@@ -1,0 +1,16 @@
+.{
+    .name = .opensim_zig,
+    .version = "0.1.0",
+    .fingerprint = 0xb34fd157834e5459,
+    .dependencies = .{
+        .astroz = .{
+            .url = "git+https://github.com/ATTron/astroz/?ref=HEAD#4d8e449f204c4d88b6a03b73914a175394029e03",
+            .hash = "astroz-0.9.0-nxWVpjuBCAARZt7dcRiJvedFYCt2Jmhq68Lya0A-lRjt",
+        },
+    },
+    .paths = .{
+        "build.zig",
+        "build.zig.zon",
+        "src",
+    },
+}

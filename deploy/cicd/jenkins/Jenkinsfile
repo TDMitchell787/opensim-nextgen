@@ -1,0 +1,603 @@
+// Jenkins Pipeline for OpenSim Next
+// Declarative pipeline with comprehensive build, test, security, and deployment stages
+
+pipeline {
+    agent none
+    
+    options {
+        buildDiscarder(logRotator(numToKeepStr: '10'))
+        timeout(time: 2, unit: 'HOURS')
+        timestamps()
+        parallelsAlwaysFailFast()
+        skipDefaultCheckout()
+    }
+    
+    environment {
+        REGISTRY = 'harbor.opensim.example.com'
+        IMAGE_NAME = 'opensim-next/opensim-next'
+        RUST_BACKTRACE = '1'
+        CARGO_HOME = "${WORKSPACE}/.cargo"
+        DOCKER_BUILDKIT = '1'
+        KUBECONFIG = credentials('kubeconfig')
+        HARBOR_CREDENTIALS = credentials('harbor-credentials')
+        SLACK_TOKEN = credentials('slack-token')
+    }
+    
+    stages {
+        stage('Preflight') {
+            agent {
+                kubernetes {
+                    yaml """
+                        apiVersion: v1
+                        kind: Pod
+                        spec:
+                          containers:
+                          - name: git
+                            image: alpine/git:latest
+                            tty: true
+                            command: ['cat']
+                        """
+                }
+            }
+            steps {
+                container('git') {
+                    checkout scm
+                    script {
+                        env.GIT_COMMIT_SHORT = sh(
+                            script: "git rev-parse --short HEAD",
+                            returnStdout: true
+                        ).trim()
+                        
+                        env.VERSION = sh(
+                            script: """
+                                if git describe --tags --exact-match HEAD 2>/dev/null; then
+                                    git describe --tags --exact-match HEAD
+                                elif [ '${BRANCH_NAME}' = 'main' ]; then
+                                    echo "\$(date +%Y%m%d)-${env.GIT_COMMIT_SHORT}"
+                                else
+                                    echo "${BRANCH_NAME}-\$(date +%Y%m%d)-${env.GIT_COMMIT_SHORT}"
+                                fi
+                            """,
+                            returnStdout: true
+                        ).trim()
+                        
+                        // Detect changes
+                        env.RUST_CHANGED = sh(
+                            script: "git diff --name-only HEAD~1 HEAD | grep -q 'opensim-next/rust\\|Cargo' && echo 'true' || echo 'false'",
+                            returnStdout: true
+                        ).trim()
+                        
+                        env.ZIG_CHANGED = sh(
+                            script: "git diff --name-only HEAD~1 HEAD | grep -q 'opensim-next/zig\\|build.zig' && echo 'true' || echo 'false'",
+                            returnStdout: true
+                        ).trim()
+                        
+                        env.DOCKER_CHANGED = sh(
+                            script: "git diff --name-only HEAD~1 HEAD | grep -q 'opensim-next/deploy/docker\\|Dockerfile' && echo 'true' || echo 'false'",
+                            returnStdout: true
+                        ).trim()
+                    }
+                }
+                stash includes: '**', name: 'source-code'
+            }
+            post {
+                always {
+                    echo "Version: ${env.VERSION}"
+                    echo "Rust changed: ${env.RUST_CHANGED}"
+                    echo "Zig changed: ${env.ZIG_CHANGED}"
+                    echo "Docker changed: ${env.DOCKER_CHANGED}"
+                }
+            }
+        }
+        
+        stage('Build & Test') {
+            parallel {
+                stage('Rust Pipeline') {
+                    when {
+                        anyOf {
+                            environment name: 'RUST_CHANGED', value: 'true'
+                            branch 'main'
+                            buildingTag()
+                        }
+                    }
+                    agent {
+                        kubernetes {
+                            yaml """
+                                apiVersion: v1
+                                kind: Pod
+                                spec:
+                                  containers:
+                                  - name: rust
+                                    image: rust:1.75
+                                    tty: true
+                                    command: ['cat']
+                                    resources:
+                                      requests:
+                                        memory: "2Gi"
+                                        cpu: "1000m"
+                                      limits:
+                                        memory: "4Gi"
+                                        cpu: "2000m"
+                                    volumeMounts:
+                                    - name: cargo-cache
+                                      mountPath: /usr/local/cargo/registry
+                                  volumes:
+                                  - name: cargo-cache
+                                    emptyDir: {}
+                                """
+                        }
+                    }
+                    stages {
+                        stage('Rust Setup') {
+                            steps {
+                                container('rust') {
+                                    unstash 'source-code'
+                                    sh '''
+                                        apt-get update && apt-get install -y pkg-config libssl-dev libpq-dev postgresql-client
+                                        rustc --version
+                                        cargo --version
+                                    '''
+                                }
+                            }
+                        }
+                        stage('Rust Quality') {
+                            parallel {
+                                stage('Format Check') {
+                                    steps {
+                                        container('rust') {
+                                            dir('opensim-next/rust') {
+                                                sh 'cargo fmt --all -- --check'
+                                            }
+                                        }
+                                    }
+                                }
+                                stage('Clippy Lints') {
+                                    steps {
+                                        container('rust') {
+                                            dir('opensim-next/rust') {
+                                                sh 'cargo clippy --all-targets --all-features -- -D warnings'
+                                            }
+                                        }
+                                    }
+                                }
+                                stage('Security Audit') {
+                                    steps {
+                                        container('rust') {
+                                            dir('opensim-next/rust') {
+                                                sh '''
+                                                    cargo install cargo-audit
+                                                    cargo audit --deny warnings
+                                                '''
+                                            }
+                                        }
+                                    }
+                                }
+                            }
+                        }
+                        stage('Rust Build') {
+                            steps {
+                                container('rust') {
+                                    dir('opensim-next/rust') {
+                                        sh '''
+                                            cargo build --verbose --all-features
+                                            cargo build --verbose --release --all-features
+                                        '''
+                                    }
+                                }
+                            }
+                            post {
+                                success {
+                                    stash includes: 'opensim-next/rust/target/release/opensim-next', name: 'rust-binary'
+                                }
+                            }
+                        }
+                        stage('Rust Tests') {
+                            steps {
+                                container('rust') {
+                                    dir('opensim-next/rust') {
+                                        sh 'cargo test --verbose --all-features'
+                                    }
+                                }
+                            }
+                            post {
+                                always {
+                                    publishTestResults testResultsPattern: 'opensim-next/rust/target/test-results.xml'
+                                }
+                            }
+                        }
+                    }
+                }
+                
+                stage('Zig Pipeline') {
+                    when {
+                        anyOf {
+                            environment name: 'ZIG_CHANGED', value: 'true'
+                            branch 'main'
+                            buildingTag()
+                        }
+                    }
+                    agent {
+                        kubernetes {
+                            yaml """
+                                apiVersion: v1
+                                kind: Pod
+                                spec:
+                                  containers:
+                                  - name: zig
+                                    image: alpine:latest
+                                    tty: true
+                                    command: ['cat']
+                                    resources:
+                                      requests:
+                                        memory: "1Gi"
+                                        cpu: "500m"
+                                      limits:
+                                        memory: "2Gi"
+                                        cpu: "1000m"
+                                """
+                        }
+                    }
+                    stages {
+                        stage('Zig Setup') {
+                            steps {
+                                container('zig') {
+                                    unstash 'source-code'
+                                    sh '''
+                                        apk add --no-cache curl xz build-base linux-headers
+                                        curl -L https://ziglang.org/download/0.14.0/zig-linux-x86_64-0.14.0.tar.xz | tar -xJ
+                                        export PATH=$PWD/zig-linux-x86_64-0.14.0:$PATH
+                                        zig version
+                                    '''
+                                }
+                            }
+                        }
+                        stage('Zig Quality') {
+                            steps {
+                                container('zig') {
+                                    sh '''
+                                        export PATH=$PWD/zig-linux-x86_64-0.14.0:$PATH
+                                        cd opensim-next/zig
+                                        zig fmt --check src/
+                                    '''
+                                }
+                            }
+                        }
+                        stage('Zig Build') {
+                            steps {
+                                container('zig') {
+                                    sh '''
+                                        export PATH=$PWD/zig-linux-x86_64-0.14.0:$PATH
+                                        cd opensim-next/zig
+                                        zig build
+                                        zig build -Doptimize=ReleaseFast
+                                    '''
+                                }
+                            }
+                            post {
+                                success {
+                                    stash includes: 'opensim-next/zig/zig-out/**', name: 'zig-artifacts'
+                                }
+                            }
+                        }
+                        stage('Zig Tests') {
+                            steps {
+                                container('zig') {
+                                    sh '''
+                                        export PATH=$PWD/zig-linux-x86_64-0.14.0:$PATH
+                                        cd opensim-next/zig
+                                        zig build test
+                                    '''
+                                }
+                            }
+                        }
+                    }
+                }
+            }
+        }
+        
+        stage('Security Scanning') {
+            agent {
+                kubernetes {
+                    yaml """
+                        apiVersion: v1
+                        kind: Pod
+                        spec:
+                          containers:
+                          - name: security
+                            image: aquasec/trivy:latest
+                            tty: true
+                            command: ['cat']
+                        """
+                }
+            }
+            steps {
+                container('security') {
+                    unstash 'source-code'
+                    sh '''
+                        # Filesystem scan
+                        trivy fs --format sarif --output trivy-fs-results.sarif .
+                        trivy fs --severity HIGH,CRITICAL .
+                    '''
+                }
+            }
+            post {
+                always {
+                    recordIssues enabledForFailure: true, tools: [sarif(pattern: 'trivy-fs-results.sarif')]
+                }
+            }
+        }
+        
+        stage('Docker Build') {
+            when {
+                anyOf {
+                    environment name: 'DOCKER_CHANGED', value: 'true'
+                    environment name: 'RUST_CHANGED', value: 'true'
+                    environment name: 'ZIG_CHANGED', value: 'true'
+                    branch 'main'
+                    buildingTag()
+                }
+            }
+            agent {
+                kubernetes {
+                    yaml """
+                        apiVersion: v1
+                        kind: Pod
+                        spec:
+                          containers:
+                          - name: docker
+                            image: docker:24-dind
+                            tty: true
+                            command: ['cat']
+                            volumeMounts:
+                            - name: docker-sock
+                              mountPath: /var/run/docker.sock
+                          volumes:
+                          - name: docker-sock
+                            hostPath:
+                              path: /var/run/docker.sock
+                        """
+                }
+            }
+            steps {
+                container('docker') {
+                    unstash 'source-code'
+                    script {
+                        def imageTags = [
+                            "${env.REGISTRY}/${env.IMAGE_NAME}:${env.VERSION}",
+                            "${env.REGISTRY}/${env.IMAGE_NAME}:${env.GIT_COMMIT_SHORT}"
+                        ]
+                        
+                        if (env.BRANCH_NAME == 'main') {
+                            imageTags.add("${env.REGISTRY}/${env.IMAGE_NAME}:latest")
+                        }
+                        
+                        sh """
+                            echo '${HARBOR_CREDENTIALS_PSW}' | docker login ${env.REGISTRY} -u '${HARBOR_CREDENTIALS_USR}' --password-stdin
+                            
+                            docker build \\
+                                --tag ${imageTags.join(' --tag ')} \\
+                                --file opensim-next/deploy/docker/Dockerfile.production \\
+                                --build-arg VERSION=${env.VERSION} \\
+                                --build-arg BUILD_DATE=\$(date -Iseconds) \\
+                                --build-arg VCS_REF=${env.GIT_COMMIT} \\
+                                opensim-next/
+                        """
+                        
+                        imageTags.each { tag ->
+                            sh "docker push ${tag}"
+                        }
+                        
+                        // Container scan
+                        sh """
+                            docker run --rm -v /var/run/docker.sock:/var/run/docker.sock \\
+                                aquasec/trivy:latest image \\
+                                --format sarif \\
+                                --output /dev/stdout \\
+                                ${imageTags[0]} > trivy-container-results.sarif
+                        """
+                    }
+                }
+            }
+            post {
+                always {
+                    recordIssues enabledForFailure: true, tools: [sarif(pattern: 'trivy-container-results.sarif')]
+                }
+            }
+        }
+        
+        stage('Integration Tests') {
+            when {
+                anyOf {
+                    branch 'main'
+                    buildingTag()
+                    changeRequest()
+                }
+            }
+            agent {
+                kubernetes {
+                    yaml """
+                        apiVersion: v1
+                        kind: Pod
+                        spec:
+                          containers:
+                          - name: rust
+                            image: rust:1.75
+                            tty: true
+                            command: ['cat']
+                          - name: postgres
+                            image: postgres:15
+                            env:
+                            - name: POSTGRES_DB
+                              value: opensim_test
+                            - name: POSTGRES_USER
+                              value: opensim
+                            - name: POSTGRES_PASSWORD
+                              value: opensim_test_password
+                          - name: redis
+                            image: redis:7-alpine
+                            command: ['redis-server', '--requirepass', 'redis_test_password']
+                        """
+                }
+            }
+            steps {
+                container('rust') {
+                    unstash 'source-code'
+                    sh '''
+                        apt-get update && apt-get install -y pkg-config libssl-dev libpq-dev postgresql-client redis-tools
+                        
+                        # Wait for services
+                        until pg_isready -h localhost -p 5432 -U opensim; do sleep 1; done
+                        until redis-cli -h localhost -a redis_test_password ping; do sleep 1; done
+                        
+                        cd opensim-next/rust
+                        export DATABASE_URL="postgresql://opensim:opensim_test_password@localhost:5432/opensim_test"
+                        export REDIS_URL="redis://:redis_test_password@localhost:6379"
+                        
+                        cargo test --test integration_tests --all-features -- --test-threads=1
+                    '''
+                }
+            }
+        }
+        
+        stage('Deploy') {
+            parallel {
+                stage('Deploy to Staging') {
+                    when {
+                        branch 'main'
+                    }
+                    agent {
+                        kubernetes {
+                            yaml """
+                                apiVersion: v1
+                                kind: Pod
+                                spec:
+                                  containers:
+                                  - name: kubectl
+                                    image: alpine/helm:latest
+                                    tty: true
+                                    command: ['cat']
+                                """
+                        }
+                    }
+                    steps {
+                        container('kubectl') {
+                            unstash 'source-code'
+                            sh '''
+                                apk add --no-cache curl
+                                curl -LO https://storage.googleapis.com/kubernetes-release/release/v1.28.0/bin/linux/amd64/kubectl
+                                chmod +x kubectl && mv kubectl /usr/local/bin/
+                                
+                                helm upgrade --install opensim-next-staging \\
+                                    opensim-next/deploy/kubernetes/helm \\
+                                    --namespace opensim-next-staging \\
+                                    --create-namespace \\
+                                    --values opensim-next/deploy/kubernetes/helm/values.yaml \\
+                                    --values opensim-next/deploy/config/environments/staging.yaml \\
+                                    --set image.tag=${VERSION} \\
+                                    --set environment=staging \\
+                                    --wait --timeout=15m
+                                
+                                kubectl rollout status deployment/opensim-next-staging \\
+                                    -n opensim-next-staging --timeout=600s
+                            '''
+                        }
+                    }
+                }
+                
+                stage('Deploy to Production') {
+                    when {
+                        buildingTag()
+                    }
+                    agent {
+                        kubernetes {
+                            yaml """
+                                apiVersion: v1
+                                kind: Pod
+                                spec:
+                                  containers:
+                                  - name: kubectl
+                                    image: alpine/helm:latest
+                                    tty: true
+                                    command: ['cat']
+                                """
+                        }
+                    }
+                    input {
+                        message "Deploy to production?"
+                        ok "Deploy"
+                        submitterParameter "DEPLOYER"
+                    }
+                    steps {
+                        container('kubectl') {
+                            unstash 'source-code'
+                            sh '''
+                                apk add --no-cache curl
+                                curl -LO https://storage.googleapis.com/kubernetes-release/release/v1.28.0/bin/linux/amd64/kubectl
+                                chmod +x kubectl && mv kubectl /usr/local/bin/
+                                
+                                # Blue-Green Deployment
+                                CURRENT_COLOR=$(kubectl get service opensim-next-active -n opensim-next -o jsonpath='{.spec.selector.color}' 2>/dev/null || echo "blue")
+                                NEW_COLOR=$([ "$CURRENT_COLOR" = "blue" ] && echo "green" || echo "blue")
+                                
+                                echo "Deploying to $NEW_COLOR environment"
+                                
+                                helm upgrade --install opensim-next-$NEW_COLOR \\
+                                    opensim-next/deploy/kubernetes/helm \\
+                                    --namespace opensim-next \\
+                                    --create-namespace \\
+                                    --values opensim-next/deploy/kubernetes/helm/values.yaml \\
+                                    --values opensim-next/deploy/config/environments/production.yaml \\
+                                    --set image.tag=${VERSION} \\
+                                    --set environment=production \\
+                                    --set color=$NEW_COLOR \\
+                                    --wait --timeout=20m
+                                
+                                kubectl rollout status deployment/opensim-next-$NEW_COLOR \\
+                                    -n opensim-next --timeout=900s
+                                
+                                # Switch traffic
+                                kubectl patch service opensim-next-active -n opensim-next \\
+                                    -p "{\\"spec\\":{\\"selector\\":{\\"color\\":\\"$NEW_COLOR\\"}}}"
+                                
+                                echo "Production deployment completed. Active color: $NEW_COLOR"
+                            '''
+                        }
+                    }
+                }
+            }
+        }
+    }
+    
+    post {
+        always {
+            script {
+                def status = currentBuild.result ?: 'SUCCESS'
+                def color = status == 'SUCCESS' ? 'good' : 'danger'
+                def message = """
+                    *OpenSim Next Pipeline ${status}*
+                    Branch: ${env.BRANCH_NAME}
+                    Version: ${env.VERSION}
+                    Commit: ${env.GIT_COMMIT_SHORT}
+                    Duration: ${currentBuild.durationString}
+                    Build: ${env.BUILD_URL}
+                """.stripIndent()
+                
+                slackSend(
+                    token: env.SLACK_TOKEN,
+                    channel: '#opensim-ci',
+                    color: color,
+                    message: message
+                )
+            }
+        }
+        success {
+            echo 'Pipeline completed successfully!'
+        }
+        failure {
+            echo 'Pipeline failed!'
+        }
+        cleanup {
+            cleanWs()
+        }
+    }
+}

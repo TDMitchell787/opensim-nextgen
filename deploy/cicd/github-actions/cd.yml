@@ -1,0 +1,478 @@
+# GitHub Actions CD Pipeline for OpenSim Next
+# Continuous Deployment with automated releases and environment promotion
+
+name: OpenSim Next CD
+
+on:
+  push:
+    tags:
+      - 'v*'
+    branches:
+      - main
+      - develop
+      - 'release/*'
+  workflow_run:
+    workflows: ["OpenSim Next CI"]
+    types:
+      - completed
+    branches:
+      - main
+
+env:
+  REGISTRY: ghcr.io
+  IMAGE_NAME: ${{ github.repository }}
+
+# Ensure only one deployment runs at a time
+concurrency:
+  group: ${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: false
+
+jobs:
+  # Determine deployment strategy
+  deployment-strategy:
+    name: Deployment Strategy
+    runs-on: ubuntu-latest
+    if: github.event.workflow_run.conclusion == 'success' || github.event_name == 'push'
+    
+    outputs:
+      environment: ${{ steps.strategy.outputs.environment }}
+      deploy-staging: ${{ steps.strategy.outputs.deploy-staging }}
+      deploy-production: ${{ steps.strategy.outputs.deploy-production }}
+      version: ${{ steps.strategy.outputs.version }}
+      is-release: ${{ steps.strategy.outputs.is-release }}
+    
+    steps:
+    - name: Determine deployment strategy
+      id: strategy
+      run: |
+        if [[ "${{ github.ref }}" == "refs/tags/v"* ]]; then
+          echo "environment=production" >> $GITHUB_OUTPUT
+          echo "deploy-staging=false" >> $GITHUB_OUTPUT
+          echo "deploy-production=true" >> $GITHUB_OUTPUT
+          echo "version=${GITHUB_REF#refs/tags/}" >> $GITHUB_OUTPUT
+          echo "is-release=true" >> $GITHUB_OUTPUT
+        elif [[ "${{ github.ref }}" == "refs/heads/main" ]]; then
+          echo "environment=staging" >> $GITHUB_OUTPUT
+          echo "deploy-staging=true" >> $GITHUB_OUTPUT
+          echo "deploy-production=false" >> $GITHUB_OUTPUT
+          echo "version=$(date +%Y%m%d)-${GITHUB_SHA::8}" >> $GITHUB_OUTPUT
+          echo "is-release=false" >> $GITHUB_OUTPUT
+        elif [[ "${{ github.ref }}" == "refs/heads/develop" ]]; then
+          echo "environment=development" >> $GITHUB_OUTPUT
+          echo "deploy-staging=false" >> $GITHUB_OUTPUT
+          echo "deploy-production=false" >> $GITHUB_OUTPUT
+          echo "version=dev-$(date +%Y%m%d)-${GITHUB_SHA::8}" >> $GITHUB_OUTPUT
+          echo "is-release=false" >> $GITHUB_OUTPUT
+        elif [[ "${{ github.ref }}" == "refs/heads/release/"* ]]; then
+          echo "environment=staging" >> $GITHUB_OUTPUT
+          echo "deploy-staging=true" >> $GITHUB_OUTPUT
+          echo "deploy-production=false" >> $GITHUB_OUTPUT
+          echo "version=rc-$(date +%Y%m%d)-${GITHUB_SHA::8}" >> $GITHUB_OUTPUT
+          echo "is-release=false" >> $GITHUB_OUTPUT
+        else
+          echo "environment=none" >> $GITHUB_OUTPUT
+          echo "deploy-staging=false" >> $GITHUB_OUTPUT
+          echo "deploy-production=false" >> $GITHUB_OUTPUT
+          echo "version=dev-${GITHUB_SHA::8}" >> $GITHUB_OUTPUT
+          echo "is-release=false" >> $GITHUB_OUTPUT
+        fi
+
+  # Build and push release artifacts
+  build-release:
+    name: Build Release Artifacts
+    runs-on: ubuntu-latest
+    needs: deployment-strategy
+    if: needs.deployment-strategy.outputs.environment != 'none'
+    
+    steps:
+    - name: Checkout code
+      uses: actions/checkout@v4
+    
+    - name: Set up Docker Buildx
+      uses: docker/setup-buildx-action@v3
+    
+    - name: Log in to Container Registry
+      uses: docker/login-action@v3
+      with:
+        registry: ${{ env.REGISTRY }}
+        username: ${{ github.actor }}
+        password: ${{ secrets.GITHUB_TOKEN }}
+    
+    - name: Build and push Docker image
+      uses: docker/build-push-action@v5
+      with:
+        context: opensim-next
+        file: opensim-next/deploy/docker/Dockerfile.production
+        platforms: linux/amd64,linux/arm64
+        push: true
+        tags: |
+          ${{ env.REGISTRY }}/${{ env.IMAGE_NAME }}:${{ needs.deployment-strategy.outputs.version }}
+          ${{ env.REGISTRY }}/${{ env.IMAGE_NAME }}:latest
+        cache-from: type=gha
+        cache-to: type=gha,mode=max
+        build-args: |
+          VERSION=${{ needs.deployment-strategy.outputs.version }}
+          BUILD_DATE=${{ github.event.head_commit.timestamp }}
+          VCS_REF=${{ github.sha }}
+    
+    - name: Generate Helm package
+      run: |
+        helm package opensim-next/deploy/kubernetes/helm \
+          --version ${{ needs.deployment-strategy.outputs.version }} \
+          --app-version ${{ needs.deployment-strategy.outputs.version }}
+    
+    - name: Upload Helm chart
+      uses: actions/upload-artifact@v3
+      with:
+        name: helm-chart
+        path: opensim-next-*.tgz
+
+  # Deploy to development environment
+  deploy-development:
+    name: Deploy to Development
+    runs-on: ubuntu-latest
+    needs: [deployment-strategy, build-release]
+    if: needs.deployment-strategy.outputs.environment == 'development'
+    environment:
+      name: development
+      url: https://dev.opensim.example.com
+    
+    steps:
+    - name: Checkout code
+      uses: actions/checkout@v4
+    
+    - name: Setup kubectl
+      uses: azure/setup-kubectl@v3
+      with:
+        version: '1.28.0'
+    
+    - name: Setup Helm
+      uses: azure/setup-helm@v3
+      with:
+        version: '3.13.0'
+    
+    - name: Configure kubectl
+      run: |
+        echo "${{ secrets.DEV_KUBECONFIG }}" | base64 -d > /tmp/kubeconfig
+        export KUBECONFIG=/tmp/kubeconfig
+        kubectl config current-context
+    
+    - name: Deploy to development
+      env:
+        KUBECONFIG: /tmp/kubeconfig
+      run: |
+        helm upgrade --install opensim-next-dev \
+          opensim-next/deploy/kubernetes/helm \
+          --namespace opensim-next-dev \
+          --create-namespace \
+          --values opensim-next/deploy/kubernetes/helm/values.yaml \
+          --values opensim-next/deploy/config/environments/development.yaml \
+          --set image.tag=${{ needs.deployment-strategy.outputs.version }} \
+          --set environment=development \
+          --wait --timeout=10m
+    
+    - name: Verify deployment
+      env:
+        KUBECONFIG: /tmp/kubeconfig
+      run: |
+        kubectl rollout status deployment/opensim-next-dev -n opensim-next-dev --timeout=300s
+        kubectl get pods -n opensim-next-dev
+    
+    - name: Run smoke tests
+      env:
+        KUBECONFIG: /tmp/kubeconfig
+      run: |
+        kubectl run smoke-test \
+          --image=curlimages/curl:latest \
+          --rm -i --restart=Never \
+          --namespace=opensim-next-dev \
+          -- curl -f http://opensim-next-dev:9100/health
+
+  # Deploy to staging environment
+  deploy-staging:
+    name: Deploy to Staging
+    runs-on: ubuntu-latest
+    needs: [deployment-strategy, build-release]
+    if: needs.deployment-strategy.outputs.deploy-staging == 'true'
+    environment:
+      name: staging
+      url: https://staging.opensim.example.com
+    
+    steps:
+    - name: Checkout code
+      uses: actions/checkout@v4
+    
+    - name: Setup kubectl
+      uses: azure/setup-kubectl@v3
+      with:
+        version: '1.28.0'
+    
+    - name: Setup Helm
+      uses: azure/setup-helm@v3
+      with:
+        version: '3.13.0'
+    
+    - name: Configure kubectl
+      run: |
+        echo "${{ secrets.STAGING_KUBECONFIG }}" | base64 -d > /tmp/kubeconfig
+        export KUBECONFIG=/tmp/kubeconfig
+        kubectl config current-context
+    
+    - name: Deploy to staging
+      env:
+        KUBECONFIG: /tmp/kubeconfig
+      run: |
+        helm upgrade --install opensim-next-staging \
+          opensim-next/deploy/kubernetes/helm \
+          --namespace opensim-next-staging \
+          --create-namespace \
+          --values opensim-next/deploy/kubernetes/helm/values.yaml \
+          --values opensim-next/deploy/config/environments/staging.yaml \
+          --set image.tag=${{ needs.deployment-strategy.outputs.version }} \
+          --set environment=staging \
+          --wait --timeout=15m
+    
+    - name: Verify deployment
+      env:
+        KUBECONFIG: /tmp/kubeconfig
+      run: |
+        kubectl rollout status deployment/opensim-next-staging -n opensim-next-staging --timeout=600s
+        kubectl get pods -n opensim-next-staging
+    
+    - name: Run integration tests
+      env:
+        KUBECONFIG: /tmp/kubeconfig
+      run: |
+        kubectl create job staging-integration-test \
+          --from=cronjob/opensim-next-integration-tests \
+          --namespace=opensim-next-staging || true
+        kubectl wait --for=condition=complete job/staging-integration-test \
+          --namespace=opensim-next-staging --timeout=1800s
+    
+    - name: Collect test results
+      if: always()
+      env:
+        KUBECONFIG: /tmp/kubeconfig
+      run: |
+        kubectl logs job/staging-integration-test -n opensim-next-staging > staging-test-results.log
+    
+    - name: Upload test results
+      if: always()
+      uses: actions/upload-artifact@v3
+      with:
+        name: staging-test-results
+        path: staging-test-results.log
+
+  # Deploy to production environment
+  deploy-production:
+    name: Deploy to Production
+    runs-on: ubuntu-latest
+    needs: [deployment-strategy, build-release, deploy-staging]
+    if: needs.deployment-strategy.outputs.deploy-production == 'true'
+    environment:
+      name: production
+      url: https://opensim.example.com
+    
+    steps:
+    - name: Checkout code
+      uses: actions/checkout@v4
+    
+    - name: Setup kubectl
+      uses: azure/setup-kubectl@v3
+      with:
+        version: '1.28.0'
+    
+    - name: Setup Helm
+      uses: azure/setup-helm@v3
+      with:
+        version: '3.13.0'
+    
+    - name: Configure kubectl
+      run: |
+        echo "${{ secrets.PROD_KUBECONFIG }}" | base64 -d > /tmp/kubeconfig
+        export KUBECONFIG=/tmp/kubeconfig
+        kubectl config current-context
+    
+    - name: Pre-deployment backup
+      env:
+        KUBECONFIG: /tmp/kubeconfig
+      run: |
+        kubectl create job prod-backup-$(date +%Y%m%d-%H%M%S) \
+          --from=cronjob/opensim-next-backup \
+          --namespace=opensim-next || true
+    
+    - name: Deploy to production (Blue-Green)
+      env:
+        KUBECONFIG: /tmp/kubeconfig
+      run: |
+        # Get current active color
+        CURRENT_COLOR=$(kubectl get service opensim-next-active -n opensim-next -o jsonpath='{.spec.selector.color}' 2>/dev/null || echo "blue")
+        NEW_COLOR=$([ "$CURRENT_COLOR" = "blue" ] && echo "green" || echo "blue")
+        
+        echo "Current active: $CURRENT_COLOR, deploying to: $NEW_COLOR"
+        
+        # Deploy new version
+        helm upgrade --install opensim-next-$NEW_COLOR \
+          opensim-next/deploy/kubernetes/helm \
+          --namespace opensim-next \
+          --create-namespace \
+          --values opensim-next/deploy/kubernetes/helm/values.yaml \
+          --values opensim-next/deploy/config/environments/production.yaml \
+          --set image.tag=${{ needs.deployment-strategy.outputs.version }} \
+          --set environment=production \
+          --set color=$NEW_COLOR \
+          --set nameOverride=opensim-next-$NEW_COLOR \
+          --wait --timeout=20m
+    
+    - name: Verify new deployment
+      env:
+        KUBECONFIG: /tmp/kubeconfig
+      run: |
+        NEW_COLOR=$([ "$(kubectl get service opensim-next-active -n opensim-next -o jsonpath='{.spec.selector.color}' 2>/dev/null || echo 'blue')" = "blue" ] && echo "green" || echo "blue")
+        
+        kubectl rollout status deployment/opensim-next-$NEW_COLOR -n opensim-next --timeout=900s
+        kubectl get pods -n opensim-next -l color=$NEW_COLOR
+        
+        # Health check
+        kubectl run health-check-$NEW_COLOR \
+          --image=curlimages/curl:latest \
+          --rm -i --restart=Never \
+          --namespace=opensim-next \
+          -- curl -f http://opensim-next-$NEW_COLOR:9100/health
+    
+    - name: Switch traffic (Blue-Green)
+      env:
+        KUBECONFIG: /tmp/kubeconfig
+      run: |
+        CURRENT_COLOR=$(kubectl get service opensim-next-active -n opensim-next -o jsonpath='{.spec.selector.color}' 2>/dev/null || echo "blue")
+        NEW_COLOR=$([ "$CURRENT_COLOR" = "blue" ] && echo "green" || echo "blue")
+        
+        # Update active service to point to new color
+        kubectl patch service opensim-next-active -n opensim-next \
+          -p '{"spec":{"selector":{"color":"'$NEW_COLOR'"}}}'
+        
+        echo "Traffic switched to $NEW_COLOR"
+        
+        # Wait for traffic to settle
+        sleep 30
+        
+        # Final health check
+        kubectl run final-health-check \
+          --image=curlimages/curl:latest \
+          --rm -i --restart=Never \
+          --namespace=opensim-next \
+          -- curl -f http://opensim-next-active:9100/health
+    
+    - name: Cleanup old deployment
+      env:
+        KUBECONFIG: /tmp/kubeconfig
+      run: |
+        CURRENT_COLOR=$(kubectl get service opensim-next-active -n opensim-next -o jsonpath='{.spec.selector.color}')
+        OLD_COLOR=$([ "$CURRENT_COLOR" = "blue" ] && echo "green" || echo "blue")
+        
+        # Keep old deployment for 1 hour for potential rollback
+        kubectl annotate deployment opensim-next-$OLD_COLOR -n opensim-next \
+          "deployment.kubernetes.io/cleanup-time=$(date -d '+1 hour' --iso-8601=seconds)" \
+          --overwrite
+
+  # Create GitHub release
+  create-release:
+    name: Create GitHub Release
+    runs-on: ubuntu-latest
+    needs: [deployment-strategy, deploy-production]
+    if: needs.deployment-strategy.outputs.is-release == 'true'
+    
+    steps:
+    - name: Checkout code
+      uses: actions/checkout@v4
+      with:
+        fetch-depth: 0
+    
+    - name: Download Helm chart
+      uses: actions/download-artifact@v3
+      with:
+        name: helm-chart
+    
+    - name: Generate changelog
+      id: changelog
+      run: |
+        if git describe --tags --abbrev=0 HEAD~1 >/dev/null 2>&1; then
+          PREV_TAG=$(git describe --tags --abbrev=0 HEAD~1)
+          git log $PREV_TAG..HEAD --oneline --pretty=format:"- %s" > CHANGELOG.md
+        else
+          echo "- Initial release" > CHANGELOG.md
+        fi
+        
+        # Add release notes
+        cat >> CHANGELOG.md << 'EOF'
+        
+        ## What's New
+        - Production-ready virtual world server
+        - Zero trust networking with OpenZiti
+        - Multi-physics engine support
+        - Web browser client support
+        - Complete OpenSim compatibility
+        
+        ## Docker Images
+        - `ghcr.io/opensim-next/opensim-next:${{ needs.deployment-strategy.outputs.version }}`
+        - `ghcr.io/opensim-next/opensim-next:latest`
+        
+        ## Deployment
+        Use the included Helm chart for Kubernetes deployment.
+        EOF
+    
+    - name: Create Release
+      uses: actions/create-release@v1
+      env:
+        GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+      with:
+        tag_name: ${{ needs.deployment-strategy.outputs.version }}
+        release_name: OpenSim Next ${{ needs.deployment-strategy.outputs.version }}
+        body_path: CHANGELOG.md
+        draft: false
+        prerelease: false
+    
+    - name: Upload Helm chart to release
+      uses: actions/upload-release-asset@v1
+      env:
+        GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+      with:
+        upload_url: ${{ steps.create-release.outputs.upload_url }}
+        asset_path: opensim-next-${{ needs.deployment-strategy.outputs.version }}.tgz
+        asset_name: opensim-next-${{ needs.deployment-strategy.outputs.version }}.tgz
+        asset_content_type: application/gzip
+
+  # Notify deployment status
+  notify:
+    name: Notify Deployment Status
+    runs-on: ubuntu-latest
+    needs: [deployment-strategy, deploy-development, deploy-staging, deploy-production, create-release]
+    if: always()
+    
+    steps:
+    - name: Notify Slack
+      if: always()
+      uses: 8398a7/action-slack@v3
+      with:
+        status: ${{ job.status }}
+        channel: '#opensim-deployments'
+        username: 'OpenSim CD Bot'
+        icon_emoji: ':rocket:'
+        fields: repo,message,commit,author,action,eventName,ref,workflow
+        text: |
+          OpenSim Next deployment completed
+          Environment: ${{ needs.deployment-strategy.outputs.environment }}
+          Version: ${{ needs.deployment-strategy.outputs.version }}
+          Status: ${{ job.status }}
+      env:
+        SLACK_WEBHOOK_URL: ${{ secrets.SLACK_WEBHOOK_URL }}
+    
+    - name: Update deployment status
+      run: |
+        echo "Deployment Summary:"
+        echo "Environment: ${{ needs.deployment-strategy.outputs.environment }}"
+        echo "Version: ${{ needs.deployment-strategy.outputs.version }}"
+        echo "Development: ${{ needs.deploy-development.result || 'skipped' }}"
+        echo "Staging: ${{ needs.deploy-staging.result || 'skipped' }}"
+        echo "Production: ${{ needs.deploy-production.result || 'skipped' }}"
+        echo "Release: ${{ needs.create-release.result || 'skipped' }}"

@@ -1,0 +1,550 @@
+# Configuration Validation Tools for OpenSim Next
+# Automated validation of environment configurations
+
+---
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: config-validator-scripts
+  namespace: opensim-next
+  labels:
+    app.kubernetes.io/name: opensim-next
+    app.kubernetes.io/component: config-validation
+data:
+  validate-config.sh: |
+    #!/bin/bash
+    set -e
+    
+    ENVIRONMENT=${1:-development}
+    CONFIG_DIR="/config/environments"
+    VALIDATION_RESULTS="/tmp/validation-results"
+    
+    echo "Validating OpenSim Next configuration for environment: $ENVIRONMENT"
+    mkdir -p "$VALIDATION_RESULTS"
+    
+    # Color codes for output
+    RED='\033[0;31m'
+    GREEN='\033[0;32m'
+    YELLOW='\033[1;33m'
+    NC='\033[0m' # No Color
+    
+    ERRORS=0
+    WARNINGS=0
+    
+    # Function to log validation results
+    log_result() {
+      local level=$1
+      local message=$2
+      local timestamp=$(date '+%Y-%m-%d %H:%M:%S')
+      
+      case $level in
+        "ERROR")
+          echo -e "${RED}[ERROR]${NC} $message"
+          echo "[$timestamp] ERROR: $message" >> "$VALIDATION_RESULTS/errors.log"
+          ((ERRORS++))
+          ;;
+        "WARN")
+          echo -e "${YELLOW}[WARN]${NC} $message"
+          echo "[$timestamp] WARN: $message" >> "$VALIDATION_RESULTS/warnings.log"
+          ((WARNINGS++))
+          ;;
+        "INFO")
+          echo -e "${GREEN}[INFO]${NC} $message"
+          echo "[$timestamp] INFO: $message" >> "$VALIDATION_RESULTS/info.log"
+          ;;
+      esac
+    }
+    
+    # Validate TOML configuration
+    validate_toml() {
+      local config_file="$CONFIG_DIR/$ENVIRONMENT.yaml"
+      
+      if [ ! -f "$config_file" ]; then
+        log_result "ERROR" "Configuration file not found: $config_file"
+        return 1
+      fi
+      
+      # Extract TOML from YAML and validate
+      if ! yq eval '.data."opensim.toml"' "$config_file" > /tmp/opensim.toml; then
+        log_result "ERROR" "Failed to extract TOML configuration from YAML"
+        return 1
+      fi
+      
+      # Validate TOML syntax
+      if ! toml-validator /tmp/opensim.toml; then
+        log_result "ERROR" "Invalid TOML syntax in configuration"
+        return 1
+      fi
+      
+      log_result "INFO" "TOML configuration syntax is valid"
+      
+      # Validate required sections
+      local required_sections=("general" "network" "database" "cache" "physics" "assets" "region" "monitoring" "security")
+      
+      for section in "${required_sections[@]}"; do
+        if ! toml get /tmp/opensim.toml "$section" >/dev/null 2>&1; then
+          log_result "ERROR" "Missing required configuration section: [$section]"
+        else
+          log_result "INFO" "Configuration section [$section] found"
+        fi
+      done
+      
+      # Validate environment-specific requirements
+      case $ENVIRONMENT in
+        "production")
+          validate_production_config
+          ;;
+        "staging")
+          validate_staging_config
+          ;;
+        "development")
+          validate_development_config
+          ;;
+        "testing")
+          validate_testing_config
+          ;;
+      esac
+    }
+    
+    # Validate production-specific configuration
+    validate_production_config() {
+      local config="/tmp/opensim.toml"
+      
+      # SSL must be enabled
+      if [ "$(toml get $config general.ssl_enabled)" != "true" ]; then
+        log_result "ERROR" "SSL must be enabled in production"
+      fi
+      
+      # Debug must be disabled
+      if [ "$(toml get $config general.debug)" != "false" ]; then
+        log_result "ERROR" "Debug must be disabled in production"
+      fi
+      
+      # Rate limiting must be enabled
+      if [ "$(toml get $config security.rate_limit_enabled)" != "true" ]; then
+        log_result "ERROR" "Rate limiting must be enabled in production"
+      fi
+      
+      # CORS must be restricted
+      if [ "$(toml get $config security.cors_enabled)" = "true" ]; then
+        local cors_origins=$(toml get $config security.cors_origins)
+        if [[ "$cors_origins" == *"*"* ]]; then
+          log_result "ERROR" "CORS origins must not include wildcards in production"
+        fi
+      fi
+      
+      # Backup must be enabled
+      if [ "$(toml get $config backup.enabled)" != "true" ]; then
+        log_result "WARN" "Backup should be enabled in production"
+      fi
+      
+      log_result "INFO" "Production-specific validation completed"
+    }
+    
+    # Validate staging-specific configuration
+    validate_staging_config() {
+      local config="/tmp/opensim.toml"
+      
+      # SSL should be enabled
+      if [ "$(toml get $config general.ssl_enabled)" != "true" ]; then
+        log_result "WARN" "SSL should be enabled in staging"
+      fi
+      
+      # Testing endpoints should be enabled
+      if [ "$(toml get $config testing.enable_test_endpoints)" != "true" ]; then
+        log_result "WARN" "Test endpoints should be enabled in staging"
+      fi
+      
+      log_result "INFO" "Staging-specific validation completed"
+    }
+    
+    # Validate development-specific configuration
+    validate_development_config() {
+      local config="/tmp/opensim.toml"
+      
+      # Debug should be enabled
+      if [ "$(toml get $config general.debug)" != "true" ]; then
+        log_result "WARN" "Debug should be enabled in development"
+      fi
+      
+      # Rate limiting can be disabled
+      if [ "$(toml get $config security.rate_limit_enabled)" = "true" ]; then
+        log_result "INFO" "Rate limiting is enabled (optional in development)"
+      fi
+      
+      log_result "INFO" "Development-specific validation completed"
+    }
+    
+    # Validate testing-specific configuration
+    validate_testing_config() {
+      local config="/tmp/opensim.toml"
+      
+      # Fast mode should be enabled
+      if [ "$(toml get $config testing.fast_mode)" != "true" ]; then
+        log_result "WARN" "Fast mode should be enabled in testing"
+      fi
+      
+      # Mock services should be enabled
+      if [ "$(toml get $config testing.mock_external_services)" != "true" ]; then
+        log_result "WARN" "Mock external services should be enabled in testing"
+      fi
+      
+      log_result "INFO" "Testing-specific validation completed"
+    }
+    
+    # Validate secrets
+    validate_secrets() {
+      local secrets_file="$CONFIG_DIR/$ENVIRONMENT.yaml"
+      
+      # Check if secrets are properly base64 encoded
+      local secret_keys=("database-password" "redis-password" "api-key" "encryption-key" "jwt-secret")
+      
+      for key in "${secret_keys[@]}"; do
+        local value=$(yq eval ".data.\"$key\"" "$secrets_file" 2>/dev/null || echo "null")
+        
+        if [ "$value" = "null" ]; then
+          log_result "ERROR" "Missing secret: $key"
+          continue
+        fi
+        
+        # Check base64 encoding
+        if ! echo "$value" | base64 -d >/dev/null 2>&1; then
+          log_result "ERROR" "Invalid base64 encoding for secret: $key"
+        else
+          log_result "INFO" "Secret $key is properly encoded"
+        fi
+        
+        # Check secret strength (for non-production environments)
+        if [ "$ENVIRONMENT" != "production" ]; then
+          local decoded=$(echo "$value" | base64 -d)
+          local length=${#decoded}
+          
+          case $key in
+            "api-key"|"encryption-key"|"jwt-secret")
+              if [ $length -lt 32 ]; then
+                log_result "WARN" "Secret $key should be at least 32 characters"
+              fi
+              ;;
+            "database-password"|"redis-password")
+              if [ $length -lt 12 ]; then
+                log_result "WARN" "Password $key should be at least 12 characters"
+              fi
+              ;;
+          esac
+        fi
+      done
+    }
+    
+    # Validate resource limits
+    validate_resources() {
+      local config_file="$CONFIG_DIR/$ENVIRONMENT.yaml"
+      
+      if ! yq eval '.data."resource-limits.yaml"' "$config_file" > /tmp/resources.yaml; then
+        log_result "WARN" "No resource limits defined"
+        return
+      fi
+      
+      local cpu_request=$(yq eval '.requests.cpu' /tmp/resources.yaml)
+      local memory_request=$(yq eval '.requests.memory' /tmp/resources.yaml)
+      local cpu_limit=$(yq eval '.limits.cpu' /tmp/resources.yaml)
+      local memory_limit=$(yq eval '.limits.memory' /tmp/resources.yaml)
+      
+      # Validate resource format
+      if [[ ! "$cpu_request" =~ ^[0-9]+m$ ]] && [[ ! "$cpu_request" =~ ^[0-9]+$ ]]; then
+        log_result "ERROR" "Invalid CPU request format: $cpu_request"
+      fi
+      
+      if [[ ! "$memory_request" =~ ^[0-9]+[MGT]i$ ]]; then
+        log_result "ERROR" "Invalid memory request format: $memory_request"
+      fi
+      
+      log_result "INFO" "Resource limits validation completed"
+    }
+    
+    # Main validation function
+    main() {
+      echo "Starting OpenSim Next configuration validation..."
+      echo "Environment: $ENVIRONMENT"
+      echo "Timestamp: $(date)"
+      echo "----------------------------------------"
+      
+      validate_toml
+      validate_secrets
+      validate_resources
+      
+      echo "----------------------------------------"
+      echo "Validation Summary:"
+      echo "Errors: $ERRORS"
+      echo "Warnings: $WARNINGS"
+      
+      # Create summary report
+      cat > "$VALIDATION_RESULTS/summary.json" <<EOF
+    {
+      "environment": "$ENVIRONMENT",
+      "timestamp": "$(date -Iseconds)",
+      "errors": $ERRORS,
+      "warnings": $WARNINGS,
+      "status": $([ $ERRORS -eq 0 ] && echo '"PASS"' || echo '"FAIL"')
+    }
+    EOF
+      
+      if [ $ERRORS -gt 0 ]; then
+        echo -e "${RED}Validation FAILED with $ERRORS errors${NC}"
+        exit 1
+      elif [ $WARNINGS -gt 0 ]; then
+        echo -e "${YELLOW}Validation PASSED with $WARNINGS warnings${NC}"
+        exit 0
+      else
+        echo -e "${GREEN}Validation PASSED successfully${NC}"
+        exit 0
+      fi
+    }
+    
+    # Run main function
+    main
+  
+  validate-secrets.sh: |
+    #!/bin/bash
+    set -e
+    
+    NAMESPACE=${1:-opensim-next}
+    SECRET_NAME=${2:-opensim-next-secrets}
+    
+    echo "Validating secrets in namespace: $NAMESPACE"
+    
+    # Check if secret exists
+    if ! kubectl get secret "$SECRET_NAME" -n "$NAMESPACE" >/dev/null 2>&1; then
+      echo "ERROR: Secret $SECRET_NAME not found in namespace $NAMESPACE"
+      exit 1
+    fi
+    
+    # Check required keys
+    REQUIRED_KEYS=("database-password" "redis-password" "api-key" "encryption-key" "jwt-secret")
+    
+    for key in "${REQUIRED_KEYS[@]}"; do
+      if ! kubectl get secret "$SECRET_NAME" -n "$NAMESPACE" -o jsonpath="{.data.$key}" >/dev/null 2>&1; then
+        echo "ERROR: Missing required secret key: $key"
+        exit 1
+      else
+        echo "INFO: Secret key $key found"
+      fi
+    done
+    
+    # Validate secret values are not empty
+    for key in "${REQUIRED_KEYS[@]}"; do
+      local value=$(kubectl get secret "$SECRET_NAME" -n "$NAMESPACE" -o jsonpath="{.data.$key}" | base64 -d)
+      if [ -z "$value" ]; then
+        echo "ERROR: Secret key $key is empty"
+        exit 1
+      fi
+    done
+    
+    echo "All secrets validated successfully"
+  
+  test-connectivity.sh: |
+    #!/bin/bash
+    set -e
+    
+    ENVIRONMENT=${1:-development}
+    CONFIG_DIR="/config/environments"
+    
+    echo "Testing connectivity for environment: $ENVIRONMENT"
+    
+    # Extract configuration
+    yq eval '.data."opensim.toml"' "$CONFIG_DIR/$ENVIRONMENT.yaml" > /tmp/opensim.toml
+    
+    # Get database connection details
+    DB_HOST=$(toml get /tmp/opensim.toml database.host)
+    DB_PORT=$(toml get /tmp/opensim.toml database.port)
+    
+    # Get Redis connection details
+    REDIS_HOST=$(toml get /tmp/opensim.toml cache.host)
+    REDIS_PORT=$(toml get /tmp/opensim.toml cache.port)
+    
+    # Test database connectivity
+    echo "Testing database connectivity..."
+    if timeout 10 bash -c "</dev/tcp/$DB_HOST/$DB_PORT"; then
+      echo "✓ Database connection successful"
+    else
+      echo "✗ Database connection failed"
+      exit 1
+    fi
+    
+    # Test Redis connectivity
+    echo "Testing Redis connectivity..."
+    if timeout 10 bash -c "</dev/tcp/$REDIS_HOST/$REDIS_PORT"; then
+      echo "✓ Redis connection successful"
+    else
+      echo "✗ Redis connection failed"
+      exit 1
+    fi
+    
+    echo "All connectivity tests passed"
+
+---
+# ConfigMap for validation schemas
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: config-validation-schemas
+  namespace: opensim-next
+  labels:
+    app.kubernetes.io/name: opensim-next
+    app.kubernetes.io/component: config-validation
+data:
+  opensim-config-schema.json: |
+    {
+      "$schema": "http://json-schema.org/draft-07/schema#",
+      "title": "OpenSim Next Configuration Schema",
+      "type": "object",
+      "properties": {
+        "general": {
+          "type": "object",
+          "required": ["environment", "instance_id"],
+          "properties": {
+            "environment": {
+              "type": "string",
+              "enum": ["development", "staging", "production", "testing"]
+            },
+            "debug": {
+              "type": "boolean"
+            },
+            "log_level": {
+              "type": "string",
+              "enum": ["trace", "debug", "info", "warn", "error"]
+            },
+            "instance_id": {
+              "type": "string",
+              "minLength": 1
+            }
+          }
+        },
+        "network": {
+          "type": "object",
+          "required": ["bind_address", "port"],
+          "properties": {
+            "bind_address": {
+              "type": "string",
+              "pattern": "^(?:[0-9]{1,3}\\.){3}[0-9]{1,3}$|^0\\.0\\.0\\.0$"
+            },
+            "port": {
+              "type": "integer",
+              "minimum": 1024,
+              "maximum": 65535
+            },
+            "ssl_enabled": {
+              "type": "boolean"
+            }
+          }
+        },
+        "database": {
+          "type": "object",
+          "required": ["type", "host", "database"],
+          "properties": {
+            "type": {
+              "type": "string",
+              "enum": ["postgresql", "mysql"]
+            },
+            "host": {
+              "type": "string",
+              "minLength": 1
+            },
+            "port": {
+              "type": "integer",
+              "minimum": 1,
+              "maximum": 65535
+            },
+            "database": {
+              "type": "string",
+              "minLength": 1
+            }
+          }
+        },
+        "security": {
+          "type": "object",
+          "properties": {
+            "rate_limit_enabled": {
+              "type": "boolean"
+            },
+            "cors_enabled": {
+              "type": "boolean"
+            },
+            "cors_origins": {
+              "type": "array",
+              "items": {
+                "type": "string"
+              }
+            }
+          }
+        }
+      },
+      "required": ["general", "network", "database", "security"],
+      "additionalProperties": true
+    }
+
+---
+# CronJob for regular configuration validation
+apiVersion: batch/v1
+kind: CronJob
+metadata:
+  name: config-validator
+  namespace: opensim-next
+  labels:
+    app.kubernetes.io/name: opensim-next
+    app.kubernetes.io/component: config-validation
+spec:
+  schedule: "0 6 * * *"  # Daily at 6 AM
+  timeZone: "UTC"
+  concurrencyPolicy: Forbid
+  successfulJobsHistoryLimit: 3
+  failedJobsHistoryLimit: 1
+  
+  jobTemplate:
+    spec:
+      template:
+        metadata:
+          labels:
+            app.kubernetes.io/name: opensim-next
+            app.kubernetes.io/component: config-validation
+        spec:
+          restartPolicy: OnFailure
+          
+          volumes:
+          - name: config-scripts
+            configMap:
+              name: config-validator-scripts
+              defaultMode: 0755
+          - name: config-environments
+            configMap:
+              name: opensim-next-environments
+          
+          containers:
+          - name: validator
+            image: alpine:3.18
+            command: ["/scripts/validate-config.sh"]
+            args: ["production"]
+            
+            volumeMounts:
+            - name: config-scripts
+              mountPath: /scripts
+            - name: config-environments
+              mountPath: /config/environments
+            
+            resources:
+              requests:
+                cpu: 100m
+                memory: 128Mi
+              limits:
+                cpu: 200m
+                memory: 256Mi
+            
+            # Install required tools
+            lifecycle:
+              postStart:
+                exec:
+                  command:
+                  - /bin/sh
+                  - -c
+                  - |
+                    apk add --no-cache curl jq yq bash postgresql-client redis
+                    curl -L https://github.com/BurntSushi/toml/releases/download/v1.3.2/toml-v1.3.2-x86_64-unknown-linux-musl.tar.gz | tar xz -C /usr/local/bin

@@ -1,0 +1,204 @@
+{{- if .Values.loadBalancer.enabled }}
+apiVersion: v1
+kind: Service
+metadata:
+  name: {{ include "opensim-next.fullname" . }}-loadbalancer
+  labels:
+    {{- include "opensim-next.labels" . | nindent 4 }}
+    app.kubernetes.io/component: loadbalancer
+  {{- with .Values.loadBalancer.annotations }}
+  annotations:
+    {{- toYaml . | nindent 4 }}
+  {{- end }}
+spec:
+  type: {{ .Values.loadBalancer.type }}
+  {{- if .Values.loadBalancer.loadBalancerIP }}
+  loadBalancerIP: {{ .Values.loadBalancer.loadBalancerIP }}
+  {{- end }}
+  {{- if .Values.loadBalancer.loadBalancerSourceRanges }}
+  loadBalancerSourceRanges:
+    {{- toYaml .Values.loadBalancer.loadBalancerSourceRanges | nindent 4 }}
+  {{- end }}
+  ports:
+    - name: viewer
+      port: {{ .Values.opensim.service.ports.viewer }}
+      targetPort: viewer
+      protocol: TCP
+    - name: websocket
+      port: {{ .Values.opensim.service.ports.websocket }}
+      targetPort: websocket
+      protocol: TCP
+    - name: web
+      port: {{ .Values.opensim.service.ports.web }}
+      targetPort: web
+      protocol: TCP
+    - name: hypergrid
+      port: {{ .Values.opensim.service.ports.hypergrid }}
+      targetPort: hypergrid
+      protocol: TCP
+  selector:
+    {{- include "opensim-next.selectorLabels" . | nindent 4 }}
+---
+# Multi-region load balancer for grid federation
+{{- if .Values.global.serviceMesh.enabled }}
+apiVersion: v1
+kind: Service
+metadata:
+  name: {{ include "opensim-next.fullname" . }}-grid-lb
+  labels:
+    {{- include "opensim-next.labels" . | nindent 4 }}
+    app.kubernetes.io/component: grid-loadbalancer
+  annotations:
+    # Service mesh annotations
+    {{- if eq .Values.global.serviceMesh.type "istio" }}
+    service.istio.io/canonical-name: opensim-next
+    service.istio.io/canonical-revision: {{ .Chart.AppVersion }}
+    {{- end }}
+    {{- if eq .Values.global.serviceMesh.type "linkerd" }}
+    linkerd.io/inject: enabled
+    {{- end }}
+    # Load balancer configuration
+    service.beta.kubernetes.io/load-balancer-source-ranges: "0.0.0.0/0"
+    external-dns.alpha.kubernetes.io/hostname: "grid.{{ (index .Values.opensim.ingress.hosts 0).host }}"
+spec:
+  type: LoadBalancer
+  sessionAffinity: ClientIP
+  sessionAffinityConfig:
+    clientIP:
+      timeoutSeconds: 10800  # 3 hours for long sessions
+  ports:
+    - name: hypergrid
+      port: 8002
+      targetPort: hypergrid
+      protocol: TCP
+    - name: grid-services
+      port: 8003
+      targetPort: 8003
+      protocol: TCP
+  selector:
+    {{- include "opensim-next.selectorLabels" . | nindent 4 }}
+{{- end }}
+{{- end }}
+
+{{- if .Values.global.serviceMesh.enabled }}
+---
+# Service mesh traffic management
+{{- if eq .Values.global.serviceMesh.type "istio" }}
+apiVersion: networking.istio.io/v1beta1
+kind: VirtualService
+metadata:
+  name: {{ include "opensim-next.fullname" . }}-vs
+  labels:
+    {{- include "opensim-next.labels" . | nindent 4 }}
+spec:
+  hosts:
+    {{- range .Values.opensim.ingress.hosts }}
+    - {{ .host }}
+    {{- end }}
+  gateways:
+    - {{ include "opensim-next.fullname" . }}-gateway
+  http:
+    - match:
+        - uri:
+            prefix: /ws
+      route:
+        - destination:
+            host: {{ include "opensim-next.fullname" . }}
+            port:
+              number: {{ .Values.opensim.service.ports.websocket }}
+      timeout: 0s  # Disable timeout for WebSocket connections
+    - match:
+        - uri:
+            prefix: /api
+      route:
+        - destination:
+            host: {{ include "opensim-next.fullname" . }}
+            port:
+              number: {{ .Values.opensim.service.ports.metrics }}
+    - match:
+        - uri:
+            prefix: /admin
+      route:
+        - destination:
+            host: {{ include "opensim-next.fullname" . }}
+            port:
+              number: {{ .Values.opensim.service.ports.admin }}
+    - route:
+        - destination:
+            host: {{ include "opensim-next.fullname" . }}
+            port:
+              number: {{ .Values.opensim.service.ports.web }}
+---
+apiVersion: networking.istio.io/v1beta1
+kind: Gateway
+metadata:
+  name: {{ include "opensim-next.fullname" . }}-gateway
+  labels:
+    {{- include "opensim-next.labels" . | nindent 4 }}
+spec:
+  selector:
+    istio: ingressgateway
+  servers:
+    - port:
+        number: 80
+        name: http
+        protocol: HTTP
+      hosts:
+        {{- range .Values.opensim.ingress.hosts }}
+        - {{ .host }}
+        {{- end }}
+      tls:
+        httpsRedirect: true
+    - port:
+        number: 443
+        name: https
+        protocol: HTTPS
+      tls:
+        mode: SIMPLE
+        credentialName: {{ .Values.opensim.ingress.tls.secretName | default (printf "%s-tls-secret" (include "opensim-next.fullname" .)) }}
+      hosts:
+        {{- range .Values.opensim.ingress.hosts }}
+        - {{ .host }}
+        {{- end }}
+    # Second Life viewer port
+    - port:
+        number: {{ .Values.opensim.service.ports.viewer }}
+        name: viewer
+        protocol: TCP
+      hosts:
+        - "*"
+    # Hypergrid port
+    - port:
+        number: {{ .Values.opensim.service.ports.hypergrid }}
+        name: hypergrid
+        protocol: TCP
+      hosts:
+        - "*"
+---
+apiVersion: networking.istio.io/v1beta1
+kind: DestinationRule
+metadata:
+  name: {{ include "opensim-next.fullname" . }}-dr
+  labels:
+    {{- include "opensim-next.labels" . | nindent 4 }}
+spec:
+  host: {{ include "opensim-next.fullname" . }}
+  trafficPolicy:
+    {{- toYaml .Values.global.serviceMesh.trafficPolicy | nindent 4 }}
+  portLevelSettings:
+    - port:
+        number: {{ .Values.opensim.service.ports.websocket }}
+      connectionPool:
+        tcp:
+          maxConnections: 5000  # High connection limit for WebSocket
+          connectTimeout: 30s
+          tcpKeepalive:
+            time: 7200s
+            interval: 75s
+        http:
+          http1MaxPendingRequests: 1000
+          http2MaxRequests: 10000
+          maxRequestsPerConnection: 1  # WebSocket upgrades
+          h2UpgradePolicy: UPGRADE
+{{- end }}
+{{- end }}

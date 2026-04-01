@@ -1,0 +1,289 @@
+# OpenSim Next Kubernetes Service
+# Exposes OpenSim Next application ports for internal and external access
+
+apiVersion: v1
+kind: Service
+metadata:
+  name: {{ include "opensim-next.fullname" . }}
+  namespace: {{ .Release.Namespace | quote }}
+  labels:
+    {{- include "opensim-next.labels" . | nindent 4 }}
+    {{- include "opensim-next.monitoring.labels" . | nindent 4 }}
+  annotations:
+    {{- with .Values.opensim.service.annotations }}
+    {{- toYaml . | nindent 4 }}
+    {{- end }}
+    # Prometheus monitoring annotations
+    prometheus.io/scrape: "true"
+    prometheus.io/port: "9100"
+    prometheus.io/path: "/metrics"
+    # Service mesh annotations (Istio/Linkerd)
+    {{- if .Values.serviceMesh.enabled }}
+    {{- if eq .Values.serviceMesh.type "istio" }}
+    sidecar.istio.io/inject: "true"
+    traffic.sidecar.istio.io/includeInboundPorts: "9000,9001,8080,9100,8002,9200"
+    {{- else if eq .Values.serviceMesh.type "linkerd" }}
+    linkerd.io/inject: enabled
+    {{- end }}
+    {{- end }}
+spec:
+  type: {{ .Values.opensim.service.type }}
+  
+  {{- if eq .Values.opensim.service.type "LoadBalancer" }}
+  {{- with .Values.loadBalancer.loadBalancerIP }}
+  loadBalancerIP: {{ . }}
+  {{- end }}
+  {{- with .Values.loadBalancer.loadBalancerSourceRanges }}
+  loadBalancerSourceRanges:
+    {{- toYaml . | nindent 4 }}
+  {{- end }}
+  {{- end }}
+  
+  {{- if eq .Values.opensim.service.type "NodePort" }}
+  externalTrafficPolicy: Local
+  {{- end }}
+  
+  ports:
+    # Second Life Viewer Protocol (TCP)
+    - name: viewer
+      port: {{ .Values.opensim.service.ports.viewer }}
+      targetPort: viewer
+      protocol: TCP
+      {{- if and (eq .Values.opensim.service.type "NodePort") .Values.opensim.service.nodePorts.viewer }}
+      nodePort: {{ .Values.opensim.service.nodePorts.viewer }}
+      {{- end }}
+    
+    # WebSocket Server (TCP with upgrade support)
+    - name: websocket
+      port: {{ .Values.opensim.service.ports.websocket }}
+      targetPort: websocket
+      protocol: TCP
+      {{- if and (eq .Values.opensim.service.type "NodePort") .Values.opensim.service.nodePorts.websocket }}
+      nodePort: {{ .Values.opensim.service.nodePorts.websocket }}
+      {{- end }}
+    
+    # Web Interface (HTTP/HTTPS)
+    - name: web
+      port: {{ .Values.opensim.service.ports.web }}
+      targetPort: web
+      protocol: TCP
+      {{- if and (eq .Values.opensim.service.type "NodePort") .Values.opensim.service.nodePorts.web }}
+      nodePort: {{ .Values.opensim.service.nodePorts.web }}
+      {{- end }}
+    
+    # Prometheus Metrics & Health API
+    - name: metrics
+      port: {{ .Values.opensim.service.ports.metrics }}
+      targetPort: metrics
+      protocol: TCP
+      {{- if and (eq .Values.opensim.service.type "NodePort") .Values.opensim.service.nodePorts.metrics }}
+      nodePort: {{ .Values.opensim.service.nodePorts.metrics }}
+      {{- end }}
+    
+    # Hypergrid Protocol
+    - name: hypergrid
+      port: {{ .Values.opensim.service.ports.hypergrid }}
+      targetPort: hypergrid
+      protocol: TCP
+      {{- if and (eq .Values.opensim.service.type "NodePort") .Values.opensim.service.nodePorts.hypergrid }}
+      nodePort: {{ .Values.opensim.service.nodePorts.hypergrid }}
+      {{- end }}
+    
+    # Admin API (Internal)
+    - name: admin
+      port: {{ .Values.opensim.service.ports.admin }}
+      targetPort: admin
+      protocol: TCP
+      {{- if and (eq .Values.opensim.service.type "NodePort") .Values.opensim.service.nodePorts.admin }}
+      nodePort: {{ .Values.opensim.service.nodePorts.admin }}
+      {{- end }}
+  
+  selector:
+    {{- include "opensim-next.selectorLabels" . | nindent 4 }}
+  
+  # Session affinity for WebSocket connections
+  sessionAffinity: ClientIP
+  sessionAffinityConfig:
+    clientIP:
+      timeoutSeconds: 3600
+
+---
+{{/* Headless service for StatefulSet if enabled */}}
+{{- if .Values.opensim.statefulSet.enabled }}
+apiVersion: v1
+kind: Service
+metadata:
+  name: {{ include "opensim-next.fullname" . }}-headless
+  namespace: {{ .Release.Namespace | quote }}
+  labels:
+    {{- include "opensim-next.labels" . | nindent 4 }}
+    service-type: headless
+spec:
+  type: ClusterIP
+  clusterIP: None
+  
+  ports:
+    - name: viewer
+      port: {{ .Values.opensim.service.ports.viewer }}
+      targetPort: viewer
+      protocol: TCP
+    - name: websocket
+      port: {{ .Values.opensim.service.ports.websocket }}
+      targetPort: websocket
+      protocol: TCP
+    - name: web
+      port: {{ .Values.opensim.service.ports.web }}
+      targetPort: web
+      protocol: TCP
+    - name: metrics
+      port: {{ .Values.opensim.service.ports.metrics }}
+      targetPort: metrics
+      protocol: TCP
+    - name: hypergrid
+      port: {{ .Values.opensim.service.ports.hypergrid }}
+      targetPort: hypergrid
+      protocol: TCP
+    - name: admin
+      port: {{ .Values.opensim.service.ports.admin }}
+      targetPort: admin
+      protocol: TCP
+  
+  selector:
+    {{- include "opensim-next.selectorLabels" . | nindent 4 }}
+  
+  publishNotReadyAddresses: true
+{{- end }}
+
+---
+{{/* Internal service for admin/metrics (restricted access) */}}
+apiVersion: v1
+kind: Service
+metadata:
+  name: {{ include "opensim-next.fullname" . }}-internal
+  namespace: {{ .Release.Namespace | quote }}
+  labels:
+    {{- include "opensim-next.labels" . | nindent 4 }}
+    service-type: internal
+  annotations:
+    # Internal service - not exposed externally
+    service.beta.kubernetes.io/aws-load-balancer-internal: "true"
+    service.beta.kubernetes.io/azure-load-balancer-internal: "true"
+    cloud.google.com/load-balancer-type: "Internal"
+spec:
+  type: ClusterIP
+  
+  ports:
+    # Metrics endpoint (Prometheus)
+    - name: metrics
+      port: {{ .Values.opensim.service.ports.metrics }}
+      targetPort: metrics
+      protocol: TCP
+    
+    # Admin API (Internal operations)
+    - name: admin
+      port: {{ .Values.opensim.service.ports.admin }}
+      targetPort: admin
+      protocol: TCP
+  
+  selector:
+    {{- include "opensim-next.selectorLabels" . | nindent 4 }}
+
+---
+{{/* External service for public access */}}
+{{- if .Values.opensim.service.external.enabled }}
+apiVersion: v1
+kind: Service
+metadata:
+  name: {{ include "opensim-next.fullname" . }}-external
+  namespace: {{ .Release.Namespace | quote }}
+  labels:
+    {{- include "opensim-next.labels" . | nindent 4 }}
+    service-type: external
+  annotations:
+    {{- with .Values.opensim.service.external.annotations }}
+    {{- toYaml . | nindent 4 }}
+    {{- end }}
+    # External service annotations
+    {{- if eq .Values.opensim.service.external.type "LoadBalancer" }}
+    {{- if .Values.opensim.service.external.cloud.aws.enabled }}
+    service.beta.kubernetes.io/aws-load-balancer-type: {{ .Values.opensim.service.external.cloud.aws.type | quote }}
+    service.beta.kubernetes.io/aws-load-balancer-ssl-cert: {{ .Values.opensim.service.external.cloud.aws.sslCert | quote }}
+    service.beta.kubernetes.io/aws-load-balancer-backend-protocol: "tcp"
+    {{- end }}
+    {{- if .Values.opensim.service.external.cloud.gcp.enabled }}
+    cloud.google.com/load-balancer-type: "External"
+    {{- end }}
+    {{- if .Values.opensim.service.external.cloud.azure.enabled }}
+    service.beta.kubernetes.io/azure-load-balancer-resource-group: {{ .Values.opensim.service.external.cloud.azure.resourceGroup | quote }}
+    {{- end }}
+    {{- end }}
+spec:
+  type: {{ .Values.opensim.service.external.type }}
+  
+  {{- if eq .Values.opensim.service.external.type "LoadBalancer" }}
+  {{- with .Values.opensim.service.external.loadBalancerIP }}
+  loadBalancerIP: {{ . }}
+  {{- end }}
+  {{- with .Values.opensim.service.external.loadBalancerSourceRanges }}
+  loadBalancerSourceRanges:
+    {{- toYaml . | nindent 4 }}
+  {{- end }}
+  {{- end }}
+  
+  ports:
+    # Second Life Viewer Protocol (Public)
+    - name: viewer
+      port: {{ .Values.opensim.service.ports.viewer }}
+      targetPort: viewer
+      protocol: TCP
+      {{- if and (eq .Values.opensim.service.external.type "NodePort") .Values.opensim.service.external.nodePorts.viewer }}
+      nodePort: {{ .Values.opensim.service.external.nodePorts.viewer }}
+      {{- end }}
+    
+    # WebSocket Server (Public)
+    - name: websocket
+      port: {{ .Values.opensim.service.ports.websocket }}
+      targetPort: websocket
+      protocol: TCP
+      {{- if and (eq .Values.opensim.service.external.type "NodePort") .Values.opensim.service.external.nodePorts.websocket }}
+      nodePort: {{ .Values.opensim.service.external.nodePorts.websocket }}
+      {{- end }}
+    
+    # Web Interface (Public)
+    - name: web
+      port: {{ .Values.opensim.service.ports.web }}
+      targetPort: web
+      protocol: TCP
+      {{- if and (eq .Values.opensim.service.external.type "NodePort") .Values.opensim.service.external.nodePorts.web }}
+      nodePort: {{ .Values.opensim.service.external.nodePorts.web }}
+      {{- end }}
+    
+    # Hypergrid Protocol (Public)
+    - name: hypergrid
+      port: {{ .Values.opensim.service.ports.hypergrid }}
+      targetPort: hypergrid
+      protocol: TCP
+      {{- if and (eq .Values.opensim.service.external.type "NodePort") .Values.opensim.service.external.nodePorts.hypergrid }}
+      nodePort: {{ .Values.opensim.service.external.nodePorts.hypergrid }}
+      {{- end }}
+    
+    {{- if .Values.opensim.service.external.exposeMetrics }}
+    # Metrics (Public - if enabled)
+    - name: metrics
+      port: {{ .Values.opensim.service.ports.metrics }}
+      targetPort: metrics
+      protocol: TCP
+      {{- if and (eq .Values.opensim.service.external.type "NodePort") .Values.opensim.service.external.nodePorts.metrics }}
+      nodePort: {{ .Values.opensim.service.external.nodePorts.metrics }}
+      {{- end }}
+    {{- end }}
+  
+  selector:
+    {{- include "opensim-next.selectorLabels" . | nindent 4 }}
+  
+  # Session affinity for external connections
+  sessionAffinity: ClientIP
+  sessionAffinityConfig:
+    clientIP:
+      timeoutSeconds: 3600
+{{- end }}

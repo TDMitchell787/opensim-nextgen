@@ -1,0 +1,193 @@
+# OpenSim Next Kubernetes Namespace
+# Production namespace with resource quotas and network policies
+
+apiVersion: v1
+kind: Namespace
+metadata:
+  name: opensim-next
+  labels:
+    name: opensim-next
+    app.kubernetes.io/name: opensim-next
+    app.kubernetes.io/managed-by: kubernetes
+    environment: production
+    tier: application
+    # Security labels
+    pod-security.kubernetes.io/enforce: restricted
+    pod-security.kubernetes.io/audit: restricted
+    pod-security.kubernetes.io/warn: restricted
+  annotations:
+    # Portainer annotations for management
+    portainer.io/description: "OpenSim Next virtual world server production environment"
+    portainer.io/team: "opensim-next-team"
+    # Network policy annotations
+    networkpolicy.kubernetes.io/ingress: "restricted"
+    networkpolicy.kubernetes.io/egress: "restricted"
+
+---
+# Resource Quota for the namespace
+apiVersion: v1
+kind: ResourceQuota
+metadata:
+  name: opensim-next-quota
+  namespace: opensim-next
+  labels:
+    app.kubernetes.io/name: opensim-next
+    component: resource-management
+spec:
+  hard:
+    # Compute resources
+    requests.cpu: "4000m"
+    requests.memory: "8Gi"
+    limits.cpu: "8000m"
+    limits.memory: "16Gi"
+    
+    # Storage resources
+    requests.storage: "200Gi"
+    persistentvolumeclaims: "10"
+    
+    # Object counts
+    pods: "20"
+    services: "10"
+    secrets: "10"
+    configmaps: "10"
+    replicationcontrollers: "0"
+    
+    # Load balancers and node ports
+    services.loadbalancers: "2"
+    services.nodeports: "5"
+
+---
+# Limit Range for default resource limits
+apiVersion: v1
+kind: LimitRange
+metadata:
+  name: opensim-next-limits
+  namespace: opensim-next
+  labels:
+    app.kubernetes.io/name: opensim-next
+    component: resource-management
+spec:
+  limits:
+    # Container limits
+    - type: Container
+      default:
+        cpu: "500m"
+        memory: "1Gi"
+      defaultRequest:
+        cpu: "100m"
+        memory: "256Mi"
+      max:
+        cpu: "4000m"
+        memory: "8Gi"
+      min:
+        cpu: "50m"
+        memory: "128Mi"
+    
+    # Pod limits
+    - type: Pod
+      max:
+        cpu: "4000m"
+        memory: "8Gi"
+      min:
+        cpu: "50m"
+        memory: "128Mi"
+    
+    # Persistent Volume Claim limits
+    - type: PersistentVolumeClaim
+      max:
+        storage: "100Gi"
+      min:
+        storage: "1Gi"
+
+---
+# Network Policy for namespace isolation
+apiVersion: networking.k8s.io/v1
+kind: NetworkPolicy
+metadata:
+  name: opensim-next-network-policy
+  namespace: opensim-next
+  labels:
+    app.kubernetes.io/name: opensim-next
+    component: network-security
+spec:
+  podSelector: {}
+  policyTypes:
+    - Ingress
+    - Egress
+  
+  ingress:
+    # Allow ingress from ingress controller
+    - from:
+        - namespaceSelector:
+            matchLabels:
+              name: ingress-nginx
+        - namespaceSelector:
+            matchLabels:
+              name: ingress-system
+      ports:
+        - protocol: TCP
+          port: 8080
+        - protocol: TCP
+          port: 9001
+        - protocol: TCP
+          port: 9000
+        - protocol: TCP
+          port: 8002
+    
+    # Allow ingress from monitoring namespace
+    - from:
+        - namespaceSelector:
+            matchLabels:
+              name: monitoring
+        - namespaceSelector:
+            matchLabels:
+              name: prometheus-system
+      ports:
+        - protocol: TCP
+          port: 9100
+    
+    # Allow internal communication within namespace
+    - from:
+        - podSelector: {}
+      ports:
+        - protocol: TCP
+        - protocol: UDP
+  
+  egress:
+    # Allow egress to PostgreSQL and Redis
+    - to:
+        - podSelector:
+            matchLabels:
+              app.kubernetes.io/name: postgresql
+        - podSelector:
+            matchLabels:
+              app.kubernetes.io/name: redis
+      ports:
+        - protocol: TCP
+          port: 5432
+        - protocol: TCP
+          port: 6379
+    
+    # Allow egress to Kubernetes API server
+    - to: []
+      ports:
+        - protocol: TCP
+          port: 443
+        - protocol: TCP
+          port: 6443
+    
+    # Allow egress to DNS
+    - to: []
+      ports:
+        - protocol: UDP
+          port: 53
+        - protocol: TCP
+          port: 53
+    
+    # Allow egress to external services (HTTP/HTTPS)
+    - to: []
+      ports:
+        - protocol: TCP
+          port: 80
+        - protocol: TCP
+          port: 443

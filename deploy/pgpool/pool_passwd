@@ -1,0 +1,4 @@
+# pool_passwd - pgpool-II password file
+# Format: username:md5hash
+# Generate: pg_md5 <password>
+# opensim:md5_hash_here

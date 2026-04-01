@@ -1,0 +1,163 @@
+# OpenSim Next Multi-Instance Configuration
+# This file defines all OpenSim-next instances that the Flutter dashboard can manage
+#
+# Discovery Mode Options:
+#   - "config"      : Use this file only (default)
+#   - "multicast"   : Auto-discover instances on local network
+#   - "consul"      : Use Consul service discovery
+#   - "kubernetes"  : Use Kubernetes service discovery
+
+[controller]
+discovery_mode = "config"
+health_check_interval_ms = 5000
+heartbeat_timeout_ms = 15000
+reconnect_delay_ms = 3000
+max_reconnect_attempts = 5
+command_timeout_ms = 30000
+controller_port = 9300
+instances_base_dir = "./Instances"
+binary_path = ""
+
+# =============================================================================
+# INSTANCE DEFINITIONS
+# =============================================================================
+# Each [[instances]] block defines one OpenSim-next server to manage.
+# The dashboard will connect to each instance's WebSocket port for real-time
+# communication and control.
+
+[[instances]]
+id = "local-dev"
+name = "Local Development"
+description = "Local development server for testing"
+host = "localhost"
+websocket_port = 9001
+admin_port = 9200
+metrics_port = 9100
+http_port = 9000
+udp_port = 9000
+api_key = "dev-api-key-change-me"
+environment = "development"
+auto_connect = true
+tags = ["development", "local", "testing"]
+
+[instances.authentication]
+method = "api_key"              # "api_key" | "jwt" | "mtls"
+# credentials_file = ""         # Optional: path to credentials file
+
+[instances.tls]
+enabled = false
+# ca_cert_path = ""
+# verify_host = true
+
+# -----------------------------------------------------------------------------
+# Example: Production Server
+# -----------------------------------------------------------------------------
+# Uncomment and configure for your production deployment
+
+# [[instances]]
+# id = "prod-main"
+# name = "Production Main Grid"
+# description = "Primary production virtual world server"
+# host = "grid.example.com"
+# websocket_port = 9001
+# admin_port = 9200
+# metrics_port = 9100
+# http_port = 9000
+# udp_port = 9000
+# api_key = "prod-secure-api-key-12345"
+# environment = "production"
+# auto_connect = true
+# tags = ["production", "main", "us-east"]
+#
+# [instances.authentication]
+# method = "api_key"
+#
+# [instances.tls]
+# enabled = true
+# ca_cert_path = "/etc/opensim/certs/ca.crt"
+# verify_host = true
+
+# -----------------------------------------------------------------------------
+# Example: Staging Server
+# -----------------------------------------------------------------------------
+
+# [[instances]]
+# id = "staging-1"
+# name = "Staging Server"
+# description = "Staging environment for pre-production testing"
+# host = "staging.example.com"
+# websocket_port = 9001
+# admin_port = 9200
+# metrics_port = 9100
+# http_port = 9000
+# udp_port = 9000
+# api_key = "staging-api-key-67890"
+# environment = "staging"
+# auto_connect = false
+# tags = ["staging", "testing", "pre-prod"]
+#
+# [instances.authentication]
+# method = "api_key"
+#
+# [instances.tls]
+# enabled = true
+# verify_host = true
+
+# -----------------------------------------------------------------------------
+# Example: Secondary Region Server
+# -----------------------------------------------------------------------------
+
+# [[instances]]
+# id = "region-server-2"
+# name = "Region Server 2"
+# description = "Secondary region server for load distribution"
+# host = "region2.example.com"
+# websocket_port = 9001
+# admin_port = 9200
+# metrics_port = 9100
+# http_port = 9000
+# udp_port = 9000
+# api_key = "region2-api-key"
+# environment = "production"
+# auto_connect = true
+# tags = ["production", "region", "us-west"]
+#
+# [instances.authentication]
+# method = "api_key"
+#
+# [instances.tls]
+# enabled = true
+# verify_host = true
+
+# =============================================================================
+# CONFIGURATION REFERENCE
+# =============================================================================
+#
+# Instance Fields:
+#   id              - Unique identifier for this instance (required)
+#   name            - Human-readable display name (required)
+#   description     - Optional description
+#   host            - Hostname or IP address (required)
+#   websocket_port  - WebSocket server port (default: 9001)
+#   admin_port      - Admin API port (default: 9200)
+#   metrics_port    - Prometheus metrics port (default: 9100)
+#   http_port       - HTTP/HTTPS server port (default: 9000)
+#   udp_port        - UDP server port for viewers (default: 9000)
+#   api_key         - Authentication key for this instance (required)
+#   environment     - "development" | "staging" | "production"
+#   auto_connect    - Connect automatically on dashboard startup
+#   tags            - Array of tags for filtering/grouping
+#
+# Authentication Methods:
+#   api_key         - Simple API key authentication (default)
+#   jwt             - JSON Web Token authentication
+#   mtls            - Mutual TLS with client certificates
+#
+# TLS Configuration:
+#   enabled         - Enable TLS for WebSocket connections
+#   ca_cert_path    - Path to CA certificate for verification
+#   verify_host     - Verify server hostname matches certificate
+#
+# Environment Variables Override:
+#   OPENSIM_INSTANCE_{ID}_API_KEY - Override API key for instance
+#   OPENSIM_INSTANCE_{ID}_HOST    - Override host for instance

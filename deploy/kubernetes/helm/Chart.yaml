@@ -1,0 +1,98 @@
+# OpenSim Next Helm Chart Metadata
+# Kubernetes deployment chart for OpenSim Next virtual world server
+
+apiVersion: v2
+name: opensim-next
+description: Revolutionary web-enabled virtual world server with Second Life compatibility
+type: application
+version: 1.0.0
+appVersion: "1.0.0"
+
+# Chart metadata
+home: https://github.com/opensim/opensim-next
+sources:
+  - https://github.com/opensim/opensim-next
+
+maintainers:
+  - name: OpenSim Next Team
+    email: team@opensim-next.org
+
+# Keywords for chart discovery
+keywords:
+  - opensim
+  - virtual-world
+  - metaverse
+  - second-life
+  - websocket
+  - rust
+  - zig
+
+# Dependencies
+dependencies:
+  - name: postgresql
+    version: "~12.1.0"
+    repository: "https://charts.bitnami.com/bitnami"
+    condition: postgresql.enabled
+    tags:
+      - database
+
+  - name: redis
+    version: "~18.1.0"
+    repository: "https://charts.bitnami.com/bitnami"
+    condition: redis.enabled
+    tags:
+      - cache
+
+  - name: prometheus
+    version: "~15.18.0"
+    repository: "https://prometheus-community.github.io/helm-charts"
+    condition: monitoring.prometheus.enabled
+    tags:
+      - monitoring
+
+  - name: grafana
+    version: "~6.50.0"
+    repository: "https://grafana.github.io/helm-charts"
+    condition: monitoring.grafana.enabled
+    tags:
+      - monitoring
+
+  - name: nginx-ingress
+    version: "~4.4.0"
+    repository: "https://kubernetes.github.io/ingress-nginx"
+    condition: ingress.enabled
+    tags:
+      - networking
+
+# Annotations for additional metadata
+annotations:
+  # Artifact Hub annotations
+  artifacthub.io/category: "integration-delivery"
+  artifacthub.io/license: "MIT"
+  artifacthub.io/links: |
+    - name: OpenSim Next Documentation
+      url: https://docs.opensim-next.org
+    - name: OpenSim Next Discord
+      url: https://discord.gg/opensim-next
+  artifacthub.io/screenshots: |
+    - title: Admin Dashboard
+      url: https://opensim-next.org/screenshots/admin-dashboard.png
+    - title: Web Client Interface
+      url: https://opensim-next.org/screenshots/web-client.png
+  artifacthub.io/changes: |
+    - kind: added
+      description: Revolutionary web-enabled virtual world server
+    - kind: added
+      description: Complete Second Life viewer compatibility
+    - kind: added
+      description: WebSocket support for web browsers
+    - kind: added
+      description: Multi-physics engine system
+    - kind: added
+      description: Production-ready Kubernetes deployment
+
+# Minimum Kubernetes version
+kubeVersion: ">=1.20.0"
+
+# Deprecated (false for new chart)
+deprecated: false

@@ -1,0 +1,495 @@
+// Configuration Dashboard Widget - Flutter Web Version
+// Intelligent dashboard with real-time progress tracking and configuration status
+
+import 'package:flutter/material.dart';
+import 'package:provider/provider.dart';
+import '../providers/configurator_provider.dart';
+import '../theme/app_theme.dart';
+
+class ConfigurationDashboard extends StatelessWidget {
+  final VoidCallback onStartWizard;
+
+  const ConfigurationDashboard({
+    Key? key,
+    required this.onStartWizard,
+  }) : super(key: key);
+
+  @override
+  Widget build(BuildContext context) {
+    return Consumer<ConfiguratorProvider>(
+      builder: (context, provider, child) {
+        return Column(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            // Dashboard Header
+            _buildDashboardHeader(provider),
+            SizedBox(height: 24),
+            
+            // Configuration Cards Grid
+            _buildConfigurationGrid(provider),
+            
+            SizedBox(height: 24),
+            
+            // Recommendations Panel
+            _buildRecommendationsPanel(provider),
+          ],
+        );
+      },
+    );
+  }
+
+  Widget _buildDashboardHeader(ConfiguratorProvider provider) {
+    return Card(
+      child: Padding(
+        padding: EdgeInsets.all(24),
+        child: Column(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            Row(
+              mainAxisAlignment: MainAxisAlignment.spaceBetween,
+              children: [
+                Text(
+                  'Configuration Dashboard',
+                  style: AppTheme.headlineStyle(),
+                ),
+                ElevatedButton.icon(
+                  onPressed: onStartWizard,
+                  icon: Icon(Icons.auto_fix_high),
+                  label: Text('Start Configuration Wizard'),
+                ),
+              ],
+            ),
+            SizedBox(height: 20),
+            
+            // Progress Indicators
+            Row(
+              children: [
+                Expanded(
+                  child: _buildProgressIndicator(
+                    'Overall Progress',
+                    provider.overallProgress,
+                    AppTheme.primaryColor,
+                  ),
+                ),
+                SizedBox(width: 24),
+                Expanded(
+                  child: _buildProgressIndicator(
+                    'Security Status',
+                    provider.securityScore,
+                    AppTheme.warningColor,
+                  ),
+                ),
+                SizedBox(width: 24),
+                Expanded(
+                  child: _buildStatusIndicator(
+                    'Validation Status',
+                    provider.validationStatus,
+                  ),
+                ),
+              ],
+            ),
+          ],
+        ),
+      ),
+    );
+  }
+
+  Widget _buildProgressIndicator(String label, double value, Color color) {
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        Row(
+          mainAxisAlignment: MainAxisAlignment.spaceBetween,
+          children: [
+            Text(label, style: AppTheme.captionStyle()),
+            Text('${(value * 100).toInt()}%', style: AppTheme.bodyStyle()),
+          ],
+        ),
+        SizedBox(height: 8),
+        LinearProgressIndicator(
+          value: value,
+          backgroundColor: AppTheme.gray200,
+          valueColor: AlwaysStoppedAnimation<Color>(color),
+        ),
+      ],
+    );
+  }
+
+  Widget _buildStatusIndicator(String label, String status) {
+    Color statusColor;
+    IconData statusIcon;
+    
+    switch (status.toLowerCase()) {
+      case 'complete':
+        statusColor = AppTheme.successColor;
+        statusIcon = Icons.check_circle;
+        break;
+      case 'warning':
+        statusColor = AppTheme.warningColor;
+        statusIcon = Icons.warning;
+        break;
+      case 'error':
+        statusColor = AppTheme.errorColor;
+        statusIcon = Icons.error;
+        break;
+      default:
+        statusColor = AppTheme.gray500;
+        statusIcon = Icons.pending;
+    }
+
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        Text(label, style: AppTheme.captionStyle()),
+        SizedBox(height: 8),
+        Container(
+          padding: EdgeInsets.symmetric(horizontal: 12, vertical: 8),
+          decoration: BoxDecoration(
+            color: statusColor.withValues(alpha: 0.1),
+            border: Border.all(color: statusColor.withValues(alpha: 0.3)),
+            borderRadius: BorderRadius.circular(6),
+          ),
+          child: Row(
+            mainAxisSize: MainAxisSize.min,
+            children: [
+              Icon(statusIcon, color: statusColor, size: 16),
+              SizedBox(width: 6),
+              Text(
+                status,
+                style: TextStyle(
+                  color: statusColor,
+                  fontSize: 12,
+                  fontWeight: FontWeight.w500,
+                ),
+              ),
+            ],
+          ),
+        ),
+      ],
+    );
+  }
+
+  Widget _buildConfigurationGrid(ConfiguratorProvider provider) {
+    return LayoutBuilder(
+      builder: (context, constraints) {
+        int crossAxisCount = constraints.maxWidth > 1200 ? 3 : 
+                           constraints.maxWidth > 800 ? 2 : 1;
+        
+        return GridView.builder(
+          shrinkWrap: true,
+          physics: NeverScrollableScrollPhysics(),
+          gridDelegate: SliverGridDelegateWithFixedCrossAxisCount(
+            crossAxisCount: crossAxisCount,
+            crossAxisSpacing: 16,
+            mainAxisSpacing: 16,
+            childAspectRatio: 1.2,
+          ),
+          itemCount: _configurationSections.length,
+          itemBuilder: (context, index) {
+            final section = _configurationSections[index];
+            return _buildConfigurationCard(section, provider);
+          },
+        );
+      },
+    );
+  }
+
+  Widget _buildConfigurationCard(ConfigurationSection section, ConfiguratorProvider provider) {
+    final sectionStatus = provider.getSectionStatus(section.id);
+    final isCompleted = sectionStatus == ConfigurationStatus.completed;
+    final isInProgress = sectionStatus == ConfigurationStatus.inProgress;
+    final hasWarning = sectionStatus == ConfigurationStatus.warning;
+
+    Color statusColor = isCompleted 
+      ? AppTheme.successColor
+      : isInProgress 
+        ? AppTheme.primaryColor
+        : hasWarning
+          ? AppTheme.warningColor
+          : AppTheme.gray400;
+
+    IconData statusIcon = isCompleted
+      ? Icons.check_circle
+      : isInProgress
+        ? Icons.hourglass_empty
+        : hasWarning
+          ? Icons.warning
+          : Icons.radio_button_unchecked;
+
+    return Card(
+      child: InkWell(
+        onTap: () => _openConfigurationSection(section),
+        borderRadius: BorderRadius.circular(12),
+        child: Padding(
+          padding: EdgeInsets.all(20),
+          child: Column(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              // Header
+              Row(
+                children: [
+                  Icon(section.icon, color: AppTheme.primaryColor, size: 32),
+                  Spacer(),
+                  Icon(statusIcon, color: statusColor, size: 24),
+                ],
+              ),
+              
+              SizedBox(height: 16),
+              
+              // Title
+              Text(
+                section.title,
+                style: AppTheme.titleStyle(),
+              ),
+              
+              SizedBox(height: 8),
+              
+              // Description
+              Text(
+                section.description,
+                style: AppTheme.bodyStyle(),
+                maxLines: 2,
+                overflow: TextOverflow.ellipsis,
+              ),
+              
+              Spacer(),
+              
+              // Progress and Actions
+              if (isInProgress) ...[
+                LinearProgressIndicator(
+                  value: provider.getSectionProgress(section.id),
+                  backgroundColor: AppTheme.gray200,
+                  valueColor: AlwaysStoppedAnimation<Color>(AppTheme.primaryColor),
+                ),
+                SizedBox(height: 12),
+              ],
+              
+              // Action Button
+              SizedBox(
+                width: double.infinity,
+                child: OutlinedButton(
+                  onPressed: () => _openConfigurationSection(section),
+                  child: Text(
+                    isCompleted ? 'Review' : 
+                    isInProgress ? 'Continue' : 'Configure'
+                  ),
+                ),
+              ),
+            ],
+          ),
+        ),
+      ),
+    );
+  }
+
+  Widget _buildRecommendationsPanel(ConfiguratorProvider provider) {
+    final recommendations = provider.getRecommendations();
+    
+    if (recommendations.isEmpty) {
+      return SizedBox.shrink();
+    }
+
+    return Card(
+      child: Padding(
+        padding: EdgeInsets.all(24),
+        child: Column(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            Row(
+              children: [
+                Icon(Icons.lightbulb_outline, color: AppTheme.warningColor),
+                SizedBox(width: 8),
+                Text(
+                  'Intelligent Recommendations',
+                  style: AppTheme.titleStyle(),
+                ),
+                Spacer(),
+                TextButton(
+                  onPressed: () => provider.dismissAllRecommendations(),
+                  child: Text('Dismiss All'),
+                ),
+              ],
+            ),
+            SizedBox(height: 16),
+            
+            ...recommendations.take(3).map((recommendation) => 
+              _buildRecommendationItem(recommendation, provider)
+            ).toList(),
+            
+            if (recommendations.length > 3) ...[
+              SizedBox(height: 12),
+              TextButton(
+                onPressed: () => _showAllRecommendations(recommendations),
+                child: Text('View ${recommendations.length - 3} more recommendations'),
+              ),
+            ],
+          ],
+        ),
+      ),
+    );
+  }
+
+  Widget _buildRecommendationItem(ConfigurationRecommendation recommendation, ConfiguratorProvider provider) {
+    Color priorityColor = recommendation.priority == RecommendationPriority.high
+      ? AppTheme.errorColor
+      : recommendation.priority == RecommendationPriority.medium
+        ? AppTheme.warningColor
+        : AppTheme.infoColor;
+
+    return Container(
+      margin: EdgeInsets.only(bottom: 12),
+      padding: EdgeInsets.all(16),
+      decoration: BoxDecoration(
+        border: Border.all(color: priorityColor.withValues(alpha: 0.3)),
+        borderRadius: BorderRadius.circular(8),
+        color: priorityColor.withValues(alpha: 0.05),
+      ),
+      child: Row(
+        children: [
+          Icon(
+            recommendation.priority == RecommendationPriority.high
+              ? Icons.priority_high
+              : Icons.info_outline,
+            color: priorityColor,
+            size: 20,
+          ),
+          SizedBox(width: 12),
+          Expanded(
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                Text(
+                  recommendation.title,
+                  style: TextStyle(
+                    fontWeight: FontWeight.w500,
+                    color: AppTheme.gray900,
+                  ),
+                ),
+                SizedBox(height: 4),
+                Text(
+                  recommendation.description,
+                  style: AppTheme.bodyStyle(),
+                ),
+              ],
+            ),
+          ),
+          SizedBox(width: 12),
+          OutlinedButton(
+            onPressed: () => _applyRecommendation(recommendation, provider),
+            child: Text('Apply'),
+            style: OutlinedButton.styleFrom(
+              foregroundColor: priorityColor,
+              side: BorderSide(color: priorityColor),
+            ),
+          ),
+          SizedBox(width: 8),
+          IconButton(
+            onPressed: () => provider.dismissRecommendation(recommendation.id),
+            icon: Icon(Icons.close, size: 16),
+            constraints: BoxConstraints(minWidth: 32, minHeight: 32),
+          ),
+        ],
+      ),
+    );
+  }
+
+  void _openConfigurationSection(ConfigurationSection section) {
+    // Implementation depends on the section type
+    print('Opening configuration section: ${section.id}');
+  }
+
+  void _showAllRecommendations(List<ConfigurationRecommendation> recommendations) {
+    // Show modal with all recommendations
+    print('Showing all ${recommendations.length} recommendations');
+  }
+
+  void _applyRecommendation(ConfigurationRecommendation recommendation, ConfiguratorProvider provider) {
+    provider.applyRecommendation(recommendation.id);
+  }
+}
+
+// Configuration section data model
+class ConfigurationSection {
+  final String id;
+  final String title;
+  final String description;
+  final IconData icon;
+
+  ConfigurationSection({
+    required this.id,
+    required this.title,
+    required this.description,
+    required this.icon,
+  });
+}
+
+// Pre-defined configuration sections
+final List<ConfigurationSection> _configurationSections = [
+  ConfigurationSection(
+    id: 'deployment',
+    title: 'Deployment Type',
+    description: 'Choose your deployment configuration and environment settings',
+    icon: Icons.settings_applications,
+  ),
+  ConfigurationSection(
+    id: 'environment',
+    title: 'Environment Setup',
+    description: 'Configure basic environment and server settings',
+    icon: Icons.computer,
+  ),
+  ConfigurationSection(
+    id: 'database',
+    title: 'Database Configuration',
+    description: 'Set up database connections and storage options',
+    icon: Icons.storage,
+  ),
+  ConfigurationSection(
+    id: 'regions',
+    title: 'Region Management',
+    description: 'Configure virtual world regions and physics engines',
+    icon: Icons.public,
+  ),
+  ConfigurationSection(
+    id: 'security',
+    title: 'Security Settings',
+    description: 'Configure encryption, authentication, and access controls',
+    icon: Icons.security,
+  ),
+  ConfigurationSection(
+    id: 'network',
+    title: 'Network Configuration',
+    description: 'Set up networking, ports, and connectivity options',
+    icon: Icons.network_check,
+  ),
+];
+
+// Enums for configuration status and recommendations
+enum ConfigurationStatus {
+  pending,
+  inProgress,
+  completed,
+  warning,
+  error,
+}
+
+enum RecommendationPriority {
+  low,
+  medium,
+  high,
+}
+
+class ConfigurationRecommendation {
+  final String id;
+  final String title;
+  final String description;
+  final RecommendationPriority priority;
+  final String actionText;
+
+  ConfigurationRecommendation({
+    required this.id,
+    required this.title,
+    required this.description,
+    required this.priority,
+    required this.actionText,
+  });
+}

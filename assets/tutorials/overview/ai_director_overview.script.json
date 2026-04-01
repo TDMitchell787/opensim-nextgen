@@ -1,0 +1,126 @@
+{
+  "skill_id": "overview",
+  "title": "AI Director — Complete Skill Engine Overview",
+  "version": "1.0",
+  "duration_target_secs": 180,
+  "narrator": "AI Director",
+  "segments": [
+    {
+      "segment_type": "intro",
+      "narration": "Welcome to the AI Director Skill Engine — your intelligent building partner in this virtual world. The AI Director combines 120 skills across 14 domains, all accessible through natural conversation, REST API, or LSL scripting. Let's take a tour.",
+      "duration_secs": 12,
+      "camera": { "type": "static", "position": [128, 100, 35], "look_at": [128, 128, 25] },
+      "overlay": { "text": "AI Director — Skill Engine", "position": "top_center", "style": "title" }
+    },
+    {
+      "segment_type": "demonstrate",
+      "narration": "The Building domain is the foundation — 26 skills at production maturity. Seven prim types, mesh import, Blender generation, linkset operations, and full OAR export. Say 'build me a wooden table' and watch it appear.",
+      "duration_secs": 15,
+      "camera": { "type": "orbit", "center": [128, 128, 26], "radius": 8, "height": 3 },
+      "action": { "domain": "building", "skill_id": "rez_box", "params": { "position": [128, 128, 25.8], "scale": [1.5, 1.0, 0.08], "name": "Demo Table" } },
+      "overlay": { "text": "Building — 26 skills (L7)", "position": "bottom_center", "style": "domain_label" }
+    },
+    {
+      "segment_type": "demonstrate",
+      "narration": "Vehicles come ready to drive. Seven recipes — car, bike, plane, VTOL, sailing vessel, starship, and the Gaia hybrid. Each is fully scripted with physics, HUD controls, and tunable parameters.",
+      "duration_secs": 14,
+      "camera": { "type": "follow", "target": "vehicle" },
+      "action": { "domain": "vehicles", "skill_id": "build_vehicle", "params": { "recipe": "vessel", "position": [128, 128, 20] } },
+      "overlay": { "text": "Vehicles — 7 recipes (L7)", "position": "bottom_center", "style": "domain_label" }
+    },
+    {
+      "segment_type": "demonstrate",
+      "narration": "The Media domain powers cinematography. Drone camera shots with 8 types — orbit, dolly, crane, flyby. The Luxor raytracer renders photos and video server-side in seconds. Plus the tutorial video pipeline that created this very video.",
+      "duration_secs": 14,
+      "camera": { "type": "crane", "start_height": 2, "end_height": 30, "center": [128, 128, 25] },
+      "action": { "domain": "media", "skill_id": "drone_cinematography", "params": { "scene_name": "Demo Orbit", "shot_type": "orbit", "subject_position": [128, 128, 28] } },
+      "overlay": { "text": "Media — 14 skills (Film, Photo, Luxor, Tutorials)", "position": "bottom_center", "style": "domain_label" }
+    },
+    {
+      "segment_type": "demonstrate",
+      "narration": "Landscaping generates entire terrains procedurally. Eight presets from volcanic islands to rolling hills. Preview before you apply, import heightmaps, and build seamless multi-region worlds.",
+      "duration_secs": 12,
+      "camera": { "type": "static", "position": [128, 50, 80], "look_at": [128, 128, 25] },
+      "action": { "domain": "landscaping", "skill_id": "terrain_generate", "params": { "preset": "island", "scale": 1.2 } },
+      "overlay": { "text": "Landscaping — 6 skills (L7)", "position": "bottom_center", "style": "domain_label" }
+    },
+    {
+      "segment_type": "demonstrate",
+      "narration": "Clothing creates wearable mesh garments. T-shirts with custom logos are production-ready. Pants, dresses, jackets, and skirts are defined and coming online through the Blender pipeline.",
+      "duration_secs": 10,
+      "camera": { "type": "static", "position": [130, 128, 26], "look_at": [128, 128, 26] },
+      "overlay": { "text": "Clothing — 6 skills (T-shirt L7, others L1)", "position": "bottom_center", "style": "domain_label" }
+    },
+    {
+      "segment_type": "demonstrate",
+      "narration": "Scripting inserts LSL code directly into prims. Choose from 14 templates — rotating, sliding door, vendor, sit target — or write custom scripts. The AI Director handles the wiring.",
+      "duration_secs": 10,
+      "camera": { "type": "static", "position": [128, 130, 26], "look_at": [128, 128, 25] },
+      "overlay": { "text": "Scripting — 4 skills (L7)", "position": "bottom_center", "style": "domain_label" }
+    },
+    {
+      "segment_type": "explain",
+      "narration": "Now the new domains added in Phase 209. Navigation handles teleporting agents, landmarks, waypoint tours, and home locations. Estate gives admins control over regions — restart, ban, parcel settings, sun, water height.",
+      "duration_secs": 12,
+      "camera": { "type": "orbit", "center": [128, 128, 25], "radius": 40, "height": 20 },
+      "overlay": { "text": "Navigation (7 skills) + Estate (11 skills)", "position": "bottom_center", "style": "domain_label" }
+    },
+    {
+      "segment_type": "explain",
+      "narration": "Economy connects to the grid currency system. Pay agents, check balances, create vendors and tip jars. Social handles greetings, announcements, events, group invites, and greeter NPCs.",
+      "duration_secs": 12,
+      "camera": { "type": "orbit", "center": [128, 128, 25], "radius": 40, "height": 20 },
+      "overlay": { "text": "Economy (6 skills) + Social (6 skills)", "position": "bottom_center", "style": "domain_label" }
+    },
+    {
+      "segment_type": "explain",
+      "narration": "Animation plays and stops animations, creates poses, bakes statue meshes, and applies animation overrides. NPC Management spawns, despawns, costumes, patrols, and assigns roles to non-player characters.",
+      "duration_secs": 12,
+      "camera": { "type": "static", "position": [128, 128, 35], "look_at": [128, 128, 25] },
+      "overlay": { "text": "Animation (6) + NPC Management (8)", "position": "bottom_center", "style": "domain_label" }
+    },
+    {
+      "segment_type": "explain",
+      "narration": "Inventory manages items — give, search, distribute starter kits. Tutorial creates interactive learning experiences with hints, info boards, and welcome areas. Every skill tracks progress through 7 maturity levels.",
+      "duration_secs": 12,
+      "camera": { "type": "static", "position": [128, 128, 35], "look_at": [128, 128, 25] },
+      "overlay": { "text": "Inventory (6) + Tutorial (5)", "position": "bottom_center", "style": "domain_label" }
+    },
+    {
+      "segment_type": "explain",
+      "narration": "Three ways to access any skill. Chat naturally with the AI Director — just talk. Use the REST API from the Flutter dashboard or external tools. Or call osInvokeSkill from any LSL script in-world.",
+      "duration_secs": 12,
+      "camera": { "type": "static", "position": [128, 128, 30], "look_at": [128, 128, 25] },
+      "overlay": { "text": "3 Access Paths: Chat | REST API | LSL", "position": "center", "style": "highlight" }
+    },
+    {
+      "segment_type": "explain",
+      "narration": "The Skills Dashboard in the Flutter Configurator shows every domain's maturity score at a glance. Drill into any domain, search skills, view parameters and examples. It's the map of everything the AI Director can do.",
+      "duration_secs": 12,
+      "camera": { "type": "static", "position": [128, 128, 30], "look_at": [128, 128, 25] },
+      "overlay": { "text": "Flutter Skills Dashboard", "position": "top_center", "style": "title" }
+    },
+    {
+      "segment_type": "variation",
+      "narration": "Grid operators can rename the AI Director to match their world's theme. Set name equals Athena, Oracle, or Sage in llm.ini. The AI knows its own name and introduces itself accordingly.",
+      "duration_secs": 8,
+      "camera": { "type": "static", "position": [130, 128, 26], "look_at": [128, 128, 26] },
+      "overlay": { "text": "[galadriel]\nname=Athena", "position": "center", "style": "code" }
+    },
+    {
+      "segment_type": "outro",
+      "narration": "That's the AI Director Skill Engine — 120 skills, 14 domains, growing with every phase. Start by saying hello in local chat. The AI Director is ready to build your world.",
+      "duration_secs": 10,
+      "camera": { "type": "orbit", "center": [128, 128, 28], "radius": 50, "height": 25 },
+      "overlay": { "text": "120 Skills | 14 Domains | 3 Access Paths\nOpenSim Next", "position": "center", "style": "title" }
+    }
+  ],
+  "metadata": {
+    "created": "2026-03-30",
+    "phase": "Phase 209",
+    "total_segments": 15,
+    "target_audience": "new_users",
+    "tts_engine": "piper",
+    "tts_voice": "en_US-lessac-medium"
+  }
+}

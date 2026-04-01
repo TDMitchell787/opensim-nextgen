@@ -1,0 +1,684 @@
+# OpenSim Next Helm Chart Values
+# Default configuration for Kubernetes deployment
+
+#==============================================================================
+# Global Configuration
+#==============================================================================
+global:
+  # Image registry and settings
+  imageRegistry: ""
+  imagePullSecrets: []
+  storageClass: ""
+  
+  # Security context
+  securityContext:
+    enabled: true
+    runAsNonRoot: true
+    runAsUser: 1001
+    runAsGroup: 1001
+    fsGroup: 1001
+  
+  # Service mesh configuration
+  serviceMesh:
+    enabled: false
+    type: "istio"  # istio, linkerd, consul-connect
+    mTLS:
+      enabled: true
+      mode: "STRICT"  # STRICT, PERMISSIVE
+    tracing:
+      enabled: true
+      jaeger:
+        enabled: true
+      zipkin:
+        enabled: false
+    monitoring:
+      enabled: true
+      prometheus:
+        scrape: true
+    trafficPolicy:
+      loadBalancer:
+        simple: ROUND_ROBIN  # ROUND_ROBIN, LEAST_CONN, RANDOM, PASSTHROUGH
+      connectionPool:
+        tcp:
+          maxConnections: 100
+          connectTimeout: 30s
+        http:
+          http1MaxPendingRequests: 100
+          http2MaxRequests: 1000
+          maxRequestsPerConnection: 10
+          maxRetries: 3
+          consecutiveGatewayErrors: 5
+          interval: 30s
+          baseEjectionTime: 30s
+
+#==============================================================================
+# OpenSim Next Application Configuration
+#==============================================================================
+opensim:
+  # Image configuration
+  image:
+    registry: docker.io
+    repository: opensim/opensim-next
+    tag: "1.0.0"
+    pullPolicy: IfNotPresent
+    pullSecrets: []
+  
+  # Replica configuration
+  replicaCount: 1
+  
+  # Auto-scaling configuration
+  autoscaling:
+    enabled: true
+    minReplicas: 1
+    maxReplicas: 10
+    targetCPUUtilizationPercentage: 70
+    targetMemoryUtilizationPercentage: 80
+    behavior:
+      scaleDown:
+        stabilizationWindowSeconds: 300
+        policies:
+        - type: Percent
+          value: 10
+          periodSeconds: 60
+      scaleUp:
+        stabilizationWindowSeconds: 60
+        policies:
+        - type: Percent
+          value: 50
+          periodSeconds: 60
+  
+  # Pod Disruption Budget
+  podDisruptionBudget:
+    enabled: true
+    minAvailable: 1
+  
+  # Service configuration
+  service:
+    type: ClusterIP
+    ports:
+      viewer: 9000      # Second Life Viewer Protocol
+      websocket: 9001   # WebSocket Server
+      web: 8080         # Web Interface
+      metrics: 9100     # Prometheus Metrics
+      hypergrid: 8002   # Hypergrid Protocol
+      admin: 9200       # Admin API
+    
+    annotations: {}
+    labels: {}
+  
+  # Ingress configuration
+  ingress:
+    enabled: true
+    className: "nginx"
+    annotations:
+      nginx.ingress.kubernetes.io/ssl-redirect: "true"
+      nginx.ingress.kubernetes.io/force-ssl-redirect: "true"
+      nginx.ingress.kubernetes.io/proxy-body-size: "100m"
+      nginx.ingress.kubernetes.io/proxy-read-timeout: "600"
+      nginx.ingress.kubernetes.io/proxy-send-timeout: "600"
+      nginx.ingress.kubernetes.io/upstream-hash-by: "$remote_addr"
+      # WebSocket support
+      nginx.ingress.kubernetes.io/proxy-set-headers: |
+        Host $host;
+        X-Real-IP $remote_addr;
+        X-Forwarded-For $proxy_add_x_forwarded_for;
+        X-Forwarded-Proto $scheme;
+        Upgrade $http_upgrade;
+        Connection "upgrade";
+    
+    hosts:
+      - host: opensim.example.com
+        paths:
+          - path: /
+            pathType: Prefix
+            service: web
+          - path: /ws
+            pathType: Prefix
+            service: websocket
+          - path: /api
+            pathType: Prefix
+            service: metrics
+          - path: /admin
+            pathType: Prefix
+            service: admin
+    
+    tls:
+      - secretName: opensim-tls-secret
+        hosts:
+          - opensim.example.com
+
+  # Certificate Management
+  certificates:
+    enabled: true
+    provider: "cert-manager"  # cert-manager, manual
+    certManager:
+      enabled: true
+      issuer:
+        name: "letsencrypt-prod"
+        type: "ClusterIssuer"  # Issuer, ClusterIssuer
+        acme:
+          server: "https://acme-v02.api.letsencrypt.org/directory"
+          email: "admin@opensim.example.com"
+          privateKeySecretRef: "letsencrypt-prod-key"
+          solvers:
+            - http01:
+                ingress:
+                  class: nginx
+      duration: "2160h"  # 90 days
+      renewBefore: "360h"  # 15 days before expiry
+    wildcard:
+      enabled: false
+      domains:
+        - "*.opensim.example.com"
+
+  # Advanced Persistence Configuration
+  persistence:
+    enabled: true
+    # Region data persistence (StatefulSet)
+    regionData:
+      enabled: true
+      storageClass: ""
+      size: "50Gi"
+      accessMode: "ReadWriteOnce"
+      mountPath: "/data/regions"
+      subPath: ""
+      annotations: {}
+      # Backup configuration
+      backup:
+        enabled: true
+        schedule: "0 2 * * *"  # Daily at 2 AM
+        retention: "30d"
+        storageClass: ""
+        size: "100Gi"
+    
+    # Asset storage persistence
+    assetStorage:
+      enabled: true
+      storageClass: ""
+      size: "500Gi"
+      accessMode: "ReadWriteMany"  # Shared across replicas
+      mountPath: "/data/assets"
+      nfs:
+        enabled: false
+        server: ""
+        path: ""
+      s3:
+        enabled: false
+        bucket: ""
+        region: ""
+        endpoint: ""
+    
+    # Log persistence
+    logs:
+      enabled: true
+      storageClass: ""
+      size: "20Gi"
+      accessMode: "ReadWriteOnce"
+      mountPath: "/var/log/opensim"
+      retention: "7d"
+  
+  # Environment variables
+  env:
+    # Database configuration
+    DATABASE_URL: "postgresql://opensim:opensim@opensim-next-postgresql:5432/opensim"
+    
+    # Redis configuration
+    REDIS_URL: "redis://opensim-next-redis:6379"
+    
+    # Server configuration
+    OPENSIM_API_KEY: "change-me-in-production"
+    OPENSIM_INSTANCE_ID: "k8s-instance"
+    RUST_LOG: "info"
+    
+    # Performance settings
+    DATABASE_MAX_CONNECTIONS: "50"
+    CACHE_SIZE_MB: "512"
+    MAX_CONCURRENT_USERS: "1000"
+    
+    # Security
+    RATE_LIMIT_RPM: "1000"
+    
+    # Physics
+    OPENSIM_DEFAULT_PHYSICS_ENGINE: "ODE"
+  
+  # Secret environment variables (from Kubernetes secrets)
+  envSecrets:
+    - name: OPENSIM_API_KEY
+      secretName: opensim-secrets
+      secretKey: api-key
+    - name: DATABASE_PASSWORD
+      secretName: opensim-secrets
+      secretKey: database-password
+    - name: REDIS_PASSWORD
+      secretName: opensim-secrets
+      secretKey: redis-password
+  
+  # Resource configuration
+  resources:
+    requests:
+      cpu: 500m
+      memory: 1Gi
+    limits:
+      cpu: 2000m
+      memory: 4Gi
+  
+  # Health checks
+  livenessProbe:
+    httpGet:
+      path: /health
+      port: 9100
+      httpHeaders:
+        - name: X-API-Key
+          value: "health-check-key"
+    initialDelaySeconds: 60
+    periodSeconds: 30
+    timeoutSeconds: 10
+    successThreshold: 1
+    failureThreshold: 3
+  
+  readinessProbe:
+    httpGet:
+      path: /health
+      port: 9100
+      httpHeaders:
+        - name: X-API-Key
+          value: "health-check-key"
+    initialDelaySeconds: 30
+    periodSeconds: 10
+    timeoutSeconds: 5
+    successThreshold: 1
+    failureThreshold: 3
+  
+  # Startup probe for slow startup times
+  startupProbe:
+    httpGet:
+      path: /health
+      port: 9100
+      httpHeaders:
+        - name: X-API-Key
+          value: "health-check-key"
+    initialDelaySeconds: 30
+    periodSeconds: 10
+    timeoutSeconds: 5
+    successThreshold: 1
+    failureThreshold: 30
+  
+  # Node selection
+  nodeSelector: {}
+  tolerations: []
+  affinity:
+    podAntiAffinity:
+      preferredDuringSchedulingIgnoredDuringExecution:
+        - weight: 100
+          podAffinityTerm:
+            labelSelector:
+              matchExpressions:
+                - key: app.kubernetes.io/name
+                  operator: In
+                  values:
+                    - opensim-next
+            topologyKey: kubernetes.io/hostname
+  
+  # Security context
+  securityContext:
+    runAsNonRoot: true
+    runAsUser: 1001
+    runAsGroup: 1001
+    fsGroup: 1001
+    capabilities:
+      drop:
+        - ALL
+    readOnlyRootFilesystem: false  # Set to true for maximum security
+    allowPrivilegeEscalation: false
+  
+  # Pod annotations and labels
+  podAnnotations:
+    prometheus.io/scrape: "true"
+    prometheus.io/port: "9100"
+    prometheus.io/path: "/metrics"
+  
+  podLabels:
+    app.kubernetes.io/component: "server"
+
+#==============================================================================
+# Persistence Configuration
+#==============================================================================
+persistence:
+  # Data persistence
+  data:
+    enabled: true
+    storageClass: ""
+    accessMode: ReadWriteOnce
+    size: 10Gi
+    annotations: {}
+    
+  # Asset storage
+  assets:
+    enabled: true
+    storageClass: ""
+    accessMode: ReadWriteOnce
+    size: 50Gi
+    annotations: {}
+    
+  # Log storage
+  logs:
+    enabled: true
+    storageClass: ""
+    accessMode: ReadWriteOnce
+    size: 5Gi
+    annotations: {}
+
+#==============================================================================
+# PostgreSQL Database Configuration
+#==============================================================================
+postgresql:
+  enabled: true
+  
+  # PostgreSQL image
+  image:
+    tag: "15.4.0"
+  
+  # Authentication
+  auth:
+    postgresPassword: "postgres_admin_password"
+    username: "opensim"
+    password: "opensim_secure_password"
+    database: "opensim"
+  
+  # Architecture
+  architecture: standalone
+  
+  # Primary configuration
+  primary:
+    resources:
+      requests:
+        cpu: 250m
+        memory: 512Mi
+      limits:
+        cpu: 1000m
+        memory: 2Gi
+    
+    persistence:
+      enabled: true
+      size: 20Gi
+      storageClass: ""
+    
+    configuration: |
+      # PostgreSQL configuration for OpenSim Next
+      max_connections = 200
+      shared_buffers = 256MB
+      effective_cache_size = 1GB
+      maintenance_work_mem = 64MB
+      checkpoint_completion_target = 0.9
+      wal_buffers = 16MB
+      default_statistics_target = 100
+      random_page_cost = 1.1
+      effective_io_concurrency = 200
+      work_mem = 4MB
+      min_wal_size = 1GB
+      max_wal_size = 4GB
+      
+      # Logging
+      log_destination = 'stderr'
+      logging_collector = on
+      log_directory = '/opt/bitnami/postgresql/logs'
+      log_filename = 'postgresql-%Y-%m-%d_%H%M%S.log'
+      log_min_duration_statement = 1000
+      log_line_prefix = '%t [%p]: [%l-1] user=%u,db=%d,app=%a,client=%h '
+      log_checkpoints = on
+      log_connections = on
+      log_disconnections = on
+      log_lock_waits = on
+      log_temp_files = 10MB
+  
+  # Monitoring
+  metrics:
+    enabled: true
+    serviceMonitor:
+      enabled: true
+
+#==============================================================================
+# Redis Cache Configuration
+#==============================================================================
+redis:
+  enabled: true
+  
+  # Architecture
+  architecture: standalone
+  
+  # Authentication
+  auth:
+    enabled: true
+    password: "opensim_redis_password"
+  
+  # Master configuration
+  master:
+    resources:
+      requests:
+        cpu: 100m
+        memory: 256Mi
+      limits:
+        cpu: 500m
+        memory: 1Gi
+    
+    persistence:
+      enabled: true
+      size: 5Gi
+      storageClass: ""
+    
+    configuration: |
+      # Redis configuration for OpenSim Next
+      maxmemory 512mb
+      maxmemory-policy allkeys-lru
+      save 900 1
+      save 300 10
+      save 60 10000
+      stop-writes-on-bgsave-error yes
+      rdbcompression yes
+      rdbchecksum yes
+      tcp-keepalive 300
+      timeout 0
+  
+  # Monitoring
+  metrics:
+    enabled: true
+    serviceMonitor:
+      enabled: true
+
+#==============================================================================
+# Monitoring Configuration
+#==============================================================================
+monitoring:
+  # Prometheus
+  prometheus:
+    enabled: true
+    
+    server:
+      retention: "15d"
+      resources:
+        requests:
+          cpu: 200m
+          memory: 512Mi
+        limits:
+          cpu: 1000m
+          memory: 2Gi
+      
+      persistentVolume:
+        enabled: true
+        size: 20Gi
+        storageClass: ""
+    
+    # Alertmanager
+    alertmanager:
+      enabled: true
+      resources:
+        requests:
+          cpu: 50m
+          memory: 128Mi
+        limits:
+          cpu: 200m
+          memory: 512Mi
+  
+  # Grafana
+  grafana:
+    enabled: true
+    
+    adminPassword: "admin_change_me"
+    
+    resources:
+      requests:
+        cpu: 100m
+        memory: 256Mi
+      limits:
+        cpu: 500m
+        memory: 1Gi
+    
+    persistence:
+      enabled: true
+      size: 5Gi
+      storageClass: ""
+    
+    # Dashboard provisioning
+    dashboardProviders:
+      dashboardproviders.yaml:
+        apiVersion: 1
+        providers:
+        - name: 'opensim-dashboards'
+          orgId: 1
+          folder: 'OpenSim Next'
+          type: file
+          disableDeletion: false
+          editable: true
+          options:
+            path: /var/lib/grafana/dashboards
+    
+    # Ingress for Grafana
+    ingress:
+      enabled: true
+      hosts:
+        - grafana.opensim.example.com
+      tls:
+        - secretName: grafana-tls-secret
+          hosts:
+            - grafana.opensim.example.com
+  
+  # ServiceMonitor for Prometheus Operator
+  serviceMonitor:
+    enabled: true
+    namespace: ""
+    labels: {}
+    interval: 30s
+    scrapeTimeout: 10s
+    path: /metrics
+
+#==============================================================================
+# Networking Configuration
+#==============================================================================
+networkPolicy:
+  enabled: false
+  
+  ingress:
+    - from:
+        - namespaceSelector:
+            matchLabels:
+              name: ingress-system
+    - from:
+        - namespaceSelector:
+            matchLabels:
+              name: monitoring-system
+    - from:
+        - podSelector:
+            matchLabels:
+              app.kubernetes.io/name: opensim-next
+
+#==============================================================================
+# RBAC Configuration
+#==============================================================================
+rbac:
+  create: true
+  
+serviceAccount:
+  create: true
+  annotations: {}
+  name: ""
+
+#==============================================================================
+# ConfigMaps and Secrets
+#==============================================================================
+configMaps:
+  opensim-config:
+    data:
+      opensim-config.toml: |
+        # OpenSim Next Configuration (Generated from Helm)
+        [server]
+        bind_address = "0.0.0.0"
+        instance_id = "{{ .Values.opensim.env.OPENSIM_INSTANCE_ID }}"
+        api_key = "{{ .Values.opensim.env.OPENSIM_API_KEY }}"
+        
+        [ports]
+        viewer = 9000
+        websocket = 9001
+        web = 8080
+        metrics = 9100
+        hypergrid = 8002
+        admin = 9200
+        
+        [database]
+        url = "{{ .Values.opensim.env.DATABASE_URL }}"
+        max_connections = {{ .Values.opensim.env.DATABASE_MAX_CONNECTIONS }}
+        
+        [cache]
+        redis_url = "{{ .Values.opensim.env.REDIS_URL }}"
+        default_ttl_seconds = 3600
+        
+        [performance]
+        physics_engine = "{{ .Values.opensim.env.OPENSIM_DEFAULT_PHYSICS_ENGINE }}"
+        cache_size_mb = {{ .Values.opensim.env.CACHE_SIZE_MB }}
+        max_concurrent_users = {{ .Values.opensim.env.MAX_CONCURRENT_USERS }}
+
+secrets:
+  opensim-secrets:
+    type: Opaque
+    data:
+      api-key: "Y2hhbmdlLW1lLWluLXByb2R1Y3Rpb24="  # base64: change-me-in-production
+      database-password: "b3BlbnNpbV9zZWN1cmVfcGFzc3dvcmQ="  # base64: opensim_secure_password
+      redis-password: "b3BlbnNpbV9yZWRpc19wYXNzd29yZA=="  # base64: opensim_redis_password
+
+#==============================================================================
+# Additional Services
+#==============================================================================
+# Load Balancer (optional)
+loadBalancer:
+  enabled: false
+  type: LoadBalancer
+  annotations: {}
+  loadBalancerIP: ""
+  loadBalancerSourceRanges: []
+
+# External DNS (optional)
+externalDNS:
+  enabled: false
+  domainFilters:
+    - opensim.example.com
+
+# Cert Manager (optional)
+certManager:
+  enabled: false
+  issuer:
+    name: letsencrypt-prod
+    email: admin@opensim.example.com
+
+#==============================================================================
+# Development and Testing
+#==============================================================================
+development:
+  enabled: false
+  
+  # Use test database
+  useTestDatabase: false
+  
+  # Enable debug logging
+  debugLogging: false
+  
+  # Disable resource limits
+  disableResourceLimits: false

@@ -1,0 +1,314 @@
+# OpenSim Next Kubernetes Ingress
+# Provides external access with TLS, WebSocket support, and load balancing
+
+{{- if .Values.opensim.ingress.enabled }}
+apiVersion: networking.k8s.io/v1
+kind: Ingress
+metadata:
+  name: {{ include "opensim-next.fullname" . }}
+  namespace: {{ .Release.Namespace | quote }}
+  labels:
+    {{- include "opensim-next.labels" . | nindent 4 }}
+    component: ingress
+  annotations:
+    # Ingress class
+    kubernetes.io/ingress.class: {{ .Values.opensim.ingress.className | quote }}
+    
+    # SSL and HTTPS configuration
+    nginx.ingress.kubernetes.io/ssl-redirect: "true"
+    nginx.ingress.kubernetes.io/force-ssl-redirect: "true"
+    nginx.ingress.kubernetes.io/ssl-protocols: "TLSv1.2 TLSv1.3"
+    nginx.ingress.kubernetes.io/ssl-ciphers: "ECDHE-ECDSA-AES128-GCM-SHA256,ECDHE-RSA-AES128-GCM-SHA256,ECDHE-ECDSA-AES256-GCM-SHA384,ECDHE-RSA-AES256-GCM-SHA384"
+    
+    # Request size and timeout configuration
+    nginx.ingress.kubernetes.io/proxy-body-size: "100m"
+    nginx.ingress.kubernetes.io/proxy-read-timeout: "600"
+    nginx.ingress.kubernetes.io/proxy-send-timeout: "600"
+    nginx.ingress.kubernetes.io/proxy-connect-timeout: "60"
+    
+    # Load balancing configuration
+    nginx.ingress.kubernetes.io/upstream-hash-by: "$remote_addr"
+    nginx.ingress.kubernetes.io/load-balance: "ewma"
+    
+    # WebSocket support configuration
+    nginx.ingress.kubernetes.io/proxy-set-headers: |
+      Host $host;
+      X-Real-IP $remote_addr;
+      X-Forwarded-For $proxy_add_x_forwarded_for;
+      X-Forwarded-Proto $scheme;
+      X-Forwarded-Host $host;
+      X-Forwarded-Port $server_port;
+      Upgrade $http_upgrade;
+      Connection "upgrade";
+    
+    # Rate limiting
+    nginx.ingress.kubernetes.io/rate-limit: "{{ .Values.opensim.ingress.rateLimit | default 1000 }}"
+    nginx.ingress.kubernetes.io/rate-limit-window: "1m"
+    
+    # CORS configuration
+    nginx.ingress.kubernetes.io/enable-cors: "true"
+    nginx.ingress.kubernetes.io/cors-allow-origin: "{{ .Values.opensim.ingress.corsAllowOrigin | default "*" }}"
+    nginx.ingress.kubernetes.io/cors-allow-methods: "GET, POST, PUT, DELETE, OPTIONS, HEAD"
+    nginx.ingress.kubernetes.io/cors-allow-headers: "DNT,User-Agent,X-Requested-With,If-Modified-Since,Cache-Control,Content-Type,Range,Authorization,X-API-Key"
+    nginx.ingress.kubernetes.io/cors-expose-headers: "Content-Length,Content-Range"
+    nginx.ingress.kubernetes.io/cors-max-age: "1728000"
+    
+    # Security headers
+    nginx.ingress.kubernetes.io/configuration-snippet: |
+      add_header X-Frame-Options "SAMEORIGIN" always;
+      add_header X-Content-Type-Options "nosniff" always;
+      add_header X-XSS-Protection "1; mode=block" always;
+      add_header Referrer-Policy "strict-origin-when-cross-origin" always;
+      add_header Content-Security-Policy "default-src 'self'; script-src 'self' 'unsafe-inline' 'unsafe-eval'; style-src 'self' 'unsafe-inline'; img-src 'self' data: https:; font-src 'self' data:; connect-src 'self' ws: wss:; media-src 'self'; object-src 'none'; frame-ancestors 'self';" always;
+    
+    # Custom annotations from values
+    {{- with .Values.opensim.ingress.annotations }}
+    {{- toYaml . | nindent 4 }}
+    {{- end }}
+    
+    # Cert-manager annotations (if enabled)
+    {{- if .Values.certManager.enabled }}
+    cert-manager.io/issuer: {{ .Values.certManager.issuer.name | quote }}
+    cert-manager.io/issuer-kind: {{ .Values.certManager.issuer.kind | default "ClusterIssuer" | quote }}
+    {{- end }}
+
+spec:
+  {{- if .Values.opensim.ingress.className }}
+  ingressClassName: {{ .Values.opensim.ingress.className }}
+  {{- end }}
+  
+  {{- if .Values.opensim.ingress.tls }}
+  tls:
+    {{- range .Values.opensim.ingress.tls }}
+    - hosts:
+        {{- range .hosts }}
+        - {{ . | quote }}
+        {{- end }}
+      secretName: {{ .secretName }}
+    {{- end }}
+  {{- end }}
+  
+  rules:
+    {{- range .Values.opensim.ingress.hosts }}
+    - host: {{ .host | quote }}
+      http:
+        paths:
+          {{- range .paths }}
+          - path: {{ .path }}
+            pathType: {{ .pathType }}
+            backend:
+              service:
+                name: {{ include "opensim-next.fullname" $ }}
+                port:
+                  {{- if eq .service "web" }}
+                  number: {{ $.Values.opensim.service.ports.web }}
+                  {{- else if eq .service "websocket" }}
+                  number: {{ $.Values.opensim.service.ports.websocket }}
+                  {{- else if eq .service "metrics" }}
+                  number: {{ $.Values.opensim.service.ports.metrics }}
+                  {{- else if eq .service "admin" }}
+                  number: {{ $.Values.opensim.service.ports.admin }}
+                  {{- else if eq .service "hypergrid" }}
+                  number: {{ $.Values.opensim.service.ports.hypergrid }}
+                  {{- else if eq .service "viewer" }}
+                  number: {{ $.Values.opensim.service.ports.viewer }}
+                  {{- else }}
+                  number: {{ $.Values.opensim.service.ports.web }}
+                  {{- end }}
+          {{- end }}
+    {{- end }}
+
+---
+{{/* WebSocket-specific Ingress (if separate configuration needed) */}}
+{{- if .Values.opensim.ingress.separateWebSocket }}
+apiVersion: networking.k8s.io/v1
+kind: Ingress
+metadata:
+  name: {{ include "opensim-next.fullname" . }}-websocket
+  namespace: {{ .Release.Namespace | quote }}
+  labels:
+    {{- include "opensim-next.labels" . | nindent 4 }}
+    component: websocket-ingress
+  annotations:
+    # Ingress class
+    kubernetes.io/ingress.class: {{ .Values.opensim.ingress.className | quote }}
+    
+    # WebSocket-specific configuration
+    nginx.ingress.kubernetes.io/proxy-read-timeout: "3600"
+    nginx.ingress.kubernetes.io/proxy-send-timeout: "3600"
+    nginx.ingress.kubernetes.io/proxy-connect-timeout: "60"
+    
+    # WebSocket upgrade headers
+    nginx.ingress.kubernetes.io/configuration-snippet: |
+      proxy_set_header Upgrade $http_upgrade;
+      proxy_set_header Connection "upgrade";
+      proxy_set_header Host $host;
+      proxy_set_header X-Real-IP $remote_addr;
+      proxy_set_header X-Forwarded-For $proxy_add_x_forwarded_for;
+      proxy_set_header X-Forwarded-Proto $scheme;
+      proxy_cache_bypass $http_upgrade;
+      proxy_buffering off;
+    
+    # Session affinity for WebSocket connections
+    nginx.ingress.kubernetes.io/affinity: "cookie"
+    nginx.ingress.kubernetes.io/affinity-mode: "persistent"
+    nginx.ingress.kubernetes.io/session-cookie-name: "opensim-websocket"
+    nginx.ingress.kubernetes.io/session-cookie-max-age: "3600"
+
+spec:
+  {{- if .Values.opensim.ingress.className }}
+  ingressClassName: {{ .Values.opensim.ingress.className }}
+  {{- end }}
+  
+  {{- if .Values.opensim.ingress.tls }}
+  tls:
+    {{- range .Values.opensim.ingress.tls }}
+    - hosts:
+        {{- range .hosts }}
+        - {{ . | quote }}
+        {{- end }}
+      secretName: {{ .secretName }}
+    {{- end }}
+  {{- end }}
+  
+  rules:
+    {{- range .Values.opensim.ingress.hosts }}
+    - host: {{ .host | quote }}
+      http:
+        paths:
+          - path: /ws
+            pathType: Prefix
+            backend:
+              service:
+                name: {{ include "opensim-next.fullname" $ }}
+                port:
+                  number: {{ $.Values.opensim.service.ports.websocket }}
+          - path: /websocket
+            pathType: Prefix
+            backend:
+              service:
+                name: {{ include "opensim-next.fullname" $ }}
+                port:
+                  number: {{ $.Values.opensim.service.ports.websocket }}
+    {{- end }}
+{{- end }}
+
+---
+{{/* Admin Ingress (Internal/Restricted Access) */}}
+{{- if .Values.opensim.ingress.enableAdmin }}
+apiVersion: networking.k8s.io/v1
+kind: Ingress
+metadata:
+  name: {{ include "opensim-next.fullname" . }}-admin
+  namespace: {{ .Release.Namespace | quote }}
+  labels:
+    {{- include "opensim-next.labels" . | nindent 4 }}
+    component: admin-ingress
+  annotations:
+    # Ingress class
+    kubernetes.io/ingress.class: {{ .Values.opensim.ingress.className | quote }}
+    
+    # Admin access restrictions
+    nginx.ingress.kubernetes.io/whitelist-source-range: {{ .Values.opensim.ingress.adminWhitelist | default "10.0.0.0/8,172.16.0.0/12,192.168.0.0/16" | quote }}
+    
+    # Authentication (if enabled)
+    {{- if .Values.opensim.ingress.adminAuth.enabled }}
+    nginx.ingress.kubernetes.io/auth-type: basic
+    nginx.ingress.kubernetes.io/auth-secret: {{ include "opensim-next.fullname" . }}-admin-auth
+    nginx.ingress.kubernetes.io/auth-realm: "OpenSim Next Admin Access"
+    {{- end }}
+    
+    # Additional security for admin
+    nginx.ingress.kubernetes.io/configuration-snippet: |
+      add_header X-Admin-Access "restricted" always;
+      add_header X-Frame-Options "DENY" always;
+
+spec:
+  {{- if .Values.opensim.ingress.className }}
+  ingressClassName: {{ .Values.opensim.ingress.className }}
+  {{- end }}
+  
+  {{- if .Values.opensim.ingress.tls }}
+  tls:
+    {{- range .Values.opensim.ingress.tls }}
+    - hosts:
+        {{- range .hosts }}
+        - {{ . | quote }}
+        {{- end }}
+      secretName: {{ .secretName }}
+    {{- end }}
+  {{- end }}
+  
+  rules:
+    {{- range .Values.opensim.ingress.hosts }}
+    - host: {{ .host | quote }}
+      http:
+        paths:
+          - path: /admin
+            pathType: Prefix
+            backend:
+              service:
+                name: {{ include "opensim-next.fullname" $ }}-internal
+                port:
+                  number: {{ $.Values.opensim.service.ports.admin }}
+          - path: /metrics
+            pathType: Prefix
+            backend:
+              service:
+                name: {{ include "opensim-next.fullname" $ }}-internal
+                port:
+                  number: {{ $.Values.opensim.service.ports.metrics }}
+    {{- end }}
+{{- end }}
+
+---
+{{/* Second Life Viewer Protocol Ingress (TCP/UDP) */}}
+{{- if .Values.opensim.ingress.enableViewer }}
+apiVersion: networking.k8s.io/v1
+kind: Ingress
+metadata:
+  name: {{ include "opensim-next.fullname" . }}-viewer
+  namespace: {{ .Release.Namespace | quote }}
+  labels:
+    {{- include "opensim-next.labels" . | nindent 4 }}
+    component: viewer-ingress
+  annotations:
+    # TCP/UDP proxy configuration
+    nginx.ingress.kubernetes.io/tcp-services-configmap: {{ .Release.Namespace }}/{{ include "opensim-next.fullname" . }}-tcp-services
+    
+    # Stream proxy for viewer protocol
+    nginx.ingress.kubernetes.io/configuration-snippet: |
+      # Second Life Viewer Protocol support
+      proxy_pass_header Server;
+      proxy_set_header Host $http_host;
+      proxy_redirect off;
+      proxy_set_header X-Real-IP $remote_addr;
+      proxy_set_header X-Scheme $scheme;
+
+spec:
+  {{- if .Values.opensim.ingress.className }}
+  ingressClassName: {{ .Values.opensim.ingress.className }}
+  {{- end }}
+  
+  rules:
+    {{- range .Values.opensim.ingress.hosts }}
+    - host: {{ .host | quote }}
+      http:
+        paths:
+          - path: /viewer
+            pathType: Prefix
+            backend:
+              service:
+                name: {{ include "opensim-next.fullname" $ }}
+                port:
+                  number: {{ $.Values.opensim.service.ports.viewer }}
+          - path: /hypergrid
+            pathType: Prefix
+            backend:
+              service:
+                name: {{ include "opensim-next.fullname" $ }}
+                port:
+                  number: {{ $.Values.opensim.service.ports.hypergrid }}
+    {{- end }}
+{{- end }}
+{{- end }}

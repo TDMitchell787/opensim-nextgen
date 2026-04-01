@@ -1,0 +1,192 @@
+# OpenSim Next Development Environment Configuration
+# Optimized for local development and testing
+
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: opensim-next-dev-config
+  namespace: opensim-next-dev
+  labels:
+    app.kubernetes.io/name: opensim-next
+    app.kubernetes.io/component: configuration
+    environment: development
+data:
+  # Core application configuration
+  opensim.toml: |
+    [general]
+    environment = "development"
+    debug = true
+    log_level = "debug"
+    instance_id = "dev-instance"
+    region_name = "OpenSim Next Dev Region"
+    
+    [network]
+    bind_address = "0.0.0.0"
+    port = 9000
+    websocket_port = 9001
+    admin_port = 9100
+    hypergrid_port = 8002
+    
+    # Allow insecure connections for development
+    ssl_enabled = false
+    require_ssl = false
+    
+    [database]
+    type = "postgresql"
+    host = "opensim-next-postgresql"
+    port = 5432
+    database = "opensim_dev"
+    username = "opensim"
+    # Password from secret
+    ssl_mode = "disable"
+    max_connections = 10
+    
+    [cache]
+    type = "redis"
+    host = "opensim-next-redis-master"
+    port = 6379
+    database = 0
+    # Password from secret
+    
+    [physics]
+    default_engine = "ode"
+    max_prims = 15000
+    max_physical_prims = 500
+    
+    [assets]
+    storage_type = "filesystem"
+    base_path = "/data/assets"
+    enable_caching = true
+    cache_timeout = 3600
+    
+    [region]
+    max_avatars = 50
+    allow_script_engines = true
+    enable_physics = true
+    startup_scripts = true
+    
+    [monitoring]
+    enable_metrics = true
+    metrics_port = 9100
+    health_check_interval = 30
+    
+    [security]
+    api_key = "dev-api-key-change-me"
+    rate_limit_enabled = false
+    cors_enabled = true
+    cors_origins = ["*"]
+    
+    [ziti]
+    enabled = false  # Disabled for development
+    
+  # Logging configuration
+  log4rs.yaml: |
+    refresh_rate: 30 seconds
+    
+    appenders:
+      stdout:
+        kind: console
+        encoder:
+          pattern: "{d(%Y-%m-%d %H:%M:%S%.3f)} [{l}] [{t}] {m}{n}"
+      
+      file:
+        kind: file
+        path: "/data/logs/opensim-dev.log"
+        encoder:
+          pattern: "{d(%Y-%m-%d %H:%M:%S%.3f)} [{l}] [{f}:{L}] [{t}] {m}{n}"
+        append: true
+    
+    root:
+      level: debug
+      appenders:
+        - stdout
+        - file
+    
+    loggers:
+      opensim_next:
+        level: debug
+        additive: false
+        appenders:
+          - stdout
+          - file
+      
+      hyper:
+        level: info
+      
+      tokio:
+        level: info
+  
+  # Development-specific scripts
+  init-dev.sh: |
+    #!/bin/bash
+    set -e
+    
+    echo "Initializing OpenSim Next development environment..."
+    
+    # Wait for database to be ready
+    until pg_isready -h opensim-next-postgresql -p 5432 -U opensim; do
+      echo "Waiting for PostgreSQL to be ready..."
+      sleep 2
+    done
+    
+    # Wait for Redis to be ready
+    until redis-cli -h opensim-next-redis-master ping; do
+      echo "Waiting for Redis to be ready..."
+      sleep 2
+    done
+    
+    # Create development directories
+    mkdir -p /data/assets/textures
+    mkdir -p /data/assets/sounds
+    mkdir -p /data/assets/meshes
+    mkdir -p /data/regions
+    mkdir -p /data/logs
+    mkdir -p /data/cache
+    
+    # Set permissions
+    chmod -R 755 /data
+    
+    # Initialize database if needed
+    if ! psql -h opensim-next-postgresql -U opensim -d opensim_dev -c "SELECT 1 FROM information_schema.tables WHERE table_name='users';" 2>/dev/null | grep -q "1"; then
+      echo "Initializing development database..."
+      opensim-next --init-db
+    fi
+    
+    echo "Development environment initialized successfully!"
+  
+  # Resource limits for development
+  resource-limits.yaml: |
+    requests:
+      cpu: 200m
+      memory: 512Mi
+    limits:
+      cpu: 2000m
+      memory: 4Gi
+
+---
+# Development secrets
+apiVersion: v1
+kind: Secret
+metadata:
+  name: opensim-next-dev-secrets
+  namespace: opensim-next-dev
+  labels:
+    app.kubernetes.io/name: opensim-next
+    app.kubernetes.io/component: secrets
+    environment: development
+type: Opaque
+data:
+  # Base64 encoded development credentials
+  # Note: These are development-only credentials, never use in production
+  database-password: b3BlbnNpbV9kZXZfcGFzc3dvcmQ=  # opensim_dev_password
+  redis-password: b3BlbnNpbV9yZWRpc19kZXZfcGFzc3dvcmQ=  # opensim_redis_dev_password
+  api-key: ZGV2LWFwaS1rZXktY2hhbmdlLW1l  # dev-api-key-change-me
+  encryption-key: ZGV2LWVuY3J5cHRpb24ta2V5LTEyMzQ1Njc4OTA=  # dev-encryption-key-1234567890
+  jwt-secret: ZGV2LWp3dC1zZWNyZXQtZm9yLXRva2Vucy1hYmNkZWY=  # dev-jwt-secret-for-tokens-abcdef
+  
+  # OpenZiti development certificates (placeholder)
+  ziti-identity.json: e30=  # Empty JSON object for development
+  
+  # TLS certificates for development (self-signed)
+  tls.crt: LS0tLS1CRUdJTiBDRVJUSUZJQ0FURS0tLS0tCi4uLmRldmVsb3BtZW50IGNlcnRpZmljYXRlLi4uCi0tLS0tRU5EIENFUlRJRklDQVRFLS0tLS0=
+  tls.key: LS0tLS1CRUdJTiBQUklWQVRFIEtFWS0tLS0tCi4uLmRldmVsb3BtZW50IHByaXZhdGUga2V5Li4uCi0tLS0tRU5EIFBSSVZBVEUgS0VZLS0tLS0=

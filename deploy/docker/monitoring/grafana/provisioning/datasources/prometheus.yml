@@ -1,0 +1,239 @@
+# OpenSim Next Grafana Data Sources Configuration
+# Configures Prometheus and other data sources for monitoring dashboards
+
+apiVersion: 1
+
+# Delete existing data sources
+deleteDatasources:
+  - name: Prometheus
+    orgId: 1
+
+# Configure data sources
+datasources:
+  #============================================================================
+  # Prometheus Data Source (Primary Metrics)
+  #============================================================================
+  - name: Prometheus
+    type: prometheus
+    access: proxy
+    url: http://prometheus:9090
+    isDefault: true
+    orgId: 1
+    
+    # Basic authentication (if required)
+    basicAuth: false
+    basicAuthUser: ''
+    basicAuthPassword: ''
+    
+    # JSON data configuration
+    jsonData:
+      # HTTP method for queries
+      httpMethod: GET
+      
+      # Query timeout
+      queryTimeout: 60s
+      
+      # Time interval options
+      timeInterval: 15s
+      
+      # Enable exemplars (requires Prometheus 2.26+)
+      exemplarTraceIdDestinations:
+        - name: trace_id
+          datasourceUid: jaeger
+      
+      # Custom query parameters
+      customQueryParameters: ''
+      
+      # Enable TLS
+      tlsAuth: false
+      tlsAuthWithCACert: false
+      tlsSkipVerify: false
+      
+      # Prometheus-specific settings
+      prometheusType: Prometheus
+      prometheusVersion: 2.40.0
+      
+      # Enable cache
+      cacheLevel: High
+      
+      # HTTP headers
+      httpHeaderName1: 'X-Grafana-Source'
+    
+    # Secure JSON data
+    secureJsonData:
+      httpHeaderValue1: 'opensim-next-grafana'
+    
+    # Read-only mode
+    readOnly: false
+    
+    # Enable alerting
+    withCredentials: false
+    
+    # UID for referencing in dashboards
+    uid: prometheus-opensim
+
+  #============================================================================
+  # PostgreSQL Data Source (Database Metrics)
+  #============================================================================
+  - name: PostgreSQL
+    type: postgres
+    access: proxy
+    url: postgres:5432
+    user: opensim
+    database: opensim
+    
+    # Secure JSON data for password
+    secureJsonData:
+      password: opensim_secure_password
+    
+    # JSON data configuration
+    jsonData:
+      sslmode: disable
+      maxOpenConns: 10
+      maxIdleConns: 2
+      connMaxLifetime: 14400
+      postgresVersion: 1500
+      timescaledb: false
+    
+    uid: postgres-opensim
+    orgId: 1
+    readOnly: true
+
+  #============================================================================
+  # Redis Data Source (Cache Metrics)
+  #============================================================================
+  - name: Redis
+    type: redis-datasource
+    access: proxy
+    url: redis://redis:6379
+    
+    # JSON data configuration
+    jsonData:
+      client: cluster
+      poolSize: 10
+      timeout: 30
+      pingInterval: 0
+      pipelineWindow: 0
+    
+    # Secure JSON data for password
+    secureJsonData:
+      password: opensim_redis_password
+    
+    uid: redis-opensim
+    orgId: 1
+    readOnly: true
+
+  #============================================================================
+  # TestData Data Source (for testing and demos)
+  #============================================================================
+  - name: TestData
+    type: testdata
+    access: proxy
+    
+    # JSON data for test scenarios
+    jsonData:
+      # Test scenarios for OpenSim Next demos
+      testScenarios:
+        - name: "opensim_demo_data"
+          description: "Simulated OpenSim metrics for demos"
+          queries:
+            - metric: "opensim_active_users"
+              min: 10
+              max: 1000
+              noise: 0.1
+            - metric: "opensim_regions_active"
+              min: 5
+              max: 100
+              noise: 0.05
+            - metric: "opensim_assets_cached"
+              min: 1000
+              max: 100000
+              trend: "up"
+    
+    uid: testdata-opensim
+    orgId: 1
+    readOnly: true
+
+  #============================================================================
+  # Loki Data Source (Log Aggregation)
+  #============================================================================
+  - name: Loki
+    type: loki
+    access: proxy
+    url: http://loki:3100
+    
+    # JSON data configuration
+    jsonData:
+      # Maximum number of lines to return
+      maxLines: 1000
+      
+      # Timeout for queries
+      timeout: 60s
+      
+      # HTTP method
+      httpMethod: GET
+      
+      # Derived fields for trace correlation
+      derivedFields:
+        - name: "TraceID"
+          label: "trace_id"
+          url: "http://jaeger:16686/trace/$${__value.raw}"
+          datasourceUid: jaeger
+    
+    uid: loki-opensim
+    orgId: 1
+    readOnly: true
+
+  #============================================================================
+  # Node Exporter (System Metrics)
+  #============================================================================
+  - name: Node Exporter
+    type: prometheus
+    access: proxy
+    url: http://node-exporter:9100
+    
+    # JSON data configuration
+    jsonData:
+      httpMethod: GET
+      prometheusType: Prometheus
+      customQueryParameters: 'job=node-exporter'
+    
+    uid: node-exporter
+    orgId: 1
+    readOnly: true
+
+  #============================================================================
+  # cAdvisor (Container Metrics)
+  #============================================================================
+  - name: cAdvisor
+    type: prometheus
+    access: proxy
+    url: http://cadvisor:8080
+    
+    # JSON data configuration
+    jsonData:
+      httpMethod: GET
+      prometheusType: Prometheus
+      customQueryParameters: 'job=cadvisor'
+    
+    uid: cadvisor
+    orgId: 1
+    readOnly: true
+
+  #============================================================================
+  # BlackBox Exporter (Endpoint Monitoring)
+  #============================================================================
+  - name: BlackBox
+    type: prometheus
+    access: proxy
+    url: http://blackbox-exporter:9115
+    
+    # JSON data configuration
+    jsonData:
+      httpMethod: GET
+      prometheusType: Prometheus
+      customQueryParameters: 'job=blackbox'
+    
+    uid: blackbox-exporter
+    orgId: 1
+    readOnly: true

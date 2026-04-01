@@ -1,0 +1,9 @@
+apiVersion: v1
+kind: Namespace
+metadata:
+  name: opensim-next
+  labels:
+    name: opensim-next
+    environment: production
+    version: "1.0.0"
+    managed-by: kubernetes

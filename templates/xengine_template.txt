@@ -1,0 +1,42 @@
+# XEngine Compatibility Configuration Template
+# Basic XEngine compatibility layer for OpenSim Next
+
+[XEngine]
+# Enable/disable XEngine compatibility
+Enabled = false
+
+# XEngine compatibility class and assembly
+Class = "OpenSim.Region.ScriptEngine.XEngine.XEngine"
+Assembly = "OpenSim.Region.ScriptEngine.XEngine.dll"
+
+# Basic settings (limited performance)
+MaxScriptsPerRegion = 200
+MaxScriptMemory = 16384
+ScriptTimeout = 120
+
+# Legacy compatibility
+EnableLegacyLSL = true
+BasicCompatibilityMode = true
+LimitedFeatureSet = true
+
+# State management (basic)
+EnableBasicStatePersistence = true
+StateBackupInterval = 600
+StateBackupPath = "ScriptStates/XEngine"
+
+# Migration assistance
+EnableMigrationWarnings = true
+SuggestYEngineUpgrade = true
+SuggestNativeUpgrade = true
+
+# Performance (very limited)
+EnableMinimalOptimization = false
+SingleThreadedExecution = true
+
+# Legacy debugging
+EnableBasicLogging = true
+LogAllScriptErrors = true
+
+# Deprecation warnings
+WarnOnDeprecatedFeatures = true
+ShowMigrationPath = true

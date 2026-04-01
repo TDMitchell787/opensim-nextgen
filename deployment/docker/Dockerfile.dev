@@ -1,0 +1,65 @@
+# Development Dockerfile with debug symbols and development tools
+FROM ubuntu:22.04
+
+# Install development dependencies
+RUN apt-get update && apt-get install -y \
+    curl \
+    wget \
+    git \
+    build-essential \
+    pkg-config \
+    libssl-dev \
+    libpq-dev \
+    libsqlite3-dev \
+    protobuf-compiler \
+    postgresql-client \
+    redis-tools \
+    ca-certificates \
+    xz-utils \
+    gdb \
+    valgrind \
+    strace \
+    htop \
+    vim \
+    && rm -rf /var/lib/apt/lists/*
+
+# Install Rust
+RUN curl --proto '=https' --tlsv1.2 -sSf https://sh.rustup.rs | sh -s -- -y
+ENV PATH="/root/.cargo/bin:${PATH}"
+
+# Install Zig
+RUN wget https://ziglang.org/builds/zig-linux-x86_64-0.14.0-dev.1911+3bf89f55c.tar.xz \
+    && tar -xf zig-linux-x86_64-0.14.0-dev.1911+3bf89f55c.tar.xz \
+    && mv zig-linux-x86_64-0.14.0-dev.1911+3bf89f55c /opt/zig \
+    && rm zig-linux-x86_64-0.14.0-dev.1911+3bf89f55c.tar.xz
+ENV PATH="/opt/zig:${PATH}"
+
+# Install additional Rust tools
+RUN cargo install cargo-watch cargo-edit cargo-audit cargo-outdated
+
+# Create development user
+RUN useradd -m -s /bin/bash developer && \
+    echo "developer ALL=(ALL) NOPASSWD:ALL" >> /etc/sudoers
+
+# Set up development environment
+USER developer
+WORKDIR /workspace
+
+# Copy source code
+COPY --chown=developer:developer . .
+
+# Set environment variables for development
+ENV RUST_LOG=debug
+ENV RUST_BACKTRACE=full
+ENV CARGO_HOME=/workspace/.cargo
+ENV RUSTUP_HOME=/workspace/.rustup
+
+# Install Rust for the development user
+RUN curl --proto '=https' --tlsv1.2 -sSf https://sh.rustup.rs | sh -s -- -y
+ENV PATH="/home/developer/.cargo/bin:${PATH}"
+
+# Expose all ports for development
+EXPOSE 9000 9001 8080 8090 9100
+
+# Development entry point
+CMD ["bash"]

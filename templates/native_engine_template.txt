@@ -1,0 +1,50 @@
+# Native Script Engine Configuration Template
+# High-performance Rust/Zig script engine for OpenSim Next
+
+[Native]
+# Enable/disable the Native script engine
+Enabled = true
+
+# Script engine class and assembly
+Class = "OpenSim.Region.ScriptEngine.Native.NativeScriptEngine"
+Assembly = "OpenSim.Region.ScriptEngine.Native.dll"
+
+# Performance settings
+MaxScriptsPerRegion = 1000
+MaxScriptMemory = 65536
+ScriptTimeout = 30
+EnableSIMDOptimization = true
+
+# Async execution settings
+AsyncExecutionEnabled = true
+MaxConcurrentScripts = 100
+ThreadPoolSize = 8
+
+# Security settings
+SandboxMode = true
+AllowUnsafeOperations = false
+RestrictFileAccess = true
+
+# Language support
+EnableLSL = true
+EnableCSharp = true
+EnableRust = true
+
+# Advanced features
+EnableJIT = true
+OptimizationLevel = 3
+EnableProfiler = false
+
+# Memory management
+UseArenaAllocator = true
+GarbageCollectionMode = "Incremental"
+
+# Debugging
+EnableDebugger = false
+DebugPort = 9002
+LogScriptExecution = false
+
+# Compatibility
+LegacyLSLCompatibility = true
+YEngineStateCompatibility = true
+XEngineStateCompatibility = true

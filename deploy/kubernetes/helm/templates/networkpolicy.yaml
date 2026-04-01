@@ -1,0 +1,193 @@
+{{- if .Values.networkPolicy.enabled }}
+apiVersion: networking.k8s.io/v1
+kind: NetworkPolicy
+metadata:
+  name: {{ include "opensim-next.fullname" . }}-allow-ingress
+  labels:
+    {{- include "opensim-next.labels" . | nindent 4 }}
+spec:
+  podSelector:
+    matchLabels:
+      {{- include "opensim-next.selectorLabels" . | nindent 6 }}
+  policyTypes:
+    - Ingress
+    - Egress
+  ingress:
+    {{- toYaml .Values.networkPolicy.ingress | nindent 4 }}
+    # Allow traffic from pods in the same namespace
+    - from:
+        - podSelector: {}
+      ports:
+        - protocol: TCP
+          port: {{ .Values.opensim.service.ports.viewer }}
+        - protocol: TCP
+          port: {{ .Values.opensim.service.ports.websocket }}
+        - protocol: TCP
+          port: {{ .Values.opensim.service.ports.web }}
+        - protocol: TCP
+          port: {{ .Values.opensim.service.ports.metrics }}
+        - protocol: TCP
+          port: {{ .Values.opensim.service.ports.hypergrid }}
+        - protocol: TCP
+          port: {{ .Values.opensim.service.ports.admin }}
+  egress:
+    # Allow DNS resolution
+    - to: []
+      ports:
+        - protocol: UDP
+          port: 53
+        - protocol: TCP
+          port: 53
+    # Allow database connections
+    - to:
+        - podSelector:
+            matchLabels:
+              app.kubernetes.io/name: postgresql
+      ports:
+        - protocol: TCP
+          port: 5432
+    # Allow Redis connections
+    - to:
+        - podSelector:
+            matchLabels:
+              app.kubernetes.io/name: redis
+      ports:
+        - protocol: TCP
+          port: 6379
+    # Allow HTTPS/HTTP outbound (for hypergrid, asset fetching, etc.)
+    - to: []
+      ports:
+        - protocol: TCP
+          port: 443
+        - protocol: TCP
+          port: 80
+    # Allow hypergrid communication
+    - to: []
+      ports:
+        - protocol: TCP
+          port: 8002
+    # Allow service mesh communication if enabled
+    {{- if .Values.global.serviceMesh.enabled }}
+    - to: []
+      ports:
+        - protocol: TCP
+          port: 15000  # Envoy admin
+        - protocol: TCP
+          port: 15001  # Envoy outbound
+        - protocol: TCP
+          port: 15006  # Envoy inbound
+    {{- end }}
+---
+# Network policy for database
+{{- if .Values.postgresql.enabled }}
+apiVersion: networking.k8s.io/v1
+kind: NetworkPolicy
+metadata:
+  name: {{ include "opensim-next.fullname" . }}-postgresql-access
+  labels:
+    {{- include "opensim-next.labels" . | nindent 4 }}
+spec:
+  podSelector:
+    matchLabels:
+      app.kubernetes.io/name: postgresql
+  policyTypes:
+    - Ingress
+  ingress:
+    # Allow OpenSim Next to connect to PostgreSQL
+    - from:
+        - podSelector:
+            matchLabels:
+              {{- include "opensim-next.selectorLabels" . | nindent 14 }}
+      ports:
+        - protocol: TCP
+          port: 5432
+    # Allow monitoring
+    - from:
+        - namespaceSelector:
+            matchLabels:
+              name: monitoring-system
+      ports:
+        - protocol: TCP
+          port: 9187  # postgres-exporter
+{{- end }}
+---
+# Network policy for Redis
+{{- if .Values.redis.enabled }}
+apiVersion: networking.k8s.io/v1
+kind: NetworkPolicy
+metadata:
+  name: {{ include "opensim-next.fullname" . }}-redis-access
+  labels:
+    {{- include "opensim-next.labels" . | nindent 4 }}
+spec:
+  podSelector:
+    matchLabels:
+      app.kubernetes.io/name: redis
+  policyTypes:
+    - Ingress
+  ingress:
+    # Allow OpenSim Next to connect to Redis
+    - from:
+        - podSelector:
+            matchLabels:
+              {{- include "opensim-next.selectorLabels" . | nindent 14 }}
+      ports:
+        - protocol: TCP
+          port: 6379
+    # Allow monitoring
+    - from:
+        - namespaceSelector:
+            matchLabels:
+              name: monitoring-system
+      ports:
+        - protocol: TCP
+          port: 9121  # redis-exporter
+{{- end }}
+---
+# Service mesh network policies
+{{- if .Values.global.serviceMesh.enabled }}
+apiVersion: networking.k8s.io/v1
+kind: NetworkPolicy
+metadata:
+  name: {{ include "opensim-next.fullname" . }}-service-mesh
+  labels:
+    {{- include "opensim-next.labels" . | nindent 4 }}
+spec:
+  podSelector:
+    matchLabels:
+      {{- include "opensim-next.selectorLabels" . | nindent 6 }}
+  policyTypes:
+    - Ingress
+    - Egress
+  ingress:
+    # Allow service mesh proxy traffic
+    - from:
+        - namespaceSelector:
+            matchLabels:
+              name: {{ .Values.global.serviceMesh.type }}-system
+      ports:
+        - protocol: TCP
+          port: 15000
+        - protocol: TCP
+          port: 15001
+        - protocol: TCP
+          port: 15006
+        - protocol: TCP
+          port: 15090
+  egress:
+    # Allow service mesh control plane communication
+    - to:
+        - namespaceSelector:
+            matchLabels:
+              name: {{ .Values.global.serviceMesh.type }}-system
+      ports:
+        - protocol: TCP
+          port: 15010  # Pilot
+        - protocol: TCP
+          port: 15011  # Pilot
+        - protocol: TCP
+          port: 8080   # Pilot
+        - protocol: TCP
+          port: 443    # Pilot
+{{- end }}
+{{- end }}

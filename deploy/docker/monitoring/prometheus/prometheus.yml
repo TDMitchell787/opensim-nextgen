@@ -1,0 +1,283 @@
+# OpenSim Next Prometheus Configuration
+# Production monitoring configuration for metrics collection
+
+global:
+  scrape_interval: 15s
+  evaluation_interval: 15s
+  external_labels:
+    cluster: 'opensim-next'
+    environment: 'production'
+
+# Rule files for alerting
+rule_files:
+  - "rules/*.yml"
+
+# Alert manager configuration
+alerting:
+  alertmanagers:
+    - static_configs:
+        - targets:
+          - alertmanager:9093
+
+# Scrape configurations
+scrape_configs:
+  #============================================================================
+  # OpenSim Next Application Metrics
+  #============================================================================
+  - job_name: 'opensim-next'
+    static_configs:
+      - targets: ['opensim-next:9100']
+    scrape_interval: 10s
+    metrics_path: /metrics
+    scheme: http
+    params:
+      format: ['prometheus']
+    basic_auth:
+      username: 'prometheus'
+      password: 'opensim_metrics_password'
+    
+    # Metric relabeling
+    metric_relabel_configs:
+      - source_labels: [__name__]
+        regex: 'opensim_(.+)'
+        target_label: 'service'
+        replacement: 'opensim-next'
+      
+      - source_labels: [instance]
+        target_label: 'pod'
+        regex: '([^:]+):.*'
+        replacement: '${1}'
+
+  #============================================================================
+  # System Metrics (Node Exporter)
+  #============================================================================
+  - job_name: 'node-exporter'
+    static_configs:
+      - targets: ['node-exporter:9100']
+    scrape_interval: 15s
+    metrics_path: /metrics
+    
+    # Add system labels
+    relabel_configs:
+      - source_labels: [__address__]
+        target_label: __param_target
+      - source_labels: [__param_target]
+        target_label: instance
+      - target_label: __address__
+        replacement: node-exporter:9100
+
+  #============================================================================
+  # PostgreSQL Database Metrics
+  #============================================================================
+  - job_name: 'postgres-exporter'
+    static_configs:
+      - targets: ['postgres-exporter:9187']
+    scrape_interval: 30s
+    metrics_path: /metrics
+    
+    # Database-specific labels
+    relabel_configs:
+      - source_labels: [__address__]
+        target_label: database_type
+        replacement: 'postgresql'
+
+  #============================================================================
+  # Redis Cache Metrics
+  #============================================================================
+  - job_name: 'redis-exporter'
+    static_configs:
+      - targets: ['redis-exporter:9121']
+    scrape_interval: 30s
+    metrics_path: /metrics
+
+  #============================================================================
+  # Docker Container Metrics
+  #============================================================================
+  - job_name: 'cadvisor'
+    static_configs:
+      - targets: ['cadvisor:8080']
+    scrape_interval: 30s
+    metrics_path: /metrics
+    
+    # Container-specific relabeling
+    metric_relabel_configs:
+      - source_labels: [container_label_com_docker_compose_service]
+        target_label: service_name
+      
+      - source_labels: [container_label_com_docker_compose_project]
+        target_label: project_name
+
+  #============================================================================
+  # Load Balancer Metrics (if using HAProxy/Nginx)
+  #============================================================================
+  - job_name: 'nginx-exporter'
+    static_configs:
+      - targets: ['nginx-exporter:9113']
+    scrape_interval: 15s
+    metrics_path: /metrics
+    honor_labels: true
+
+  #============================================================================
+  # Blackbox Monitoring (Endpoint Health)
+  #============================================================================
+  - job_name: 'blackbox'
+    metrics_path: /probe
+    params:
+      module: [http_2xx]
+    static_configs:
+      - targets:
+        - http://opensim-next:8080/health      # Web interface health
+        - http://opensim-next:9100/health      # API health
+        - ws://opensim-next:9001/health        # WebSocket health
+    relabel_configs:
+      - source_labels: [__address__]
+        target_label: __param_target
+      - source_labels: [__param_target]
+        target_label: instance
+      - target_label: __address__
+        replacement: blackbox-exporter:9115
+
+  #============================================================================
+  # OpenSim-Specific Monitoring
+  #============================================================================
+  - job_name: 'opensim-regions'
+    static_configs:
+      - targets: ['opensim-next:9100']
+    scrape_interval: 30s
+    metrics_path: /metrics/regions
+    params:
+      format: ['prometheus']
+    
+    # Region-specific labels
+    metric_relabel_configs:
+      - source_labels: [region_name]
+        target_label: region
+      
+      - source_labels: [physics_engine]
+        target_label: engine
+      
+      - source_labels: [__name__]
+        regex: 'opensim_region_(.+)'
+        target_label: metric_type
+        replacement: 'region'
+
+  #============================================================================
+  # WebSocket Connection Monitoring
+  #============================================================================
+  - job_name: 'opensim-websocket'
+    static_configs:
+      - targets: ['opensim-next:9001']
+    scrape_interval: 10s
+    metrics_path: /metrics
+    scheme: http
+    
+    # WebSocket-specific metrics
+    metric_relabel_configs:
+      - source_labels: [connection_type]
+        target_label: client_type
+      
+      - source_labels: [__name__]
+        regex: 'websocket_(.+)'
+        target_label: protocol
+        replacement: 'websocket'
+
+  #============================================================================
+  # Physics Engine Monitoring
+  #============================================================================
+  - job_name: 'opensim-physics'
+    static_configs:
+      - targets: ['opensim-next:9100']
+    scrape_interval: 20s
+    metrics_path: /metrics/physics
+    
+    # Physics engine labels
+    metric_relabel_configs:
+      - source_labels: [engine_type]
+        target_label: physics_engine
+      
+      - source_labels: [region_id]
+        target_label: region
+      
+      - source_labels: [__name__]
+        regex: 'physics_(.+)'
+        target_label: subsystem
+        replacement: 'physics'
+
+  #============================================================================
+  # Asset System Monitoring
+  #============================================================================
+  - job_name: 'opensim-assets'
+    static_configs:
+      - targets: ['opensim-next:9100']
+    scrape_interval: 60s
+    metrics_path: /metrics/assets
+    
+    # Asset-specific labels
+    metric_relabel_configs:
+      - source_labels: [asset_type]
+        target_label: type
+      
+      - source_labels: [cache_tier]
+        target_label: tier
+      
+      - source_labels: [__name__]
+        regex: 'asset_(.+)'
+        target_label: subsystem
+        replacement: 'assets'
+
+#==============================================================================
+# Remote Write Configuration (for long-term storage)
+#==============================================================================
+remote_write:
+  - url: "http://victoria-metrics:8428/api/v1/write"
+    queue_config:
+      max_samples_per_send: 10000
+      capacity: 20000
+      max_shards: 200
+    
+    # Write relabeling
+    write_relabel_configs:
+      - source_labels: [__name__]
+        regex: 'opensim_(.+)'
+        target_label: 'application'
+        replacement: 'opensim-next'
+
+#==============================================================================
+# Storage Configuration
+#==============================================================================
+storage:
+  tsdb:
+    path: /prometheus
+    retention.time: 15d
+    retention.size: 50GB
+    min-block-duration: 2h
+    max-block-duration: 25h
+    
+    # Compaction settings
+    wal-compression: true
+    
+    # Head chunks settings
+    head-chunks-write-queue-size: 10000
+
+#==============================================================================
+# Performance Tuning
+#==============================================================================
+# Query timeout
+query_timeout: 2m
+
+# Maximum concurrent queries
+query_max_concurrency: 20
+
+# Maximum samples per query
+query_max_samples: 50000000
+
+# Enable admin API
+enable_admin_api: true
+
+# Enable lifecycle API
+enable_lifecycle: true
+
+# Feature flags
+feature_flags:
+  - promql-at-modifier
+  - remote-write-receiver

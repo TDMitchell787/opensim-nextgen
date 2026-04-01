@@ -1,0 +1,169 @@
+{
+  "name": "OpenSim Next Auto-Configurator",
+  "short_name": "OpenSim Config",
+  "description": "Intelligent configuration wizard for OpenSim Next virtual world server",
+  "version": "1.0.0",
+  "start_url": "/",
+  "display": "standalone",
+  "background_color": "#f8fafc",
+  "theme_color": "#2563eb",
+  "orientation": "portrait-primary",
+  "scope": "/",
+  "lang": "en",
+  
+  "icons": [
+    {
+      "src": "icons/icon-72.png",
+      "sizes": "72x72",
+      "type": "image/png",
+      "purpose": "any"
+    },
+    {
+      "src": "icons/icon-96.png", 
+      "sizes": "96x96",
+      "type": "image/png",
+      "purpose": "any"
+    },
+    {
+      "src": "icons/icon-128.png",
+      "sizes": "128x128", 
+      "type": "image/png",
+      "purpose": "any"
+    },
+    {
+      "src": "icons/icon-144.png",
+      "sizes": "144x144",
+      "type": "image/png",
+      "purpose": "any"
+    },
+    {
+      "src": "icons/icon-152.png",
+      "sizes": "152x152",
+      "type": "image/png",
+      "purpose": "any"
+    },
+    {
+      "src": "icons/icon-192.png",
+      "sizes": "192x192",
+      "type": "image/png",
+      "purpose": "any maskable"
+    },
+    {
+      "src": "icons/icon-384.png",
+      "sizes": "384x384",
+      "type": "image/png",
+      "purpose": "any"
+    },
+    {
+      "src": "icons/icon-512.png",
+      "sizes": "512x512",
+      "type": "image/png",
+      "purpose": "any maskable"
+    }
+  ],
+  
+  "categories": [
+    "productivity",
+    "utilities",
+    "developer"
+  ],
+  
+  "screenshots": [
+    {
+      "src": "screenshots/desktop-1.png",
+      "sizes": "1280x720",
+      "type": "image/png",
+      "form_factor": "wide",
+      "label": "Main dashboard view"
+    },
+    {
+      "src": "screenshots/mobile-1.png", 
+      "sizes": "360x640",
+      "type": "image/png",
+      "form_factor": "narrow",
+      "label": "Mobile configuration wizard"
+    }
+  ],
+  
+  "shortcuts": [
+    {
+      "name": "New Configuration",
+      "short_name": "New Config",
+      "description": "Start a new OpenSim configuration",
+      "url": "/?action=new",
+      "icons": [
+        {
+          "src": "icons/shortcut-new.png",
+          "sizes": "192x192"
+        }
+      ]
+    },
+    {
+      "name": "Import Configuration",
+      "short_name": "Import",
+      "description": "Import existing configuration",
+      "url": "/?action=import",
+      "icons": [
+        {
+          "src": "icons/shortcut-import.png", 
+          "sizes": "192x192"
+        }
+      ]
+    },
+    {
+      "name": "Help & Documentation",
+      "short_name": "Help",
+      "description": "View help and documentation",
+      "url": "/help",
+      "icons": [
+        {
+          "src": "icons/shortcut-help.png",
+          "sizes": "192x192"
+        }
+      ]
+    }
+  ],
+  
+  "prefer_related_applications": false,
+  
+  "file_handlers": [
+    {
+      "action": "/?action=import",
+      "accept": {
+        "application/json": [".json"],
+        "text/plain": [".ini", ".conf"]
+      }
+    }
+  ],
+  
+  "protocol_handlers": [
+    {
+      "protocol": "opensim",
+      "url": "/?protocol=%s"
+    }
+  ],
+  
+  "share_target": {
+    "action": "/?action=share",
+    "method": "POST",
+    "enctype": "multipart/form-data",
+    "params": {
+      "files": [
+        {
+          "name": "config",
+          "accept": ["application/json", "text/plain"]
+        }
+      ]
+    }
+  },
+  
+  "launch_handler": {
+    "client_mode": "focus-existing"
+  },
+  
+  "edge_side_panel": {
+    "preferred_width": 400
+  },
+  
+  "handle_links": "preferred"
+}

@@ -1,0 +1,57 @@
+# OpenSim Next Grafana Dashboard Provisioning Configuration
+# Automatically loads dashboards from files on startup
+
+apiVersion: 1
+
+providers:
+  #============================================================================
+  # OpenSim Next Dashboards
+  #============================================================================
+  - name: 'opensim-dashboards'
+    orgId: 1
+    folder: 'OpenSim Next'
+    type: file
+    disableDeletion: false
+    updateIntervalSeconds: 30
+    allowUiUpdates: true
+    options:
+      path: /var/lib/grafana/dashboards
+
+  #============================================================================
+  # System Dashboards (Node Exporter, cAdvisor, etc.)
+  #============================================================================
+  - name: 'system-dashboards'
+    orgId: 1
+    folder: 'System Monitoring'
+    type: file
+    disableDeletion: false
+    updateIntervalSeconds: 60
+    allowUiUpdates: true
+    options:
+      path: /var/lib/grafana/dashboards/system
+
+  #============================================================================
+  # Application Dashboards (Database, WebSocket, Physics)
+  #============================================================================
+  - name: 'application-dashboards'
+    orgId: 1
+    folder: 'Application Metrics'
+    type: file
+    disableDeletion: false
+    updateIntervalSeconds: 30
+    allowUiUpdates: true
+    options:
+      path: /var/lib/grafana/dashboards/application
+
+  #============================================================================
+  # Business Dashboards (User Activity, Virtual Economy)
+  #============================================================================
+  - name: 'business-dashboards'
+    orgId: 1
+    folder: 'Business Metrics'
+    type: file
+    disableDeletion: false
+    updateIntervalSeconds: 60
+    allowUiUpdates: true
+    options:
+      path: /var/lib/grafana/dashboards/business

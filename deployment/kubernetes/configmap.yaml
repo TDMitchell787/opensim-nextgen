@@ -1,0 +1,147 @@
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: opensim-next-config
+  namespace: opensim-next
+  labels:
+    app: opensim-next
+    component: config
+data:
+  # Server Configuration
+  server.yaml: |
+    server:
+      host: "0.0.0.0"
+      port: 9000
+      websocket_port: 9001
+      web_port: 8080
+      admin_port: 8090
+      metrics_port: 9100
+      max_connections: 10000
+      keep_alive_timeout: 30
+      request_timeout: 60
+    
+    # Database Configuration  
+    database:
+      pool_size: 20
+      connection_timeout: 30
+      idle_timeout: 300
+      max_lifetime: 1800
+    
+    # Security Configuration
+    security:
+      encryption_key_rotation_interval: 86400
+      session_timeout: 3600
+      max_login_attempts: 5
+      rate_limit_requests_per_second: 100
+    
+    # Performance Configuration
+    performance:
+      enable_caching: true
+      cache_ttl: 3600
+      enable_compression: true
+      thread_pool_size: 32
+      physics_update_rate: 60
+    
+    # Monitoring Configuration
+    monitoring:
+      enable_metrics: true
+      enable_tracing: true
+      log_level: "info"
+      health_check_interval: 30
+    
+    # Content Management
+    content:
+      storage_backend: "s3"
+      enable_compression: true
+      auto_optimize: true
+      distribution_strategy: "on_demand"
+    
+    # Zero Trust Networking
+    zero_trust:
+      enable_service_mesh: true
+      require_mutual_tls: true
+      identity_verification: "strict"
+      policy_enforcement: "deny_by_default"
+---
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: opensim-next-scripts
+  namespace: opensim-next
+  labels:
+    app: opensim-next
+    component: scripts
+data:
+  init.sh: |
+    #!/bin/bash
+    set -euo pipefail
+    
+    echo "Initializing OpenSim Next deployment..."
+    
+    # Wait for database to be ready
+    echo "Waiting for database connection..."
+    while ! pg_isready -h $DATABASE_HOST -p $DATABASE_PORT -U $DATABASE_USER; do
+      echo "Database not ready, waiting..."
+      sleep 2
+    done
+    echo "Database connection established"
+    
+    # Run database migrations
+    echo "Running database migrations..."
+    /app/opensim-next migrate --database-url "$DATABASE_URL"
+    
+    # Initialize system components
+    echo "Initializing system components..."
+    /app/opensim-next init --config /config/server.yaml
+    
+    echo "Initialization complete"
+  
+  healthcheck.sh: |
+    #!/bin/bash
+    set -euo pipefail
+    
+    # Check main service health
+    curl -f http://localhost:8080/health || exit 1
+    
+    # Check metrics endpoint
+    curl -f http://localhost:9100/metrics > /dev/null || exit 1
+    
+    # Check admin interface
+    curl -f http://localhost:8090/health || exit 1
+    
+    echo "Health check passed"
+  
+  backup.sh: |
+    #!/bin/bash
+    set -euo pipefail
+    
+    BACKUP_DATE=$(date +%Y%m%d_%H%M%S)
+    BACKUP_DIR="/backups/opensim-next-$BACKUP_DATE"
+    
+    echo "Starting backup at $BACKUP_DATE"
+    
+    # Create backup directory
+    mkdir -p "$BACKUP_DIR"
+    
+    # Backup database
+    pg_dump "$DATABASE_URL" > "$BACKUP_DIR/database.sql"
+    
+    # Backup configuration
+    cp -r /config "$BACKUP_DIR/"
+    
+    # Backup assets (if local storage)
+    if [ -d "/assets" ]; then
+      tar -czf "$BACKUP_DIR/assets.tar.gz" /assets
+    fi
+    
+    # Create manifest
+    cat > "$BACKUP_DIR/manifest.json" << EOF
+    {
+      "backup_date": "$BACKUP_DATE",
+      "version": "$(cat /app/VERSION)",
+      "components": ["database", "config", "assets"],
+      "size_bytes": $(du -sb "$BACKUP_DIR" | cut -f1)
+    }
+    EOF
+    
+    echo "Backup completed: $BACKUP_DIR"

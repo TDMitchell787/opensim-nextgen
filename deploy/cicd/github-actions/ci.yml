@@ -1,0 +1,568 @@
+# GitHub Actions CI Pipeline for OpenSim Next
+# Continuous Integration with comprehensive testing and security scanning
+
+name: OpenSim Next CI
+
+on:
+  push:
+    branches: [ main, develop, 'feature/*', 'release/*' ]
+  pull_request:
+    branches: [ main, develop ]
+  schedule:
+    # Run nightly builds
+    - cron: '0 2 * * *'
+
+env:
+  CARGO_TERM_COLOR: always
+  RUST_BACKTRACE: 1
+  REGISTRY: ghcr.io
+  IMAGE_NAME: ${{ github.repository }}
+
+# Ensure only one workflow runs at a time for the same ref
+concurrency:
+  group: ${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  # Pre-flight checks
+  preflight:
+    name: Pre-flight Checks
+    runs-on: ubuntu-latest
+    outputs:
+      rust-changed: ${{ steps.changes.outputs.rust }}
+      zig-changed: ${{ steps.changes.outputs.zig }}
+      docker-changed: ${{ steps.changes.outputs.docker }}
+      k8s-changed: ${{ steps.changes.outputs.k8s }}
+      version: ${{ steps.version.outputs.version }}
+    
+    steps:
+    - name: Checkout code
+      uses: actions/checkout@v4
+      with:
+        fetch-depth: 0
+    
+    - name: Detect changes
+      uses: dorny/paths-filter@v2
+      id: changes
+      with:
+        filters: |
+          rust:
+            - 'opensim-next/rust/**'
+            - 'opensim-next/Cargo.*'
+          zig:
+            - 'opensim-next/zig/**'
+            - 'opensim-next/build.zig'
+          docker:
+            - 'opensim-next/deploy/docker/**'
+            - 'Dockerfile*'
+          k8s:
+            - 'opensim-next/deploy/kubernetes/**'
+            - 'opensim-next/deploy/config/**'
+    
+    - name: Generate version
+      id: version
+      run: |
+        if [[ "${{ github.ref }}" == "refs/tags/"* ]]; then
+          VERSION=${GITHUB_REF#refs/tags/}
+        else
+          VERSION=$(date +%Y%m%d)-${GITHUB_SHA::8}
+        fi
+        echo "version=$VERSION" >> $GITHUB_OUTPUT
+        echo "Version: $VERSION"
+
+  # Rust code quality and testing
+  rust-ci:
+    name: Rust CI
+    runs-on: ubuntu-latest
+    needs: preflight
+    if: needs.preflight.outputs.rust-changed == 'true' || github.event_name == 'schedule'
+    
+    strategy:
+      matrix:
+        rust-version: [stable, beta]
+        include:
+          - rust-version: stable
+            can-fail: false
+          - rust-version: beta
+            can-fail: true
+    
+    continue-on-error: ${{ matrix.can-fail }}
+    
+    steps:
+    - name: Checkout code
+      uses: actions/checkout@v4
+    
+    - name: Install Rust toolchain
+      uses: dtolnay/rust-toolchain@master
+      with:
+        toolchain: ${{ matrix.rust-version }}
+        components: rustfmt, clippy
+    
+    - name: Setup Rust cache
+      uses: Swatinem/rust-cache@v2
+      with:
+        workspaces: opensim-next/rust
+        cache-on-failure: true
+    
+    - name: Install system dependencies
+      run: |
+        sudo apt-get update
+        sudo apt-get install -y \
+          pkg-config \
+          libssl-dev \
+          libpq-dev \
+          postgresql-client \
+          redis-tools \
+          protobuf-compiler
+    
+    - name: Check Rust formatting
+      working-directory: opensim-next/rust
+      run: cargo fmt --all -- --check
+    
+    - name: Run Clippy lints
+      working-directory: opensim-next/rust
+      run: |
+        cargo clippy --all-targets --all-features -- \
+          -D warnings \
+          -D clippy::all \
+          -D clippy::pedantic \
+          -A clippy::module-name-repetitions \
+          -A clippy::too-many-arguments
+    
+    - name: Run security audit
+      working-directory: opensim-next/rust
+      run: |
+        cargo install cargo-audit
+        cargo audit --deny warnings
+    
+    - name: Check dependencies
+      working-directory: opensim-next/rust
+      run: |
+        cargo install cargo-deny
+        cargo deny check
+    
+    - name: Build Rust code
+      working-directory: opensim-next/rust
+      run: |
+        cargo build --verbose --all-features
+        cargo build --verbose --release --all-features
+    
+    - name: Run unit tests
+      working-directory: opensim-next/rust
+      run: |
+        cargo test --verbose --all-features
+    
+    - name: Run integration tests
+      working-directory: opensim-next/rust
+      run: |
+        cargo test --verbose --test '*' --all-features
+    
+    - name: Generate code coverage
+      if: matrix.rust-version == 'stable'
+      working-directory: opensim-next/rust
+      run: |
+        cargo install cargo-tarpaulin
+        cargo tarpaulin --verbose --all-features --workspace --timeout 120 --out xml
+    
+    - name: Upload coverage to Codecov
+      if: matrix.rust-version == 'stable'
+      uses: codecov/codecov-action@v3
+      with:
+        file: opensim-next/rust/cobertura.xml
+        flags: rust
+        name: rust-coverage
+
+  # Zig code quality and testing
+  zig-ci:
+    name: Zig CI
+    runs-on: ubuntu-latest
+    needs: preflight
+    if: needs.preflight.outputs.zig-changed == 'true' || github.event_name == 'schedule'
+    
+    strategy:
+      matrix:
+        zig-version: ['0.14.0']
+    
+    steps:
+    - name: Checkout code
+      uses: actions/checkout@v4
+    
+    - name: Setup Zig
+      uses: goto-bus-stop/setup-zig@v2
+      with:
+        version: ${{ matrix.zig-version }}
+    
+    - name: Install system dependencies
+      run: |
+        sudo apt-get update
+        sudo apt-get install -y \
+          libode-dev \
+          libbullet-dev \
+          libopenssl-dev
+    
+    - name: Check Zig formatting
+      working-directory: opensim-next/zig
+      run: zig fmt --check src/
+    
+    - name: Build Zig code
+      working-directory: opensim-next/zig
+      run: |
+        zig build
+        zig build -Doptimize=ReleaseFast
+    
+    - name: Run Zig tests
+      working-directory: opensim-next/zig
+      run: |
+        zig build test
+        zig build test -Doptimize=ReleaseFast
+    
+    - name: Run Zig benchmarks
+      working-directory: opensim-next/zig
+      run: zig build bench
+
+  # Security scanning
+  security:
+    name: Security Scanning
+    runs-on: ubuntu-latest
+    needs: preflight
+    
+    steps:
+    - name: Checkout code
+      uses: actions/checkout@v4
+      with:
+        fetch-depth: 0
+    
+    - name: Run Trivy vulnerability scanner
+      uses: aquasecurity/trivy-action@master
+      with:
+        scan-type: 'fs'
+        scan-ref: '.'
+        format: 'sarif'
+        output: 'trivy-results.sarif'
+    
+    - name: Upload Trivy scan results
+      uses: github/codeql-action/upload-sarif@v2
+      with:
+        sarif_file: 'trivy-results.sarif'
+    
+    - name: Run CodeQL Analysis
+      uses: github/codeql-action/init@v2
+      with:
+        languages: rust
+        queries: security-and-quality
+    
+    - name: Autobuild
+      uses: github/codeql-action/autobuild@v2
+    
+    - name: Perform CodeQL Analysis
+      uses: github/codeql-action/analyze@v2
+    
+    - name: Run Semgrep
+      uses: returntocorp/semgrep-action@v1
+      with:
+        config: >-
+          p/security-audit
+          p/secrets
+          p/rust
+          p/docker
+          p/kubernetes
+
+  # Docker image building and scanning
+  docker:
+    name: Docker Build & Scan
+    runs-on: ubuntu-latest
+    needs: [preflight, rust-ci, zig-ci]
+    if: always() && (needs.rust-ci.result == 'success' || needs.rust-ci.result == 'skipped') && (needs.zig-ci.result == 'success' || needs.zig-ci.result == 'skipped')
+    
+    steps:
+    - name: Checkout code
+      uses: actions/checkout@v4
+    
+    - name: Set up Docker Buildx
+      uses: docker/setup-buildx-action@v3
+    
+    - name: Log in to Container Registry
+      if: github.event_name != 'pull_request'
+      uses: docker/login-action@v3
+      with:
+        registry: ${{ env.REGISTRY }}
+        username: ${{ github.actor }}
+        password: ${{ secrets.GITHUB_TOKEN }}
+    
+    - name: Extract metadata
+      id: meta
+      uses: docker/metadata-action@v5
+      with:
+        images: ${{ env.REGISTRY }}/${{ env.IMAGE_NAME }}
+        tags: |
+          type=ref,event=branch
+          type=ref,event=pr
+          type=schedule
+          type=raw,value=latest,enable={{is_default_branch}}
+          type=raw,value=${{ needs.preflight.outputs.version }}
+    
+    - name: Build Docker image
+      uses: docker/build-push-action@v5
+      with:
+        context: opensim-next
+        file: opensim-next/deploy/docker/Dockerfile.production
+        platforms: linux/amd64,linux/arm64
+        push: ${{ github.event_name != 'pull_request' }}
+        tags: ${{ steps.meta.outputs.tags }}
+        labels: ${{ steps.meta.outputs.labels }}
+        cache-from: type=gha
+        cache-to: type=gha,mode=max
+        build-args: |
+          VERSION=${{ needs.preflight.outputs.version }}
+          BUILD_DATE=${{ fromJSON(steps.meta.outputs.json).labels['org.opencontainers.image.created'] }}
+          VCS_REF=${{ github.sha }}
+    
+    - name: Run Trivy container scan
+      uses: aquasecurity/trivy-action@master
+      with:
+        image-ref: ${{ env.REGISTRY }}/${{ env.IMAGE_NAME }}:${{ needs.preflight.outputs.version }}
+        format: 'sarif'
+        output: 'docker-trivy-results.sarif'
+    
+    - name: Upload Docker scan results
+      uses: github/codeql-action/upload-sarif@v2
+      with:
+        sarif_file: 'docker-trivy-results.sarif'
+    
+    - name: Run container structure test
+      run: |
+        curl -LO https://storage.googleapis.com/container-structure-test/latest/container-structure-test-linux-amd64
+        chmod +x container-structure-test-linux-amd64
+        sudo mv container-structure-test-linux-amd64 /usr/local/bin/container-structure-test
+        container-structure-test test --image ${{ env.REGISTRY }}/${{ env.IMAGE_NAME }}:${{ needs.preflight.outputs.version }} --config opensim-next/deploy/docker/structure-test.yaml
+
+  # Kubernetes manifests validation
+  kubernetes:
+    name: Kubernetes Validation
+    runs-on: ubuntu-latest
+    needs: preflight
+    if: needs.preflight.outputs.k8s-changed == 'true' || github.event_name == 'schedule'
+    
+    steps:
+    - name: Checkout code
+      uses: actions/checkout@v4
+    
+    - name: Setup Helm
+      uses: azure/setup-helm@v3
+      with:
+        version: '3.13.0'
+    
+    - name: Setup kubectl
+      uses: azure/setup-kubectl@v3
+      with:
+        version: '1.28.0'
+    
+    - name: Install kubeval
+      run: |
+        curl -L https://github.com/instrumenta/kubeval/releases/latest/download/kubeval-linux-amd64.tar.gz | tar xz
+        sudo mv kubeval /usr/local/bin
+    
+    - name: Install kustomize
+      run: |
+        curl -s "https://raw.githubusercontent.com/kubernetes-sigs/kustomize/master/hack/install_kustomize.sh" | bash
+        sudo mv kustomize /usr/local/bin/
+    
+    - name: Validate Helm charts
+      working-directory: opensim-next/deploy/kubernetes/helm
+      run: |
+        helm dependency build
+        helm lint .
+        helm template opensim-next . --values values.yaml > /tmp/manifests.yaml
+        kubeval /tmp/manifests.yaml
+    
+    - name: Validate Kubernetes manifests
+      working-directory: opensim-next/deploy/kubernetes/manifests
+      run: |
+        for file in *.yaml; do
+          echo "Validating $file..."
+          kubeval "$file"
+        done
+    
+    - name: Run Polaris security scan
+      run: |
+        curl -L https://github.com/FairwindsOps/polaris/releases/latest/download/polaris_linux_amd64.tar.gz | tar xz
+        sudo mv polaris /usr/local/bin/
+        polaris audit --config opensim-next/deploy/kubernetes/polaris-config.yaml --audit-path opensim-next/deploy/kubernetes/ --format json > polaris-results.json
+    
+    - name: Upload Polaris results
+      uses: actions/upload-artifact@v3
+      with:
+        name: polaris-results
+        path: polaris-results.json
+
+  # Integration testing
+  integration:
+    name: Integration Tests
+    runs-on: ubuntu-latest
+    needs: [preflight, rust-ci, zig-ci]
+    if: always() && needs.rust-ci.result == 'success' && needs.zig-ci.result == 'success'
+    
+    services:
+      postgres:
+        image: postgres:15
+        env:
+          POSTGRES_PASSWORD: postgres
+          POSTGRES_DB: opensim_test
+        options: >-
+          --health-cmd pg_isready
+          --health-interval 10s
+          --health-timeout 5s
+          --health-retries 5
+        ports:
+          - 5432:5432
+      
+      redis:
+        image: redis:7-alpine
+        options: >-
+          --health-cmd "redis-cli ping"
+          --health-interval 10s
+          --health-timeout 5s
+          --health-retries 5
+        ports:
+          - 6379:6379
+    
+    steps:
+    - name: Checkout code
+      uses: actions/checkout@v4
+    
+    - name: Install Rust toolchain
+      uses: dtolnay/rust-toolchain@stable
+    
+    - name: Setup Rust cache
+      uses: Swatinem/rust-cache@v2
+      with:
+        workspaces: opensim-next/rust
+    
+    - name: Install system dependencies
+      run: |
+        sudo apt-get update
+        sudo apt-get install -y \
+          pkg-config \
+          libssl-dev \
+          libpq-dev \
+          postgresql-client \
+          redis-tools
+    
+    - name: Setup database
+      run: |
+        PGPASSWORD=postgres psql -h localhost -U postgres -d opensim_test -c "CREATE EXTENSION IF NOT EXISTS \"uuid-ossp\";"
+    
+    - name: Run integration tests
+      working-directory: opensim-next/rust
+      env:
+        DATABASE_URL: postgresql://postgres:postgres@localhost:5432/opensim_test
+        REDIS_URL: redis://localhost:6379
+      run: |
+        cargo test --test integration_tests --all-features -- --test-threads=1
+    
+    - name: Run performance tests
+      working-directory: opensim-next/rust
+      env:
+        DATABASE_URL: postgresql://postgres:postgres@localhost:5432/opensim_test
+        REDIS_URL: redis://localhost:6379
+      run: |
+        cargo test --test performance_tests --all-features --release -- --test-threads=1
+
+  # Performance benchmarking
+  benchmark:
+    name: Performance Benchmarks
+    runs-on: ubuntu-latest
+    needs: [preflight, rust-ci, zig-ci]
+    if: github.event_name == 'schedule' || (github.event_name == 'push' && github.ref == 'refs/heads/main')
+    
+    steps:
+    - name: Checkout code
+      uses: actions/checkout@v4
+    
+    - name: Install Rust toolchain
+      uses: dtolnay/rust-toolchain@stable
+    
+    - name: Setup Rust cache
+      uses: Swatinem/rust-cache@v2
+      with:
+        workspaces: opensim-next/rust
+    
+    - name: Run Rust benchmarks
+      working-directory: opensim-next/rust
+      run: |
+        cargo install cargo-criterion
+        cargo criterion --output-format json > benchmark-results.json
+    
+    - name: Upload benchmark results
+      uses: actions/upload-artifact@v3
+      with:
+        name: benchmark-results
+        path: opensim-next/rust/benchmark-results.json
+    
+    - name: Store benchmark result
+      uses: benchmark-action/github-action-benchmark@v1
+      if: github.ref == 'refs/heads/main'
+      with:
+        tool: 'cargo'
+        output-file-path: opensim-next/rust/benchmark-results.json
+        github-token: ${{ secrets.GITHUB_TOKEN }}
+        auto-push: true
+
+  # Quality gates
+  quality-gate:
+    name: Quality Gate
+    runs-on: ubuntu-latest
+    needs: [rust-ci, zig-ci, security, docker, kubernetes, integration]
+    if: always()
+    
+    steps:
+    - name: Check quality gate
+      run: |
+        if [[ "${{ needs.rust-ci.result }}" != "success" && "${{ needs.rust-ci.result }}" != "skipped" ]]; then
+          echo "Rust CI failed"
+          exit 1
+        fi
+        
+        if [[ "${{ needs.zig-ci.result }}" != "success" && "${{ needs.zig-ci.result }}" != "skipped" ]]; then
+          echo "Zig CI failed"
+          exit 1
+        fi
+        
+        if [[ "${{ needs.security.result }}" != "success" ]]; then
+          echo "Security scanning failed"
+          exit 1
+        fi
+        
+        if [[ "${{ needs.docker.result }}" != "success" && "${{ needs.docker.result }}" != "skipped" ]]; then
+          echo "Docker build failed"
+          exit 1
+        fi
+        
+        if [[ "${{ needs.kubernetes.result }}" != "success" && "${{ needs.kubernetes.result }}" != "skipped" ]]; then
+          echo "Kubernetes validation failed"
+          exit 1
+        fi
+        
+        if [[ "${{ needs.integration.result }}" != "success" && "${{ needs.integration.result }}" != "skipped" ]]; then
+          echo "Integration tests failed"
+          exit 1
+        fi
+        
+        echo "All quality gates passed!"
+
+  # Cleanup
+  cleanup:
+    name: Cleanup
+    runs-on: ubuntu-latest
+    needs: [quality-gate]
+    if: always()
+    
+    steps:
+    - name: Delete old packages
+      if: github.event_name != 'pull_request'
+      uses: actions/delete-package-versions@v4
+      with:
+        package-name: ${{ github.event.repository.name }}
+        package-type: 'container'
+        min-versions-to-keep: 10
+        delete-only-untagged-versions: true

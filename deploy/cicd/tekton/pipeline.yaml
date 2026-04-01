@@ -1,0 +1,690 @@
+# Tekton Pipeline for OpenSim Next
+# Cloud-native Kubernetes CI/CD with Tasks and Pipelines
+
+---
+# PipelineRun for OpenSim Next
+apiVersion: tekton.dev/v1beta1
+kind: PipelineRun
+metadata:
+  name: opensim-next-pipeline-run
+  namespace: opensim-next-ci
+  labels:
+    app.kubernetes.io/name: opensim-next
+    app.kubernetes.io/component: ci-cd
+spec:
+  pipelineRef:
+    name: opensim-next-pipeline
+  
+  workspaces:
+  - name: source
+    volumeClaimTemplate:
+      spec:
+        accessModes:
+        - ReadWriteOnce
+        resources:
+          requests:
+            storage: 5Gi
+        storageClassName: fast-ssd
+  
+  - name: docker-credentials
+    secret:
+      secretName: docker-credentials
+  
+  - name: kubeconfig
+    secret:
+      secretName: kubeconfig
+  
+  params:
+  - name: git-url
+    value: "https://github.com/opensim-next/opensim-next.git"
+  - name: git-revision
+    value: "main"
+  - name: image-name
+    value: "harbor.opensim.example.com/opensim-next/opensim-next"
+  - name: environment
+    value: "staging"
+
+---
+# Main Pipeline Definition
+apiVersion: tekton.dev/v1beta1
+kind: Pipeline
+metadata:
+  name: opensim-next-pipeline
+  namespace: opensim-next-ci
+  labels:
+    app.kubernetes.io/name: opensim-next
+    app.kubernetes.io/component: ci-cd
+spec:
+  params:
+  - name: git-url
+    type: string
+    description: Git repository URL
+  - name: git-revision
+    type: string
+    description: Git revision to build
+    default: main
+  - name: image-name
+    type: string
+    description: Container image name
+  - name: environment
+    type: string
+    description: Target environment
+    default: staging
+  
+  workspaces:
+  - name: source
+    description: Source code workspace
+  - name: docker-credentials
+    description: Docker registry credentials
+  - name: kubeconfig
+    description: Kubernetes configuration
+  
+  tasks:
+  # Git clone task
+  - name: fetch-source
+    taskRef:
+      name: git-clone
+      kind: ClusterTask
+    workspaces:
+    - name: output
+      workspace: source
+    params:
+    - name: url
+      value: $(params.git-url)
+    - name: revision
+      value: $(params.git-revision)
+    - name: depth
+      value: "2"
+
+  # Detect changes task
+  - name: detect-changes
+    taskRef:
+      name: opensim-detect-changes
+    workspaces:
+    - name: source
+      workspace: source
+    runAfter:
+    - fetch-source
+
+  # Rust pipeline
+  - name: rust-build
+    taskRef:
+      name: opensim-rust-build
+    workspaces:
+    - name: source
+      workspace: source
+    runAfter:
+    - detect-changes
+    when:
+    - input: $(tasks.detect-changes.results.rust-changed)
+      operator: in
+      values: ["true"]
+
+  - name: rust-test
+    taskRef:
+      name: opensim-rust-test
+    workspaces:
+    - name: source
+      workspace: source
+    runAfter:
+    - rust-build
+    when:
+    - input: $(tasks.detect-changes.results.rust-changed)
+      operator: in
+      values: ["true"]
+
+  # Zig pipeline
+  - name: zig-build
+    taskRef:
+      name: opensim-zig-build
+    workspaces:
+    - name: source
+      workspace: source
+    runAfter:
+    - detect-changes
+    when:
+    - input: $(tasks.detect-changes.results.zig-changed)
+      operator: in
+      values: ["true"]
+
+  - name: zig-test
+    taskRef:
+      name: opensim-zig-test
+    workspaces:
+    - name: source
+      workspace: source
+    runAfter:
+    - zig-build
+    when:
+    - input: $(tasks.detect-changes.results.zig-changed)
+      operator: in
+      values: ["true"]
+
+  # Security scanning
+  - name: security-scan
+    taskRef:
+      name: opensim-security-scan
+    workspaces:
+    - name: source
+      workspace: source
+    runAfter:
+    - fetch-source
+
+  # Docker build and push
+  - name: docker-build
+    taskRef:
+      name: opensim-docker-build
+    workspaces:
+    - name: source
+      workspace: source
+    - name: dockerconfig
+      workspace: docker-credentials
+    params:
+    - name: image-name
+      value: $(params.image-name)
+    - name: version
+      value: $(tasks.detect-changes.results.version)
+    runAfter:
+    - rust-test
+    - zig-test
+    - security-scan
+    when:
+    - input: $(tasks.detect-changes.results.docker-changed)
+      operator: in
+      values: ["true"]
+
+  # Integration tests
+  - name: integration-test
+    taskRef:
+      name: opensim-integration-test
+    workspaces:
+    - name: source
+      workspace: source
+    runAfter:
+    - docker-build
+
+  # Deploy
+  - name: deploy
+    taskRef:
+      name: opensim-deploy
+    workspaces:
+    - name: source
+      workspace: source
+    - name: kubeconfig
+      workspace: kubeconfig
+    params:
+    - name: environment
+      value: $(params.environment)
+    - name: image-name
+      value: $(params.image-name)
+    - name: version
+      value: $(tasks.detect-changes.results.version)
+    runAfter:
+    - integration-test
+
+---
+# Task: Detect Changes
+apiVersion: tekton.dev/v1beta1
+kind: Task
+metadata:
+  name: opensim-detect-changes
+  namespace: opensim-next-ci
+  labels:
+    app.kubernetes.io/name: opensim-next
+    app.kubernetes.io/component: ci-cd
+spec:
+  workspaces:
+  - name: source
+    description: Source code workspace
+  
+  results:
+  - name: version
+    description: Build version
+  - name: rust-changed
+    description: Whether Rust code changed
+  - name: zig-changed
+    description: Whether Zig code changed
+  - name: docker-changed
+    description: Whether Docker files changed
+  
+  steps:
+  - name: detect-changes
+    image: alpine/git:latest
+    workingDir: $(workspaces.source.path)
+    script: |
+      #!/bin/sh
+      set -e
+      
+      # Generate version
+      if git describe --tags --exact-match HEAD 2>/dev/null; then
+        VERSION=$(git describe --tags --exact-match HEAD)
+      else
+        VERSION=$(date +%Y%m%d)-$(git rev-parse --short HEAD)
+      fi
+      echo -n "$VERSION" > $(results.version.path)
+      echo "Version: $VERSION"
+      
+      # Detect changes
+      if git diff --name-only HEAD~1 HEAD | grep -q 'opensim-next/rust\|Cargo'; then
+        echo -n "true" > $(results.rust-changed.path)
+        echo "Rust changed: true"
+      else
+        echo -n "false" > $(results.rust-changed.path)
+        echo "Rust changed: false"
+      fi
+      
+      if git diff --name-only HEAD~1 HEAD | grep -q 'opensim-next/zig\|build.zig'; then
+        echo -n "true" > $(results.zig-changed.path)
+        echo "Zig changed: true"
+      else
+        echo -n "false" > $(results.zig-changed.path)
+        echo "Zig changed: false"
+      fi
+      
+      if git diff --name-only HEAD~1 HEAD | grep -q 'opensim-next/deploy/docker\|Dockerfile'; then
+        echo -n "true" > $(results.docker-changed.path)
+        echo "Docker changed: true"
+      else
+        echo -n "false" > $(results.docker-changed.path)
+        echo "Docker changed: false"
+      fi
+
+---
+# Task: Rust Build
+apiVersion: tekton.dev/v1beta1
+kind: Task
+metadata:
+  name: opensim-rust-build
+  namespace: opensim-next-ci
+  labels:
+    app.kubernetes.io/name: opensim-next
+    app.kubernetes.io/component: ci-cd
+spec:
+  workspaces:
+  - name: source
+    description: Source code workspace
+  
+  steps:
+  - name: install-rust
+    image: rust:1.75
+    workingDir: $(workspaces.source.path)
+    script: |
+      #!/bin/bash
+      set -e
+      
+      apt-get update
+      apt-get install -y pkg-config libssl-dev libpq-dev
+      
+      rustc --version
+      cargo --version
+  
+  - name: format-check
+    image: rust:1.75
+    workingDir: $(workspaces.source.path)/opensim-next/rust
+    script: |
+      #!/bin/bash
+      set -e
+      cargo fmt --all -- --check
+  
+  - name: clippy-lint
+    image: rust:1.75
+    workingDir: $(workspaces.source.path)/opensim-next/rust
+    script: |
+      #!/bin/bash
+      set -e
+      cargo clippy --all-targets --all-features -- -D warnings
+  
+  - name: security-audit
+    image: rust:1.75
+    workingDir: $(workspaces.source.path)/opensim-next/rust
+    script: |
+      #!/bin/bash
+      set -e
+      cargo install cargo-audit
+      cargo audit --deny warnings
+  
+  - name: build
+    image: rust:1.75
+    workingDir: $(workspaces.source.path)/opensim-next/rust
+    script: |
+      #!/bin/bash
+      set -e
+      cargo build --verbose --all-features
+      cargo build --verbose --release --all-features
+    
+    resources:
+      requests:
+        memory: 2Gi
+        cpu: 1000m
+      limits:
+        memory: 4Gi
+        cpu: 2000m
+
+---
+# Task: Rust Test
+apiVersion: tekton.dev/v1beta1
+kind: Task
+metadata:
+  name: opensim-rust-test
+  namespace: opensim-next-ci
+  labels:
+    app.kubernetes.io/name: opensim-next
+    app.kubernetes.io/component: ci-cd
+spec:
+  workspaces:
+  - name: source
+    description: Source code workspace
+  
+  sidecars:
+  - name: postgres
+    image: postgres:15
+    env:
+    - name: POSTGRES_DB
+      value: opensim_test
+    - name: POSTGRES_USER
+      value: opensim
+    - name: POSTGRES_PASSWORD
+      value: opensim_test_password
+  
+  - name: redis
+    image: redis:7-alpine
+    command: ["redis-server", "--requirepass", "redis_test_password"]
+  
+  steps:
+  - name: test
+    image: rust:1.75
+    workingDir: $(workspaces.source.path)/opensim-next/rust
+    env:
+    - name: DATABASE_URL
+      value: "postgresql://opensim:opensim_test_password@localhost:5432/opensim_test"
+    - name: REDIS_URL
+      value: "redis://:redis_test_password@localhost:6379"
+    script: |
+      #!/bin/bash
+      set -e
+      
+      apt-get update
+      apt-get install -y pkg-config libssl-dev libpq-dev postgresql-client redis-tools
+      
+      # Wait for services
+      until pg_isready -h localhost -p 5432 -U opensim; do sleep 1; done
+      until redis-cli -h localhost -a redis_test_password ping; do sleep 1; done
+      
+      cargo test --verbose --all-features
+
+---
+# Task: Zig Build
+apiVersion: tekton.dev/v1beta1
+kind: Task
+metadata:
+  name: opensim-zig-build
+  namespace: opensim-next-ci
+  labels:
+    app.kubernetes.io/name: opensim-next
+    app.kubernetes.io/component: ci-cd
+spec:
+  workspaces:
+  - name: source
+    description: Source code workspace
+  
+  steps:
+  - name: install-zig
+    image: alpine:latest
+    workingDir: $(workspaces.source.path)
+    script: |
+      #!/bin/sh
+      set -e
+      
+      apk add --no-cache curl xz build-base linux-headers
+      curl -L https://ziglang.org/download/0.14.0/zig-linux-x86_64-0.14.0.tar.xz | tar -xJ
+      mv zig-linux-x86_64-0.14.0 /usr/local/zig
+      export PATH=/usr/local/zig:$PATH
+      zig version
+  
+  - name: format-check
+    image: alpine:latest
+    workingDir: $(workspaces.source.path)/opensim-next/zig
+    script: |
+      #!/bin/sh
+      set -e
+      export PATH=/usr/local/zig:$PATH
+      zig fmt --check src/
+  
+  - name: build
+    image: alpine:latest
+    workingDir: $(workspaces.source.path)/opensim-next/zig
+    script: |
+      #!/bin/sh
+      set -e
+      export PATH=/usr/local/zig:$PATH
+      zig build
+      zig build -Doptimize=ReleaseFast
+
+---
+# Task: Zig Test
+apiVersion: tekton.dev/v1beta1
+kind: Task
+metadata:
+  name: opensim-zig-test
+  namespace: opensim-next-ci
+  labels:
+    app.kubernetes.io/name: opensim-next
+    app.kubernetes.io/component: ci-cd
+spec:
+  workspaces:
+  - name: source
+    description: Source code workspace
+  
+  steps:
+  - name: test
+    image: alpine:latest
+    workingDir: $(workspaces.source.path)/opensim-next/zig
+    script: |
+      #!/bin/sh
+      set -e
+      export PATH=/usr/local/zig:$PATH
+      zig build test
+
+---
+# Task: Security Scan
+apiVersion: tekton.dev/v1beta1
+kind: Task
+metadata:
+  name: opensim-security-scan
+  namespace: opensim-next-ci
+  labels:
+    app.kubernetes.io/name: opensim-next
+    app.kubernetes.io/component: ci-cd
+spec:
+  workspaces:
+  - name: source
+    description: Source code workspace
+  
+  steps:
+  - name: trivy-scan
+    image: aquasec/trivy:latest
+    workingDir: $(workspaces.source.path)
+    script: |
+      #!/bin/sh
+      set -e
+      
+      # Filesystem scan
+      trivy fs --format sarif --output trivy-results.sarif .
+      trivy fs --severity HIGH,CRITICAL .
+
+---
+# Task: Docker Build
+apiVersion: tekton.dev/v1beta1
+kind: Task
+metadata:
+  name: opensim-docker-build
+  namespace: opensim-next-ci
+  labels:
+    app.kubernetes.io/name: opensim-next
+    app.kubernetes.io/component: ci-cd
+spec:
+  params:
+  - name: image-name
+    type: string
+    description: Container image name
+  - name: version
+    type: string
+    description: Build version
+  
+  workspaces:
+  - name: source
+    description: Source code workspace
+  - name: dockerconfig
+    description: Docker configuration
+  
+  steps:
+  - name: build-and-push
+    image: gcr.io/kaniko-project/executor:latest
+    workingDir: $(workspaces.source.path)
+    env:
+    - name: DOCKER_CONFIG
+      value: $(workspaces.dockerconfig.path)
+    args:
+    - --dockerfile=opensim-next/deploy/docker/Dockerfile.production
+    - --context=opensim-next
+    - --destination=$(params.image-name):$(params.version)
+    - --destination=$(params.image-name):latest
+    - --build-arg=VERSION=$(params.version)
+    - --build-arg=BUILD_DATE=$(date -Iseconds)
+    - --cache=true
+
+---
+# Task: Integration Test
+apiVersion: tekton.dev/v1beta1
+kind: Task
+metadata:
+  name: opensim-integration-test
+  namespace: opensim-next-ci
+  labels:
+    app.kubernetes.io/name: opensim-next
+    app.kubernetes.io/component: ci-cd
+spec:
+  workspaces:
+  - name: source
+    description: Source code workspace
+  
+  sidecars:
+  - name: postgres
+    image: postgres:15
+    env:
+    - name: POSTGRES_DB
+      value: opensim_test
+    - name: POSTGRES_USER
+      value: opensim
+    - name: POSTGRES_PASSWORD
+      value: opensim_test_password
+  
+  - name: redis
+    image: redis:7-alpine
+    command: ["redis-server", "--requirepass", "redis_test_password"]
+  
+  steps:
+  - name: integration-test
+    image: rust:1.75
+    workingDir: $(workspaces.source.path)/opensim-next/rust
+    env:
+    - name: DATABASE_URL
+      value: "postgresql://opensim:opensim_test_password@localhost:5432/opensim_test"
+    - name: REDIS_URL
+      value: "redis://:redis_test_password@localhost:6379"
+    script: |
+      #!/bin/bash
+      set -e
+      
+      apt-get update
+      apt-get install -y pkg-config libssl-dev libpq-dev postgresql-client redis-tools
+      
+      # Wait for services
+      until pg_isready -h localhost -p 5432 -U opensim; do sleep 1; done
+      until redis-cli -h localhost -a redis_test_password ping; do sleep 1; done
+      
+      cargo test --test integration_tests --all-features -- --test-threads=1
+
+---
+# Task: Deploy
+apiVersion: tekton.dev/v1beta1
+kind: Task
+metadata:
+  name: opensim-deploy
+  namespace: opensim-next-ci
+  labels:
+    app.kubernetes.io/name: opensim-next
+    app.kubernetes.io/component: ci-cd
+spec:
+  params:
+  - name: environment
+    type: string
+    description: Target environment
+  - name: image-name
+    type: string
+    description: Container image name
+  - name: version
+    type: string
+    description: Build version
+  
+  workspaces:
+  - name: source
+    description: Source code workspace
+  - name: kubeconfig
+    description: Kubernetes configuration
+  
+  steps:
+  - name: deploy
+    image: alpine/helm:latest
+    workingDir: $(workspaces.source.path)
+    env:
+    - name: KUBECONFIG
+      value: $(workspaces.kubeconfig.path)/kubeconfig
+    script: |
+      #!/bin/sh
+      set -e
+      
+      apk add --no-cache curl
+      curl -LO https://storage.googleapis.com/kubernetes-release/release/v1.28.0/bin/linux/amd64/kubectl
+      chmod +x kubectl && mv kubectl /usr/local/bin/
+      
+      # Deploy based on environment
+      if [ "$(params.environment)" = "production" ]; then
+        # Blue-Green deployment for production
+        CURRENT_COLOR=$(kubectl get service opensim-next-active -n opensim-next -o jsonpath='{.spec.selector.color}' 2>/dev/null || echo "blue")
+        NEW_COLOR=$([ "$CURRENT_COLOR" = "blue" ] && echo "green" || echo "blue")
+        
+        echo "Deploying to $NEW_COLOR environment"
+        
+        helm upgrade --install opensim-next-$NEW_COLOR \
+          opensim-next/deploy/kubernetes/helm \
+          --namespace opensim-next \
+          --create-namespace \
+          --values opensim-next/deploy/kubernetes/helm/values.yaml \
+          --values opensim-next/deploy/config/environments/production.yaml \
+          --set image.tag=$(params.version) \
+          --set environment=production \
+          --set color=$NEW_COLOR \
+          --wait --timeout=20m
+        
+        kubectl rollout status deployment/opensim-next-$NEW_COLOR \
+          -n opensim-next --timeout=900s
+        
+        # Switch traffic
+        kubectl patch service opensim-next-active -n opensim-next \
+          -p "{\"spec\":{\"selector\":{\"color\":\"$NEW_COLOR\"}}}"
+      else
+        # Standard deployment for non-production
+        helm upgrade --install opensim-next-$(params.environment) \
+          opensim-next/deploy/kubernetes/helm \
+          --namespace opensim-next-$(params.environment) \
+          --create-namespace \
+          --values opensim-next/deploy/kubernetes/helm/values.yaml \
+          --values opensim-next/deploy/config/environments/$(params.environment).yaml \
+          --set image.tag=$(params.version) \
+          --set environment=$(params.environment) \
+          --wait --timeout=15m
+        
+        kubectl rollout status deployment/opensim-next-$(params.environment) \
+          -n opensim-next-$(params.environment) --timeout=600s
+      fi

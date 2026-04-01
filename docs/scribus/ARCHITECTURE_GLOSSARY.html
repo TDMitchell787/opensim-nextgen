@@ -1,0 +1,200 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>OpenSim Next - Architecture Glossary</title>
+    <style>
+        body { font-family: Arial, sans-serif; line-height: 1.6; margin: 40px; }
+        h1 { color: #2c3e50; border-bottom: 3px solid #3498db; padding-bottom: 10px; }
+        h2 { color: #27ae60; margin-top: 30px; border-bottom: 2px solid #27ae60; padding-bottom: 5px; }
+        h3 { color: #e67e22; margin-top: 20px; }
+        .subtitle { font-style: italic; color: #7f8c8d; margin-bottom: 30px; }
+        .section-divider { border-top: 2px solid #ecf0f1; margin: 30px 0; }
+        .system-entry { background-color: #f8f9fa; padding: 15px; margin: 10px 0; border-left: 4px solid #3498db; border-radius: 5px; }
+        .system-name { color: #2c3e50; font-weight: bold; }
+        .system-path { color: #8e44ad; font-family: monospace; font-style: italic; }
+        .system-description { color: #34495e; margin-top: 5px; }
+        .core-system { border-left-color: #3498db; }
+        .data-system { border-left-color: #e67e22; }
+        .intelligence-system { border-left-color: #9b59b6; }
+        .communication-system { border-left-color: #1abc9c; }
+        .infrastructure-system { border-left-color: #e74c3c; }
+        .developer-system { border-left-color: #f39c12; }
+        .legacy-system { border-left-color: #95a5a6; }
+        .specialized-system { border-left-color: #16a085; }
+    </style>
+</head>
+<body>
+
+<h1>OpenSim Next - Architecture Glossary</h1>
+<p class="subtitle">Concise descriptions of each system's function and purpose</p>
+
+<div class="section-divider"></div>
+
+<h2>Core Platform Systems</h2>
+
+<div class="system-entry core-system">
+<h3><span class="system-name">Mobile Integration</span> <span class="system-path">(`src/mobile/`)</span></h3>
+<p class="system-description">Cross-platform mobile client framework with PWA capabilities, touch optimization, and VR integration. Enables OpenSim access from iOS/Android devices with offline support and native app experiences.</p>
+</div>
+
+<div class="system-entry core-system">
+<h3><span class="system-name">VR/XR Framework</span> <span class="system-path">(`src/vr/`)</span></h3>
+<p class="system-description">Virtual and mixed reality integration system supporting OpenXR, spatial audio, and haptic feedback. Provides immersive 3D experiences across VR headsets and AR devices.</p>
+</div>
+
+<div class="system-entry core-system">
+<h3><span class="system-name">Physics Engine</span> <span class="system-path">(`src/physics/`)</span></h3>
+<p class="system-description">Multi-backend physics simulation supporting Bullet, ODE, and POS engines with GPU acceleration. Handles collision detection, dynamics, and realistic object behavior in virtual worlds.</p>
+</div>
+
+<div class="system-entry core-system">
+<h3><span class="system-name">Network Layer</span> <span class="system-path">(`src/network/`)</span></h3>
+<p class="system-description">Protocol management for Second Life viewers, WebSocket clients, and hypergrid connections. Manages authentication, session handling, and secure inter-region communication.</p>
+</div>
+
+<div class="system-entry core-system">
+<h3><span class="system-name">Region Management</span> <span class="system-path">(`src/region/`)</span></h3>
+<p class="system-description">Virtual world region simulation including scene management, terrain, and spatial indexing. Coordinates avatar presence, object physics, and environmental systems within geographic areas.</p>
+</div>
+
+<div class="section-divider"></div>
+
+<h2>Data & Content Systems</h2>
+
+<div class="system-entry data-system">
+<h3><span class="system-name">Asset Management</span> <span class="system-path">(`src/asset/`)</span></h3>
+<p class="system-description">Content storage, caching, and distribution system with CDN integration and deduplication. Manages textures, meshes, sounds, and animations with optimized delivery.</p>
+</div>
+
+<div class="system-entry data-system">
+<h3><span class="system-name">Database Layer</span> <span class="system-path">(`src/database/`)</span></h3>
+<p class="system-description">Multi-backend data persistence supporting PostgreSQL, MySQL, and SQLite with migration management. Handles user accounts, inventory, region data, and system configuration.</p>
+</div>
+
+<div class="system-entry data-system">
+<h3><span class="system-name">Content Management</span> <span class="system-path">(`src/content/`)</span></h3>
+<p class="system-description">Content creation, validation, marketplace, and distribution system. Manages user-generated content lifecycle from creation to monetization.</p>
+</div>
+
+<div class="system-entry data-system">
+<h3><span class="system-name">Avatar System</span> <span class="system-path">(`src/avatar/`)</span></h3>
+<p class="system-description">Avatar appearance, behavior, persistence, and social features. Handles avatar customization, animation, and cross-platform representation.</p>
+</div>
+
+<div class="section-divider"></div>
+
+<h2>Intelligence & Analytics</h2>
+
+<div class="system-entry intelligence-system">
+<h3><span class="system-name">Reporting & Analytics</span> <span class="system-path">(`src/reporting/`)</span></h3>
+<p class="system-description">Business intelligence platform with real-time analytics, predictive modeling, and automated report generation. Provides insights into user behavior, system performance, and business metrics.</p>
+</div>
+
+<div class="system-entry intelligence-system">
+<h3><span class="system-name">AI Integration</span> <span class="system-path">(`src/ai/`)</span></h3>
+<p class="system-description">Artificial intelligence for avatar behavior, content generation, and performance optimization. Enables intelligent NPCs, automated content creation, and ML-driven system improvements.</p>
+</div>
+
+<div class="system-entry intelligence-system">
+<h3><span class="system-name">Monitoring</span> <span class="system-path">(`src/monitoring/`)</span></h3>
+<p class="system-description">Performance metrics collection, health monitoring, and observability platform. Tracks system performance, user activity, and infrastructure health with alerting.</p>
+</div>
+
+<div class="section-divider"></div>
+
+<h2>Communication & Social</h2>
+
+<div class="system-entry communication-system">
+<h3><span class="system-name">Social Systems</span> <span class="system-path">(`src/social/`)</span></h3>
+<p class="system-description">Friends, groups, messaging, and community management features. Facilitates user interaction, communication, and social relationship building.</p>
+</div>
+
+<div class="system-entry communication-system">
+<h3><span class="system-name">Scripting Engine</span> <span class="system-path">(`src/scripting/`)</span></h3>
+<p class="system-description">LSL (Linden Scripting Language) interpreter with sandbox security and multi-engine support. Enables user scripting for interactive objects and automated behaviors.</p>
+</div>
+
+<div class="system-entry communication-system">
+<h3><span class="system-name">Economy System</span> <span class="system-path">(`src/economy/`)</span></h3>
+<p class="system-description">Virtual currency, transactions, marketplace, and financial analytics. Manages the virtual world's economic ecosystem and user commerce.</p>
+</div>
+
+<div class="section-divider"></div>
+
+<h2>Infrastructure & Security</h2>
+
+<div class="system-entry infrastructure-system">
+<h3><span class="system-name">Security Framework</span> <span class="system-path">(`src/ziti/`)</span></h3>
+<p class="system-description">Zero-trust networking with Ziti integration, secure communication channels, and identity management. Provides end-to-end encryption and secure service access.</p>
+</div>
+
+<div class="system-entry infrastructure-system">
+<h3><span class="system-name">Grid Services</span> <span class="system-path">(`src/grid/`)</span></h3>
+<p class="system-description">Multi-region coordination, load balancing, federation, and hypergrid connectivity. Manages distributed virtual world infrastructure and inter-grid communication.</p>
+</div>
+
+<div class="system-entry infrastructure-system">
+<h3><span class="system-name">Performance Systems</span> <span class="system-path">(`src/performance/`)</span></h3>
+<p class="system-description">Optimization, caching, load balancing, and resource management. Ensures efficient system operation under varying loads and conditions.</p>
+</div>
+
+<div class="section-divider"></div>
+
+<h2>Developer & Operations</h2>
+
+<div class="system-entry developer-system">
+<h3><span class="system-name">Client SDK</span> <span class="system-path">(`src/client_sdk/`)</span></h3>
+<p class="system-description">Multi-language SDK generation (Rust, Python, JavaScript, etc.) with documentation and testing frameworks. Enables third-party developers to integrate with OpenSim Next.</p>
+</div>
+
+<div class="system-entry developer-system">
+<h3><span class="system-name">Community Platform</span> <span class="system-path">(`src/community/`)</span></h3>
+<p class="system-description">Developer portal, forums, knowledge base, and user management. Supports the OpenSim Next community and ecosystem development.</p>
+</div>
+
+<div class="system-entry developer-system">
+<h3><span class="system-name">Observability</span> <span class="system-path">(`src/observability/`)</span></h3>
+<p class="system-description">Distributed tracing, analytics engine, and operational dashboards. Provides deep system insights and debugging capabilities for complex distributed operations.</p>
+</div>
+
+<div class="section-divider"></div>
+
+<h2>Legacy & Compatibility</h2>
+
+<div class="system-entry legacy-system">
+<h3><span class="system-name">OpenSim Compatibility</span> <span class="system-path">(`src/opensim_compatibility/`)</span></h3>
+<p class="system-description">Legacy OpenSim protocol support, database migration, and asset compatibility. Ensures seamless transition from existing OpenSim installations.</p>
+</div>
+
+<div class="system-entry legacy-system">
+<h3><span class="system-name">FFI Bridge</span> <span class="system-path">(`src/ffi/`)</span></h3>
+<p class="system-description">Foreign Function Interface for Zig integration and legacy C/C++ components. Enables high-performance interoperation with native code libraries.</p>
+</div>
+
+<div class="section-divider"></div>
+
+<h2>Specialized Features</h2>
+
+<div class="system-entry specialized-system">
+<h3><span class="system-name">PWA Integration</span> <span class="system-path">(`src/pwa/`)</span></h3>
+<p class="system-description">Progressive Web App capabilities with service workers, offline support, and app store distribution. Enables web-based access with native app experiences.</p>
+</div>
+
+<div class="system-entry specialized-system">
+<h3><span class="system-name">State Management</span> <span class="system-path">(`src/state/`)</span></h3>
+<p class="system-description">Distributed state synchronization and inventory management. Maintains consistent state across multiple servers and clients.</p>
+</div>
+
+<div class="system-entry specialized-system">
+<h3><span class="system-name">Synchronization</span> <span class="system-path">(`src/sync/`)</span></h3>
+<p class="system-description">Data synchronization protocols and conflict resolution for distributed systems. Ensures data consistency in multi-server deployments.</p>
+</div>
+
+<div class="section-divider"></div>
+
+<p><em>Each system is designed for modularity, scalability, and production deployment while maintaining compatibility with existing virtual world standards.</em></p>
+
+</body>
+</html>

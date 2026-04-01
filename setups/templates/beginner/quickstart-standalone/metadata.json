@@ -1,0 +1,31 @@
+{
+  "name": "Quick Start Standalone",
+  "description": "Perfect for first-time users - a single region setup that just works out of the box",
+  "category": "beginner",
+  "difficulty": "🟢 Beginner",
+  "features": [
+    "Single region (256x256m)",
+    "Auto-configured admin user",
+    "Basic physics (ubODE)",
+    "SQLite database (no setup required)",
+    "Local asset storage",
+    "Basic scripting enabled"
+  ],
+  "requirements": {
+    "ram": "2GB minimum",
+    "disk": "1GB free space",
+    "ports": ["9000", "8080"],
+    "os": ["Windows", "macOS", "Linux"]
+  },
+  "estimated_setup_time": "2 minutes",
+  "user_level": "first-time",
+  "tags": ["standalone", "beginner", "quick", "single-region"],
+  "version": "1.0.0",
+  "created_by": "OpenSim Next Setup Wizard",
+  "last_updated": "2024-07-03",
+  "deployment": {
+    "auto_start": true,
+    "health_check": true,
+    "documentation_generation": true
+  }
+}

@@ -1,0 +1,260 @@
+# OpenSim Next Horizontal Pod Autoscaler
+# Automatically scales OpenSim Next pods based on resource utilization
+
+{{- if .Values.opensim.autoscaling.enabled }}
+apiVersion: autoscaling/v2
+kind: HorizontalPodAutoscaler
+metadata:
+  name: {{ include "opensim-next.fullname" . }}
+  namespace: {{ .Release.Namespace | quote }}
+  labels:
+    {{- include "opensim-next.labels" . | nindent 4 }}
+    component: autoscaling
+  annotations:
+    meta.helm.sh/release-name: "{{ .Release.Name }}"
+    meta.helm.sh/release-namespace: "{{ .Release.Namespace }}"
+spec:
+  scaleTargetRef:
+    apiVersion: apps/v1
+    kind: Deployment
+    name: {{ include "opensim-next.fullname" . }}
+  
+  minReplicas: {{ .Values.opensim.autoscaling.minReplicas }}
+  maxReplicas: {{ .Values.opensim.autoscaling.maxReplicas }}
+  
+  metrics:
+    # CPU utilization metric
+    {{- if .Values.opensim.autoscaling.targetCPUUtilizationPercentage }}
+    - type: Resource
+      resource:
+        name: cpu
+        target:
+          type: Utilization
+          averageUtilization: {{ .Values.opensim.autoscaling.targetCPUUtilizationPercentage }}
+    {{- end }}
+    
+    # Memory utilization metric
+    {{- if .Values.opensim.autoscaling.targetMemoryUtilizationPercentage }}
+    - type: Resource
+      resource:
+        name: memory
+        target:
+          type: Utilization
+          averageUtilization: {{ .Values.opensim.autoscaling.targetMemoryUtilizationPercentage }}
+    {{- end }}
+    
+    # Custom metrics (if enabled)
+    {{- if .Values.opensim.autoscaling.customMetrics.enabled }}
+    
+    # Active user count metric
+    - type: Pods
+      pods:
+        metric:
+          name: opensim_active_users_total
+        target:
+          type: AverageValue
+          averageValue: {{ .Values.opensim.autoscaling.customMetrics.targetActiveUsers | default "100" | quote }}
+    
+    # WebSocket connections metric
+    - type: Pods
+      pods:
+        metric:
+          name: opensim_websocket_connections_active
+        target:
+          type: AverageValue
+          averageValue: {{ .Values.opensim.autoscaling.customMetrics.targetWebSocketConnections | default "200" | quote }}
+    
+    # Request rate metric
+    - type: Pods
+      pods:
+        metric:
+          name: opensim_http_requests_per_second
+        target:
+          type: AverageValue
+          averageValue: {{ .Values.opensim.autoscaling.customMetrics.targetRequestsPerSecond | default "50" | quote }}
+    
+    # Database connection metric
+    - type: Pods
+      pods:
+        metric:
+          name: opensim_database_connections_active
+        target:
+          type: AverageValue
+          averageValue: {{ .Values.opensim.autoscaling.customMetrics.targetDatabaseConnections | default "30" | quote }}
+    
+    # Region load metric
+    - type: Pods
+      pods:
+        metric:
+          name: opensim_region_load_average
+        target:
+          type: AverageValue
+          averageValue: {{ .Values.opensim.autoscaling.customMetrics.targetRegionLoad | default "0.7" | quote }}
+    {{- end }}
+  
+  # Scaling behavior configuration
+  {{- if .Values.opensim.autoscaling.behavior }}
+  behavior:
+    {{- with .Values.opensim.autoscaling.behavior.scaleDown }}
+    scaleDown:
+      stabilizationWindowSeconds: {{ .stabilizationWindowSeconds | default 300 }}
+      selectPolicy: {{ .selectPolicy | default "Min" }}
+      policies:
+        {{- range .policies }}
+        - type: {{ .type }}
+          value: {{ .value }}
+          periodSeconds: {{ .periodSeconds }}
+        {{- end }}
+    {{- end }}
+    
+    {{- with .Values.opensim.autoscaling.behavior.scaleUp }}
+    scaleUp:
+      stabilizationWindowSeconds: {{ .stabilizationWindowSeconds | default 60 }}
+      selectPolicy: {{ .selectPolicy | default "Max" }}
+      policies:
+        {{- range .policies }}
+        - type: {{ .type }}
+          value: {{ .value }}
+          periodSeconds: {{ .periodSeconds }}
+        {{- end }}
+    {{- end }}
+  {{- else }}
+  behavior:
+    scaleDown:
+      stabilizationWindowSeconds: 300
+      selectPolicy: Min
+      policies:
+      - type: Percent
+        value: 10
+        periodSeconds: 60
+      - type: Pods
+        value: 2
+        periodSeconds: 60
+    scaleUp:
+      stabilizationWindowSeconds: 60
+      selectPolicy: Max
+      policies:
+      - type: Percent
+        value: 50
+        periodSeconds: 60
+      - type: Pods
+        value: 4
+        periodSeconds: 60
+  {{- end }}
+
+---
+{{/* Vertical Pod Autoscaler (if enabled) */}}
+{{- if .Values.opensim.verticalAutoscaling.enabled }}
+apiVersion: autoscaling.k8s.io/v1
+kind: VerticalPodAutoscaler
+metadata:
+  name: {{ include "opensim-next.fullname" . }}-vpa
+  namespace: {{ .Release.Namespace | quote }}
+  labels:
+    {{- include "opensim-next.labels" . | nindent 4 }}
+    component: vertical-autoscaling
+spec:
+  targetRef:
+    apiVersion: apps/v1
+    kind: Deployment
+    name: {{ include "opensim-next.fullname" . }}
+  
+  updatePolicy:
+    updateMode: {{ .Values.opensim.verticalAutoscaling.updateMode | default "Auto" }}
+    minReplicas: {{ .Values.opensim.autoscaling.minReplicas }}
+  
+  resourcePolicy:
+    containerPolicies:
+    - containerName: opensim-next
+      maxAllowed:
+        cpu: {{ .Values.opensim.verticalAutoscaling.maxAllowed.cpu | default "4000m" }}
+        memory: {{ .Values.opensim.verticalAutoscaling.maxAllowed.memory | default "8Gi" }}
+      minAllowed:
+        cpu: {{ .Values.opensim.verticalAutoscaling.minAllowed.cpu | default "100m" }}
+        memory: {{ .Values.opensim.verticalAutoscaling.minAllowed.memory | default "256Mi" }}
+      controlledResources: ["cpu", "memory"]
+      controlledValues: RequestsAndLimits
+
+---
+{{- end }}
+
+{{/* Custom Resource Autoscaler (for advanced metrics) */}}
+{{- if .Values.opensim.autoscaling.advanced.enabled }}
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: {{ include "opensim-next.fullname" . }}-autoscaling-config
+  namespace: {{ .Release.Namespace | quote }}
+  labels:
+    {{- include "opensim-next.labels" . | nindent 4 }}
+    component: autoscaling-config
+data:
+  scaling-config.yaml: |
+    # Advanced autoscaling configuration for OpenSim Next
+    opensim_autoscaling:
+      metrics:
+        # Virtual world specific metrics
+        active_regions:
+          threshold: {{ .Values.opensim.autoscaling.advanced.activeRegionsThreshold | default 80 }}
+          scale_factor: 1.2
+        
+        physics_load:
+          threshold: {{ .Values.opensim.autoscaling.advanced.physicsLoadThreshold | default 0.8 }}
+          scale_factor: 1.5
+        
+        asset_requests:
+          threshold: {{ .Values.opensim.autoscaling.advanced.assetRequestsThreshold | default 1000 }}
+          scale_factor: 1.3
+        
+        script_execution:
+          threshold: {{ .Values.opensim.autoscaling.advanced.scriptExecutionThreshold | default 500 }}
+          scale_factor: 1.4
+      
+      scaling_policies:
+        # Conservative scaling for virtual world stability
+        scale_up_cooldown: {{ .Values.opensim.autoscaling.advanced.scaleUpCooldown | default 180 }}
+        scale_down_cooldown: {{ .Values.opensim.autoscaling.advanced.scaleDownCooldown | default 600 }}
+        
+        # Minimum stability period before scaling
+        stability_window: {{ .Values.opensim.autoscaling.advanced.stabilityWindow | default 120 }}
+        
+        # Maximum scaling velocity
+        max_scale_up_pods: {{ .Values.opensim.autoscaling.advanced.maxScaleUpPods | default 3 }}
+        max_scale_down_pods: {{ .Values.opensim.autoscaling.advanced.maxScaleDownPods | default 1 }}
+      
+      custom_webhooks:
+        # Webhook for custom scaling logic
+        {{- if .Values.opensim.autoscaling.advanced.webhook.enabled }}
+        scaling_webhook:
+          url: {{ .Values.opensim.autoscaling.advanced.webhook.url | quote }}
+          timeout: {{ .Values.opensim.autoscaling.advanced.webhook.timeout | default 30 }}
+          headers:
+            Content-Type: "application/json"
+            Authorization: "Bearer {{ .Values.opensim.autoscaling.advanced.webhook.token }}"
+        {{- end }}
+
+---
+{{- end }}
+
+{{/* Pod Disruption Budget */}}
+{{- if .Values.opensim.podDisruptionBudget.enabled }}
+apiVersion: policy/v1
+kind: PodDisruptionBudget
+metadata:
+  name: {{ include "opensim-next.fullname" . }}-pdb
+  namespace: {{ .Release.Namespace | quote }}
+  labels:
+    {{- include "opensim-next.labels" . | nindent 4 }}
+    component: disruption-budget
+spec:
+  {{- if .Values.opensim.podDisruptionBudget.minAvailable }}
+  minAvailable: {{ .Values.opensim.podDisruptionBudget.minAvailable }}
+  {{- end }}
+  {{- if .Values.opensim.podDisruptionBudget.maxUnavailable }}
+  maxUnavailable: {{ .Values.opensim.podDisruptionBudget.maxUnavailable }}
+  {{- end }}
+  selector:
+    matchLabels:
+      {{- include "opensim-next.selectorLabels" . | nindent 6 }}
+{{- end }}
+{{- end }}

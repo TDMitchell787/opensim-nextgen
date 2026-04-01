@@ -1,0 +1,434 @@
+# Docker Desktop Kubernetes + Portainer Setup Guide
+# Configuration for running OpenSim Next with Docker Desktop's built-in Kubernetes
+
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: docker-desktop-setup-guide
+  namespace: portainer
+  labels:
+    app.kubernetes.io/name: portainer
+    component: setup-guide
+data:
+  README.md: |
+    # Docker Desktop + Kubernetes + Portainer Setup for OpenSim Next
+    
+    This guide helps you set up OpenSim Next using Docker Desktop's built-in Kubernetes cluster with Portainer as the management interface.
+    
+    ## Prerequisites
+    
+    1. **Docker Desktop** with Kubernetes enabled
+    2. **kubectl** configured to use docker-desktop context
+    3. **Helm 3.8+** for chart deployment
+    
+    ## Step 1: Enable Kubernetes in Docker Desktop
+    
+    1. Open Docker Desktop
+    2. Go to Settings → Kubernetes
+    3. Check "Enable Kubernetes"
+    4. Click "Apply & restart"
+    5. Wait for Kubernetes to start (green indicator)
+    
+    ## Step 2: Verify Kubernetes Context
+    
+    ```bash
+    # Check current context
+    kubectl config current-context
+    # Should show: docker-desktop
+    
+    # Verify cluster info
+    kubectl cluster-info
+    
+    # Check nodes
+    kubectl get nodes
+    ```
+    
+    ## Step 3: Install Portainer
+    
+    ```bash
+    # Apply Portainer deployment
+    kubectl apply -f portainer-deployment.yaml
+    
+    # Wait for Portainer to be ready
+    kubectl wait --for=condition=ready pod -l app.kubernetes.io/name=portainer -n portainer --timeout=300s
+    
+    # Get Portainer service details
+    kubectl get svc -n portainer
+    ```
+    
+    ## Step 4: Access Portainer
+    
+    ### Option A: Port Forward (Recommended for local development)
+    ```bash
+    kubectl port-forward -n portainer svc/portainer 9000:9000
+    ```
+    Then open: http://localhost:9000
+    
+    ### Option B: LoadBalancer (if available)
+    ```bash
+    kubectl get svc -n portainer portainer
+    # Use EXTERNAL-IP when available
+    ```
+    
+    ### Option C: Ingress (requires ingress controller)
+    ```bash
+    # Install NGINX Ingress Controller for Docker Desktop
+    kubectl apply -f https://raw.githubusercontent.com/kubernetes/ingress-nginx/controller-v1.8.2/deploy/static/provider/cloud/deploy.yaml
+    
+    # Wait for ingress controller
+    kubectl wait --namespace ingress-nginx \
+      --for=condition=ready pod \
+      --selector=app.kubernetes.io/component=controller \
+      --timeout=300s
+    
+    # Apply ingress for Portainer
+    kubectl apply -f portainer-ingress.yaml
+    ```
+    
+    ## Step 5: Configure Portainer for OpenSim Next
+    
+    1. **Initial Setup**:
+       - Open Portainer web interface
+       - Create admin user
+       - Select "Get Started" for local Kubernetes
+    
+    2. **Add OpenSim Next Environment**:
+       - Go to Environments
+       - Click "Add environment"
+       - Select "Kubernetes"
+       - Choose "Agent" or "API" method
+       - Configure cluster access
+    
+    3. **Create OpenSim Next Namespace**:
+       ```bash
+       kubectl apply -f ../manifests/namespace.yaml
+       ```
+    
+    ## Step 6: Deploy OpenSim Next with Helm
+    
+    ```bash
+    # Add required repositories
+    helm repo add bitnami https://charts.bitnami.com/bitnami
+    helm repo add prometheus-community https://prometheus-community.github.io/helm-charts
+    helm repo add grafana https://grafana.github.io/helm-charts
+    helm repo update
+    
+    # Install OpenSim Next
+    cd ../helm
+    helm install opensim-next . \
+      --namespace opensim-next \
+      --create-namespace \
+      --values values.yaml \
+      --values values-docker-desktop.yaml
+    
+    # Monitor deployment
+    kubectl get pods -n opensim-next -w
+    ```
+    
+    ## Step 7: Access OpenSim Next Services
+    
+    ### Port Forwarding for Local Access
+    ```bash
+    # Web Interface
+    kubectl port-forward -n opensim-next svc/opensim-next 8080:8080
+    # Access: http://localhost:8080
+    
+    # WebSocket Server
+    kubectl port-forward -n opensim-next svc/opensim-next 9001:9001
+    # Access: ws://localhost:9001/ws
+    
+    # Second Life Viewer Protocol
+    kubectl port-forward -n opensim-next svc/opensim-next 9000:9000
+    # Access: opensim://localhost:9000
+    
+    # Metrics/Admin API
+    kubectl port-forward -n opensim-next svc/opensim-next 9100:9100
+    # Access: http://localhost:9100/metrics
+    
+    # Hypergrid Protocol
+    kubectl port-forward -n opensim-next svc/opensim-next 8002:8002
+    # Access: http://localhost:8002
+    ```
+    
+    ## Step 8: Portainer Management Tasks
+    
+    ### Managing OpenSim Next through Portainer
+    
+    1. **Navigate to OpenSim Next Namespace**:
+       - In Portainer, go to the kubernetes environment
+       - Select "Namespaces" → "opensim-next"
+    
+    2. **Monitor Applications**:
+       - View pod status and logs
+       - Check resource usage
+       - Monitor service endpoints
+    
+    3. **Scaling Operations**:
+       - Use Portainer UI to scale deployments
+       - Monitor HPA (Horizontal Pod Autoscaler) status
+       - Adjust resource limits
+    
+    4. **Configuration Management**:
+       - Edit ConfigMaps through UI
+       - Manage Secrets securely
+       - Update environment variables
+    
+    ## Troubleshooting
+    
+    ### Common Issues
+    
+    1. **Portainer not accessible**:
+       ```bash
+       kubectl logs -n portainer deployment/portainer
+       kubectl describe pod -n portainer -l app.kubernetes.io/name=portainer
+       ```
+    
+    2. **OpenSim Next pods not starting**:
+       ```bash
+       kubectl describe pod -n opensim-next -l app.kubernetes.io/name=opensim-next
+       kubectl logs -n opensim-next -l app.kubernetes.io/name=opensim-next
+       ```
+    
+    3. **Storage issues**:
+       ```bash
+       kubectl get pvc -n opensim-next
+       kubectl describe pvc -n opensim-next
+       ```
+    
+    4. **Network connectivity**:
+       ```bash
+       kubectl get networkpolicy -n opensim-next
+       kubectl get ingress -n opensim-next
+       ```
+    
+    ### Resource Monitoring
+    
+    ```bash
+    # Check resource usage
+    kubectl top nodes
+    kubectl top pods -n opensim-next
+    
+    # Monitor events
+    kubectl get events -n opensim-next --sort-by='.lastTimestamp'
+    
+    # Check service endpoints
+    kubectl get endpoints -n opensim-next
+    ```
+    
+    ## Production Considerations
+    
+    ### Security Hardening
+    
+    1. **Enable RBAC restrictions**:
+       - Limit Portainer service account permissions
+       - Use namespace-specific access
+    
+    2. **Network Security**:
+       - Configure NetworkPolicies
+       - Restrict ingress access
+       - Use TLS certificates
+    
+    3. **Authentication**:
+       - Enable Portainer team management
+       - Configure OAuth integration
+       - Use strong passwords
+    
+    ### Performance Optimization
+    
+    1. **Resource Limits**:
+       - Set appropriate CPU/memory limits
+       - Configure quality of service classes
+       - Monitor resource usage
+    
+    2. **Storage**:
+       - Use appropriate storage classes
+       - Configure backup strategies
+       - Monitor disk usage
+    
+    3. **Networking**:
+       - Optimize service mesh configuration
+       - Configure load balancing
+       - Monitor network latency
+    
+    ## Backup and Recovery
+    
+    ### Database Backups
+    ```bash
+    # PostgreSQL backup
+    kubectl exec -n opensim-next deployment/opensim-next-postgresql -- \
+      pg_dump -U opensim opensim > opensim-backup.sql
+    
+    # Restore database
+    kubectl exec -i -n opensim-next deployment/opensim-next-postgresql -- \
+      psql -U opensim opensim < opensim-backup.sql
+    ```
+    
+    ### Configuration Backups
+    ```bash
+    # Export all configurations
+    kubectl get all,configmaps,secrets,pvc -n opensim-next -o yaml > opensim-config-backup.yaml
+    
+    # Restore configurations
+    kubectl apply -f opensim-config-backup.yaml
+    ```
+    
+    ## Monitoring and Alerting
+    
+    ### Portainer Monitoring
+    - Use Portainer's built-in monitoring features
+    - Set up container health checks
+    - Configure resource alerts
+    
+    ### Prometheus Integration
+    ```bash
+    # Access Prometheus (if enabled)
+    kubectl port-forward -n opensim-next svc/prometheus 9090:9090
+    
+    # Access Grafana (if enabled)
+    kubectl port-forward -n opensim-next svc/grafana 3000:3000
+    ```
+    
+    ## Advanced Configuration
+    
+    ### Multi-Environment Setup
+    ```bash
+    # Development environment
+    helm install opensim-next-dev . \
+      --namespace opensim-next-dev \
+      --create-namespace \
+      --values values-development.yaml
+    
+    # Staging environment
+    helm install opensim-next-staging . \
+      --namespace opensim-next-staging \
+      --create-namespace \
+      --values values-staging.yaml
+    ```
+    
+    ### GitOps Integration
+    ```bash
+    # ArgoCD installation (optional)
+    kubectl create namespace argocd
+    kubectl apply -n argocd -f https://raw.githubusercontent.com/argoproj/argo-cd/stable/manifests/install.yaml
+    
+    # Access ArgoCD
+    kubectl port-forward svc/argocd-server -n argocd 8080:443
+    ```
+
+  docker-desktop-values.yaml: |
+    # OpenSim Next Helm values optimized for Docker Desktop
+    
+    global:
+      environment: development
+      storageClass: hostpath
+    
+    opensim:
+      replicaCount: 1
+      
+      # Reduced resource requirements for local development
+      resources:
+        requests:
+          cpu: 200m
+          memory: 512Mi
+        limits:
+          cpu: 1000m
+          memory: 2Gi
+      
+      # Disable autoscaling for single-node setup
+      autoscaling:
+        enabled: false
+      
+      # Service configuration for Docker Desktop
+      service:
+        type: ClusterIP
+        annotations:
+          service.beta.kubernetes.io/aws-load-balancer-type: ""
+      
+      # Ingress configuration
+      ingress:
+        enabled: false  # Use port-forwarding instead
+        className: nginx
+        hosts:
+          - host: localhost
+            paths:
+              - path: /
+                pathType: Prefix
+                service: web
+    
+    # PostgreSQL configuration for Docker Desktop
+    postgresql:
+      enabled: true
+      auth:
+        postgresPassword: "postgres_dev_password"
+        username: "opensim"
+        password: "opensim_dev_password"
+        database: "opensim"
+      
+      primary:
+        resources:
+          requests:
+            cpu: 100m
+            memory: 256Mi
+          limits:
+            cpu: 500m
+            memory: 1Gi
+        
+        persistence:
+          enabled: true
+          size: 8Gi
+          storageClass: hostpath
+    
+    # Redis configuration for Docker Desktop
+    redis:
+      enabled: true
+      auth:
+        enabled: true
+        password: "opensim_redis_dev_password"
+      
+      master:
+        resources:
+          requests:
+            cpu: 50m
+            memory: 128Mi
+          limits:
+            cpu: 200m
+            memory: 512Mi
+        
+        persistence:
+          enabled: true
+          size: 2Gi
+          storageClass: hostpath
+    
+    # Monitoring configuration (lightweight for development)
+    monitoring:
+      prometheus:
+        enabled: false  # Can be enabled if needed
+      
+      grafana:
+        enabled: false  # Can be enabled if needed
+      
+      serviceMonitor:
+        enabled: false
+    
+    # Persistence configuration
+    persistence:
+      data:
+        enabled: true
+        size: 5Gi
+        storageClass: hostpath
+      
+      assets:
+        enabled: true
+        size: 10Gi
+        storageClass: hostpath
+      
+      logs:
+        enabled: true
+        size: 2Gi
+        storageClass: hostpath
+    
+    # Development mode settings
+    development:
+      enabled: true
+      debugLogging: true
+      disableResourceLimits: false

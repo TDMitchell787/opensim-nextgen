@@ -1,0 +1,198 @@
+# OpenSim Next Persistent Volume Claims
+# Provides persistent storage for data, assets, and logs
+
+{{- if .Values.persistence.data.enabled }}
+apiVersion: v1
+kind: PersistentVolumeClaim
+metadata:
+  name: {{ include "opensim-next.fullname" . }}-data
+  namespace: {{ .Release.Namespace | quote }}
+  labels:
+    {{- include "opensim-next.labels" . | nindent 4 }}
+    component: data-storage
+  annotations:
+    {{- with .Values.persistence.data.annotations }}
+    {{- toYaml . | nindent 4 }}
+    {{- end }}
+    volume.kubernetes.io/storage-class: {{ include "opensim-next.storageClass" .Values.persistence.data | quote }}
+spec:
+  accessModes:
+    - {{ .Values.persistence.data.accessMode | quote }}
+  
+  resources:
+    requests:
+      storage: {{ .Values.persistence.data.size | quote }}
+  
+  {{- $storageClass := include "opensim-next.storageClass" .Values.persistence.data }}
+  {{- if $storageClass }}
+  storageClassName: {{ $storageClass | quote }}
+  {{- end }}
+  
+  {{- if .Values.persistence.data.selector }}
+  selector:
+    {{- toYaml .Values.persistence.data.selector | nindent 4 }}
+  {{- end }}
+  
+  {{- if .Values.persistence.data.volumeName }}
+  volumeName: {{ .Values.persistence.data.volumeName | quote }}
+  {{- end }}
+
+---
+{{- end }}
+
+{{- if .Values.persistence.assets.enabled }}
+apiVersion: v1
+kind: PersistentVolumeClaim
+metadata:
+  name: {{ include "opensim-next.fullname" . }}-assets
+  namespace: {{ .Release.Namespace | quote }}
+  labels:
+    {{- include "opensim-next.labels" . | nindent 4 }}
+    component: asset-storage
+  annotations:
+    {{- with .Values.persistence.assets.annotations }}
+    {{- toYaml . | nindent 4 }}
+    {{- end }}
+    volume.kubernetes.io/storage-class: {{ include "opensim-next.storageClass" .Values.persistence.assets | quote }}
+spec:
+  accessModes:
+    - {{ .Values.persistence.assets.accessMode | quote }}
+  
+  resources:
+    requests:
+      storage: {{ .Values.persistence.assets.size | quote }}
+  
+  {{- $storageClass := include "opensim-next.storageClass" .Values.persistence.assets }}
+  {{- if $storageClass }}
+  storageClassName: {{ $storageClass | quote }}
+  {{- end }}
+  
+  {{- if .Values.persistence.assets.selector }}
+  selector:
+    {{- toYaml .Values.persistence.assets.selector | nindent 4 }}
+  {{- end }}
+  
+  {{- if .Values.persistence.assets.volumeName }}
+  volumeName: {{ .Values.persistence.assets.volumeName | quote }}
+  {{- end }}
+
+---
+{{- end }}
+
+{{- if .Values.persistence.logs.enabled }}
+apiVersion: v1
+kind: PersistentVolumeClaim
+metadata:
+  name: {{ include "opensim-next.fullname" . }}-logs
+  namespace: {{ .Release.Namespace | quote }}
+  labels:
+    {{- include "opensim-next.labels" . | nindent 4 }}
+    component: log-storage
+  annotations:
+    {{- with .Values.persistence.logs.annotations }}
+    {{- toYaml . | nindent 4 }}
+    {{- end }}
+    volume.kubernetes.io/storage-class: {{ include "opensim-next.storageClass" .Values.persistence.logs | quote }}
+spec:
+  accessModes:
+    - {{ .Values.persistence.logs.accessMode | quote }}
+  
+  resources:
+    requests:
+      storage: {{ .Values.persistence.logs.size | quote }}
+  
+  {{- $storageClass := include "opensim-next.storageClass" .Values.persistence.logs }}
+  {{- if $storageClass }}
+  storageClassName: {{ $storageClass | quote }}
+  {{- end }}
+  
+  {{- if .Values.persistence.logs.selector }}
+  selector:
+    {{- toYaml .Values.persistence.logs.selector | nindent 4 }}
+  {{- end }}
+  
+  {{- if .Values.persistence.logs.volumeName }}
+  volumeName: {{ .Values.persistence.logs.volumeName | quote }}
+  {{- end }}
+
+---
+{{- end }}
+
+{{/* Backup storage PVC (if backup is enabled) */}}
+{{- if and .Values.opensim.backup.enabled .Values.persistence.backup.enabled }}
+apiVersion: v1
+kind: PersistentVolumeClaim
+metadata:
+  name: {{ include "opensim-next.fullname" . }}-backup
+  namespace: {{ .Release.Namespace | quote }}
+  labels:
+    {{- include "opensim-next.labels" . | nindent 4 }}
+    component: backup-storage
+  annotations:
+    {{- with .Values.persistence.backup.annotations }}
+    {{- toYaml . | nindent 4 }}
+    {{- end }}
+    volume.kubernetes.io/storage-class: {{ include "opensim-next.storageClass" .Values.persistence.backup | quote }}
+    backup.opensim-next.org/retention-policy: {{ .Values.opensim.backup.retention | quote }}
+spec:
+  accessModes:
+    - {{ .Values.persistence.backup.accessMode | default "ReadWriteOnce" | quote }}
+  
+  resources:
+    requests:
+      storage: {{ .Values.persistence.backup.size | default "100Gi" | quote }}
+  
+  {{- $storageClass := include "opensim-next.storageClass" .Values.persistence.backup }}
+  {{- if $storageClass }}
+  storageClassName: {{ $storageClass | quote }}
+  {{- end }}
+  
+  {{- if .Values.persistence.backup.selector }}
+  selector:
+    {{- toYaml .Values.persistence.backup.selector | nindent 4 }}
+  {{- end }}
+  
+  {{- if .Values.persistence.backup.volumeName }}
+  volumeName: {{ .Values.persistence.backup.volumeName | quote }}
+  {{- end }}
+
+---
+{{- end }}
+
+{{/* Cache storage PVC (if enabled and not using external Redis) */}}
+{{- if and .Values.persistence.cache.enabled (not .Values.redis.enabled) }}
+apiVersion: v1
+kind: PersistentVolumeClaim
+metadata:
+  name: {{ include "opensim-next.fullname" . }}-cache
+  namespace: {{ .Release.Namespace | quote }}
+  labels:
+    {{- include "opensim-next.labels" . | nindent 4 }}
+    component: cache-storage
+  annotations:
+    {{- with .Values.persistence.cache.annotations }}
+    {{- toYaml . | nindent 4 }}
+    {{- end }}
+    volume.kubernetes.io/storage-class: {{ include "opensim-next.storageClass" .Values.persistence.cache | quote }}
+spec:
+  accessModes:
+    - {{ .Values.persistence.cache.accessMode | default "ReadWriteOnce" | quote }}
+  
+  resources:
+    requests:
+      storage: {{ .Values.persistence.cache.size | default "10Gi" | quote }}
+  
+  {{- $storageClass := include "opensim-next.storageClass" .Values.persistence.cache }}
+  {{- if $storageClass }}
+  storageClassName: {{ $storageClass | quote }}
+  {{- end }}
+  
+  {{- if .Values.persistence.cache.selector }}
+  selector:
+    {{- toYaml .Values.persistence.cache.selector | nindent 4 }}
+  {{- end }}
+  
+  {{- if .Values.persistence.cache.volumeName }}
+  volumeName: {{ .Values.persistence.cache.volumeName | quote }}
+  {{- end }}
+{{- end }}

@@ -1,0 +1,201 @@
+# Phase 199.6: High-Availability Docker Compose with pgpool-II
+# PostgreSQL primary + streaming standby + pgpool-II + Valkey shared cache
+#
+# Architecture:
+#   opensim-next → pgpool-II (:9999) → pg-primary (:5432) + pg-standby (:5432)
+#   pgpool-II provides: connection pooling, load balancing, automatic failover
+#
+# Usage:
+#   docker compose -f docker-compose.ha.yml up -d
+#   docker compose -f docker-compose.ha.yml exec pgpool psql -h localhost -p 9999 -U opensim -c "SHOW pool_nodes;"
+
+version: '3.8'
+
+services:
+
+  pg-primary:
+    image: postgres:15-alpine
+    container_name: opensim-pg-primary
+    restart: unless-stopped
+    environment:
+      POSTGRES_DB: opensim
+      POSTGRES_USER: opensim
+      POSTGRES_PASSWORD: ${PG_PASSWORD:-CHANGEME}
+      POSTGRES_INITDB_ARGS: "--auth-host=scram-sha-256"
+    volumes:
+      - pg_primary_data:/var/lib/postgresql/data
+      - pg_wal_archive:/var/lib/postgresql/wal_archive
+      - ./postgres-init.sql:/docker-entrypoint-initdb.d/01-init.sql:ro
+      - ./pg-primary-init.sh:/docker-entrypoint-initdb.d/02-replication.sh:ro
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U opensim -d opensim"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+      start_period: 30s
+    command: >
+      postgres
+        -c wal_level=replica
+        -c max_wal_senders=5
+        -c max_replication_slots=5
+        -c wal_keep_size=1GB
+        -c archive_mode=on
+        -c archive_command='cp %p /var/lib/postgresql/wal_archive/%f'
+        -c hot_standby=on
+        -c max_connections=200
+        -c checkpoint_timeout=15min
+        -c checkpoint_completion_target=0.9
+        -c wal_buffers=64MB
+        -c shared_buffers=256MB
+        -c effective_cache_size=768MB
+    deploy:
+      resources:
+        limits:
+          memory: 1G
+          cpus: '1.0'
+    networks:
+      - opensim_ha
+
+  pg-standby:
+    image: postgres:15-alpine
+    container_name: opensim-pg-standby
+    restart: unless-stopped
+    depends_on:
+      pg-primary:
+        condition: service_healthy
+    environment:
+      PGUSER: replicator
+      PGPASSWORD: ${REPL_PASSWORD:-CHANGEME}
+    volumes:
+      - pg_standby_data:/var/lib/postgresql/data
+      - pg_wal_archive:/var/lib/postgresql/wal_archive:ro
+    entrypoint: |
+      bash -c '
+        if [ ! -s "/var/lib/postgresql/data/PG_VERSION" ]; then
+          echo "Initializing standby from primary..."
+          rm -rf /var/lib/postgresql/data/*
+          PGPASSWORD=$${PGPASSWORD} pg_basebackup \
+            -h pg-primary -p 5432 -U replicator \
+            -D /var/lib/postgresql/data \
+            -Fp -Xs -P -R \
+            -S opensim_standby \
+            --checkpoint=fast
+          echo "primary_conninfo = '\''host=pg-primary port=5432 user=replicator password=$${PGPASSWORD} application_name=opensim_standby'\''" >> /var/lib/postgresql/data/postgresql.conf
+          echo "primary_slot_name = '\''opensim_standby'\''" >> /var/lib/postgresql/data/postgresql.conf
+          echo "hot_standby = on" >> /var/lib/postgresql/data/postgresql.conf
+          echo "hot_standby_feedback = on" >> /var/lib/postgresql/data/postgresql.conf
+          echo "restore_command = '\''cp /var/lib/postgresql/wal_archive/%f %p 2>/dev/null || true'\''" >> /var/lib/postgresql/data/postgresql.conf
+          chown -R postgres:postgres /var/lib/postgresql/data
+          chmod 700 /var/lib/postgresql/data
+        fi
+        exec docker-entrypoint.sh postgres
+      '
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U opensim"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+      start_period: 60s
+    deploy:
+      resources:
+        limits:
+          memory: 1G
+          cpus: '1.0'
+    networks:
+      - opensim_ha
+
+  pgpool:
+    image: pgpool/pgpool2:4.5
+    container_name: opensim-pgpool
+    restart: unless-stopped
+    depends_on:
+      pg-primary:
+        condition: service_healthy
+      pg-standby:
+        condition: service_healthy
+    volumes:
+      - ./pgpool/pgpool.conf:/etc/pgpool-II/pgpool.conf:ro
+      - ./pgpool/pcp.conf:/etc/pgpool-II/pcp.conf:ro
+      - ./pgpool/pool_hba.conf:/etc/pgpool-II/pool_hba.conf:ro
+      - ./pgpool/pool_passwd:/etc/pgpool-II/pool_passwd:ro
+      - ./pgpool/failover.sh:/etc/pgpool-II/failover.sh:ro
+      - pgpool_run:/var/run/pgpool
+    ports:
+      - "127.0.0.1:9999:9999"
+      - "127.0.0.1:9898:9898"
+    healthcheck:
+      test: ["CMD-SHELL", "PGPASSWORD='' psql -h localhost -p 9999 -U opensim -d opensim -Atc 'SELECT 1;' 2>/dev/null | grep -q 1"]
+      interval: 15s
+      timeout: 10s
+      retries: 5
+      start_period: 30s
+    deploy:
+      resources:
+        limits:
+          memory: 256M
+          cpus: '0.5'
+    networks:
+      - opensim_ha
+
+  valkey:
+    image: valkey/valkey:8-alpine
+    container_name: opensim-valkey
+    restart: unless-stopped
+    command: valkey-server --appendonly yes --maxmemory 512mb --maxmemory-policy allkeys-lru
+    volumes:
+      - valkey_data:/data
+    ports:
+      - "127.0.0.1:6379:6379"
+    healthcheck:
+      test: ["CMD", "valkey-cli", "ping"]
+      interval: 10s
+      timeout: 5s
+      retries: 3
+    deploy:
+      resources:
+        limits:
+          memory: 640M
+          cpus: '0.5'
+    networks:
+      - opensim_ha
+
+  opensim-next:
+    image: opensim-next:${BUILD_VERSION:-latest}
+    container_name: opensim-next-server
+    restart: unless-stopped
+    environment:
+      DATABASE_URL: postgresql://opensim:${PG_PASSWORD:-CHANGEME}@pgpool:9999/opensim
+      VALKEY_URL: redis://valkey:6379
+      RUST_LOG: ${LOG_LEVEL:-info}
+      FSASSETS_ROOT: /var/lib/opensim-next/fsassets
+      OPENSIM_API_KEY: ${OPENSIM_API_KEY:-change-me-in-production}
+    volumes:
+      - opensim_data:/var/lib/opensim-next
+      - opensim_fsassets:/var/lib/opensim-next/fsassets
+      - opensim_logs:/var/log/opensim-next
+    depends_on:
+      pgpool:
+        condition: service_healthy
+      valkey:
+        condition: service_healthy
+    ports:
+      - "9000:9000"
+      - "9001:9001"
+      - "8080:8080"
+      - "8002:8002"
+    networks:
+      - opensim_ha
+
+volumes:
+  pg_primary_data:
+  pg_standby_data:
+  pg_wal_archive:
+  pgpool_run:
+  valkey_data:
+  opensim_data:
+  opensim_fsassets:
+  opensim_logs:
+
+networks:
+  opensim_ha:
+    driver: bridge

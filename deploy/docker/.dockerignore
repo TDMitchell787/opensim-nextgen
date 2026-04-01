@@ -1,0 +1,251 @@
+# OpenSim Next Docker Build Context Exclusions
+# Optimize build performance by excluding unnecessary files
+
+#==============================================================================
+# Version Control
+#==============================================================================
+.git/
+.gitignore
+.gitattributes
+.gitmodules
+
+#==============================================================================
+# Build Artifacts
+#==============================================================================
+# Rust
+rust/target/
+rust/Cargo.lock
+**/*.pdb
+**/*.rlib
+
+# Zig
+zig/zig-out/
+zig/zig-cache/
+
+# Node.js
+node_modules/
+npm-debug.log*
+yarn-debug.log*
+yarn-error.log*
+
+#==============================================================================
+# Development Files
+#==============================================================================
+# IDE and editors
+.vscode/
+.idea/
+*.swp
+*.swo
+*~
+.DS_Store
+Thumbs.db
+
+# Local development
+.env
+.env.local
+.env.development
+.env.test
+.env.production
+
+#==============================================================================
+# Documentation
+#==============================================================================
+*.md
+docs/
+README*
+CHANGELOG*
+LICENSE*
+CONTRIBUTING*
+
+#==============================================================================
+# Logs and Temporary Files
+#==============================================================================
+# Application logs
+*.log
+logs/
+rust/*.log
+rust/server*.log
+rust/postgresql*.log
+rust/phase*.log
+
+# System logs
+/var/log/
+/tmp/
+/var/tmp/
+
+# Output files
+output/
+**/*.tmp
+**/*.temp
+
+#==============================================================================
+# Test Files
+#==============================================================================
+# Test directories
+tests/
+test/
+spec/
+__tests__/
+
+# Test files
+*test.rs
+*_test.rs
+test_*.rs
+*_spec.rs
+
+# Coverage reports
+coverage/
+.nyc_output/
+*.coverage
+.coverage
+
+#==============================================================================
+# Development Tools
+#==============================================================================
+# Flutter development
+flutter-client/
+auto-configurator/
+
+# Development scripts
+tools/
+scripts/
+*.sh
+sds-eads*.sh
+
+# Backup files
+backups/
+*.backup
+*.bak
+
+#==============================================================================
+# Data and Configuration
+#==============================================================================
+# Database files
+*.db
+*.sqlite
+*.sqlite3
+
+# Configuration files (will be copied explicitly)
+config/
+*.ini
+*.toml.example
+
+# User data
+data/
+cache/
+assets/textures/
+assets/sounds/
+
+#==============================================================================
+# Build and Deploy
+#==============================================================================
+# Docker files (except the one being used)
+Dockerfile*
+!Dockerfile.production
+docker-compose*.yml
+.dockerignore
+
+# CI/CD
+.github/
+.gitlab-ci.yml
+.travis.yml
+.circleci/
+
+# Deployment
+deploy/
+kubernetes/
+helm/
+terraform/
+
+#==============================================================================
+# Platform Specific
+#==============================================================================
+# macOS
+.DS_Store
+.AppleDouble
+.LSOverride
+
+# Windows
+Thumbs.db
+ehthumbs.db
+Desktop.ini
+
+# Linux
+*~
+
+#==============================================================================
+# Security
+#==============================================================================
+# Keys and certificates
+*.key
+*.pem
+*.crt
+*.p12
+*.pfx
+
+# Secrets
+secrets/
+.secrets
+*.secret
+
+#==============================================================================
+# Performance
+#==============================================================================
+# Large binary files
+*.iso
+*.zip
+*.tar.gz
+*.7z
+
+# Media files
+*.mp3
+*.wav
+*.mp4
+*.avi
+*.mov
+
+# Archives
+*.tar
+*.gz
+*.bz2
+*.xz
+
+#==============================================================================
+# Project Specific
+#==============================================================================
+# Phase outputs
+Phase*.md
+Errortrap*
+error-*.py
+error-*.html
+xml_tree_visualizer.py
+
+# Testing outputs
+logs/
+rust/tools/phase28-testing/logs/
+
+# Template files
+templates/
+*.template
+*.txt
+
+# Migration test files
+rust/test_*
+rust/migrations/test*
+
+# Web frontend build (will be built in container)
+rust/web-frontend/node_modules/
+rust/web-frontend/dist/
+rust/web-frontend/build/
+
+#==============================================================================
+# Size Optimization
+#==============================================================================
+# Only include essential files for the build:
+# - Source code (rust/src/, zig/src/)
+# - Build configuration (Cargo.toml, build.rs, build.zig)
+# - Essential assets and migrations
+# - Web frontend source (will be built in container)
+#
+# This should reduce build context from ~500MB to ~50MB
+#==============================================================================

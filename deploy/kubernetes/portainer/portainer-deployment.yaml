@@ -1,0 +1,378 @@
+# Portainer Deployment for OpenSim Next Kubernetes Management
+# Provides graphical interface for container orchestration management
+
+apiVersion: v1
+kind: Namespace
+metadata:
+  name: portainer
+  labels:
+    name: portainer
+    app.kubernetes.io/name: portainer
+    app.kubernetes.io/managed-by: kubernetes
+  annotations:
+    description: "Portainer namespace for OpenSim Next Kubernetes management"
+
+---
+# Portainer Service Account
+apiVersion: v1
+kind: ServiceAccount
+metadata:
+  name: portainer-sa-clusteradmin
+  namespace: portainer
+  labels:
+    app.kubernetes.io/name: portainer
+    app.kubernetes.io/instance: portainer
+
+---
+# Cluster Role Binding for Portainer
+apiVersion: rbac.authorization.k8s.io/v1
+kind: ClusterRoleBinding
+metadata:
+  name: portainer-crb-clusteradmin
+  labels:
+    app.kubernetes.io/name: portainer
+    app.kubernetes.io/instance: portainer
+subjects:
+- kind: ServiceAccount
+  name: portainer-sa-clusteradmin
+  namespace: portainer
+roleRef:
+  kind: ClusterRole
+  name: cluster-admin
+  apiGroup: rbac.authorization.k8s.io
+
+---
+# Portainer Data Persistent Volume Claim
+apiVersion: v1
+kind: PersistentVolumeClaim
+metadata:
+  name: portainer-pvc
+  namespace: portainer
+  labels:
+    app.kubernetes.io/name: portainer
+    app.kubernetes.io/instance: portainer
+  annotations:
+    volume.beta.kubernetes.io/storage-class: "opensim-next-standard"
+spec:
+  accessModes:
+    - ReadWriteOnce
+  storageClassName: opensim-next-standard
+  resources:
+    requests:
+      storage: 10Gi
+
+---
+# Portainer Deployment
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: portainer
+  namespace: portainer
+  labels:
+    app.kubernetes.io/name: portainer
+    app.kubernetes.io/instance: portainer
+    app.kubernetes.io/version: "2.19.4"
+    app.kubernetes.io/component: management-ui
+spec:
+  replicas: 1
+  strategy:
+    type: Recreate
+  selector:
+    matchLabels:
+      app.kubernetes.io/name: portainer
+      app.kubernetes.io/instance: portainer
+  template:
+    metadata:
+      labels:
+        app.kubernetes.io/name: portainer
+        app.kubernetes.io/instance: portainer
+        app.kubernetes.io/component: management-ui
+      annotations:
+        cluster-autoscaler.kubernetes.io/safe-to-evict: "false"
+    spec:
+      serviceAccountName: portainer-sa-clusteradmin
+      
+      # Security context
+      securityContext:
+        runAsNonRoot: false  # Portainer requires root for Docker socket access
+        fsGroup: 2000
+      
+      containers:
+      - name: portainer
+        image: portainer/portainer-ce:2.19.4
+        imagePullPolicy: IfNotPresent
+        
+        # Container security context
+        securityContext:
+          allowPrivilegeEscalation: false
+          capabilities:
+            drop:
+              - ALL
+          readOnlyRootFilesystem: false
+        
+        ports:
+        - name: web
+          containerPort: 9000
+          protocol: TCP
+        - name: edge
+          containerPort: 8000
+          protocol: TCP
+        
+        # Resource limits
+        resources:
+          requests:
+            cpu: 100m
+            memory: 256Mi
+          limits:
+            cpu: 500m
+            memory: 1Gi
+        
+        # Health checks
+        livenessProbe:
+          httpGet:
+            path: /
+            port: 9000
+            scheme: HTTP
+          initialDelaySeconds: 30
+          periodSeconds: 30
+          timeoutSeconds: 10
+          failureThreshold: 3
+        
+        readinessProbe:
+          httpGet:
+            path: /
+            port: 9000
+            scheme: HTTP
+          initialDelaySeconds: 10
+          periodSeconds: 10
+          timeoutSeconds: 5
+          failureThreshold: 3
+        
+        # Volume mounts
+        volumeMounts:
+        - name: portainer-data
+          mountPath: /data
+      
+      volumes:
+      - name: portainer-data
+        persistentVolumeClaim:
+          claimName: portainer-pvc
+      
+      # Node selection and tolerations
+      nodeSelector:
+        kubernetes.io/os: linux
+      
+      # Prefer not to run on the same node as OpenSim Next
+      affinity:
+        podAntiAffinity:
+          preferredDuringSchedulingIgnoredDuringExecution:
+          - weight: 100
+            podAffinityTerm:
+              labelSelector:
+                matchExpressions:
+                - key: app.kubernetes.io/name
+                  operator: In
+                  values:
+                  - opensim-next
+              topologyKey: kubernetes.io/hostname
+
+---
+# Portainer Service
+apiVersion: v1
+kind: Service
+metadata:
+  name: portainer
+  namespace: portainer
+  labels:
+    app.kubernetes.io/name: portainer
+    app.kubernetes.io/instance: portainer
+    app.kubernetes.io/component: management-ui
+  annotations:
+    service.beta.kubernetes.io/aws-load-balancer-type: nlb  # Change based on cloud provider
+spec:
+  type: LoadBalancer
+  ports:
+  - name: web
+    port: 9000
+    targetPort: 9000
+    protocol: TCP
+  - name: edge
+    port: 8000
+    targetPort: 8000
+    protocol: TCP
+  selector:
+    app.kubernetes.io/name: portainer
+    app.kubernetes.io/instance: portainer
+  
+  # Session affinity for consistent access
+  sessionAffinity: ClientIP
+  sessionAffinityConfig:
+    clientIP:
+      timeoutSeconds: 3600
+
+---
+# Portainer Ingress (alternative to LoadBalancer)
+apiVersion: networking.k8s.io/v1
+kind: Ingress
+metadata:
+  name: portainer-ingress
+  namespace: portainer
+  labels:
+    app.kubernetes.io/name: portainer
+    app.kubernetes.io/instance: portainer
+  annotations:
+    kubernetes.io/ingress.class: "nginx"
+    nginx.ingress.kubernetes.io/ssl-redirect: "true"
+    nginx.ingress.kubernetes.io/force-ssl-redirect: "true"
+    
+    # Security headers for management interface
+    nginx.ingress.kubernetes.io/configuration-snippet: |
+      add_header X-Frame-Options "SAMEORIGIN" always;
+      add_header X-Content-Type-Options "nosniff" always;
+      add_header X-XSS-Protection "1; mode=block" always;
+      add_header Referrer-Policy "strict-origin-when-cross-origin" always;
+      add_header Content-Security-Policy "default-src 'self'; script-src 'self' 'unsafe-inline' 'unsafe-eval'; style-src 'self' 'unsafe-inline'; img-src 'self' data: blob:; font-src 'self' data:; connect-src 'self' ws: wss:;" always;
+    
+    # Rate limiting for admin interface
+    nginx.ingress.kubernetes.io/rate-limit: "100"
+    nginx.ingress.kubernetes.io/rate-limit-window: "1m"
+    
+    # IP whitelisting (uncomment and configure for production)
+    # nginx.ingress.kubernetes.io/whitelist-source-range: "10.0.0.0/8,172.16.0.0/12,192.168.0.0/16"
+    
+    # Authentication (uncomment to enable basic auth)
+    # nginx.ingress.kubernetes.io/auth-type: basic
+    # nginx.ingress.kubernetes.io/auth-secret: portainer-basic-auth
+    # nginx.ingress.kubernetes.io/auth-realm: "Portainer Admin Access"
+
+spec:
+  ingressClassName: nginx
+  
+  tls:
+  - hosts:
+    - portainer.opensim.example.com
+    secretName: portainer-tls-secret
+  
+  rules:
+  - host: portainer.opensim.example.com
+    http:
+      paths:
+      - path: /
+        pathType: Prefix
+        backend:
+          service:
+            name: portainer
+            port:
+              number: 9000
+
+---
+# Network Policy for Portainer (restrict access)
+apiVersion: networking.k8s.io/v1
+kind: NetworkPolicy
+metadata:
+  name: portainer-network-policy
+  namespace: portainer
+  labels:
+    app.kubernetes.io/name: portainer
+    app.kubernetes.io/instance: portainer
+spec:
+  podSelector:
+    matchLabels:
+      app.kubernetes.io/name: portainer
+  
+  policyTypes:
+  - Ingress
+  - Egress
+  
+  ingress:
+  # Allow ingress from ingress controller
+  - from:
+    - namespaceSelector:
+        matchLabels:
+          name: ingress-nginx
+    - namespaceSelector:
+        matchLabels:
+          name: ingress-system
+    ports:
+    - protocol: TCP
+      port: 9000
+    - protocol: TCP
+      port: 8000
+  
+  # Allow access from admin networks (configure as needed)
+  - from: []
+    ports:
+    - protocol: TCP
+      port: 9000
+    - protocol: TCP
+      port: 8000
+  
+  egress:
+  # Allow egress to Kubernetes API server
+  - to: []
+    ports:
+    - protocol: TCP
+      port: 443
+    - protocol: TCP
+      port: 6443
+  
+  # Allow egress to DNS
+  - to: []
+    ports:
+    - protocol: UDP
+      port: 53
+    - protocol: TCP
+      port: 53
+  
+  # Allow egress to container registries
+  - to: []
+    ports:
+    - protocol: TCP
+      port: 443
+    - protocol: TCP
+      port: 80
+
+---
+# Optional: Basic Auth Secret for Portainer
+# Uncomment and configure if using basic authentication
+# apiVersion: v1
+# kind: Secret
+# metadata:
+#   name: portainer-basic-auth
+#   namespace: portainer
+# type: Opaque
+# data:
+#   auth: YWRtaW46JGFwcjEkTk1VbWQ3RWckTGZBT09yNGU1THc4WmZvOGFSLnBmLg==  # admin:admin (change in production)
+
+---
+# ConfigMap for Portainer configuration
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: portainer-config
+  namespace: portainer
+  labels:
+    app.kubernetes.io/name: portainer
+    app.kubernetes.io/instance: portainer
+data:
+  config.json: |
+    {
+      "analytics": false,
+      "authentication": {
+        "method": "internal"
+      },
+      "features": {
+        "enableHostManagementFeatures": false
+      },
+      "edge": {
+        "enabled": true,
+        "async": true
+      },
+      "snapshot": {
+        "interval": "5m"
+      },
+      "kubernetes": {
+        "restrictDefaultNamespace": true,
+        "enableResourceOverCommit": false
+      }
+    }

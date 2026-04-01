@@ -1,0 +1,42 @@
+# YEngine Compatibility Configuration Template
+# Legacy YEngine compatibility layer for OpenSim Next
+
+[YEngine]
+# Enable/disable YEngine compatibility
+Enabled = false
+
+# YEngine compatibility class and assembly
+Class = "OpenSim.Region.ScriptEngine.YEngine.YEngine"
+Assembly = "OpenSim.Region.ScriptEngine.YEngine.dll"
+
+# Legacy compatibility settings
+MaxScriptsPerRegion = 500
+MaxScriptMemory = 32768
+ScriptTimeout = 60
+
+# State management
+EnableStatePersistence = true
+StateBackupInterval = 300
+StateBackupPath = "ScriptStates/YEngine"
+
+# Migration settings
+EnableMigrationToNative = true
+AutoMigrateSimpleScripts = false
+MigrationWarnings = true
+
+# Legacy features
+EnableLegacyAPI = true
+EnableDeprecatedFunctions = true
+StrictCompatibilityMode = true
+
+# Performance (limited)
+EnableBasicOptimization = true
+ScriptRecompileOnRestart = false
+
+# Debugging
+EnableLegacyDebugger = false
+LogLegacyWarnings = true
+
+# Transition settings
+WarnOnLegacyUsage = true
+SuggestNativeAlternatives = true

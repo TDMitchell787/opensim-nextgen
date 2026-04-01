@@ -1,0 +1,175 @@
+-- PostgreSQL Advanced Stores Complete Implementation
+-- This migration creates all advanced store systems for PostgreSQL
+
+-- RegionStore: Region Settings
+CREATE TABLE regionsettings (
+    regionUUID UUID NOT NULL PRIMARY KEY,
+    block_terraform INTEGER NOT NULL DEFAULT 1,
+    block_fly INTEGER NOT NULL DEFAULT 0,
+    allow_damage INTEGER NOT NULL DEFAULT 0,
+    restrict_pushing INTEGER NOT NULL DEFAULT 0,
+    allow_land_resell INTEGER NOT NULL DEFAULT 1,
+    allow_land_join_divide INTEGER NOT NULL DEFAULT 1,
+    block_show_in_search INTEGER NOT NULL DEFAULT 0,
+    agent_limit INTEGER NOT NULL DEFAULT 10,
+    object_bonus REAL NOT NULL DEFAULT 1.0,
+    maturity INTEGER NOT NULL DEFAULT 1,
+    disable_scripts INTEGER NOT NULL DEFAULT 0,
+    disable_collisions INTEGER NOT NULL DEFAULT 0,
+    disable_physics INTEGER NOT NULL DEFAULT 0,
+    terrain_texture_1 UUID NOT NULL DEFAULT '00000000-0000-0000-0000-000000000000',
+    terrain_texture_2 UUID NOT NULL DEFAULT '00000000-0000-0000-0000-000000000000',
+    terrain_texture_3 UUID NOT NULL DEFAULT '00000000-0000-0000-0000-000000000000',
+    terrain_texture_4 UUID NOT NULL DEFAULT '00000000-0000-0000-0000-000000000000',
+    elevation_1_nw REAL NOT NULL DEFAULT 10.0,
+    elevation_2_ne REAL NOT NULL DEFAULT 10.0,
+    elevation_1_se REAL NOT NULL DEFAULT 10.0,
+    elevation_2_sw REAL NOT NULL DEFAULT 10.0,
+    water_height REAL NOT NULL DEFAULT 20.0,
+    terrain_raise_limit REAL NOT NULL DEFAULT 100.0,
+    terrain_lower_limit REAL NOT NULL DEFAULT -100.0,
+    use_estate_sun INTEGER NOT NULL DEFAULT 1,
+    fixed_sun INTEGER NOT NULL DEFAULT 0,
+    sun_position REAL NOT NULL DEFAULT 0.0,
+    covenant UUID DEFAULT NULL,
+    covenant_datetime INTEGER NOT NULL DEFAULT 0,
+    Sandbox INTEGER NOT NULL DEFAULT 0,
+    sunvectorx REAL NOT NULL DEFAULT 0.0,
+    sunvectory REAL NOT NULL DEFAULT 0.0,
+    sunvectorz REAL NOT NULL DEFAULT 0.0,
+    loaded_creation_datetime INTEGER NOT NULL DEFAULT 0,
+    loaded_creation_id VARCHAR(64) NOT NULL DEFAULT '',
+    map_tile_ID UUID NOT NULL DEFAULT '00000000-0000-0000-0000-000000000000',
+    minimum_age INTEGER NOT NULL DEFAULT 0,
+    block_search INTEGER NOT NULL DEFAULT 0,
+    casino INTEGER NOT NULL DEFAULT 0,
+    cacheID UUID DEFAULT NULL,
+    TerrainPBR1 VARCHAR(36) NOT NULL DEFAULT '00000000-0000-0000-0000-000000000000',
+    TerrainPBR2 VARCHAR(36) NOT NULL DEFAULT '00000000-0000-0000-0000-000000000000',
+    TerrainPBR3 VARCHAR(36) NOT NULL DEFAULT '00000000-0000-0000-0000-000000000000',
+    TerrainPBR4 VARCHAR(36) NOT NULL DEFAULT '00000000-0000-0000-0000-000000000000'
+);
+
+-- RegionStore: Baked Terrain
+CREATE TABLE bakedterrain (
+    RegionUUID VARCHAR(255) DEFAULT NULL,
+    Revision INTEGER DEFAULT NULL,
+    Heightfield BYTEA,
+    PRIMARY KEY (RegionUUID, Revision)
+);
+
+-- RegionStore: Windlight
+CREATE TABLE regionwindlight (
+    region_id VARCHAR(36) NOT NULL DEFAULT '000000-0000-0000-0000-000000000000',
+    water_color_r REAL NOT NULL DEFAULT 4.0,
+    water_color_g REAL NOT NULL DEFAULT 38.0,
+    water_color_b REAL NOT NULL DEFAULT 64.0,
+    water_color_i REAL NOT NULL DEFAULT 1.0,
+    water_fog_density_exponent REAL NOT NULL DEFAULT 4.0,
+    underwater_fog_modifier REAL NOT NULL DEFAULT 0.25,
+    reflection_wavelet_scale_1 REAL NOT NULL DEFAULT 2.0,
+    reflection_wavelet_scale_2 REAL NOT NULL DEFAULT 2.0,
+    reflection_wavelet_scale_3 REAL NOT NULL DEFAULT 2.0,
+    fresnel_scale REAL NOT NULL DEFAULT 0.40,
+    fresnel_offset REAL NOT NULL DEFAULT 0.50,
+    refract_scale_above REAL NOT NULL DEFAULT 0.03,
+    refract_scale_below REAL NOT NULL DEFAULT 0.20,
+    blur_multiplier REAL NOT NULL DEFAULT 0.040,
+    big_wave_direction_x REAL NOT NULL DEFAULT 1.05,
+    big_wave_direction_y REAL NOT NULL DEFAULT -0.42,
+    little_wave_direction_x REAL NOT NULL DEFAULT 1.11,
+    little_wave_direction_y REAL NOT NULL DEFAULT -1.16,
+    normal_map_texture VARCHAR(36) NOT NULL DEFAULT '822ded49-9a6c-f61c-cb89-6df54f42cdf4',
+    horizon_r REAL NOT NULL DEFAULT 0.25,
+    horizon_g REAL NOT NULL DEFAULT 0.25,
+    horizon_b REAL NOT NULL DEFAULT 0.32,
+    horizon_i REAL NOT NULL DEFAULT 0.32,
+    haze_horizon REAL NOT NULL DEFAULT 0.19,
+    blue_density_r REAL NOT NULL DEFAULT 0.12,
+    blue_density_g REAL NOT NULL DEFAULT 0.22,
+    blue_density_b REAL NOT NULL DEFAULT 0.38,
+    blue_density_i REAL NOT NULL DEFAULT 0.38,
+    haze_density REAL NOT NULL DEFAULT 0.70,
+    density_multiplier REAL NOT NULL DEFAULT 0.18,
+    distance_multiplier REAL NOT NULL DEFAULT 0.8,
+    max_altitude INTEGER NOT NULL DEFAULT 1605,
+    sun_moon_color_r REAL NOT NULL DEFAULT 0.24,
+    sun_moon_color_g REAL NOT NULL DEFAULT 0.26,
+    sun_moon_color_b REAL NOT NULL DEFAULT 0.30,
+    sun_moon_color_i REAL NOT NULL DEFAULT 0.30,
+    sun_moon_position REAL NOT NULL DEFAULT 0.317,
+    ambient_r REAL NOT NULL DEFAULT 0.35,
+    ambient_g REAL NOT NULL DEFAULT 0.35,
+    ambient_b REAL NOT NULL DEFAULT 0.24,
+    ambient_i REAL NOT NULL DEFAULT 0.24,
+    east_angle REAL NOT NULL DEFAULT 0.0,
+    sun_glow_focus REAL NOT NULL DEFAULT 0.10,
+    sun_glow_size REAL NOT NULL DEFAULT 1.75,
+    scene_gamma REAL NOT NULL DEFAULT 1.0,
+    star_brightness REAL NOT NULL DEFAULT 0.0,
+    cloud_color_r REAL NOT NULL DEFAULT 0.41,
+    cloud_color_g REAL NOT NULL DEFAULT 0.41,
+    cloud_color_b REAL NOT NULL DEFAULT 0.41,
+    cloud_color_i REAL NOT NULL DEFAULT 0.41,
+    cloud_x REAL NOT NULL DEFAULT 1.0,
+    cloud_y REAL NOT NULL DEFAULT 0.53,
+    cloud_density REAL NOT NULL DEFAULT 1.0,
+    cloud_coverage REAL NOT NULL DEFAULT 0.27,
+    cloud_scale REAL NOT NULL DEFAULT 0.42,
+    cloud_detail_x REAL NOT NULL DEFAULT 1.0,
+    cloud_detail_y REAL NOT NULL DEFAULT 0.53,
+    cloud_detail_density REAL NOT NULL DEFAULT 0.12,
+    cloud_scroll_x REAL NOT NULL DEFAULT 0.20,
+    cloud_scroll_x_lock INTEGER NOT NULL DEFAULT 0,
+    cloud_scroll_y REAL NOT NULL DEFAULT 0.01,
+    cloud_scroll_y_lock INTEGER NOT NULL DEFAULT 0,
+    draw_classic_clouds INTEGER NOT NULL DEFAULT 1,
+    PRIMARY KEY (region_id)
+);
+
+-- RegionStore: Environment
+CREATE TABLE regionenvironment (
+    region_id VARCHAR(36) NOT NULL DEFAULT '000000-0000-0000-0000-000000000000',
+    llsd_settings TEXT,
+    PRIMARY KEY (region_id)
+);
+
+-- RegionStore: Prim Shapes
+CREATE TABLE primshapes (
+    UUID UUID NOT NULL PRIMARY KEY,
+    Shape INTEGER DEFAULT NULL,
+    ScaleX REAL DEFAULT NULL,
+    ScaleY REAL DEFAULT NULL,
+    ScaleZ REAL DEFAULT NULL,
+    PCode INTEGER DEFAULT NULL,
+    PathBegin INTEGER DEFAULT NULL,
+    PathEnd INTEGER DEFAULT NULL,
+    PathScaleX INTEGER DEFAULT NULL,
+    PathScaleY INTEGER DEFAULT NULL,
+    PathShearX INTEGER DEFAULT NULL,
+    PathShearY INTEGER DEFAULT NULL,
+    PathSkew INTEGER DEFAULT NULL,
+    PathCurve INTEGER DEFAULT NULL,
+    PathRadiusOffset INTEGER DEFAULT NULL,
+    PathRevolutions INTEGER DEFAULT NULL,
+    PathTaperX INTEGER DEFAULT NULL,
+    PathTaperY INTEGER DEFAULT NULL,
+    PathTwist INTEGER DEFAULT NULL,
+    PathTwistBegin INTEGER DEFAULT NULL,
+    ProfileBegin INTEGER DEFAULT NULL,
+    ProfileEnd INTEGER DEFAULT NULL,
+    ProfileCurve INTEGER DEFAULT NULL,
+    ProfileHollow INTEGER DEFAULT NULL,
+    Texture BYTEA DEFAULT NULL,
+    ExtraParams BYTEA DEFAULT NULL,
+    State INTEGER DEFAULT NULL,
+    Media TEXT DEFAULT NULL,
+    MatOvrd BYTEA DEFAULT NULL
+);
+
+-- Create indexes for performance
+CREATE INDEX regionsettings_regionuuid ON regionsettings(regionUUID);
+CREATE INDEX bakedterrain_regionuuid ON bakedterrain(RegionUUID);
+CREATE INDEX regionwindlight_region_id ON regionwindlight(region_id);
+CREATE INDEX regionenvironment_region_id ON regionenvironment(region_id);
+CREATE INDEX primshapes_uuid ON primshapes(UUID);

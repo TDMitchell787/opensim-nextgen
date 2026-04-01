@@ -1,0 +1,378 @@
+# OpenSim Next Kubernetes Deployment
+# Production-ready deployment with security, scaling, and monitoring
+
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: {{ include "opensim-next.fullname" . }}
+  namespace: {{ .Release.Namespace | quote }}
+  labels:
+    {{- include "opensim-next.labels" . | nindent 4 }}
+  annotations:
+    deployment.kubernetes.io/revision: "{{ .Release.Revision }}"
+    meta.helm.sh/release-name: "{{ .Release.Name }}"
+    meta.helm.sh/release-namespace: "{{ .Release.Namespace }}"
+spec:
+  {{- if not .Values.opensim.autoscaling.enabled }}
+  replicas: {{ .Values.opensim.replicaCount }}
+  {{- end }}
+  
+  strategy:
+    type: RollingUpdate
+    rollingUpdate:
+      maxUnavailable: 25%
+      maxSurge: 25%
+  
+  selector:
+    matchLabels:
+      {{- include "opensim-next.selectorLabels" . | nindent 6 }}
+  
+  template:
+    metadata:
+      annotations:
+        checksum/config: {{ include (print $.Template.BasePath "/configmap.yaml") . | sha256sum }}
+        checksum/secrets: {{ include (print $.Template.BasePath "/secrets.yaml") . | sha256sum }}
+        {{- with .Values.opensim.podAnnotations }}
+        {{- toYaml . | nindent 8 }}
+        {{- end }}
+      labels:
+        {{- include "opensim-next.selectorLabels" . | nindent 8 }}
+        {{- with .Values.opensim.podLabels }}
+        {{- toYaml . | nindent 8 }}
+        {{- end }}
+    
+    spec:
+      {{- with .Values.global.imagePullSecrets }}
+      imagePullSecrets:
+        {{- toYaml . | nindent 8 }}
+      {{- end }}
+      
+      serviceAccountName: {{ include "opensim-next.serviceAccountName" . }}
+      
+      {{- with .Values.opensim.securityContext }}
+      securityContext:
+        {{- toYaml . | nindent 8 }}
+      {{- end }}
+      
+      # Init containers for setup and validation
+      initContainers:
+        # Database migration and setup
+        - name: database-migration
+          image: "{{ .Values.opensim.image.registry }}/{{ .Values.opensim.image.repository }}:{{ .Values.opensim.image.tag }}"
+          imagePullPolicy: {{ .Values.opensim.image.pullPolicy }}
+          command:
+            - /opt/opensim-next/bin/opensim-next
+            - migrate
+          env:
+            {{- include "opensim-next.environment" . | nindent 12 }}
+          envFrom:
+            - configMapRef:
+                name: {{ include "opensim-next.fullname" . }}-config
+            - secretRef:
+                name: {{ include "opensim-next.fullname" . }}-secrets
+          
+          resources:
+            requests:
+              cpu: 100m
+              memory: 256Mi
+            limits:
+              cpu: 500m
+              memory: 1Gi
+          
+          securityContext:
+            runAsNonRoot: true
+            runAsUser: 1001
+            runAsGroup: 1001
+            allowPrivilegeEscalation: false
+            capabilities:
+              drop:
+                - ALL
+            readOnlyRootFilesystem: true
+        
+        # Configuration validation
+        - name: config-validation
+          image: "{{ .Values.opensim.image.registry }}/{{ .Values.opensim.image.repository }}:{{ .Values.opensim.image.tag }}"
+          imagePullPolicy: {{ .Values.opensim.image.pullPolicy }}
+          command:
+            - /opt/opensim-next/bin/opensim-next
+            - config
+            - --validate
+          env:
+            {{- include "opensim-next.environment" . | nindent 12 }}
+          envFrom:
+            - configMapRef:
+                name: {{ include "opensim-next.fullname" . }}-config
+            - secretRef:
+                name: {{ include "opensim-next.fullname" . }}-secrets
+          
+          resources:
+            requests:
+              cpu: 50m
+              memory: 128Mi
+            limits:
+              cpu: 200m
+              memory: 512Mi
+          
+          securityContext:
+            runAsNonRoot: true
+            runAsUser: 1001
+            runAsGroup: 1001
+            allowPrivilegeEscalation: false
+            capabilities:
+              drop:
+                - ALL
+            readOnlyRootFilesystem: true
+      
+      containers:
+        - name: opensim-next
+          image: "{{ .Values.opensim.image.registry }}/{{ .Values.opensim.image.repository }}:{{ .Values.opensim.image.tag }}"
+          imagePullPolicy: {{ .Values.opensim.image.pullPolicy }}
+          
+          command:
+            - /opt/opensim-next/entrypoint.sh
+            - server
+          
+          env:
+            {{- include "opensim-next.environment" . | nindent 12 }}
+          
+          envFrom:
+            - configMapRef:
+                name: {{ include "opensim-next.fullname" . }}-config
+            - secretRef:
+                name: {{ include "opensim-next.fullname" . }}-secrets
+          
+          ports:
+            - name: viewer
+              containerPort: 9000
+              protocol: TCP
+            - name: websocket
+              containerPort: 9001
+              protocol: TCP
+            - name: web
+              containerPort: 8080
+              protocol: TCP
+            - name: metrics
+              containerPort: 9100
+              protocol: TCP
+            - name: hypergrid
+              containerPort: 8002
+              protocol: TCP
+            - name: admin
+              containerPort: 9200
+              protocol: TCP
+          
+          {{- with .Values.opensim.livenessProbe }}
+          livenessProbe:
+            {{- toYaml . | nindent 12 }}
+          {{- end }}
+          
+          {{- with .Values.opensim.readinessProbe }}
+          readinessProbe:
+            {{- toYaml . | nindent 12 }}
+          {{- end }}
+          
+          {{- with .Values.opensim.startupProbe }}
+          startupProbe:
+            {{- toYaml . | nindent 12 }}
+          {{- end }}
+          
+          {{- with .Values.opensim.resources }}
+          resources:
+            {{- toYaml . | nindent 12 }}
+          {{- end }}
+          
+          securityContext:
+            {{- toYaml .Values.opensim.securityContext | nindent 12 }}
+          
+          volumeMounts:
+            # Configuration
+            - name: opensim-config
+              mountPath: /opt/opensim-next/config
+              readOnly: true
+            
+            # Data persistence
+            {{- if .Values.persistence.data.enabled }}
+            - name: opensim-data
+              mountPath: /var/lib/opensim-next
+            {{- end }}
+            
+            # Asset storage
+            {{- if .Values.persistence.assets.enabled }}
+            - name: opensim-assets
+              mountPath: /opt/opensim-next/assets
+            {{- end }}
+            
+            # Log storage
+            {{- if .Values.persistence.logs.enabled }}
+            - name: opensim-logs
+              mountPath: /var/log/opensim-next
+            {{- end }}
+            
+            # Temporary storage
+            - name: tmp
+              mountPath: /tmp
+            
+            # Runtime storage
+            - name: run
+              mountPath: /var/run
+        
+        # Sidecar: Log shipping (optional)
+        {{- if .Values.monitoring.logShipping.enabled }}
+        - name: log-shipper
+          image: "{{ .Values.monitoring.logShipping.image.repository }}:{{ .Values.monitoring.logShipping.image.tag }}"
+          imagePullPolicy: {{ .Values.monitoring.logShipping.image.pullPolicy }}
+          
+          args:
+            - --config.file=/etc/promtail/config.yml
+          
+          volumeMounts:
+            - name: opensim-logs
+              mountPath: /var/log/opensim-next
+              readOnly: true
+            - name: promtail-config
+              mountPath: /etc/promtail
+              readOnly: true
+          
+          resources:
+            requests:
+              cpu: 50m
+              memory: 64Mi
+            limits:
+              cpu: 200m
+              memory: 256Mi
+          
+          securityContext:
+            runAsNonRoot: true
+            runAsUser: 1001
+            runAsGroup: 1001
+            allowPrivilegeEscalation: false
+            capabilities:
+              drop:
+                - ALL
+            readOnlyRootFilesystem: true
+        {{- end }}
+        
+        # Sidecar: Metrics exporter (optional)
+        {{- if .Values.monitoring.metricsExporter.enabled }}
+        - name: metrics-exporter
+          image: "{{ .Values.monitoring.metricsExporter.image.repository }}:{{ .Values.monitoring.metricsExporter.image.tag }}"
+          imagePullPolicy: {{ .Values.monitoring.metricsExporter.image.pullPolicy }}
+          
+          ports:
+            - name: exporter
+              containerPort: 9101
+              protocol: TCP
+          
+          livenessProbe:
+            httpGet:
+              path: /health
+              port: 9101
+            initialDelaySeconds: 30
+            periodSeconds: 30
+          
+          readinessProbe:
+            httpGet:
+              path: /health
+              port: 9101
+            initialDelaySeconds: 10
+            periodSeconds: 10
+          
+          resources:
+            requests:
+              cpu: 25m
+              memory: 32Mi
+            limits:
+              cpu: 100m
+              memory: 128Mi
+          
+          securityContext:
+            runAsNonRoot: true
+            runAsUser: 1001
+            runAsGroup: 1001
+            allowPrivilegeEscalation: false
+            capabilities:
+              drop:
+                - ALL
+            readOnlyRootFilesystem: true
+        {{- end }}
+      
+      volumes:
+        # Configuration
+        - name: opensim-config
+          configMap:
+            name: {{ include "opensim-next.fullname" . }}-config
+            defaultMode: 0644
+        
+        # Data persistence
+        {{- if .Values.persistence.data.enabled }}
+        - name: opensim-data
+          persistentVolumeClaim:
+            claimName: {{ include "opensim-next.fullname" . }}-data
+        {{- else }}
+        - name: opensim-data
+          emptyDir: {}
+        {{- end }}
+        
+        # Asset storage
+        {{- if .Values.persistence.assets.enabled }}
+        - name: opensim-assets
+          persistentVolumeClaim:
+            claimName: {{ include "opensim-next.fullname" . }}-assets
+        {{- else }}
+        - name: opensim-assets
+          emptyDir: {}
+        {{- end }}
+        
+        # Log storage
+        {{- if .Values.persistence.logs.enabled }}
+        - name: opensim-logs
+          persistentVolumeClaim:
+            claimName: {{ include "opensim-next.fullname" . }}-logs
+        {{- else }}
+        - name: opensim-logs
+          emptyDir: {}
+        {{- end }}
+        
+        # Temporary storage
+        - name: tmp
+          emptyDir:
+            sizeLimit: 1Gi
+        
+        # Runtime storage
+        - name: run
+          emptyDir:
+            medium: Memory
+            sizeLimit: 100Mi
+        
+        # Log shipping configuration
+        {{- if .Values.monitoring.logShipping.enabled }}
+        - name: promtail-config
+          configMap:
+            name: {{ include "opensim-next.fullname" . }}-promtail
+            defaultMode: 0644
+        {{- end }}
+      
+      {{- with .Values.opensim.nodeSelector }}
+      nodeSelector:
+        {{- toYaml . | nindent 8 }}
+      {{- end }}
+      
+      {{- with .Values.opensim.affinity }}
+      affinity:
+        {{- toYaml . | nindent 8 }}
+      {{- end }}
+      
+      {{- with .Values.opensim.tolerations }}
+      tolerations:
+        {{- toYaml . | nindent 8 }}
+      {{- end }}
+      
+      terminationGracePeriodSeconds: 30
+      
+      # DNS configuration for service discovery
+      dnsPolicy: ClusterFirst
+      dnsConfig:
+        options:
+          - name: ndots
+            value: "2"
+          - name: edns0

@@ -1,0 +1,691 @@
+# OpenSim Next - Production Optimized Configuration
+# Phase 29.4: Advanced Production Configuration and Monitoring
+# Optimized for high-performance virtual world server deployment
+
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: opensim-next-production-config
+  namespace: opensim-next
+  labels:
+    app.kubernetes.io/name: opensim-next
+    app.kubernetes.io/component: configuration
+    environment: production
+  annotations:
+    config.version: "29.4.0"
+    config.description: "Production-optimized configuration for OpenSim Next virtual world server"
+data:
+  # Core OpenSim Next Configuration
+  opensim.ini: |
+    [Startup]
+    ; Production-optimized startup configuration
+    physics = ODE
+    physics_config = production_stable
+    meshing = Meshmerizer
+    
+    ; Performance settings
+    NonPhysicalPrimMax = 256
+    PhysicalPrimMax = 64
+    ClampPrimSize = true
+    ClampNegativeZ = true
+    
+    ; Security settings
+    allow_regionless_agent_calls = false
+    disable_banned_users = true
+    block_fly = false
+    
+    ; Asset settings
+    CacheWearables = true
+    CacheAssets = true
+    AssetCacheLimit = 10000
+    
+    [Network]
+    ; Production network configuration
+    http_listener_port = 9000
+    ExternalHostNameForLSL = ${OPENSIM_EXTERNAL_HOSTNAME}
+    
+    ; Connection limits
+    client_stack_timeout = 60
+    client_socket_rcvbuf = 8192
+    client_socket_sndbuf = 8192
+    
+    ; Packet settings
+    MaxPoolThreads = 15
+    PacketPool = true
+    
+    [ClientStack.LindenUDP]
+    ; UDP client stack configuration
+    Enabled = true
+    Port = 9000
+    
+    ; Flow control
+    AckTimeout = 1000
+    ResendTimeout = 4000
+    MaxRequestDrain = 500
+    
+    ; Throttling
+    TextureThrottle = 10000
+    AssetThrottle = 5000
+    
+    [Database]
+    ; Database configuration
+    StorageProvider = ${DATABASE_PROVIDER}
+    ConnectionString = ${DATABASE_URL}
+    
+    ; Connection pooling
+    MaxPoolSize = 50
+    MinPoolSize = 5
+    ConnectionTimeout = 30
+    CommandTimeout = 300
+    
+    [Hypergrid]
+    ; Hypergrid configuration for inter-grid communication
+    Enabled = true
+    AllowTeleportsToAnyRegion = true
+    RestrictAppearanceAbroad = false
+    
+    ; Gatekeeper service
+    GatekeeperURI = ${OPENSIM_GATEKEEPER_URI}
+    HomeURI = ${OPENSIM_HOME_URI}
+    
+    [Groups]
+    ; Groups module configuration
+    Enabled = true
+    Module = GroupsModule
+    DebugEnabled = false
+    
+    ; Group limits
+    MaxGroupsPerUser = 50
+    MaxGroupNotices = 50
+    
+    [Friends]
+    ; Friends system configuration
+    Enabled = true
+    MaxFriends = 500
+    OnlineNotification = true
+    
+    [Messaging]
+    ; Instant messaging configuration  
+    Enabled = true
+    MessageModule = InstantMessageModule
+    
+    ; Message limits
+    MaxInstantMessages = 1000
+    OfflineMessageModule = OfflineMessageModule
+    
+    [RegionStore]
+    ; Region data persistence
+    StorageProvider = ${DATABASE_PROVIDER}
+    ConnectionString = ${DATABASE_URL}
+    
+    ; Backup settings
+    backup_interval = 300
+    save_crashes = true
+    
+    [AssetService]
+    ; Asset service configuration
+    DefaultAssetLoader = OpenSim.Framework.AssetLoader.Filesystem.dll
+    AssetLoaderArgs = assets/AssetSets.xml
+    
+    ; Asset caching
+    CachingEnabled = true
+    CacheDirectory = /data/assets/cache
+    
+    [InventoryService]
+    ; Inventory service configuration
+    StorageProvider = ${DATABASE_PROVIDER}
+    ConnectionString = ${DATABASE_URL}
+    
+    ; Inventory limits
+    MaxFolders = 1000
+    MaxItems = 100000
+    
+    [UserProfiles]
+    ; User profiles configuration
+    Enabled = true
+    Module = BasicProfileModule
+    
+    ; Profile limits
+    MaxClassifieds = 100
+    MaxPicks = 10
+    
+    [Economy]
+    ; Virtual economy configuration
+    Enabled = true
+    EconomyModule = MoneyModule
+    
+    ; Currency settings
+    StartupCurrency = 1000
+    UserCurrency = 10000
+    
+    [Physics]
+    ; Physics engine configuration
+    DefaultPhysicsEngine = ODE
+    TerrainImplementation = ZeroMesher
+    
+    ; Performance settings
+    physics_fps = 60
+    physics_prim_max = 64000
+    physics_avatar_max = 1000
+    
+    [Monitoring]
+    ; Monitoring and statistics
+    Enabled = true
+    StatsModule = StatsModule
+    
+    ; Metrics collection
+    CollectStats = true
+    ReportStats = true
+    StatsReportInterval = 300
+
+  # Environment-specific settings
+  environment.ini: |
+    [Environment]
+    RUST_LOG = "info,opensim_next=debug"
+    RUST_BACKTRACE = "1"
+    
+    [Performance]
+    MAX_CONCURRENT_CONNECTIONS = "2000"
+    THREAD_POOL_SIZE = "32"
+    WORKER_THREADS = "16"
+    
+    [Database]
+    DATABASE_PROVIDER = "PostgreSQL"
+    DATABASE_MAX_CONNECTIONS = "100"
+    DATABASE_IDLE_TIMEOUT = "600"
+    DATABASE_MAX_LIFETIME = "3600"
+    
+    [Security]
+    API_RATE_LIMIT = "1000"
+    SESSION_TIMEOUT = "3600"
+    BCRYPT_COST = "12"
+    
+    [Caching]
+    REDIS_CACHE_ENABLED = "true"
+    CACHE_TTL_SECONDS = "3600"
+    CACHE_MAX_SIZE_MB = "2048"
+    
+    [Physics]
+    PHYSICS_ENGINE_THREADS = "8"
+    PHYSICS_ITERATIONS = "10"
+    PHYSICS_TIMESTEP = "0.01666"  # 60 FPS
+    
+    [Networking]
+    WEBSOCKET_MAX_CONNECTIONS = "5000"
+    WEBSOCKET_HEARTBEAT_INTERVAL = "30"
+    HTTP_REQUEST_TIMEOUT = "30"
+    
+    [Monitoring]
+    METRICS_ENABLED = "true"
+    HEALTH_CHECK_INTERVAL = "30"
+    PROMETHEUS_PORT = "9100"
+    
+    [Assets]
+    ASSET_CACHE_SIZE_GB = "10"
+    ASSET_CLEANUP_INTERVAL = "3600"
+    ASSET_COMPRESSION_ENABLED = "true"
+
+  # Production logging configuration
+  logging.yaml: |
+    version: 1
+    disable_existing_loggers: false
+    
+    formatters:
+      standard:
+        format: '[%(asctime)s] %(levelname)s [%(name)s:%(lineno)s] %(message)s'
+        datefmt: '%Y-%m-%d %H:%M:%S'
+      
+      json:
+        class: pythonjsonlogger.jsonlogger.JsonFormatter
+        format: '%(asctime)s %(name)s %(levelname)s %(message)s'
+    
+    handlers:
+      console:
+        class: logging.StreamHandler
+        formatter: standard
+        stream: ext://sys.stdout
+      
+      file:
+        class: logging.handlers.RotatingFileHandler
+        formatter: json
+        filename: /logs/opensim-next.log
+        maxBytes: 100000000  # 100MB
+        backupCount: 10
+      
+      error_file:
+        class: logging.handlers.RotatingFileHandler
+        formatter: json
+        filename: /logs/opensim-next-errors.log
+        maxBytes: 50000000  # 50MB
+        backupCount: 5
+        level: ERROR
+    
+    loggers:
+      opensim_next:
+        level: INFO
+        handlers: [console, file, error_file]
+        propagate: false
+      
+      sqlx:
+        level: WARN
+        handlers: [file]
+        propagate: false
+      
+      tokio:
+        level: WARN
+        handlers: [file]
+        propagate: false
+      
+      hyper:
+        level: WARN
+        handlers: [file]
+        propagate: false
+    
+    root:
+      level: INFO
+      handlers: [console, file]
+
+  # Production security configuration
+  security.yaml: |
+    # Security Configuration for Production
+    
+    # Authentication settings
+    authentication:
+      bcrypt_cost: 12
+      session_timeout: 3600
+      max_failed_attempts: 5
+      lockout_duration: 1800
+      jwt_secret_rotation_interval: 86400
+    
+    # Authorization settings
+    authorization:
+      rbac_enabled: true
+      default_user_level: "resident"
+      admin_approval_required: true
+      guest_access_enabled: false
+    
+    # Network security
+    network:
+      rate_limiting:
+        enabled: true
+        requests_per_minute: 1000
+        burst_size: 100
+        whitelist_ips: []
+      
+      ddos_protection:
+        enabled: true
+        threshold_connections: 100
+        ban_duration: 3600
+        detection_interval: 60
+      
+      tls:
+        min_version: "1.2"
+        cipher_suites:
+          - "TLS_ECDHE_RSA_WITH_AES_256_GCM_SHA384"
+          - "TLS_ECDHE_RSA_WITH_AES_128_GCM_SHA256"
+          - "TLS_ECDHE_RSA_WITH_CHACHA20_POLY1305"
+    
+    # Content security
+    content:
+      max_asset_size: 100000000  # 100MB
+      allowed_asset_types:
+        - "image/jpeg"
+        - "image/png"
+        - "image/gif"
+        - "audio/wav"
+        - "audio/ogg"
+        - "model/mesh"
+      
+      content_scanning:
+        enabled: true
+        antivirus_enabled: true
+        malware_detection: true
+    
+    # Database security
+    database:
+      encryption_at_rest: true
+      connection_encryption: true
+      audit_logging: true
+      sensitive_data_masking: true
+    
+    # Monitoring and alerting
+    monitoring:
+      security_events_logging: true
+      intrusion_detection: true
+      anomaly_detection: true
+      alert_thresholds:
+        failed_logins: 10
+        unusual_traffic: 5000
+        resource_exhaustion: 90
+
+  # Performance optimization settings
+  performance.yaml: |
+    # Performance Configuration for Production
+    
+    # Resource limits
+    resources:
+      cpu:
+        max_cores: 16
+        dedicated_cores: 8
+        physics_cores: 4
+        network_cores: 2
+      
+      memory:
+        max_heap_size: "8g"
+        cache_size: "4g"
+        buffer_size: "1g"
+        gc_settings:
+          type: "G1GC"
+          max_pause: "100ms"
+      
+      disk:
+        io_priority: "high"
+        cache_size: "10g"
+        async_writes: true
+    
+    # Connection optimization
+    connections:
+      max_concurrent: 2000
+      connection_pool_size: 100
+      idle_timeout: 300
+      keep_alive: true
+      tcp_nodelay: true
+    
+    # Physics optimization
+    physics:
+      threading:
+        enabled: true
+        worker_threads: 8
+        max_bodies_per_thread: 1000
+      
+      optimization:
+        spatial_partitioning: true
+        continuous_collision: true
+        body_sleeping: true
+        constraint_solving_iterations: 10
+    
+    # Rendering optimization
+    rendering:
+      level_of_detail: true
+      frustum_culling: true
+      occlusion_culling: true
+      texture_compression: true
+      mesh_optimization: true
+    
+    # Network optimization
+    network:
+      packet_compression: true
+      delta_compression: true
+      bandwidth_throttling: true
+      adaptive_quality: true
+      
+      websocket:
+        compression: true
+        max_frame_size: 65536
+        ping_interval: 30
+        pong_timeout: 10
+    
+    # Caching strategies
+    caching:
+      asset_cache:
+        type: "multi_tier"
+        memory_cache_size: "2g"
+        disk_cache_size: "50g"
+        cache_duration: 3600
+      
+      database_cache:
+        query_cache_size: "512m"
+        result_cache_duration: 300
+        prepared_statement_cache: true
+      
+      web_cache:
+        static_content_duration: 86400
+        dynamic_content_duration: 300
+        cdn_integration: true
+
+---
+# Production monitoring dashboard configuration
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: opensim-next-monitoring-config
+  namespace: opensim-next
+  labels:
+    app.kubernetes.io/name: opensim-next
+    app.kubernetes.io/component: monitoring
+data:
+  prometheus.yml: |
+    global:
+      scrape_interval: 15s
+      evaluation_interval: 15s
+      external_labels:
+        environment: 'production'
+        cluster: 'opensim-next'
+    
+    scrape_configs:
+      # OpenSim Next metrics
+      - job_name: 'opensim-next'
+        static_configs:
+          - targets: ['opensim-next:9100']
+        metrics_path: '/metrics'
+        scrape_interval: 10s
+        
+      # PostgreSQL metrics
+      - job_name: 'postgresql'
+        static_configs:
+          - targets: ['opensim-next-postgresql:9187']
+        
+      # Redis metrics
+      - job_name: 'redis'
+        static_configs:
+          - targets: ['opensim-next-redis:9121']
+        
+      # Kubernetes metrics
+      - job_name: 'kubernetes-nodes'
+        kubernetes_sd_configs:
+          - role: node
+        relabel_configs:
+          - source_labels: [__address__]
+            regex: '(.*):10250'
+            target_label: __address__
+            replacement: '${1}:9100'
+    
+    rule_files:
+      - "opensim_alerts.yml"
+    
+    alerting:
+      alertmanagers:
+        - static_configs:
+            - targets:
+              - "alertmanager:9093"
+  
+  opensim_alerts.yml: |
+    groups:
+      - name: opensim_next.rules
+        rules:
+          # High CPU usage
+          - alert: HighCPUUsage
+            expr: cpu_usage_percent > 80
+            for: 5m
+            labels:
+              severity: warning
+            annotations:
+              summary: "High CPU usage detected"
+              description: "CPU usage is above 80% for more than 5 minutes"
+          
+          # High memory usage
+          - alert: HighMemoryUsage
+            expr: memory_usage_percent > 85
+            for: 5m
+            labels:
+              severity: warning
+            annotations:
+              summary: "High memory usage detected"
+              description: "Memory usage is above 85% for more than 5 minutes"
+          
+          # Database connection issues
+          - alert: DatabaseConnectionFailure
+            expr: database_connections_failed > 0
+            for: 1m
+            labels:
+              severity: critical
+            annotations:
+              summary: "Database connection failures"
+              description: "Database connection failures detected"
+          
+          # WebSocket connection issues
+          - alert: WebSocketConnectionLimit
+            expr: websocket_connections > 4500
+            for: 2m
+            labels:
+              severity: warning
+            annotations:
+              summary: "WebSocket connection limit approaching"
+              description: "WebSocket connections approaching limit of 5000"
+          
+          # Physics engine performance
+          - alert: PhysicsEngineSlowdown
+            expr: physics_frame_time_ms > 33
+            for: 3m
+            labels:
+              severity: warning
+            annotations:
+              summary: "Physics engine performance degradation"
+              description: "Physics frame time above 33ms (below 30 FPS)"
+          
+          # Asset loading issues
+          - alert: AssetLoadingFailure
+            expr: asset_loading_failures > 10
+            for: 2m
+            labels:
+              severity: warning
+            annotations:
+              summary: "Asset loading failures"
+              description: "Multiple asset loading failures detected"
+          
+          # Region crossing failures
+          - alert: RegionCrossingFailure
+            expr: region_crossing_failures > 5
+            for: 5m
+            labels:
+              severity: warning
+            annotations:
+              summary: "Region crossing failures"
+              description: "Multiple region crossing failures detected"
+
+  grafana-dashboard.json: |
+    {
+      "dashboard": {
+        "id": null,
+        "title": "OpenSim Next Production Dashboard",
+        "description": "Comprehensive monitoring dashboard for OpenSim Next virtual world server",
+        "tags": ["opensim", "virtual-world", "production"],
+        "timezone": "browser",
+        "refresh": "30s",
+        "time": {
+          "from": "now-1h",
+          "to": "now"
+        },
+        "panels": [
+          {
+            "id": 1,
+            "title": "Server Overview",
+            "type": "stat",
+            "targets": [
+              {
+                "expr": "up{job=\"opensim-next\"}",
+                "legendFormat": "Server Status"
+              }
+            ],
+            "fieldConfig": {
+              "defaults": {
+                "color": {
+                  "mode": "thresholds"
+                },
+                "thresholds": {
+                  "steps": [
+                    {"color": "red", "value": 0},
+                    {"color": "green", "value": 1}
+                  ]
+                }
+              }
+            }
+          },
+          {
+            "id": 2,
+            "title": "Active Connections",
+            "type": "graph",
+            "targets": [
+              {
+                "expr": "opensim_active_connections",
+                "legendFormat": "SL Viewer Connections"
+              },
+              {
+                "expr": "websocket_connections",
+                "legendFormat": "WebSocket Connections"
+              }
+            ]
+          },
+          {
+            "id": 3,
+            "title": "Resource Usage",
+            "type": "graph",
+            "targets": [
+              {
+                "expr": "cpu_usage_percent",
+                "legendFormat": "CPU Usage %"
+              },
+              {
+                "expr": "memory_usage_percent",
+                "legendFormat": "Memory Usage %"
+              }
+            ]
+          },
+          {
+            "id": 4,
+            "title": "Physics Performance",
+            "type": "graph",
+            "targets": [
+              {
+                "expr": "physics_frame_time_ms",
+                "legendFormat": "Frame Time (ms)"
+              },
+              {
+                "expr": "physics_bodies_count",
+                "legendFormat": "Active Bodies"
+              }
+            ]
+          },
+          {
+            "id": 5,
+            "title": "Database Performance",
+            "type": "graph",
+            "targets": [
+              {
+                "expr": "database_query_duration_ms",
+                "legendFormat": "Query Duration (ms)"
+              },
+              {
+                "expr": "database_connections_active",
+                "legendFormat": "Active Connections"
+              }
+            ]
+          },
+          {
+            "id": 6,
+            "title": "Asset System",
+            "type": "graph",
+            "targets": [
+              {
+                "expr": "asset_requests_per_second",
+                "legendFormat": "Requests/sec"
+              },
+              {
+                "expr": "asset_cache_hit_ratio",
+                "legendFormat": "Cache Hit Ratio"
+              }
+            ]
+          }
+        ]
+      }
+    }

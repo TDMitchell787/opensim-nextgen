@@ -1,0 +1,768 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>OpenSim Admin Dashboard</title>
+    <style>
+        * {
+            margin: 0;
+            padding: 0;
+            box-sizing: border-box;
+        }
+        
+        body {
+            font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
+            background: #f5f7fa;
+            color: #333;
+        }
+        
+        .header {
+            background: #2c3e50;
+            color: white;
+            padding: 1rem 2rem;
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            box-shadow: 0 2px 4px rgba(0,0,0,0.1);
+        }
+        
+        .header h1 {
+            font-size: 1.8rem;
+            font-weight: 300;
+        }
+        
+        .status-indicator {
+            display: flex;
+            align-items: center;
+            gap: 0.5rem;
+        }
+        
+        .status-dot {
+            width: 12px;
+            height: 12px;
+            border-radius: 50%;
+            background: #27ae60;
+            animation: pulse 2s infinite;
+        }
+        
+        @keyframes pulse {
+            0% { opacity: 1; }
+            50% { opacity: 0.5; }
+            100% { opacity: 1; }
+        }
+        
+        .dashboard {
+            display: grid;
+            grid-template-columns: 1fr 1fr 1fr 1fr;
+            gap: 1.5rem;
+            padding: 2rem;
+            max-width: 1400px;
+            margin: 0 auto;
+        }
+        
+        .widget {
+            background: white;
+            border-radius: 8px;
+            padding: 1.5rem;
+            box-shadow: 0 2px 10px rgba(0,0,0,0.08);
+            border: 1px solid #e1e8ed;
+        }
+        
+        .widget.large {
+            grid-column: span 2;
+        }
+        
+        .widget.full {
+            grid-column: span 4;
+        }
+        
+        .widget h3 {
+            color: #2c3e50;
+            margin-bottom: 1rem;
+            font-size: 1.1rem;
+            font-weight: 600;
+        }
+        
+        .metric {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            margin-bottom: 0.8rem;
+            padding: 0.5rem 0;
+            border-bottom: 1px solid #f8f9fa;
+        }
+        
+        .metric:last-child {
+            border-bottom: none;
+            margin-bottom: 0;
+        }
+        
+        .metric-label {
+            font-weight: 500;
+            color: #555;
+        }
+        
+        .metric-value {
+            font-weight: 600;
+            color: #2c3e50;
+            font-size: 1.1rem;
+        }
+        
+        .metric-value.warning {
+            color: #f39c12;
+        }
+        
+        .metric-value.danger {
+            color: #e74c3c;
+        }
+        
+        .metric-value.success {
+            color: #27ae60;
+        }
+        
+        .progress-bar {
+            width: 100%;
+            height: 8px;
+            background: #ecf0f1;
+            border-radius: 4px;
+            overflow: hidden;
+            margin-top: 0.5rem;
+        }
+        
+        .progress-fill {
+            height: 100%;
+            background: linear-gradient(90deg, #3498db, #2980b9);
+            transition: width 0.3s ease;
+        }
+        
+        .chart-container {
+            width: 100%;
+            height: 200px;
+            margin-top: 1rem;
+        }
+        
+        .log-container {
+            max-height: 300px;
+            overflow-y: auto;
+            background: #2c3e50;
+            color: #ecf0f1;
+            padding: 1rem;
+            border-radius: 4px;
+            font-family: 'Courier New', monospace;
+            font-size: 0.9rem;
+        }
+        
+        .log-entry {
+            margin-bottom: 0.5rem;
+            padding: 0.3rem 0;
+        }
+        
+        .log-timestamp {
+            color: #95a5a6;
+            margin-right: 0.5rem;
+        }
+        
+        .log-level {
+            margin-right: 0.5rem;
+            font-weight: bold;
+        }
+        
+        .log-level.info { color: #3498db; }
+        .log-level.warn { color: #f39c12; }
+        .log-level.error { color: #e74c3c; }
+        
+        .service-list {
+            display: flex;
+            flex-direction: column;
+            gap: 0.8rem;
+        }
+        
+        .service-item {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            padding: 0.8rem;
+            background: #f8f9fa;
+            border-radius: 4px;
+            border-left: 4px solid #27ae60;
+        }
+        
+        .service-item.degraded {
+            border-left-color: #f39c12;
+        }
+        
+        .service-item.unhealthy {
+            border-left-color: #e74c3c;
+        }
+        
+        .service-name {
+            font-weight: 600;
+            color: #2c3e50;
+        }
+        
+        .service-stats {
+            display: flex;
+            gap: 1rem;
+            font-size: 0.9rem;
+            color: #7f8c8d;
+        }
+        
+        .control-buttons {
+            display: flex;
+            gap: 0.5rem;
+            margin-top: 1rem;
+        }
+        
+        .btn {
+            padding: 0.5rem 1rem;
+            border: none;
+            border-radius: 4px;
+            cursor: pointer;
+            font-weight: 500;
+            transition: all 0.2s ease;
+        }
+        
+        .btn-primary {
+            background: #3498db;
+            color: white;
+        }
+        
+        .btn-primary:hover {
+            background: #2980b9;
+        }
+        
+        .btn-warning {
+            background: #f39c12;
+            color: white;
+        }
+        
+        .btn-warning:hover {
+            background: #e67e22;
+        }
+        
+        .btn-danger {
+            background: #e74c3c;
+            color: white;
+        }
+        
+        .btn-danger:hover {
+            background: #c0392b;
+        }
+        
+        .connection-status {
+            position: fixed;
+            top: 1rem;
+            right: 1rem;
+            padding: 0.5rem 1rem;
+            border-radius: 4px;
+            color: white;
+            font-weight: 500;
+            z-index: 1000;
+        }
+        
+        .connection-status.connected {
+            background: #27ae60;
+        }
+        
+        .connection-status.disconnected {
+            background: #e74c3c;
+        }
+        
+        @media (max-width: 1200px) {
+            .dashboard {
+                grid-template-columns: 1fr 1fr;
+            }
+        }
+        
+        @media (max-width: 768px) {
+            .dashboard {
+                grid-template-columns: 1fr;
+                padding: 1rem;
+            }
+            
+            .header {
+                padding: 1rem;
+            }
+            
+            .header h1 {
+                font-size: 1.4rem;
+            }
+        }
+    </style>
+</head>
+<body>
+    <div class="header">
+        <h1>OpenSim Next - Admin Dashboard</h1>
+        <div class="status-indicator">
+            <div class="status-dot"></div>
+            <span id="server-status">Server Online</span>
+        </div>
+    </div>
+    
+    <div class="connection-status connected" id="ws-status">
+        WebSocket Connected
+    </div>
+    
+    <div class="dashboard">
+        <!-- System Overview -->
+        <div class="widget">
+            <h3>System Resources</h3>
+            <div class="metric">
+                <span class="metric-label">CPU Usage</span>
+                <span class="metric-value" id="cpu-usage">--</span>
+            </div>
+            <div class="progress-bar">
+                <div class="progress-fill" id="cpu-progress" style="width: 0%"></div>
+            </div>
+            <div class="metric">
+                <span class="metric-label">Memory</span>
+                <span class="metric-value" id="memory-usage">--</span>
+            </div>
+            <div class="progress-bar">
+                <div class="progress-fill" id="memory-progress" style="width: 0%"></div>
+            </div>
+            <div class="metric">
+                <span class="metric-label">Load Average</span>
+                <span class="metric-value" id="load-average">--</span>
+            </div>
+        </div>
+        
+        <!-- Performance Metrics -->
+        <div class="widget">
+            <h3>Performance</h3>
+            <div class="metric">
+                <span class="metric-label">Requests/sec</span>
+                <span class="metric-value success" id="requests-per-sec">--</span>
+            </div>
+            <div class="metric">
+                <span class="metric-label">Avg Response</span>
+                <span class="metric-value" id="avg-response">--</span>
+            </div>
+            <div class="metric">
+                <span class="metric-label">Cache Hit Rate</span>
+                <span class="metric-value success" id="cache-hit-rate">--</span>
+            </div>
+            <div class="metric">
+                <span class="metric-label">Active Connections</span>
+                <span class="metric-value" id="active-connections">--</span>
+            </div>
+        </div>
+        
+        <!-- User Activity -->
+        <div class="widget">
+            <h3>User Activity</h3>
+            <div class="metric">
+                <span class="metric-label">Online Users</span>
+                <span class="metric-value success" id="online-users">--</span>
+            </div>
+            <div class="metric">
+                <span class="metric-label">Active Regions</span>
+                <span class="metric-value" id="active-regions">--</span>
+            </div>
+            <div class="metric">
+                <span class="metric-label">Total Sessions</span>
+                <span class="metric-value" id="total-sessions">--</span>
+            </div>
+            <div class="metric">
+                <span class="metric-label">Peak Today</span>
+                <span class="metric-value" id="peak-today">--</span>
+            </div>
+        </div>
+        
+        <!-- Server Info -->
+        <div class="widget">
+            <h3>Server Info</h3>
+            <div class="metric">
+                <span class="metric-label">Uptime</span>
+                <span class="metric-value" id="uptime">--</span>
+            </div>
+            <div class="metric">
+                <span class="metric-label">Version</span>
+                <span class="metric-value" id="version">--</span>
+            </div>
+            <div class="metric">
+                <span class="metric-label">Server ID</span>
+                <span class="metric-value" id="server-id">--</span>
+            </div>
+            <div class="metric">
+                <span class="metric-label">Hostname</span>
+                <span class="metric-value" id="hostname">--</span>
+            </div>
+        </div>
+        
+        <!-- Services Status -->
+        <div class="widget large">
+            <h3>Services Status</h3>
+            <div class="service-list" id="services-list">
+                <!-- Services will be populated here -->
+            </div>
+        </div>
+        
+        <!-- System Controls -->
+        <div class="widget large">
+            <h3>System Controls</h3>
+            <div class="control-buttons">
+                <button class="btn btn-primary" onclick="refreshStats()">Refresh Stats</button>
+                <button class="btn btn-warning" onclick="clearCache()">Clear Cache</button>
+                <button class="btn btn-primary" onclick="triggerScaling()">Test Scaling</button>
+                <button class="btn btn-danger" onclick="showConfirmDialog('restart')">Restart Services</button>
+            </div>
+            <div style="margin-top: 1rem;">
+                <h4 style="margin-bottom: 0.5rem;">Quick Actions</h4>
+                <div class="control-buttons">
+                    <button class="btn btn-primary" onclick="downloadLogs()">Download Logs</button>
+                    <button class="btn btn-primary" onclick="exportMetrics()">Export Metrics</button>
+                    <button class="btn btn-warning" onclick="showPerfProfile()">Performance Profile</button>
+                </div>
+            </div>
+        </div>
+        
+        <!-- Recent Logs -->
+        <div class="widget full">
+            <h3>Recent Logs</h3>
+            <div class="log-container" id="log-container">
+                <!-- Logs will be populated here -->
+            </div>
+        </div>
+    </div>
+    
+    <script>
+        class AdminDashboard {
+            constructor() {
+                this.wsUrl = `ws://${window.location.hostname}:8091/ws`;
+                this.apiBase = `http://${window.location.hostname}:8090/api`;
+                this.ws = null;
+                this.reconnectDelay = 1000;
+                this.maxReconnectDelay = 30000;
+                this.stats = null;
+                
+                this.initWebSocket();
+                this.startPeriodicRefresh();
+            }
+            
+            initWebSocket() {
+                try {
+                    this.ws = new WebSocket(this.wsUrl);
+                    
+                    this.ws.onopen = () => {
+                        console.log('WebSocket connected');
+                        this.updateConnectionStatus(true);
+                        this.reconnectDelay = 1000;
+                    };
+                    
+                    this.ws.onmessage = (event) => {
+                        try {
+                            const data = JSON.parse(event.data);
+                            if (data.type === 'welcome') {
+                                console.log('Welcome message:', data.message);
+                            } else if (data.event_type === 'PeriodicUpdate') {
+                                this.updateDashboard(data.data);
+                            }
+                        } catch (error) {
+                            console.error('Error parsing WebSocket message:', error);
+                        }
+                    };
+                    
+                    this.ws.onclose = () => {
+                        console.log('WebSocket disconnected');
+                        this.updateConnectionStatus(false);
+                        this.scheduleReconnect();
+                    };
+                    
+                    this.ws.onerror = (error) => {
+                        console.error('WebSocket error:', error);
+                        this.updateConnectionStatus(false);
+                    };
+                } catch (error) {
+                    console.error('Failed to create WebSocket:', error);
+                    this.updateConnectionStatus(false);
+                    this.scheduleReconnect();
+                }
+            }
+            
+            scheduleReconnect() {
+                setTimeout(() => {
+                    console.log('Attempting to reconnect...');
+                    this.initWebSocket();
+                    this.reconnectDelay = Math.min(this.reconnectDelay * 2, this.maxReconnectDelay);
+                }, this.reconnectDelay);
+            }
+            
+            updateConnectionStatus(connected) {
+                const statusEl = document.getElementById('ws-status');
+                if (connected) {
+                    statusEl.textContent = 'WebSocket Connected';
+                    statusEl.className = 'connection-status connected';
+                } else {
+                    statusEl.textContent = 'WebSocket Disconnected';
+                    statusEl.className = 'connection-status disconnected';
+                }
+            }
+            
+            updateDashboard(stats) {
+                this.stats = stats;
+                
+                // Update system resources
+                this.updateElement('cpu-usage', `${stats.resource_usage.cpu_usage_percent.toFixed(1)}%`);
+                this.updateProgress('cpu-progress', stats.resource_usage.cpu_usage_percent);
+                
+                const memoryPercent = (stats.resource_usage.memory_usage_mb / stats.resource_usage.memory_total_mb * 100);
+                this.updateElement('memory-usage', 
+                    `${stats.resource_usage.memory_usage_mb.toFixed(0)}MB / ${stats.resource_usage.memory_total_mb.toFixed(0)}MB`);
+                this.updateProgress('memory-progress', memoryPercent);
+                
+                this.updateElement('load-average', 
+                    `${stats.resource_usage.load_average_1m.toFixed(2)}, ${stats.resource_usage.load_average_5m.toFixed(2)}, ${stats.resource_usage.load_average_15m.toFixed(2)}`);
+                
+                // Update performance metrics
+                this.updateElement('requests-per-sec', stats.performance_metrics.requests_per_second.toFixed(1));
+                this.updateElement('avg-response', `${stats.performance_metrics.average_response_time_ms.toFixed(1)}ms`);
+                this.updateElement('cache-hit-rate', `${stats.performance_metrics.cache_hit_rate_percent.toFixed(1)}%`);
+                this.updateElement('active-connections', stats.network_stats.active_connections);
+                
+                // Update user activity
+                this.updateElement('online-users', stats.user_activity.online_users);
+                this.updateElement('active-regions', stats.user_activity.active_regions);
+                this.updateElement('total-sessions', stats.user_activity.total_sessions);
+                this.updateElement('peak-today', stats.user_activity.concurrent_peak_today);
+                
+                // Update server info
+                this.updateElement('uptime', this.formatUptime(stats.server_info.uptime_seconds));
+                this.updateElement('version', stats.server_info.version);
+                this.updateElement('server-id', stats.server_info.server_id);
+                this.updateElement('hostname', stats.server_info.hostname);
+                
+                // Update services
+                this.updateServices(stats.service_status);
+                
+                // Add to logs
+                this.addLogEntry('INFO', 'Dashboard', `Updated stats - ${stats.user_activity.online_users} users online`);
+            }
+            
+            updateElement(id, value) {
+                const element = document.getElementById(id);
+                if (element) {
+                    element.textContent = value;
+                }
+            }
+            
+            updateProgress(id, percentage) {
+                const element = document.getElementById(id);
+                if (element) {
+                    element.style.width = `${Math.min(percentage, 100)}%`;
+                }
+            }
+            
+            updateServices(serviceStatus) {
+                const container = document.getElementById('services-list');
+                if (!container) return;
+                
+                container.innerHTML = '';
+                
+                Object.entries(serviceStatus.service_details).forEach(([name, service]) => {
+                    const serviceEl = document.createElement('div');
+                    serviceEl.className = `service-item ${service.status}`;
+                    
+                    serviceEl.innerHTML = `
+                        <div>
+                            <div class="service-name">${service.name}</div>
+                            <div class="service-stats">
+                                <span>Instances: ${service.instances}</span>
+                                <span>RPS: ${service.requests_per_second.toFixed(1)}</span>
+                                <span>Error Rate: ${service.error_rate_percent.toFixed(2)}%</span>
+                            </div>
+                        </div>
+                        <div style="text-align: right;">
+                            <div style="font-weight: 600; color: ${this.getStatusColor(service.status)};">
+                                ${service.status.toUpperCase()}
+                            </div>
+                            <div style="font-size: 0.8rem; color: #7f8c8d;">
+                                ${this.formatLastCheck(service.last_health_check)}
+                            </div>
+                        </div>
+                    `;
+                    
+                    container.appendChild(serviceEl);
+                });
+            }
+            
+            getStatusColor(status) {
+                switch(status) {
+                    case 'healthy': return '#27ae60';
+                    case 'degraded': return '#f39c12';
+                    case 'unhealthy': return '#e74c3c';
+                    default: return '#7f8c8d';
+                }
+            }
+            
+            formatUptime(seconds) {
+                const days = Math.floor(seconds / 86400);
+                const hours = Math.floor((seconds % 86400) / 3600);
+                const minutes = Math.floor((seconds % 3600) / 60);
+                
+                if (days > 0) {
+                    return `${days}d ${hours}h ${minutes}m`;
+                } else if (hours > 0) {
+                    return `${hours}h ${minutes}m`;
+                } else {
+                    return `${minutes}m`;
+                }
+            }
+            
+            formatLastCheck(timestamp) {
+                const now = Math.floor(Date.now() / 1000);
+                const diff = now - timestamp;
+                
+                if (diff < 60) {
+                    return `${diff}s ago`;
+                } else if (diff < 3600) {
+                    return `${Math.floor(diff / 60)}m ago`;
+                } else {
+                    return `${Math.floor(diff / 3600)}h ago`;
+                }
+            }
+            
+            addLogEntry(level, module, message) {
+                const container = document.getElementById('log-container');
+                if (!container) return;
+                
+                const timestamp = new Date().toLocaleTimeString();
+                const logEl = document.createElement('div');
+                logEl.className = 'log-entry';
+                
+                logEl.innerHTML = `
+                    <span class="log-timestamp">[${timestamp}]</span>
+                    <span class="log-level ${level.toLowerCase()}">${level}</span>
+                    <span class="log-module">[${module}]</span>
+                    <span class="log-message">${message}</span>
+                `;
+                
+                container.appendChild(logEl);
+                container.scrollTop = container.scrollHeight;
+                
+                // Keep only last 50 entries
+                while (container.children.length > 50) {
+                    container.removeChild(container.firstChild);
+                }
+            }
+            
+            async apiCall(endpoint, method = 'GET', data = null) {
+                try {
+                    const options = {
+                        method,
+                        headers: {
+                            'Content-Type': 'application/json',
+                            'X-API-Key': 'default-key-change-me' // This should be configurable
+                        }
+                    };
+                    
+                    if (data) {
+                        options.body = JSON.stringify(data);
+                    }
+                    
+                    const response = await fetch(`${this.apiBase}${endpoint}`, options);
+                    
+                    if (!response.ok) {
+                        throw new Error(`API call failed: ${response.status}`);
+                    }
+                    
+                    return await response.json();
+                } catch (error) {
+                    console.error('API call failed:', error);
+                    this.addLogEntry('ERROR', 'Dashboard', `API call failed: ${error.message}`);
+                    throw error;
+                }
+            }
+            
+            startPeriodicRefresh() {
+                setInterval(() => {
+                    if (!this.ws || this.ws.readyState !== WebSocket.OPEN) {
+                        this.refreshStats();
+                    }
+                }, 10000); // Fallback refresh every 10 seconds
+            }
+        }
+        
+        // Global functions for buttons
+        async function refreshStats() {
+            try {
+                dashboard.addLogEntry('INFO', 'Dashboard', 'Refreshing statistics...');
+                const stats = await dashboard.apiCall('/stats');
+                dashboard.updateDashboard(stats);
+            } catch (error) {
+                dashboard.addLogEntry('ERROR', 'Dashboard', 'Failed to refresh statistics');
+            }
+        }
+        
+        async function clearCache() {
+            try {
+                dashboard.addLogEntry('INFO', 'Dashboard', 'Clearing cache...');
+                await dashboard.apiCall('/cache/clear', 'DELETE');
+                dashboard.addLogEntry('INFO', 'Dashboard', 'Cache cleared successfully');
+            } catch (error) {
+                dashboard.addLogEntry('ERROR', 'Dashboard', 'Failed to clear cache');
+            }
+        }
+        
+        async function triggerScaling() {
+            try {
+                dashboard.addLogEntry('INFO', 'Dashboard', 'Triggering scaling test...');
+                await dashboard.apiCall('/scaling/test', 'POST');
+                dashboard.addLogEntry('INFO', 'Dashboard', 'Scaling test triggered');
+            } catch (error) {
+                dashboard.addLogEntry('ERROR', 'Dashboard', 'Failed to trigger scaling test');
+            }
+        }
+        
+        async function downloadLogs() {
+            try {
+                const logs = await dashboard.apiCall('/logs/export');
+                const blob = new Blob([JSON.stringify(logs, null, 2)], { type: 'application/json' });
+                const url = URL.createObjectURL(blob);
+                const a = document.createElement('a');
+                a.href = url;
+                a.download = `opensim-logs-${new Date().toISOString().split('T')[0]}.json`;
+                a.click();
+                URL.revokeObjectURL(url);
+                dashboard.addLogEntry('INFO', 'Dashboard', 'Logs exported successfully');
+            } catch (error) {
+                dashboard.addLogEntry('ERROR', 'Dashboard', 'Failed to export logs');
+            }
+        }
+        
+        async function exportMetrics() {
+            try {
+                const metrics = await dashboard.apiCall('/metrics/prometheus');
+                const blob = new Blob([metrics], { type: 'text/plain' });
+                const url = URL.createObjectURL(blob);
+                const a = document.createElement('a');
+                a.href = url;
+                a.download = `opensim-metrics-${new Date().toISOString().split('T')[0]}.txt`;
+                a.click();
+                URL.revokeObjectURL(url);
+                dashboard.addLogEntry('INFO', 'Dashboard', 'Metrics exported successfully');
+            } catch (error) {
+                dashboard.addLogEntry('ERROR', 'Dashboard', 'Failed to export metrics');
+            }
+        }
+        
+        function showPerfProfile() {
+            window.open(`${dashboard.apiBase}/profiler/flamegraph`, '_blank');
+        }
+        
+        function showConfirmDialog(action) {
+            if (confirm(`Are you sure you want to ${action} the services? This may cause temporary downtime.`)) {
+                dashboard.addLogEntry('WARN', 'Dashboard', `${action} action confirmed by user`);
+                // Implement actual restart logic here
+            }
+        }
+        
+        // Initialize dashboard when page loads
+        let dashboard;
+        document.addEventListener('DOMContentLoaded', () => {
+            dashboard = new AdminDashboard();
+        });
+    </script>
+</body>
+</html>

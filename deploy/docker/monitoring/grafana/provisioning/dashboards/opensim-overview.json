@@ -1,0 +1,434 @@
+{
+  "dashboard": {
+    "id": null,
+    "title": "OpenSim Next - Overview Dashboard",
+    "tags": ["opensim", "overview", "production"],
+    "style": "dark",
+    "timezone": "browser",
+    "refresh": "5s",
+    "time": {
+      "from": "now-1h",
+      "to": "now"
+    },
+    "timepicker": {
+      "refresh_intervals": ["5s", "10s", "30s", "1m", "5m", "15m", "30m", "1h"],
+      "time_options": ["5m", "15m", "1h", "6h", "12h", "24h", "2d", "7d", "30d"]
+    },
+    "annotations": {
+      "list": [
+        {
+          "name": "Deployments",
+          "datasource": "Prometheus",
+          "enable": true,
+          "expr": "opensim_deployment_timestamp",
+          "iconColor": "green",
+          "textFormat": "Deployment: {{version}}"
+        }
+      ]
+    },
+    "templating": {
+      "list": [
+        {
+          "name": "instance",
+          "type": "query",
+          "query": "label_values(opensim_info, instance)",
+          "datasource": "Prometheus",
+          "refresh": 1,
+          "includeAll": true,
+          "allValue": ".*",
+          "multi": true
+        },
+        {
+          "name": "region",
+          "type": "query",
+          "query": "label_values(opensim_region_info, region_name)",
+          "datasource": "Prometheus",
+          "refresh": 1,
+          "includeAll": true,
+          "allValue": ".*",
+          "multi": true
+        }
+      ]
+    },
+    "panels": [
+      {
+        "id": 1,
+        "title": "Server Status",
+        "type": "stat",
+        "gridPos": {"h": 4, "w": 6, "x": 0, "y": 0},
+        "targets": [
+          {
+            "expr": "opensim_server_uptime_seconds{instance=~\"$instance\"}",
+            "legendFormat": "Uptime ({{instance}})",
+            "datasource": "Prometheus"
+          }
+        ],
+        "fieldConfig": {
+          "defaults": {
+            "unit": "s",
+            "thresholds": {
+              "steps": [
+                {"color": "red", "value": 0},
+                {"color": "yellow", "value": 300},
+                {"color": "green", "value": 3600}
+              ]
+            }
+          }
+        },
+        "options": {
+          "colorMode": "background",
+          "graphMode": "area",
+          "justifyMode": "center",
+          "orientation": "horizontal"
+        }
+      },
+      {
+        "id": 2,
+        "title": "Active Users",
+        "type": "graph",
+        "gridPos": {"h": 8, "w": 12, "x": 6, "y": 0},
+        "targets": [
+          {
+            "expr": "opensim_active_users_total{instance=~\"$instance\"}",
+            "legendFormat": "Total Users",
+            "datasource": "Prometheus"
+          },
+          {
+            "expr": "opensim_websocket_connections_active{instance=~\"$instance\"}",
+            "legendFormat": "Web Clients",
+            "datasource": "Prometheus"
+          },
+          {
+            "expr": "opensim_viewer_connections_active{instance=~\"$instance\"}",
+            "legendFormat": "SL Viewers",
+            "datasource": "Prometheus"
+          }
+        ],
+        "yAxes": [
+          {
+            "label": "Users",
+            "min": 0
+          }
+        ],
+        "legend": {
+          "show": true,
+          "values": true,
+          "current": true,
+          "max": true
+        }
+      },
+      {
+        "id": 3,
+        "title": "Active Regions",
+        "type": "stat",
+        "gridPos": {"h": 4, "w": 6, "x": 18, "y": 0},
+        "targets": [
+          {
+            "expr": "count(opensim_region_active{instance=~\"$instance\"})",
+            "legendFormat": "Regions",
+            "datasource": "Prometheus"
+          }
+        ],
+        "fieldConfig": {
+          "defaults": {
+            "unit": "short",
+            "thresholds": {
+              "steps": [
+                {"color": "red", "value": 0},
+                {"color": "yellow", "value": 1},
+                {"color": "green", "value": 5}
+              ]
+            }
+          }
+        }
+      },
+      {
+        "id": 4,
+        "title": "Database Performance",
+        "type": "graph",
+        "gridPos": {"h": 8, "w": 12, "x": 0, "y": 8},
+        "targets": [
+          {
+            "expr": "rate(opensim_database_queries_total{instance=~\"$instance\"}[5m])",
+            "legendFormat": "Queries/sec",
+            "datasource": "Prometheus"
+          },
+          {
+            "expr": "opensim_database_query_duration_seconds{quantile=\"0.95\",instance=~\"$instance\"}",
+            "legendFormat": "95th percentile latency",
+            "datasource": "Prometheus"
+          }
+        ],
+        "yAxes": [
+          {
+            "label": "Operations/sec",
+            "min": 0
+          },
+          {
+            "label": "Latency (s)",
+            "min": 0
+          }
+        ]
+      },
+      {
+        "id": 5,
+        "title": "System Resources",
+        "type": "graph",
+        "gridPos": {"h": 8, "w": 12, "x": 12, "y": 8},
+        "targets": [
+          {
+            "expr": "rate(process_cpu_seconds_total{job=\"opensim-next\",instance=~\"$instance\"}[5m]) * 100",
+            "legendFormat": "CPU Usage %",
+            "datasource": "Prometheus"
+          },
+          {
+            "expr": "process_resident_memory_bytes{job=\"opensim-next\",instance=~\"$instance\"} / 1024 / 1024",
+            "legendFormat": "Memory (MB)",
+            "datasource": "Prometheus"
+          }
+        ],
+        "yAxes": [
+          {
+            "label": "Percentage",
+            "min": 0,
+            "max": 100
+          },
+          {
+            "label": "Memory (MB)",
+            "min": 0
+          }
+        ]
+      },
+      {
+        "id": 6,
+        "title": "Physics Engines",
+        "type": "piechart",
+        "gridPos": {"h": 8, "w": 6, "x": 0, "y": 16},
+        "targets": [
+          {
+            "expr": "count by (physics_engine) (opensim_region_physics_engine{instance=~\"$instance\"})",
+            "legendFormat": "{{physics_engine}}",
+            "datasource": "Prometheus"
+          }
+        ],
+        "options": {
+          "reduceOptions": {
+            "values": false,
+            "calcs": ["lastNotNull"],
+            "fields": ""
+          },
+          "pieType": "pie",
+          "tooltip": {
+            "mode": "single"
+          },
+          "legend": {
+            "displayMode": "visible",
+            "placement": "right"
+          }
+        }
+      },
+      {
+        "id": 7,
+        "title": "Asset Cache Hit Rate",
+        "type": "stat",
+        "gridPos": {"h": 4, "w": 6, "x": 6, "y": 16},
+        "targets": [
+          {
+            "expr": "rate(opensim_asset_cache_hits_total{instance=~\"$instance\"}[5m]) / (rate(opensim_asset_cache_hits_total{instance=~\"$instance\"}[5m]) + rate(opensim_asset_cache_misses_total{instance=~\"$instance\"}[5m])) * 100",
+            "legendFormat": "Hit Rate %",
+            "datasource": "Prometheus"
+          }
+        ],
+        "fieldConfig": {
+          "defaults": {
+            "unit": "percent",
+            "min": 0,
+            "max": 100,
+            "thresholds": {
+              "steps": [
+                {"color": "red", "value": 0},
+                {"color": "yellow", "value": 70},
+                {"color": "green", "value": 90}
+              ]
+            }
+          }
+        }
+      },
+      {
+        "id": 8,
+        "title": "WebSocket Connections",
+        "type": "graph",
+        "gridPos": {"h": 8, "w": 12, "x": 12, "y": 16},
+        "targets": [
+          {
+            "expr": "opensim_websocket_connections_active{instance=~\"$instance\"}",
+            "legendFormat": "Active Connections",
+            "datasource": "Prometheus"
+          },
+          {
+            "expr": "rate(opensim_websocket_messages_sent_total{instance=~\"$instance\"}[5m])",
+            "legendFormat": "Messages Sent/sec",
+            "datasource": "Prometheus"
+          },
+          {
+            "expr": "rate(opensim_websocket_messages_received_total{instance=~\"$instance\"}[5m])",
+            "legendFormat": "Messages Received/sec",
+            "datasource": "Prometheus"
+          }
+        ],
+        "yAxes": [
+          {
+            "label": "Connections",
+            "min": 0
+          },
+          {
+            "label": "Messages/sec",
+            "min": 0
+          }
+        ]
+      },
+      {
+        "id": 9,
+        "title": "Region Activity",
+        "type": "table",
+        "gridPos": {"h": 8, "w": 24, "x": 0, "y": 24},
+        "targets": [
+          {
+            "expr": "opensim_region_avatars_count{instance=~\"$instance\",region_name=~\"$region\"}",
+            "format": "table",
+            "instant": true,
+            "datasource": "Prometheus"
+          },
+          {
+            "expr": "opensim_region_objects_count{instance=~\"$instance\",region_name=~\"$region\"}",
+            "format": "table",
+            "instant": true,
+            "datasource": "Prometheus"
+          },
+          {
+            "expr": "opensim_region_scripts_active{instance=~\"$instance\",region_name=~\"$region\"}",
+            "format": "table",
+            "instant": true,
+            "datasource": "Prometheus"
+          }
+        ],
+        "transformations": [
+          {
+            "id": "merge",
+            "options": {}
+          },
+          {
+            "id": "organize",
+            "options": {
+              "excludeByName": {
+                "Time": true,
+                "job": true,
+                "instance": true,
+                "__name__": true
+              },
+              "renameByName": {
+                "region_name": "Region",
+                "physics_engine": "Physics Engine",
+                "Value #A": "Avatars",
+                "Value #B": "Objects",
+                "Value #C": "Active Scripts"
+              }
+            }
+          }
+        ],
+        "options": {
+          "showHeader": true,
+          "sortBy": [
+            {
+              "desc": true,
+              "displayName": "Avatars"
+            }
+          ]
+        }
+      },
+      {
+        "id": 10,
+        "title": "Error Rates",
+        "type": "graph",
+        "gridPos": {"h": 6, "w": 12, "x": 0, "y": 32},
+        "targets": [
+          {
+            "expr": "rate(opensim_http_requests_total{status=~\"5..\",instance=~\"$instance\"}[5m])",
+            "legendFormat": "5xx Errors/sec",
+            "datasource": "Prometheus"
+          },
+          {
+            "expr": "rate(opensim_http_requests_total{status=~\"4..\",instance=~\"$instance\"}[5m])",
+            "legendFormat": "4xx Errors/sec",
+            "datasource": "Prometheus"
+          },
+          {
+            "expr": "rate(opensim_websocket_errors_total{instance=~\"$instance\"}[5m])",
+            "legendFormat": "WebSocket Errors/sec",
+            "datasource": "Prometheus"
+          }
+        ],
+        "yAxes": [
+          {
+            "label": "Errors/sec",
+            "min": 0
+          }
+        ],
+        "alert": {
+          "conditions": [
+            {
+              "evaluator": {
+                "params": [1],
+                "type": "gt"
+              },
+              "operator": {
+                "type": "and"
+              },
+              "query": {
+                "params": ["A", "5m", "now"]
+              },
+              "reducer": {
+                "params": [],
+                "type": "avg"
+              },
+              "type": "query"
+            }
+          ],
+          "executionErrorState": "alerting",
+          "for": "5m",
+          "frequency": "10s",
+          "handler": 1,
+          "name": "High Error Rate",
+          "noDataState": "no_data",
+          "notifications": []
+        }
+      },
+      {
+        "id": 11,
+        "title": "Network Traffic",
+        "type": "graph",
+        "gridPos": {"h": 6, "w": 12, "x": 12, "y": 32},
+        "targets": [
+          {
+            "expr": "rate(opensim_network_bytes_sent_total{instance=~\"$instance\"}[5m])",
+            "legendFormat": "Bytes Sent/sec",
+            "datasource": "Prometheus"
+          },
+          {
+            "expr": "rate(opensim_network_bytes_received_total{instance=~\"$instance\"}[5m])",
+            "legendFormat": "Bytes Received/sec",
+            "datasource": "Prometheus"
+          }
+        ],
+        "yAxes": [
+          {
+            "label": "Bytes/sec",
+            "min": 0
+          }
+        ]
+      }
+    ]
+  },
+  "folderId": 0,
+  "overwrite": true
+}

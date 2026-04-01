@@ -1,0 +1,603 @@
+/* OpenSim Next Auto-Configurator - Internationalization (i18n) CSS */
+/* Comprehensive styling for multi-language support and RTL languages */
+
+/* Language Selector Styling */
+.language-selector {
+    position: relative;
+    display: inline-block;
+    margin-right: 1rem;
+}
+
+.language-toggle {
+    display: flex;
+    align-items: center;
+    gap: 0.5rem;
+    padding: 0.5rem 1rem;
+    border: 1px solid var(--border-color);
+    border-radius: 8px;
+    background: var(--card-bg);
+    color: var(--text-primary);
+    cursor: pointer;
+    transition: all 0.2s ease;
+    font-size: 0.9rem;
+}
+
+.language-toggle:hover {
+    background: var(--hover-bg);
+    border-color: var(--primary-color);
+    transform: translateY(-1px);
+}
+
+.current-language {
+    font-size: 1.2rem;
+    min-width: 24px;
+    text-align: center;
+}
+
+.language-dropdown {
+    position: absolute;
+    top: 100%;
+    right: 0;
+    min-width: 300px;
+    background: var(--card-bg);
+    border: 1px solid var(--border-color);
+    border-radius: 12px;
+    box-shadow: 0 8px 32px rgba(0, 0, 0, 0.1);
+    z-index: 1000;
+    opacity: 0;
+    visibility: hidden;
+    transform: translateY(-10px);
+    transition: all 0.3s ease;
+    overflow: hidden;
+}
+
+.language-dropdown.show {
+    opacity: 1;
+    visibility: visible;
+    transform: translateY(0);
+}
+
+.language-dropdown-header {
+    padding: 1rem 1.5rem;
+    border-bottom: 1px solid var(--border-color);
+    background: var(--background-color);
+}
+
+.language-dropdown-header h4 {
+    margin: 0;
+    font-size: 1.1rem;
+    font-weight: 600;
+    color: var(--text-primary);
+}
+
+.language-options {
+    max-height: 300px;
+    overflow-y: auto;
+    padding: 0.5rem 0;
+}
+
+.language-option {
+    display: flex;
+    align-items: center;
+    gap: 1rem;
+    padding: 0.75rem 1.5rem;
+    cursor: pointer;
+    transition: all 0.2s ease;
+    border-left: 3px solid transparent;
+}
+
+.language-option:hover {
+    background: var(--hover-bg);
+    border-left-color: var(--primary-color);
+}
+
+.language-option.active {
+    background: rgba(37, 99, 235, 0.1);
+    border-left-color: var(--primary-color);
+}
+
+.language-option.active .language-name {
+    color: var(--primary-color);
+    font-weight: 600;
+}
+
+.language-flag {
+    font-size: 1.5rem;
+    min-width: 28px;
+    text-align: center;
+}
+
+.language-info {
+    flex: 1;
+}
+
+.language-name {
+    font-weight: 500;
+    color: var(--text-primary);
+    font-size: 0.95rem;
+    margin-bottom: 0.25rem;
+}
+
+.language-native {
+    font-size: 0.85rem;
+    color: var(--text-secondary);
+}
+
+.language-dropdown-footer {
+    padding: 1rem 1.5rem;
+    border-top: 1px solid var(--border-color);
+    background: var(--background-color);
+}
+
+.auto-detect-option {
+    display: flex;
+    align-items: center;
+    gap: 0.5rem;
+    cursor: pointer;
+    font-size: 0.9rem;
+    color: var(--text-secondary);
+}
+
+.auto-detect-option input[type="checkbox"] {
+    margin: 0;
+}
+
+/* RTL Language Support */
+.rtl {
+    direction: rtl;
+    text-align: right;
+}
+
+.rtl .language-selector {
+    margin-left: 1rem;
+    margin-right: 0;
+}
+
+.rtl .language-dropdown {
+    left: 0;
+    right: auto;
+}
+
+.rtl .language-option {
+    border-left: none;
+    border-right: 3px solid transparent;
+}
+
+.rtl .language-option:hover,
+.rtl .language-option.active {
+    border-right-color: var(--primary-color);
+}
+
+/* Language-specific Font Optimizations */
+.lang-ar,
+.lang-fa,
+.lang-ur {
+    font-family: 'Noto Sans Arabic', 'Arial Unicode MS', sans-serif;
+}
+
+.lang-zh {
+    font-family: 'Noto Sans CJK SC', 'Source Han Sans SC', 'PingFang SC', 'Microsoft YaHei', sans-serif;
+}
+
+.lang-ja {
+    font-family: 'Noto Sans CJK JP', 'Source Han Sans JP', 'Hiragino Kaku Gothic Pro', 'Meiryo', sans-serif;
+}
+
+.lang-ko {
+    font-family: 'Noto Sans CJK KR', 'Source Han Sans KR', 'Malgun Gothic', 'Apple SD Gothic Neo', sans-serif;
+}
+
+.lang-th {
+    font-family: 'Noto Sans Thai', 'Leelawadee UI', 'Tahoma', sans-serif;
+}
+
+.lang-hi {
+    font-family: 'Noto Sans Devanagari', 'Mangal', 'Utsaah', sans-serif;
+}
+
+/* Text Direction and Layout Adjustments */
+.rtl .wizard-sidebar {
+    right: 0;
+    left: auto;
+    border-left: 1px solid var(--border-color);
+    border-right: none;
+}
+
+.rtl .wizard-main {
+    margin-right: 300px;
+    margin-left: 0;
+}
+
+.rtl .step-icon {
+    margin-left: 0.5rem;
+    margin-right: 0;
+}
+
+.rtl .btn {
+    text-align: right;
+}
+
+.rtl .form-group label {
+    text-align: right;
+}
+
+.rtl .checkbox-label {
+    flex-direction: row-reverse;
+}
+
+.rtl .radio-option {
+    flex-direction: row-reverse;
+}
+
+/* Dashboard RTL Adjustments */
+.rtl .dashboard-grid {
+    direction: rtl;
+}
+
+.rtl .config-card {
+    text-align: right;
+}
+
+.rtl .card-header {
+    flex-direction: row-reverse;
+}
+
+.rtl .card-actions {
+    justify-content: flex-start;
+}
+
+/* Testing Framework RTL */
+.rtl .testing-tabs {
+    direction: rtl;
+}
+
+.rtl .test-categories {
+    direction: rtl;
+}
+
+.rtl .category-header {
+    flex-direction: row-reverse;
+}
+
+.rtl .test-result {
+    flex-direction: row-reverse;
+}
+
+/* Help System RTL */
+.rtl .help-navigation {
+    right: 0;
+    left: auto;
+    border-left: 1px solid var(--border-color);
+    border-right: none;
+}
+
+.rtl .help-content {
+    margin-right: 280px;
+    margin-left: 0;
+}
+
+/* USB Key Manager RTL */
+.rtl .key-list {
+    direction: rtl;
+}
+
+.rtl .key-item {
+    flex-direction: row-reverse;
+}
+
+/* Backup Manager RTL */
+.rtl .export-options {
+    direction: rtl;
+}
+
+.rtl .template-card {
+    text-align: right;
+}
+
+.rtl .template-header {
+    flex-direction: row-reverse;
+}
+
+/* Form Controls RTL */
+.rtl input[type="text"],
+.rtl input[type="email"],
+.rtl input[type="password"],
+.rtl input[type="url"],
+.rtl textarea,
+.rtl select {
+    text-align: right;
+    direction: rtl;
+}
+
+.rtl input[type="number"] {
+    text-align: left; /* Numbers are always LTR */
+    direction: ltr;
+}
+
+/* Icon Adjustments for RTL */
+.rtl .icon-chevron-left::before {
+    content: '\f054'; /* chevron-right */
+}
+
+.rtl .icon-chevron-right::before {
+    content: '\f053'; /* chevron-left */
+}
+
+.rtl .icon-arrow-left::before {
+    content: '\f061'; /* arrow-right */
+}
+
+.rtl .icon-arrow-right::before {
+    content: '\f060'; /* arrow-left */
+}
+
+/* Progress Indicators RTL */
+.rtl .progress-steps {
+    flex-direction: row-reverse;
+}
+
+.rtl .progress-bar {
+    transform: scaleX(-1);
+}
+
+.rtl .progress-fill {
+    transform: scaleX(-1);
+}
+
+/* Notification RTL */
+.rtl .notification {
+    left: 2rem;
+    right: auto;
+}
+
+.rtl .notification-content {
+    flex-direction: row-reverse;
+}
+
+/* Language-specific Text Sizing */
+.lang-ar,
+.lang-fa,
+.lang-ur {
+    font-size: 1.05em; /* Arabic scripts benefit from slightly larger text */
+    line-height: 1.6;
+}
+
+.lang-zh,
+.lang-ja,
+.lang-ko {
+    line-height: 1.7; /* CJK languages need more line spacing */
+}
+
+.lang-th,
+.lang-hi {
+    line-height: 1.6; /* Complex scripts need better spacing */
+}
+
+/* Language Indicator Badge */
+.language-indicator {
+    position: fixed;
+    bottom: 1rem;
+    right: 1rem;
+    background: var(--primary-color);
+    color: white;
+    padding: 0.5rem 1rem;
+    border-radius: 20px;
+    font-size: 0.8rem;
+    font-weight: 500;
+    z-index: 999;
+    opacity: 0.7;
+    transition: opacity 0.3s ease;
+}
+
+.language-indicator:hover {
+    opacity: 1;
+}
+
+.rtl .language-indicator {
+    left: 1rem;
+    right: auto;
+}
+
+/* Loading States for Language Switching */
+.language-switching {
+    opacity: 0.6;
+    pointer-events: none;
+    transition: opacity 0.3s ease;
+}
+
+.language-loading::after {
+    content: '';
+    position: absolute;
+    top: 50%;
+    left: 50%;
+    transform: translate(-50%, -50%);
+    width: 20px;
+    height: 20px;
+    border: 2px solid var(--primary-color);
+    border-top: 2px solid transparent;
+    border-radius: 50%;
+    animation: spin 1s linear infinite;
+}
+
+/* Translation Missing Indicator (Development) */
+.translation-missing {
+    background: #fff3cd;
+    border: 1px dashed #856404;
+    padding: 2px 4px;
+    border-radius: 3px;
+    font-size: 0.8em;
+    color: #856404;
+}
+
+/* Responsive Design for Language Selector */
+@media (max-width: 768px) {
+    .language-dropdown {
+        min-width: 280px;
+        max-width: 90vw;
+    }
+    
+    .language-option {
+        padding: 1rem;
+    }
+    
+    .language-flag {
+        font-size: 1.3rem;
+    }
+    
+    .language-selector {
+        margin-right: 0.5rem;
+    }
+    
+    .rtl .language-selector {
+        margin-left: 0.5rem;
+        margin-right: 0;
+    }
+}
+
+@media (max-width: 480px) {
+    .language-toggle {
+        padding: 0.5rem 0.75rem;
+        font-size: 0.8rem;
+    }
+    
+    .language-dropdown {
+        min-width: 250px;
+        right: -50px;
+    }
+    
+    .rtl .language-dropdown {
+        left: -50px;
+        right: auto;
+    }
+    
+    .language-dropdown-header,
+    .language-dropdown-footer {
+        padding: 0.75rem 1rem;
+    }
+    
+    .language-option {
+        padding: 0.75rem 1rem;
+    }
+}
+
+/* Dark Mode Adjustments */
+@media (prefers-color-scheme: dark) {
+    .language-dropdown {
+        box-shadow: 0 8px 32px rgba(0, 0, 0, 0.3);
+    }
+    
+    .language-toggle:hover {
+        box-shadow: 0 2px 8px rgba(37, 99, 235, 0.3);
+    }
+    
+    .translation-missing {
+        background: #3d3829;
+        border-color: #d4af37;
+        color: #ffd700;
+    }
+}
+
+/* Animation for Language Changes */
+@keyframes languageSwitch {
+    0% {
+        opacity: 1;
+        transform: translateY(0);
+    }
+    50% {
+        opacity: 0.3;
+        transform: translateY(-10px);
+    }
+    100% {
+        opacity: 1;
+        transform: translateY(0);
+    }
+}
+
+.language-switching-animation {
+    animation: languageSwitch 0.5s ease-in-out;
+}
+
+/* Accessibility Improvements */
+.language-option:focus {
+    outline: 2px solid var(--primary-color);
+    outline-offset: -2px;
+}
+
+.language-toggle:focus {
+    outline: 2px solid var(--primary-color);
+    outline-offset: 2px;
+}
+
+/* High Contrast Mode Support */
+@media (prefers-contrast: high) {
+    .language-toggle {
+        border-width: 2px;
+    }
+    
+    .language-option.active {
+        background: var(--primary-color);
+        color: white;
+    }
+    
+    .language-dropdown {
+        border-width: 2px;
+    }
+}
+
+/* Print Styles */
+@media print {
+    .language-selector {
+        display: none;
+    }
+    
+    .language-indicator {
+        display: none;
+    }
+}
+
+/* Custom Scrollbar for Language Dropdown */
+.language-options::-webkit-scrollbar {
+    width: 6px;
+}
+
+.language-options::-webkit-scrollbar-track {
+    background: var(--background-color);
+}
+
+.language-options::-webkit-scrollbar-thumb {
+    background: var(--border-color);
+    border-radius: 3px;
+}
+
+.language-options::-webkit-scrollbar-thumb:hover {
+    background: var(--text-secondary);
+}
+
+/* Font Loading Optimization */
+@font-face {
+    font-family: 'Noto Sans Arabic';
+    src: url('fonts/NotoSansArabic-Regular.woff2') format('woff2');
+    font-display: swap;
+    unicode-range: U+0600-06FF, U+200C-200D, U+2010-2011, U+204F, U+2E41, U+FB50-FDFF, U+FE80-FEFC;
+}
+
+@font-face {
+    font-family: 'Noto Sans CJK SC';
+    src: url('fonts/NotoSansCJKsc-Regular.woff2') format('woff2');
+    font-display: swap;
+    unicode-range: U+4E00-9FFF, U+3400-4DBF, U+20000-2A6DF, U+2A700-2B73F, U+2B740-2B81F, U+2B820-2CEAF, U+2F800-2FA1F;
+}
+
+@font-face {
+    font-family: 'Noto Sans CJK JP';
+    src: url('fonts/NotoSansCJKjp-Regular.woff2') format('woff2');
+    font-display: swap;
+    unicode-range: U+3000-303F, U+3040-309F, U+30A0-30FF, U+FF00-FFEF, U+4E00-9FAF;
+}
+
+@font-face {
+    font-family: 'Noto Sans CJK KR';
+    src: url('fonts/NotoSansCJKkr-Regular.woff2') format('woff2');
+    font-display: swap;
+    unicode-range: U+AC00-D7AF, U+1100-11FF, U+3130-318F, U+A960-A97F, U+D7B0-D7FF;
+}

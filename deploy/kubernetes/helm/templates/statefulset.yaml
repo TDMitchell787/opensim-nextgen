@@ -1,0 +1,198 @@
+{{- if .Values.opensim.persistence.regionData.enabled }}
+apiVersion: apps/v1
+kind: StatefulSet
+metadata:
+  name: {{ include "opensim-next.fullname" . }}-region-data
+  labels:
+    {{- include "opensim-next.labels" . | nindent 4 }}
+    app.kubernetes.io/component: region-storage
+spec:
+  serviceName: {{ include "opensim-next.fullname" . }}-region-headless
+  replicas: 1
+  selector:
+    matchLabels:
+      {{- include "opensim-next.selectorLabels" . | nindent 6 }}
+      app.kubernetes.io/component: region-storage
+  template:
+    metadata:
+      {{- with .Values.opensim.podAnnotations }}
+      annotations:
+        {{- toYaml . | nindent 8 }}
+      {{- end }}
+      labels:
+        {{- include "opensim-next.selectorLabels" . | nindent 8 }}
+        app.kubernetes.io/component: region-storage
+        {{- with .Values.opensim.podLabels }}
+        {{- toYaml . | nindent 8 }}
+        {{- end }}
+    spec:
+      {{- with .Values.opensim.image.pullSecrets }}
+      imagePullSecrets:
+        {{- toYaml . | nindent 8 }}
+      {{- end }}
+      serviceAccountName: {{ include "opensim-next.serviceAccountName" . }}
+      {{- with .Values.opensim.securityContext }}
+      securityContext:
+        {{- toYaml . | nindent 8 }}
+      {{- end }}
+      containers:
+        - name: {{ .Chart.Name }}
+          {{- with .Values.opensim.securityContext }}
+          securityContext:
+            {{- toYaml . | nindent 12 }}
+          {{- end }}
+          image: "{{ .Values.opensim.image.registry }}/{{ .Values.opensim.image.repository }}:{{ .Values.opensim.image.tag | default .Chart.AppVersion }}"
+          imagePullPolicy: {{ .Values.opensim.image.pullPolicy }}
+          env:
+            {{- range $key, $value := .Values.opensim.env }}
+            - name: {{ $key }}
+              value: {{ $value | quote }}
+            {{- end }}
+            {{- range .Values.opensim.envSecrets }}
+            - name: {{ .name }}
+              valueFrom:
+                secretKeyRef:
+                  name: {{ .secretName }}
+                  key: {{ .secretKey }}
+            {{- end }}
+            # StatefulSet specific environment
+            - name: OPENSIM_STORAGE_MODE
+              value: "stateful"
+            - name: OPENSIM_REGION_DATA_PATH
+              value: {{ .Values.opensim.persistence.regionData.mountPath | quote }}
+          ports:
+            - name: viewer
+              containerPort: {{ .Values.opensim.service.ports.viewer }}
+              protocol: TCP
+            - name: websocket
+              containerPort: {{ .Values.opensim.service.ports.websocket }}
+              protocol: TCP
+            - name: web
+              containerPort: {{ .Values.opensim.service.ports.web }}
+              protocol: TCP
+            - name: metrics
+              containerPort: {{ .Values.opensim.service.ports.metrics }}
+              protocol: TCP
+            - name: hypergrid
+              containerPort: {{ .Values.opensim.service.ports.hypergrid }}
+              protocol: TCP
+            - name: admin
+              containerPort: {{ .Values.opensim.service.ports.admin }}
+              protocol: TCP
+          {{- if .Values.opensim.livenessProbe }}
+          livenessProbe:
+            {{- toYaml .Values.opensim.livenessProbe | nindent 12 }}
+          {{- end }}
+          {{- if .Values.opensim.readinessProbe }}
+          readinessProbe:
+            {{- toYaml .Values.opensim.readinessProbe | nindent 12 }}
+          {{- end }}
+          {{- if .Values.opensim.startupProbe }}
+          startupProbe:
+            {{- toYaml .Values.opensim.startupProbe | nindent 12 }}
+          {{- end }}
+          resources:
+            {{- toYaml .Values.opensim.resources | nindent 12 }}
+          volumeMounts:
+            - name: region-data
+              mountPath: {{ .Values.opensim.persistence.regionData.mountPath }}
+              {{- if .Values.opensim.persistence.regionData.subPath }}
+              subPath: {{ .Values.opensim.persistence.regionData.subPath }}
+              {{- end }}
+            {{- if .Values.opensim.persistence.assetStorage.enabled }}
+            - name: asset-storage
+              mountPath: {{ .Values.opensim.persistence.assetStorage.mountPath }}
+            {{- end }}
+            {{- if .Values.opensim.persistence.logs.enabled }}
+            - name: logs
+              mountPath: {{ .Values.opensim.persistence.logs.mountPath }}
+            {{- end }}
+            - name: opensim-config
+              mountPath: /etc/opensim
+              readOnly: true
+      volumes:
+        {{- if .Values.opensim.persistence.assetStorage.enabled }}
+        - name: asset-storage
+          {{- if .Values.opensim.persistence.assetStorage.nfs.enabled }}
+          nfs:
+            server: {{ .Values.opensim.persistence.assetStorage.nfs.server }}
+            path: {{ .Values.opensim.persistence.assetStorage.nfs.path }}
+          {{- else }}
+          persistentVolumeClaim:
+            claimName: {{ include "opensim-next.fullname" . }}-asset-storage
+          {{- end }}
+        {{- end }}
+        {{- if .Values.opensim.persistence.logs.enabled }}
+        - name: logs
+          persistentVolumeClaim:
+            claimName: {{ include "opensim-next.fullname" . }}-logs
+        {{- end }}
+        - name: opensim-config
+          configMap:
+            name: {{ include "opensim-next.fullname" . }}-config
+      {{- with .Values.opensim.nodeSelector }}
+      nodeSelector:
+        {{- toYaml . | nindent 8 }}
+      {{- end }}
+      {{- with .Values.opensim.affinity }}
+      affinity:
+        {{- toYaml . | nindent 8 }}
+      {{- end }}
+      {{- with .Values.opensim.tolerations }}
+      tolerations:
+        {{- toYaml . | nindent 8 }}
+      {{- end }}
+  volumeClaimTemplates:
+    - metadata:
+        name: region-data
+        {{- with .Values.opensim.persistence.regionData.annotations }}
+        annotations:
+          {{- toYaml . | nindent 10 }}
+        {{- end }}
+      spec:
+        accessModes:
+          - {{ .Values.opensim.persistence.regionData.accessMode }}
+        {{- if .Values.opensim.persistence.regionData.storageClass }}
+        {{- if (eq "-" .Values.opensim.persistence.regionData.storageClass) }}
+        storageClassName: ""
+        {{- else }}
+        storageClassName: {{ .Values.opensim.persistence.regionData.storageClass }}
+        {{- end }}
+        {{- end }}
+        resources:
+          requests:
+            storage: {{ .Values.opensim.persistence.regionData.size }}
+---
+# Headless service for StatefulSet
+apiVersion: v1
+kind: Service
+metadata:
+  name: {{ include "opensim-next.fullname" . }}-region-headless
+  labels:
+    {{- include "opensim-next.labels" . | nindent 4 }}
+    app.kubernetes.io/component: region-storage
+spec:
+  clusterIP: None
+  selector:
+    {{- include "opensim-next.selectorLabels" . | nindent 4 }}
+    app.kubernetes.io/component: region-storage
+  ports:
+    - name: viewer
+      port: {{ .Values.opensim.service.ports.viewer }}
+      targetPort: viewer
+    - name: websocket
+      port: {{ .Values.opensim.service.ports.websocket }}
+      targetPort: websocket
+    - name: web
+      port: {{ .Values.opensim.service.ports.web }}
+      targetPort: web
+    - name: metrics
+      port: {{ .Values.opensim.service.ports.metrics }}
+      targetPort: metrics
+    - name: hypergrid
+      port: {{ .Values.opensim.service.ports.hypergrid }}
+      targetPort: hypergrid
+    - name: admin
+      port: {{ .Values.opensim.service.ports.admin }}
+      targetPort: admin
+{{- end }}

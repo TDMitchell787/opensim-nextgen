@@ -1,0 +1,480 @@
+# Production RBAC Configuration for OpenSim Next
+# Role-based access control for production environment
+
+---
+# Namespace for RBAC resources
+apiVersion: v1
+kind: Namespace
+metadata:
+  name: opensim-next-rbac
+  labels:
+    app.kubernetes.io/name: opensim-next
+    app.kubernetes.io/component: rbac
+    environment: production
+
+---
+# Service Account for OpenSim Next application
+apiVersion: v1
+kind: ServiceAccount
+metadata:
+  name: opensim-next-app
+  namespace: opensim-next
+  labels:
+    app.kubernetes.io/name: opensim-next
+    app.kubernetes.io/component: application
+  annotations:
+    # AWS IAM role for service account (if using EKS)
+    eks.amazonaws.com/role-arn: "arn:aws:iam::ACCOUNT-ID:role/opensim-next-app-role"
+    
+    # Azure workload identity (if using AKS)
+    azure.workload.identity/client-id: "opensim-next-client-id"
+    
+    # GCP workload identity (if using GKE)
+    iam.gke.io/gcp-service-account: "opensim-next-app@PROJECT-ID.iam.gserviceaccount.com"
+
+---
+# Service Account for monitoring
+apiVersion: v1
+kind: ServiceAccount
+metadata:
+  name: opensim-next-monitoring
+  namespace: opensim-next
+  labels:
+    app.kubernetes.io/name: opensim-next
+    app.kubernetes.io/component: monitoring
+
+---
+# Service Account for backup operations
+apiVersion: v1
+kind: ServiceAccount
+metadata:
+  name: opensim-next-backup
+  namespace: opensim-next
+  labels:
+    app.kubernetes.io/name: opensim-next
+    app.kubernetes.io/component: backup
+
+---
+# Service Account for secret management
+apiVersion: v1
+kind: ServiceAccount
+metadata:
+  name: opensim-next-secrets
+  namespace: opensim-next
+  labels:
+    app.kubernetes.io/name: opensim-next
+    app.kubernetes.io/component: secrets
+
+---
+# ClusterRole for OpenSim Next application (minimal permissions)
+apiVersion: rbac.authorization.k8s.io/v1
+kind: ClusterRole
+metadata:
+  name: opensim-next-app-role
+  labels:
+    app.kubernetes.io/name: opensim-next
+    app.kubernetes.io/component: rbac
+rules:
+# Read access to nodes for resource monitoring
+- apiGroups: [""]
+  resources: ["nodes"]
+  verbs: ["get", "list"]
+
+# Read access to own namespace
+- apiGroups: [""]
+  resources: ["configmaps", "secrets", "services", "endpoints"]
+  verbs: ["get", "list", "watch"]
+
+# Metrics access
+- apiGroups: ["metrics.k8s.io"]
+  resources: ["nodes", "pods"]
+  verbs: ["get", "list"]
+
+---
+# Role for application within its namespace
+apiVersion: rbac.authorization.k8s.io/v1
+kind: Role
+metadata:
+  namespace: opensim-next
+  name: opensim-next-app-namespace-role
+  labels:
+    app.kubernetes.io/name: opensim-next
+    app.kubernetes.io/component: rbac
+rules:
+# Full access to own resources
+- apiGroups: [""]
+  resources: ["configmaps", "secrets"]
+  verbs: ["get", "list", "watch", "create", "update", "patch"]
+
+# Read access to pods for health checking
+- apiGroups: [""]
+  resources: ["pods"]
+  verbs: ["get", "list", "watch"]
+
+# Access to services and endpoints
+- apiGroups: [""]
+  resources: ["services", "endpoints"]
+  verbs: ["get", "list", "watch", "create", "update", "patch"]
+
+# Event creation for logging
+- apiGroups: [""]
+  resources: ["events"]
+  verbs: ["create"]
+
+---
+# Role for monitoring operations
+apiVersion: rbac.authorization.k8s.io/v1
+kind: ClusterRole
+metadata:
+  name: opensim-next-monitoring-role
+  labels:
+    app.kubernetes.io/name: opensim-next
+    app.kubernetes.io/component: monitoring
+rules:
+# Read access for monitoring
+- apiGroups: [""]
+  resources: ["nodes", "pods", "services", "endpoints", "configmaps"]
+  verbs: ["get", "list", "watch"]
+
+# Metrics access
+- apiGroups: ["metrics.k8s.io"]
+  resources: ["nodes", "pods", "containers"]
+  verbs: ["get", "list"]
+
+# Access to custom metrics
+- apiGroups: ["custom.metrics.k8s.io"]
+  resources: ["*"]
+  verbs: ["get", "list"]
+
+# Access to autoscaling resources
+- apiGroups: ["autoscaling"]
+  resources: ["horizontalpodautoscalers"]
+  verbs: ["get", "list", "watch"]
+
+---
+# Role for backup operations
+apiVersion: rbac.authorization.k8s.io/v1
+kind: Role
+metadata:
+  namespace: opensim-next
+  name: opensim-next-backup-role
+  labels:
+    app.kubernetes.io/name: opensim-next
+    app.kubernetes.io/component: backup
+rules:
+# Access to persistent volumes for backup
+- apiGroups: [""]
+  resources: ["persistentvolumes", "persistentvolumeclaims"]
+  verbs: ["get", "list", "watch", "create", "update", "patch"]
+
+# Access to secrets for backup encryption
+- apiGroups: [""]
+  resources: ["secrets"]
+  verbs: ["get", "list", "watch"]
+  resourceNames: ["opensim-next-backup-secrets"]
+
+# Access to configmaps for backup configuration
+- apiGroups: [""]
+  resources: ["configmaps"]
+  verbs: ["get", "list", "watch"]
+
+# Job management for backup tasks
+- apiGroups: ["batch"]
+  resources: ["jobs", "cronjobs"]
+  verbs: ["get", "list", "watch", "create", "update", "patch", "delete"]
+
+---
+# Role for secret management
+apiVersion: rbac.authorization.k8s.io/v1
+kind: Role
+metadata:
+  namespace: opensim-next
+  name: opensim-next-secrets-role
+  labels:
+    app.kubernetes.io/name: opensim-next
+    app.kubernetes.io/component: secrets
+rules:
+# Secret management
+- apiGroups: [""]
+  resources: ["secrets"]
+  verbs: ["get", "list", "watch", "create", "update", "patch"]
+
+# External secrets management
+- apiGroups: ["external-secrets.io"]
+  resources: ["externalsecrets", "secretstores", "clustersecretstores"]
+  verbs: ["get", "list", "watch", "create", "update", "patch"]
+
+# Sealed secrets management
+- apiGroups: ["bitnami.com"]
+  resources: ["sealedsecrets"]
+  verbs: ["get", "list", "watch", "create", "update", "patch"]
+
+---
+# ClusterRoleBinding for application
+apiVersion: rbac.authorization.k8s.io/v1
+kind: ClusterRoleBinding
+metadata:
+  name: opensim-next-app-binding
+  labels:
+    app.kubernetes.io/name: opensim-next
+    app.kubernetes.io/component: rbac
+subjects:
+- kind: ServiceAccount
+  name: opensim-next-app
+  namespace: opensim-next
+roleRef:
+  kind: ClusterRole
+  name: opensim-next-app-role
+  apiGroup: rbac.authorization.k8s.io
+
+---
+# RoleBinding for application in its namespace
+apiVersion: rbac.authorization.k8s.io/v1
+kind: RoleBinding
+metadata:
+  name: opensim-next-app-namespace-binding
+  namespace: opensim-next
+  labels:
+    app.kubernetes.io/name: opensim-next
+    app.kubernetes.io/component: rbac
+subjects:
+- kind: ServiceAccount
+  name: opensim-next-app
+  namespace: opensim-next
+roleRef:
+  kind: Role
+  name: opensim-next-app-namespace-role
+  apiGroup: rbac.authorization.k8s.io
+
+---
+# ClusterRoleBinding for monitoring
+apiVersion: rbac.authorization.k8s.io/v1
+kind: ClusterRoleBinding
+metadata:
+  name: opensim-next-monitoring-binding
+  labels:
+    app.kubernetes.io/name: opensim-next
+    app.kubernetes.io/component: monitoring
+subjects:
+- kind: ServiceAccount
+  name: opensim-next-monitoring
+  namespace: opensim-next
+roleRef:
+  kind: ClusterRole
+  name: opensim-next-monitoring-role
+  apiGroup: rbac.authorization.k8s.io
+
+---
+# RoleBinding for backup operations
+apiVersion: rbac.authorization.k8s.io/v1
+kind: RoleBinding
+metadata:
+  name: opensim-next-backup-binding
+  namespace: opensim-next
+  labels:
+    app.kubernetes.io/name: opensim-next
+    app.kubernetes.io/component: backup
+subjects:
+- kind: ServiceAccount
+  name: opensim-next-backup
+  namespace: opensim-next
+roleRef:
+  kind: Role
+  name: opensim-next-backup-role
+  apiGroup: rbac.authorization.k8s.io
+
+---
+# RoleBinding for secret management
+apiVersion: rbac.authorization.k8s.io/v1
+kind: RoleBinding
+metadata:
+  name: opensim-next-secrets-binding
+  namespace: opensim-next
+  labels:
+    app.kubernetes.io/name: opensim-next
+    app.kubernetes.io/component: secrets
+subjects:
+- kind: ServiceAccount
+  name: opensim-next-secrets
+  namespace: opensim-next
+roleRef:
+  kind: Role
+  name: opensim-next-secrets-role
+  apiGroup: rbac.authorization.k8s.io
+
+---
+# Pod Security Policy (deprecated but included for older clusters)
+apiVersion: policy/v1beta1
+kind: PodSecurityPolicy
+metadata:
+  name: opensim-next-psp
+  labels:
+    app.kubernetes.io/name: opensim-next
+    app.kubernetes.io/component: security
+spec:
+  privileged: false
+  allowPrivilegeEscalation: false
+  requiredDropCapabilities:
+    - ALL
+  allowedCapabilities: []
+  volumes:
+    - 'configMap'
+    - 'emptyDir'
+    - 'projected'
+    - 'secret'
+    - 'downwardAPI'
+    - 'persistentVolumeClaim'
+  hostNetwork: false
+  hostIPC: false
+  hostPID: false
+  runAsUser:
+    rule: 'MustRunAsNonRoot'
+  supplementalGroups:
+    rule: 'MustRunAs'
+    ranges:
+      - min: 1
+        max: 65535
+  fsGroup:
+    rule: 'MustRunAs'
+    ranges:
+      - min: 1
+        max: 65535
+  readOnlyRootFilesystem: false
+
+---
+# ClusterRole for Pod Security Policy
+apiVersion: rbac.authorization.k8s.io/v1
+kind: ClusterRole
+metadata:
+  name: opensim-next-psp-use
+  labels:
+    app.kubernetes.io/name: opensim-next
+    app.kubernetes.io/component: security
+rules:
+- apiGroups: ['policy']
+  resources: ['podsecuritypolicies']
+  verbs: ['use']
+  resourceNames:
+  - opensim-next-psp
+
+---
+# RoleBinding for Pod Security Policy
+apiVersion: rbac.authorization.k8s.io/v1
+kind: RoleBinding
+metadata:
+  name: opensim-next-psp-binding
+  namespace: opensim-next
+  labels:
+    app.kubernetes.io/name: opensim-next
+    app.kubernetes.io/component: security
+roleRef:
+  kind: ClusterRole
+  name: opensim-next-psp-use
+  apiGroup: rbac.authorization.k8s.io
+subjects:
+- kind: ServiceAccount
+  name: opensim-next-app
+  namespace: opensim-next
+- kind: ServiceAccount
+  name: opensim-next-monitoring
+  namespace: opensim-next
+- kind: ServiceAccount
+  name: opensim-next-backup
+  namespace: opensim-next
+
+---
+# Pod Security Standard (new approach for Kubernetes 1.21+)
+apiVersion: v1
+kind: Namespace
+metadata:
+  name: opensim-next
+  labels:
+    app.kubernetes.io/name: opensim-next
+    pod-security.kubernetes.io/enforce: restricted
+    pod-security.kubernetes.io/audit: restricted
+    pod-security.kubernetes.io/warn: restricted
+    pod-security.kubernetes.io/enforce-version: latest
+    pod-security.kubernetes.io/audit-version: latest
+    pod-security.kubernetes.io/warn-version: latest
+
+---
+# Network Policy for RBAC enforcement
+apiVersion: networking.k8s.io/v1
+kind: NetworkPolicy
+metadata:
+  name: opensim-next-rbac-network-policy
+  namespace: opensim-next
+  labels:
+    app.kubernetes.io/name: opensim-next
+    app.kubernetes.io/component: security
+spec:
+  podSelector:
+    matchLabels:
+      app.kubernetes.io/name: opensim-next
+  
+  policyTypes:
+  - Ingress
+  - Egress
+  
+  ingress:
+  # Allow ingress from same namespace
+  - from:
+    - namespaceSelector:
+        matchLabels:
+          name: opensim-next
+  
+  # Allow ingress from monitoring namespace
+  - from:
+    - namespaceSelector:
+        matchLabels:
+          name: monitoring
+    ports:
+    - protocol: TCP
+      port: 9100
+  
+  # Allow ingress from ingress controller
+  - from:
+    - namespaceSelector:
+        matchLabels:
+          name: ingress-nginx
+    ports:
+    - protocol: TCP
+      port: 9000
+    - protocol: TCP
+      port: 9001
+  
+  egress:
+  # Allow egress to same namespace
+  - to:
+    - namespaceSelector:
+        matchLabels:
+          name: opensim-next
+  
+  # Allow egress to kube-system for DNS
+  - to:
+    - namespaceSelector:
+        matchLabels:
+          name: kube-system
+    ports:
+    - protocol: UDP
+      port: 53
+    - protocol: TCP
+      port: 53
+  
+  # Allow egress to database
+  - to: []
+    ports:
+    - protocol: TCP
+      port: 5432
+  
+  # Allow egress to Redis
+  - to: []
+    ports:
+    - protocol: TCP
+      port: 6379
+  
+  # Allow HTTPS egress for external services
+  - to: []
+    ports:
+    - protocol: TCP
+      port: 443

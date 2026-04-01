@@ -1,0 +1,35 @@
+{
+  "name": "Creative Sandbox",
+  "description": "Enhanced environment for artists, builders, and content creators with advanced tools",
+  "category": "intermediate", 
+  "difficulty": "🟡 Intermediate",
+  "features": [
+    "Large regions (512x512m or 1024x1024m)",
+    "Advanced physics with vehicles",
+    "Full OSSL scripting (VeryHigh)",
+    "Media streaming support",
+    "Advanced lighting and rendering",
+    "Backup and restore tools",
+    "Asset management system",
+    "Collaboration features"
+  ],
+  "requirements": {
+    "ram": "4GB minimum, 8GB recommended",
+    "disk": "5GB free space",
+    "ports": ["9000-9003", "8080", "8090"],
+    "os": ["Windows", "macOS", "Linux"],
+    "experience": "Basic OpenSim knowledge helpful"
+  },
+  "estimated_setup_time": "5-10 minutes",
+  "user_level": "creative-intermediate",
+  "tags": ["creative", "building", "scripting", "media", "collaboration"],
+  "version": "1.0.0",
+  "created_by": "OpenSim Next Setup Wizard",
+  "last_updated": "2024-07-03",
+  "deployment": {
+    "auto_start": false,
+    "health_check": true,
+    "documentation_generation": true,
+    "requires_confirmation": true
+  }
+}

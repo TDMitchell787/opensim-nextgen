@@ -1,0 +1,353 @@
+# OpenSim Next Production Docker Compose Configuration
+# Complete stack with database, caching, and monitoring
+
+version: '3.8'
+
+services:
+  #============================================================================
+  # OpenSim Next Application Server
+  #============================================================================
+  opensim-next:
+    build:
+      context: ../../
+      dockerfile: deploy/docker/Dockerfile.production
+      args:
+        BUILD_VERSION: ${BUILD_VERSION:-latest}
+        BUILD_COMMIT: ${BUILD_COMMIT:-unknown}
+        BUILD_DATE: ${BUILD_DATE:-unknown}
+    image: opensim-next:${BUILD_VERSION:-latest}
+    container_name: opensim-next-server
+    restart: unless-stopped
+    
+    # Environment configuration
+    environment:
+      # Database connection
+      DATABASE_URL: postgresql://opensim:CHANGEME@postgres:5432/opensim
+      
+      # Server configuration
+      OPENSIM_API_KEY: ${OPENSIM_API_KEY:-change-me-in-production}
+      OPENSIM_INSTANCE_ID: opensim-docker-${HOSTNAME:-unknown}
+      RUST_LOG: ${LOG_LEVEL:-info}
+      
+      # Performance tuning
+      DATABASE_MAX_CONNECTIONS: 50
+      CACHE_SIZE_MB: 512
+      MAX_CONCURRENT_USERS: 1000
+      
+      # Security
+      RATE_LIMIT_RPM: 1000
+      
+      # Optional Redis for caching
+      REDIS_URL: redis://redis:6379
+    
+    # Port mappings
+    ports:
+      - "9000:9000"   # Second Life Viewer Protocol
+      - "9001:9001"   # WebSocket Server
+      - "8080:8080"   # Web Interface
+      - "9100:9100"   # Metrics/Health API
+      - "8002:8002"   # Hypergrid Protocol
+    
+    # Volume mounts
+    volumes:
+      - opensim_data:/var/lib/opensim-next
+      - opensim_logs:/var/log/opensim-next
+      - opensim_config:/opt/opensim-next/config
+      - opensim_assets:/opt/opensim-next/assets
+    
+    # Dependencies
+    depends_on:
+      postgres:
+        condition: service_healthy
+      redis:
+        condition: service_healthy
+    
+    # Health check
+    healthcheck:
+      test: ["CMD", "curl", "-f", "http://localhost:9100/health"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+      start_period: 40s
+    
+    # Resource limits
+    deploy:
+      resources:
+        limits:
+          memory: 2G
+          cpus: '2.0'
+        reservations:
+          memory: 1G
+          cpus: '1.0'
+    
+    # Security
+    security_opt:
+      - no-new-privileges:true
+    read_only: false  # Set to true for maximum security, but may need adjustment
+    tmpfs:
+      - /tmp:size=100M,noexec,nosuid,nodev
+    
+    # Logging
+    logging:
+      driver: "json-file"
+      options:
+        max-size: "100m"
+        max-file: "5"
+    
+    # Networks
+    networks:
+      - opensim_network
+
+  #============================================================================
+  # PostgreSQL Database
+  #============================================================================
+  postgres:
+    image: postgres:15-alpine
+    container_name: opensim-postgres
+    restart: unless-stopped
+    
+    environment:
+      POSTGRES_DB: opensim
+      POSTGRES_USER: opensim
+      POSTGRES_PASSWORD: CHANGEME
+      POSTGRES_INITDB_ARGS: "--auth-host=scram-sha-256"
+      PGDATA: /var/lib/postgresql/data/pgdata
+    
+    volumes:
+      - postgres_data:/var/lib/postgresql/data
+      - ./postgres-init.sql:/docker-entrypoint-initdb.d/init.sql:ro
+    
+    ports:
+      - "127.0.0.1:5432:5432"  # Only expose to localhost for security
+    
+    # Health check
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U opensim -d opensim"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+      start_period: 20s
+    
+    # Resource limits
+    deploy:
+      resources:
+        limits:
+          memory: 1G
+          cpus: '1.0'
+        reservations:
+          memory: 512M
+          cpus: '0.5'
+    
+    # Security
+    security_opt:
+      - no-new-privileges:true
+    
+    # Logging
+    logging:
+      driver: "json-file"
+      options:
+        max-size: "50m"
+        max-file: "3"
+    
+    networks:
+      - opensim_network
+
+  #============================================================================
+  # Redis Cache
+  #============================================================================
+  redis:
+    image: redis:7-alpine
+    container_name: opensim-redis
+    restart: unless-stopped
+    
+    command: redis-server --appendonly yes --requirepass CHANGEME
+    
+    volumes:
+      - redis_data:/data
+    
+    ports:
+      - "127.0.0.1:6379:6379"  # Only expose to localhost
+    
+    # Health check
+    healthcheck:
+      test: ["CMD", "redis-cli", "--raw", "incr", "ping"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+    
+    # Resource limits
+    deploy:
+      resources:
+        limits:
+          memory: 512M
+          cpus: '0.5'
+        reservations:
+          memory: 256M
+          cpus: '0.25'
+    
+    # Security
+    security_opt:
+      - no-new-privileges:true
+    
+    networks:
+      - opensim_network
+
+  #============================================================================
+  # Prometheus Monitoring
+  #============================================================================
+  prometheus:
+    image: prom/prometheus:latest
+    container_name: opensim-prometheus
+    restart: unless-stopped
+    
+    command:
+      - '--config.file=/etc/prometheus/prometheus.yml'
+      - '--storage.tsdb.path=/prometheus'
+      - '--web.console.libraries=/etc/prometheus/console_libraries'
+      - '--web.console.templates=/etc/prometheus/consoles'
+      - '--storage.tsdb.retention.time=15d'
+      - '--web.enable-lifecycle'
+    
+    volumes:
+      - ./monitoring/prometheus/prometheus.yml:/etc/prometheus/prometheus.yml:ro
+      - prometheus_data:/prometheus
+    
+    ports:
+      - "127.0.0.1:9090:9090"
+    
+    depends_on:
+      - opensim-next
+    
+    networks:
+      - opensim_network
+
+  #============================================================================
+  # Grafana Dashboard
+  #============================================================================
+  grafana:
+    image: grafana/grafana:latest
+    container_name: opensim-grafana
+    restart: unless-stopped
+    
+    environment:
+      GF_SECURITY_ADMIN_PASSWORD: CHANGEME
+      GF_USERS_ALLOW_SIGN_UP: "false"
+    
+    volumes:
+      - grafana_data:/var/lib/grafana
+      - ./monitoring/grafana/dashboards:/var/lib/grafana/dashboards:ro
+      - ./monitoring/grafana/provisioning:/etc/grafana/provisioning:ro
+    
+    ports:
+      - "127.0.0.1:3000:3000"
+    
+    depends_on:
+      - prometheus
+    
+    networks:
+      - opensim_network
+
+  #============================================================================
+  # Nginx Reverse Proxy (Optional)
+  #============================================================================
+  nginx:
+    image: nginx:alpine
+    container_name: opensim-nginx
+    restart: unless-stopped
+    
+    volumes:
+      - ./nginx/nginx.conf:/etc/nginx/nginx.conf:ro
+      - ./nginx/ssl:/etc/nginx/ssl:ro
+    
+    ports:
+      - "80:80"
+      - "443:443"
+    
+    depends_on:
+      - opensim-next
+    
+    networks:
+      - opensim_network
+    
+    profiles:
+      - proxy  # Only start with --profile proxy
+
+#==============================================================================
+# Networks
+#==============================================================================
+networks:
+  opensim_network:
+    driver: bridge
+    ipam:
+      config:
+        - subnet: 172.20.0.0/16
+
+#==============================================================================
+# Volumes
+#==============================================================================
+volumes:
+  # Application data
+  opensim_data:
+    driver: local
+    driver_opts:
+      type: none
+      o: bind
+      device: ${DATA_PATH:-./data}/opensim
+  
+  opensim_logs:
+    driver: local
+    driver_opts:
+      type: none
+      o: bind
+      device: ${DATA_PATH:-./data}/logs
+  
+  opensim_config:
+    driver: local
+  
+  opensim_assets:
+    driver: local
+  
+  # Database
+  postgres_data:
+    driver: local
+    driver_opts:
+      type: none
+      o: bind
+      device: ${DATA_PATH:-./data}/postgres
+  
+  # Cache
+  redis_data:
+    driver: local
+  
+  # Monitoring
+  prometheus_data:
+    driver: local
+  
+  grafana_data:
+    driver: local
+
+#==============================================================================
+# Usage Instructions
+#==============================================================================
+# 
+# Development:
+#   docker-compose up -d
+# 
+# Production with proxy:
+#   docker-compose --profile proxy up -d
+# 
+# View logs:
+#   docker-compose logs -f opensim-next
+# 
+# Scale OpenSim instances:
+#   docker-compose up -d --scale opensim-next=3
+# 
+# Stop all services:
+#   docker-compose down
+# 
+# Remove all data (CAUTION):
+#   docker-compose down -v
+# 
+# Update images:
+#   docker-compose pull && docker-compose up -d
+#

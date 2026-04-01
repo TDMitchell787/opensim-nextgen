@@ -1,0 +1,72 @@
+# Rust build artifacts
+target/
+*.rlib
+
+# Zig build artifacts
+zig/.zig-cache/
+zig/zig-out/
+
+# Flutter build artifacts
+flutter-client/*/build/
+flutter-client/*/dist/
+flutter-client/*/.dart_tool/
+flutter-client/*/.packages
+flutter-client/*/.idea/
+flutter-client/*/*.dmg
+
+# Environment and credentials
+.env
+*.env.local
+*.pem
+*.key
+secrets.yaml
+
+# Runtime data
+*.db
+*.db,*
+*.sqlite
+assetcache/
+fsassets/data/
+fsassets/tmp/
+
+# Logs
+*.log
+rust/logs/
+
+# OS files
+.DS_Store
+Thumbs.db
+*.swp
+*.swo
+*~
+
+# IDE
+.idea/
+.vscode/
+*.iml
+
+# Region archives (personal data)
+*.oar
+*.iar
+
+# Debug symbols
+*.pdb
+*.dSYM/
+
+# Legacy .NET
+*.dll
+*.exe
+*.config
+*.runtimeconfig.json
+lib64/
+addin-data/
+addin-dir-data/
+addon-modules/
+
+# Instance runtime data
+Instances/*/opensim.db
+Instances/*/logs/current/*.log
+Instances/*/.running*.json
+Instances/*/fsassets/
+Instances/*/assetcache/
+Instances/*/mesh/

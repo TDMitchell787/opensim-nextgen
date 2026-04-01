@@ -1,0 +1,125 @@
+{{- if and .Values.opensim.persistence.regionData.enabled .Values.opensim.persistence.regionData.backup.enabled }}
+apiVersion: batch/v1
+kind: CronJob
+metadata:
+  name: {{ include "opensim-next.fullname" . }}-backup
+  labels:
+    {{- include "opensim-next.labels" . | nindent 4 }}
+    app.kubernetes.io/component: backup
+spec:
+  schedule: {{ .Values.opensim.persistence.regionData.backup.schedule | quote }}
+  concurrencyPolicy: Forbid
+  successfulJobsHistoryLimit: 3
+  failedJobsHistoryLimit: 3
+  jobTemplate:
+    spec:
+      backoffLimit: 3
+      template:
+        metadata:
+          labels:
+            {{- include "opensim-next.selectorLabels" . | nindent 12 }}
+            app.kubernetes.io/component: backup
+        spec:
+          restartPolicy: OnFailure
+          serviceAccountName: {{ include "opensim-next.serviceAccountName" . }}
+          containers:
+            - name: backup
+              image: postgres:15-alpine
+              command:
+                - /bin/sh
+                - -c
+                - |
+                  set -e
+                  
+                  # Create backup directory
+                  mkdir -p /backup/$(date +%Y-%m-%d)
+                  
+                  # Backup PostgreSQL database
+                  if [ -n "$DATABASE_URL" ]; then
+                    echo "Starting database backup..."
+                    pg_dump "$DATABASE_URL" > /backup/$(date +%Y-%m-%d)/opensim-database-$(date +%Y%m%d-%H%M%S).sql
+                    
+                    # Compress backup
+                    gzip /backup/$(date +%Y-%m-%d)/opensim-database-$(date +%Y%m%d-%H%M%S).sql
+                    echo "Database backup completed"
+                  fi
+                  
+                  # Backup region data from persistent volume
+                  if [ -d "/data/regions" ]; then
+                    echo "Starting region data backup..."
+                    tar -czf /backup/$(date +%Y-%m-%d)/region-data-$(date +%Y%m%d-%H%M%S).tar.gz -C /data/regions .
+                    echo "Region data backup completed"
+                  fi
+                  
+                  # Backup configuration
+                  if [ -d "/etc/opensim" ]; then
+                    echo "Starting configuration backup..."
+                    tar -czf /backup/$(date +%Y-%m-%d)/config-$(date +%Y%m%d-%H%M%S).tar.gz -C /etc/opensim .
+                    echo "Configuration backup completed"
+                  fi
+                  
+                  # Clean up old backups based on retention policy
+                  find /backup -type d -name "20*" -mtime +{{ .Values.opensim.persistence.regionData.backup.retention | default "30d" | trimSuffix "d" }} -exec rm -rf {} + 2>/dev/null || true
+                  
+                  echo "Backup process completed successfully"
+                  
+                  # List backup contents for verification
+                  echo "Backup contents:"
+                  ls -la /backup/$(date +%Y-%m-%d)/
+              env:
+                - name: DATABASE_URL
+                  value: {{ .Values.opensim.env.DATABASE_URL | quote }}
+                - name: PGPASSWORD
+                  valueFrom:
+                    secretKeyRef:
+                      name: opensim-secrets
+                      key: database-password
+              volumeMounts:
+                - name: backup-storage
+                  mountPath: /backup
+                - name: region-data
+                  mountPath: /data/regions
+                  readOnly: true
+                - name: opensim-config
+                  mountPath: /etc/opensim
+                  readOnly: true
+              resources:
+                requests:
+                  cpu: 100m
+                  memory: 256Mi
+                limits:
+                  cpu: 500m
+                  memory: 1Gi
+          volumes:
+            - name: backup-storage
+              persistentVolumeClaim:
+                claimName: {{ include "opensim-next.fullname" . }}-backup
+            - name: region-data
+              persistentVolumeClaim:
+                claimName: {{ include "opensim-next.fullname" . }}-region-data-{{ include "opensim-next.fullname" . }}-region-data-0
+            - name: opensim-config
+              configMap:
+                name: {{ include "opensim-next.fullname" . }}-config
+---
+# PVC for backup storage
+apiVersion: v1
+kind: PersistentVolumeClaim
+metadata:
+  name: {{ include "opensim-next.fullname" . }}-backup
+  labels:
+    {{- include "opensim-next.labels" . | nindent 4 }}
+    app.kubernetes.io/component: backup
+spec:
+  accessModes:
+    - ReadWriteOnce
+  {{- if .Values.opensim.persistence.regionData.backup.storageClass }}
+  {{- if (eq "-" .Values.opensim.persistence.regionData.backup.storageClass) }}
+  storageClassName: ""
+  {{- else }}
+  storageClassName: {{ .Values.opensim.persistence.regionData.backup.storageClass }}
+  {{- end }}
+  {{- end }}
+  resources:
+    requests:
+      storage: {{ .Values.opensim.persistence.regionData.backup.size }}
+{{- end }}

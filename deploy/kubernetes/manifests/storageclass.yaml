@@ -1,0 +1,217 @@
+# OpenSim Next Storage Classes
+# Optimized storage configurations for different workloads
+
+---
+# High-performance SSD storage for database and critical data
+apiVersion: storage.k8s.io/v1
+kind: StorageClass
+metadata:
+  name: opensim-next-ssd-retain
+  labels:
+    app.kubernetes.io/name: opensim-next
+    component: storage
+    performance: high
+  annotations:
+    storageclass.kubernetes.io/is-default-class: "true"
+    description: "High-performance SSD storage with retain policy for critical OpenSim Next data"
+provisioner: kubernetes.io/aws-ebs  # Change based on cloud provider
+parameters:
+  type: gp3
+  iops: "3000"
+  throughput: "125"
+  fsType: ext4
+  encrypted: "true"
+reclaimPolicy: Retain
+allowVolumeExpansion: true
+volumeBindingMode: WaitForFirstConsumer
+mountOptions:
+  - discard
+  - noatime
+
+---
+# Standard storage for general application data
+apiVersion: storage.k8s.io/v1
+kind: StorageClass
+metadata:
+  name: opensim-next-standard
+  labels:
+    app.kubernetes.io/name: opensim-next
+    component: storage
+    performance: standard
+  annotations:
+    description: "Standard storage for general OpenSim Next application data"
+provisioner: kubernetes.io/aws-ebs  # Change based on cloud provider
+parameters:
+  type: gp3
+  iops: "1000"
+  throughput: "100"
+  fsType: ext4
+  encrypted: "true"
+reclaimPolicy: Delete
+allowVolumeExpansion: true
+volumeBindingMode: WaitForFirstConsumer
+
+---
+# High-throughput storage for asset and media files
+apiVersion: storage.k8s.io/v1
+kind: StorageClass
+metadata:
+  name: opensim-next-assets
+  labels:
+    app.kubernetes.io/name: opensim-next
+    component: storage
+    performance: throughput
+  annotations:
+    description: "High-throughput storage optimized for OpenSim Next asset storage"
+provisioner: kubernetes.io/aws-ebs  # Change based on cloud provider
+parameters:
+  type: gp3
+  iops: "2000"
+  throughput: "200"
+  fsType: ext4
+  encrypted: "true"
+reclaimPolicy: Retain
+allowVolumeExpansion: true
+volumeBindingMode: WaitForFirstConsumer
+mountOptions:
+  - discard
+  - noatime
+  - nodev
+  - nosuid
+
+---
+# Fast local storage for temporary and cache data
+apiVersion: storage.k8s.io/v1
+kind: StorageClass
+metadata:
+  name: opensim-next-local-ssd
+  labels:
+    app.kubernetes.io/name: opensim-next
+    component: storage
+    performance: ultra
+  annotations:
+    description: "Local SSD storage for high-performance temporary data and caching"
+provisioner: kubernetes.io/no-provisioner  # Local storage
+reclaimPolicy: Delete
+allowVolumeExpansion: false
+volumeBindingMode: WaitForFirstConsumer
+
+---
+# Network-attached storage for shared data
+apiVersion: storage.k8s.io/v1
+kind: StorageClass
+metadata:
+  name: opensim-next-shared
+  labels:
+    app.kubernetes.io/name: opensim-next
+    component: storage
+    performance: shared
+  annotations:
+    description: "Network-attached storage for shared OpenSim Next data"
+provisioner: kubernetes.io/aws-efs  # Change based on provider and needs
+parameters:
+    provisioningMode: efs-utils
+    fileSystemId: fs-xxxxxxxxx  # Replace with actual EFS ID
+    directoryPerms: "0755"
+    uid: "1001"
+    gid: "1001"
+reclaimPolicy: Retain
+allowVolumeExpansion: true
+volumeBindingMode: Immediate
+mountOptions:
+  - tls
+  - regional
+
+---
+# Backup storage class with different performance characteristics
+apiVersion: storage.k8s.io/v1
+kind: StorageClass
+metadata:
+  name: opensim-next-backup
+  labels:
+    app.kubernetes.io/name: opensim-next
+    component: storage
+    performance: backup
+  annotations:
+    description: "Cost-optimized storage for OpenSim Next backups and archives"
+provisioner: kubernetes.io/aws-ebs  # Change based on cloud provider
+parameters:
+  type: sc1  # Cold HDD for backups
+  fsType: ext4
+  encrypted: "true"
+reclaimPolicy: Retain
+allowVolumeExpansion: true
+volumeBindingMode: WaitForFirstConsumer
+
+---
+# Database-specific storage class
+apiVersion: storage.k8s.io/v1
+kind: StorageClass
+metadata:
+  name: opensim-next-database
+  labels:
+    app.kubernetes.io/name: opensim-next
+    component: storage
+    performance: database
+  annotations:
+    description: "Optimized storage for OpenSim Next PostgreSQL database with high IOPS"
+provisioner: kubernetes.io/aws-ebs  # Change based on cloud provider
+parameters:
+  type: io2
+  iops: "5000"
+  fsType: ext4
+  encrypted: "true"
+reclaimPolicy: Retain
+allowVolumeExpansion: true
+volumeBindingMode: WaitForFirstConsumer
+mountOptions:
+  - discard
+  - noatime
+  - barrier=0  # PostgreSQL recommendation for performance
+
+---
+# Redis cache storage class
+apiVersion: storage.k8s.io/v1
+kind: StorageClass
+metadata:
+  name: opensim-next-cache
+  labels:
+    app.kubernetes.io/name: opensim-next
+    component: storage
+    performance: cache
+  annotations:
+    description: "High-performance storage for OpenSim Next Redis cache"
+provisioner: kubernetes.io/aws-ebs  # Change based on cloud provider
+parameters:
+  type: gp3
+  iops: "4000"
+  throughput: "150"
+  fsType: ext4
+  encrypted: "true"
+reclaimPolicy: Delete  # Cache data can be recreated
+allowVolumeExpansion: true
+volumeBindingMode: WaitForFirstConsumer
+mountOptions:
+  - discard
+  - noatime
+
+---
+# Development storage class (for non-production environments)
+apiVersion: storage.k8s.io/v1
+kind: StorageClass
+metadata:
+  name: opensim-next-dev
+  labels:
+    app.kubernetes.io/name: opensim-next
+    component: storage
+    performance: development
+  annotations:
+    description: "Development storage for OpenSim Next testing and development"
+provisioner: kubernetes.io/aws-ebs  # Change based on cloud provider
+parameters:
+  type: gp2
+  fsType: ext4
+  encrypted: "false"  # Can disable encryption for dev
+reclaimPolicy: Delete
+allowVolumeExpansion: true
+volumeBindingMode: Immediate

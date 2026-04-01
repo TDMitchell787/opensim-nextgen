@@ -1,0 +1,218 @@
+# OpenSim Next Staging Environment Configuration
+# Pre-production testing environment with production-like settings
+
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: opensim-next-staging-config
+  namespace: opensim-next-staging
+  labels:
+    app.kubernetes.io/name: opensim-next
+    app.kubernetes.io/component: configuration
+    environment: staging
+data:
+  # Core application configuration
+  opensim.toml: |
+    [general]
+    environment = "staging"
+    debug = true
+    log_level = "debug"
+    instance_id = "staging-${RANDOM_ID}"
+    region_name = "OpenSim Next Staging Region"
+    
+    [network]
+    bind_address = "0.0.0.0"
+    port = 9000
+    websocket_port = 9001
+    admin_port = 9100
+    hypergrid_port = 8002
+    
+    # SSL enabled but with staging certificates
+    ssl_enabled = true
+    require_ssl = false  # Allow both HTTP and HTTPS
+    ssl_cert_path = "/etc/ssl/certs/tls.crt"
+    ssl_key_path = "/etc/ssl/private/tls.key"
+    
+    [database]
+    type = "postgresql"
+    host = "opensim-next-postgresql"
+    port = 5432
+    database = "opensim_staging"
+    username = "opensim"
+    # Password from secret
+    ssl_mode = "prefer"
+    max_connections = 50
+    
+    [cache]
+    type = "redis"
+    host = "opensim-next-redis-master"
+    port = 6379
+    database = 1  # Different database from dev
+    # Password from secret
+    
+    [physics]
+    default_engine = "ubode"
+    max_prims = 30000
+    max_physical_prims = 1000
+    
+    [assets]
+    storage_type = "s3"
+    s3_bucket = "opensim-staging-assets"
+    s3_region = "us-west-2"
+    enable_caching = true
+    cache_timeout = 7200
+    
+    [region]
+    max_avatars = 75
+    allow_script_engines = true
+    enable_physics = true
+    startup_scripts = true
+    
+    [monitoring]
+    enable_metrics = true
+    metrics_port = 9100
+    health_check_interval = 20
+    
+    # Enhanced monitoring for staging
+    tracing_enabled = true
+    trace_sampling_rate = 0.5  # Higher sampling for testing
+    
+    [security]
+    # API key from secret
+    rate_limit_enabled = true
+    rate_limit_requests = 500
+    rate_limit_window = 60
+    
+    cors_enabled = true
+    cors_origins = ["https://staging.opensim.example.com"]
+    
+    [ziti]
+    enabled = true
+    identity_file = "/etc/ziti/identity.json"
+    
+    [testing]
+    # Testing-specific configurations
+    enable_test_endpoints = true
+    mock_external_services = false
+    load_test_data = true
+    
+  # Staging logging configuration
+  log4rs.yaml: |
+    refresh_rate: 30 seconds
+    
+    appenders:
+      stdout:
+        kind: console
+        encoder:
+          pattern: "{d(%Y-%m-%d %H:%M:%S%.3f)} [{l}] [{t}] {m}{n}"
+      
+      file:
+        kind: rolling_file
+        path: "/data/logs/opensim-staging.log"
+        policy:
+          kind: compound
+          trigger:
+            kind: size
+            limit: 50mb
+          roller:
+            kind: fixed_window
+            pattern: "/data/logs/opensim-staging.{}.log"
+            count: 5
+        encoder:
+          pattern: "{d(%Y-%m-%d %H:%M:%S%.3f)} [{l}] [{f}:{L}] [{t}] {m}{n}"
+      
+      test_file:
+        kind: file
+        path: "/data/logs/test-results.log"
+        encoder:
+          kind: json
+    
+    root:
+      level: debug
+      appenders:
+        - stdout
+        - file
+    
+    loggers:
+      opensim_next:
+        level: debug
+        additive: false
+        appenders:
+          - stdout
+          - file
+      
+      opensim_next::testing:
+        level: trace
+        additive: false
+        appenders:
+          - test_file
+  
+  # Staging initialization script
+  init-staging.sh: |
+    #!/bin/bash
+    set -e
+    
+    echo "Initializing OpenSim Next staging environment..."
+    
+    # Wait for dependencies
+    timeout 60 bash -c 'until pg_isready -h opensim-next-postgresql -p 5432 -U opensim; do sleep 2; done'
+    timeout 60 bash -c 'until redis-cli -h opensim-next-redis-master ping; do sleep 2; done'
+    
+    # Create staging directories
+    mkdir -p /data/logs
+    mkdir -p /data/cache
+    mkdir -p /data/test-data
+    chmod 755 /data/logs
+    chmod 755 /data/cache
+    chmod 755 /data/test-data
+    
+    # Initialize database with staging data
+    opensim-next --migrate --environment staging
+    
+    # Load test data if enabled
+    if [[ "${LOAD_TEST_DATA}" == "true" ]]; then
+      echo "Loading staging test data..."
+      opensim-next --load-test-data
+    fi
+    
+    echo "Staging environment initialized successfully!"
+  
+  # Staging resource limits
+  resource-limits.yaml: |
+    requests:
+      cpu: 1000m
+      memory: 2Gi
+    limits:
+      cpu: 4000m
+      memory: 8Gi
+
+---
+# Staging secrets
+apiVersion: v1
+kind: Secret
+metadata:
+  name: opensim-next-staging-secrets
+  namespace: opensim-next-staging
+  labels:
+    app.kubernetes.io/name: opensim-next
+    app.kubernetes.io/component: secrets
+    environment: staging
+type: Opaque
+data:
+  # Base64 encoded staging credentials
+  database-password: b3BlbnNpbV9zdGFnaW5nX3Bhc3N3b3Jk  # opensim_staging_password
+  redis-password: b3BlbnNpbV9yZWRpc19zdGFnaW5nX3Bhc3N3b3Jk  # opensim_redis_staging_password
+  api-key: c3RhZ2luZy1hcGkta2V5LWNoYW5nZS1tZQ==  # staging-api-key-change-me
+  encryption-key: c3RhZ2luZy1lbmNyeXB0aW9uLWtleS0xMjM0NTY3ODkw  # staging-encryption-key-1234567890
+  jwt-secret: c3RhZ2luZy1qd3Qtc2VjcmV0LWZvci10b2tlbnMtYWJjZGVm  # staging-jwt-secret-for-tokens-abcdef
+  
+  # AWS credentials for staging
+  aws-access-key: QVNIQU1QTEVfU1RBR0lOR19BQ0NFU1NfS0VZ  # Example staging access key
+  aws-secret-key: ZXhhbXBsZVN0YWdpbmdTZWNyZXRLZXlGb3JBV1M=  # Example staging secret key
+  
+  # Staging Ziti identity
+  ziti-identity.json: eyJpZCI6InN0YWdpbmctaWRlbnRpdHkiLCJuYW1lIjoib3BlbnNpbS1uZXh0LXN0YWdpbmcifQ==
+  
+  # Staging TLS certificates
+  tls.crt: LS0tLS1CRUdJTiBDRVJUSUZJQ0FURS0tLS0tCi4uLnN0YWdpbmcgY2VydGlmaWNhdGUuLi4KLS0tLS1FTkQgQ0VSVElGSUNBVEUtLS0tLQ==
+  tls.key: LS0tLS1CRUdJTiBQUklWQVRFIEtFWS0tLS0tCi4uLnN0YWdpbmcgcHJpdmF0ZSBrZXkuLi4KLS0tLS1FTkQgUFJJVkFURSBLRVktLS0tLQ==

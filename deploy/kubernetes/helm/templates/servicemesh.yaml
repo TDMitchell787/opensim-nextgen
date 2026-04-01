@@ -1,0 +1,228 @@
+{{- if .Values.global.serviceMesh.enabled }}
+{{- if eq .Values.global.serviceMesh.type "istio" }}
+---
+# Istio Authorization Policy
+apiVersion: security.istio.io/v1beta1
+kind: AuthorizationPolicy
+metadata:
+  name: {{ include "opensim-next.fullname" . }}-authz
+  labels:
+    {{- include "opensim-next.labels" . | nindent 4 }}
+spec:
+  selector:
+    matchLabels:
+      {{- include "opensim-next.selectorLabels" . | nindent 6 }}
+  rules:
+    # Allow public access to web interface
+    - to:
+        - operation:
+            methods: ["GET", "POST"]
+            paths: ["/", "/web/*", "/assets/*"]
+    # Allow WebSocket connections
+    - to:
+        - operation:
+            methods: ["GET"]
+            paths: ["/ws", "/ws/*"]
+    # Restrict admin access
+    - to:
+        - operation:
+            methods: ["GET", "POST", "PUT", "DELETE"]
+            paths: ["/admin/*"]
+      when:
+        - key: source.ip
+          values: ["10.0.0.0/8", "172.16.0.0/12", "192.168.0.0/16"]  # Private networks only
+    # Allow hypergrid federation
+    - to:
+        - operation:
+            ports: ["8002"]
+---
+# Istio Peer Authentication
+apiVersion: security.istio.io/v1beta1
+kind: PeerAuthentication
+metadata:
+  name: {{ include "opensim-next.fullname" . }}-peer-auth
+  labels:
+    {{- include "opensim-next.labels" . | nindent 4 }}
+spec:
+  selector:
+    matchLabels:
+      {{- include "opensim-next.selectorLabels" . | nindent 6 }}
+  mtls:
+    mode: {{ .Values.global.serviceMesh.mTLS.mode }}
+---
+# Istio Sidecar Configuration
+apiVersion: networking.istio.io/v1beta1
+kind: Sidecar
+metadata:
+  name: {{ include "opensim-next.fullname" . }}-sidecar
+  labels:
+    {{- include "opensim-next.labels" . | nindent 4 }}
+spec:
+  workloadSelector:
+    labels:
+      {{- include "opensim-next.selectorLabels" . | nindent 6 }}
+  ingress:
+    - port:
+        number: {{ .Values.opensim.service.ports.viewer }}
+        protocol: TCP
+        name: viewer
+      defaultEndpoint: 127.0.0.1:{{ .Values.opensim.service.ports.viewer }}
+    - port:
+        number: {{ .Values.opensim.service.ports.websocket }}
+        protocol: HTTP
+        name: websocket
+      defaultEndpoint: 127.0.0.1:{{ .Values.opensim.service.ports.websocket }}
+    - port:
+        number: {{ .Values.opensim.service.ports.web }}
+        protocol: HTTP
+        name: web
+      defaultEndpoint: 127.0.0.1:{{ .Values.opensim.service.ports.web }}
+    - port:
+        number: {{ .Values.opensim.service.ports.hypergrid }}
+        protocol: TCP
+        name: hypergrid
+      defaultEndpoint: 127.0.0.1:{{ .Values.opensim.service.ports.hypergrid }}
+  egress:
+    - port:
+        number: 5432
+        protocol: TCP
+        name: postgresql
+      hosts:
+        - "./opensim-next-postgresql.{{ .Release.Namespace }}.svc.cluster.local"
+    - port:
+        number: 6379
+        protocol: TCP
+        name: redis
+      hosts:
+        - "./opensim-next-redis.{{ .Release.Namespace }}.svc.cluster.local"
+    - port:
+        number: 443
+        protocol: HTTPS
+        name: https
+      hosts:
+        - "*"
+    - port:
+        number: 80
+        protocol: HTTP
+        name: http
+      hosts:
+        - "*"
+{{- end }}
+
+{{- if eq .Values.global.serviceMesh.type "linkerd" }}
+---
+# Linkerd Service Profile
+apiVersion: linkerd.io/v1alpha2
+kind: ServiceProfile
+metadata:
+  name: {{ include "opensim-next.fullname" . }}.{{ .Release.Namespace }}.svc.cluster.local
+  labels:
+    {{- include "opensim-next.labels" . | nindent 4 }}
+spec:
+  routes:
+    - name: web
+      condition:
+        method: GET
+        pathRegex: "^/web/.*"
+      responseClasses:
+        - condition:
+            status:
+              min: 200
+              max: 299
+          isFailure: false
+        - condition:
+            status:
+              min: 500
+              max: 599
+          isFailure: true
+    - name: websocket
+      condition:
+        method: GET
+        pathRegex: "^/ws/.*"
+      isRetryable: false  # WebSocket connections should not be retried
+    - name: admin
+      condition:
+        method: GET
+        pathRegex: "^/admin/.*"
+      responseClasses:
+        - condition:
+            status:
+              min: 200
+              max: 299
+          isFailure: false
+        - condition:
+            status:
+              min: 401
+              max: 403
+          isFailure: true
+        - condition:
+            status:
+              min: 500
+              max: 599
+          isFailure: true
+---
+# Linkerd Traffic Split for Canary Deployments
+apiVersion: split.smi-spec.io/v1alpha1
+kind: TrafficSplit
+metadata:
+  name: {{ include "opensim-next.fullname" . }}-split
+  labels:
+    {{- include "opensim-next.labels" . | nindent 4 }}
+spec:
+  service: {{ include "opensim-next.fullname" . }}
+  backends:
+    - service: {{ include "opensim-next.fullname" . }}
+      weight: 100  # 100% to stable version initially
+{{- end }}
+
+{{- if eq .Values.global.serviceMesh.type "consul-connect" }}
+---
+# Consul Connect Service Defaults
+apiVersion: consul.hashicorp.com/v1alpha1
+kind: ServiceDefaults
+metadata:
+  name: {{ include "opensim-next.fullname" . }}
+  labels:
+    {{- include "opensim-next.labels" . | nindent 4 }}
+spec:
+  protocol: http
+  meshGateway:
+    mode: local
+  expose:
+    checks: true
+    paths:
+      - path: /health
+        localPathPort: {{ .Values.opensim.service.ports.metrics }}
+        listenerPort: 21500
+        protocol: http
+---
+# Consul Connect Service Intentions
+apiVersion: consul.hashicorp.com/v1alpha1
+kind: ServiceIntentions
+metadata:
+  name: {{ include "opensim-next.fullname" . }}-intentions
+  labels:
+    {{- include "opensim-next.labels" . | nindent 4 }}
+spec:
+  destination:
+    name: {{ include "opensim-next.fullname" . }}
+  sources:
+    - name: "*"
+      action: allow
+      permissions:
+        - resource:
+            pathPrefix: "/web"
+          action: allow
+        - resource:
+            pathPrefix: "/ws"
+          action: allow
+        - resource:
+            pathPrefix: "/admin"
+          action: deny
+          # Only allow admin access from specific sources
+          http:
+            header:
+              - name: "X-Admin-Token"
+                exact: "{{ .Values.opensim.env.OPENSIM_API_KEY }}"
+{{- end }}
+{{- end }}

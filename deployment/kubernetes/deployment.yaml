@@ -1,0 +1,226 @@
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: opensim-next
+  namespace: opensim-next
+  labels:
+    app: opensim-next
+    component: server
+    version: "1.0.0"
+spec:
+  replicas: 3
+  strategy:
+    type: RollingUpdate
+    rollingUpdate:
+      maxUnavailable: 1
+      maxSurge: 1
+  selector:
+    matchLabels:
+      app: opensim-next
+      component: server
+  template:
+    metadata:
+      labels:
+        app: opensim-next
+        component: server
+        version: "1.0.0"
+      annotations:
+        prometheus.io/scrape: "true"
+        prometheus.io/port: "9100"
+        prometheus.io/path: "/metrics"
+    spec:
+      serviceAccountName: opensim-next
+      securityContext:
+        runAsNonRoot: true
+        runAsUser: 1000
+        runAsGroup: 1000
+        fsGroup: 1000
+      initContainers:
+      - name: init-database
+        image: opensim-next:latest
+        command: ["/config/init.sh"]
+        env:
+        - name: DATABASE_URL
+          valueFrom:
+            secretKeyRef:
+              name: opensim-next-secrets
+              key: DATABASE_URL
+        - name: DATABASE_HOST
+          value: "postgres"
+        - name: DATABASE_PORT
+          value: "5432"
+        - name: DATABASE_USER
+          valueFrom:
+            secretKeyRef:
+              name: opensim-next-secrets
+              key: DATABASE_USER
+        volumeMounts:
+        - name: config
+          mountPath: /config
+        - name: scripts
+          mountPath: /scripts
+      containers:
+      - name: opensim-next
+        image: opensim-next:latest
+        imagePullPolicy: IfNotPresent
+        ports:
+        - name: main
+          containerPort: 9000
+          protocol: TCP
+        - name: websocket
+          containerPort: 9001
+          protocol: TCP
+        - name: web
+          containerPort: 8080
+          protocol: TCP
+        - name: admin
+          containerPort: 8090
+          protocol: TCP
+        - name: metrics
+          containerPort: 9100
+          protocol: TCP
+        env:
+        - name: RUST_LOG
+          value: "info"
+        - name: OPENSIM_INSTANCE_ID
+          valueFrom:
+            fieldRef:
+              fieldPath: metadata.name
+        - name: DATABASE_URL
+          valueFrom:
+            secretKeyRef:
+              name: opensim-next-secrets
+              key: DATABASE_URL
+        - name: OPENSIM_API_KEY
+          valueFrom:
+            secretKeyRef:
+              name: opensim-next-secrets
+              key: OPENSIM_API_KEY
+        - name: REDIS_URL
+          valueFrom:
+            secretKeyRef:
+              name: opensim-next-secrets  
+              key: REDIS_URL
+        - name: AWS_ACCESS_KEY_ID
+          valueFrom:
+            secretKeyRef:
+              name: opensim-next-secrets
+              key: AWS_ACCESS_KEY_ID
+        - name: AWS_SECRET_ACCESS_KEY
+          valueFrom:
+            secretKeyRef:
+              name: opensim-next-secrets
+              key: AWS_SECRET_ACCESS_KEY
+        resources:
+          requests:
+            memory: "512Mi"
+            cpu: "250m"
+          limits:
+            memory: "2Gi"
+            cpu: "1000m"
+        livenessProbe:
+          httpGet:
+            path: /health
+            port: 8080
+          initialDelaySeconds: 30
+          periodSeconds: 10
+          timeoutSeconds: 5
+          failureThreshold: 3
+        readinessProbe:
+          httpGet:
+            path: /ready
+            port: 8080
+          initialDelaySeconds: 5
+          periodSeconds: 5
+          timeoutSeconds: 3
+          failureThreshold: 3
+        startupProbe:
+          httpGet:
+            path: /health
+            port: 8080
+          initialDelaySeconds: 10
+          periodSeconds: 10
+          timeoutSeconds: 5
+          failureThreshold: 30
+        volumeMounts:
+        - name: config
+          mountPath: /config
+          readOnly: true
+        - name: scripts
+          mountPath: /scripts
+          readOnly: true
+        - name: assets
+          mountPath: /assets
+        - name: logs
+          mountPath: /logs
+        - name: temp
+          mountPath: /tmp
+      - name: metrics-exporter
+        image: prom/node-exporter:latest
+        ports:
+        - name: node-metrics
+          containerPort: 9101
+          protocol: TCP
+        resources:
+          requests:
+            memory: "64Mi"
+            cpu: "50m"
+          limits:
+            memory: "128Mi"
+            cpu: "100m"
+        volumeMounts:
+        - name: proc
+          mountPath: /host/proc
+          readOnly: true
+        - name: sys
+          mountPath: /host/sys
+          readOnly: true
+        command:
+        - /bin/node_exporter
+        - --path.procfs=/host/proc
+        - --path.sysfs=/host/sys
+        - --collector.filesystem.ignored-mount-points
+        - "^/(sys|proc|dev|host|etc|rootfs/var/lib/docker/containers|rootfs/var/lib/docker/overlay2|rootfs/run/docker/netns|rootfs/var/lib/docker/aufs)($$|/)"
+      volumes:
+      - name: config
+        configMap:
+          name: opensim-next-config
+          items:
+          - key: server.yaml
+            path: server.yaml
+      - name: scripts
+        configMap:
+          name: opensim-next-scripts
+          defaultMode: 0755
+      - name: assets
+        persistentVolumeClaim:
+          claimName: opensim-next-assets
+      - name: logs
+        emptyDir: {}
+      - name: temp
+        emptyDir: {}
+      - name: proc
+        hostPath:
+          path: /proc
+      - name: sys
+        hostPath:
+          path: /sys
+      nodeSelector:
+        kubernetes.io/os: linux
+      tolerations:
+      - key: "opensim-next"
+        operator: "Equal"
+        value: "true"
+        effect: "NoSchedule"
+      affinity:
+        podAntiAffinity:
+          preferredDuringSchedulingIgnoredDuringExecution:
+          - weight: 100
+            podAffinityTerm:
+              labelSelector:
+                matchExpressions:
+                - key: app
+                  operator: In
+                  values:
+                  - opensim-next
+              topologyKey: kubernetes.io/hostname

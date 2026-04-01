@@ -1,0 +1,380 @@
+# OpenSim Next Production Environment Configuration
+# Security-hardened configuration for production deployments
+
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: opensim-next-prod-config
+  namespace: opensim-next
+  labels:
+    app.kubernetes.io/name: opensim-next
+    app.kubernetes.io/component: configuration
+    environment: production
+  annotations:
+    config.kubernetes.io/local-config: "true"
+data:
+  # Core application configuration
+  opensim.toml: |
+    [general]
+    environment = "production"
+    debug = false
+    log_level = "info"
+    instance_id = "${INSTANCE_ID}"
+    region_name = "${REGION_NAME}"
+    
+    [network]
+    bind_address = "0.0.0.0"
+    port = 9000
+    websocket_port = 9001
+    admin_port = 9100
+    hypergrid_port = 8002
+    
+    # Production SSL configuration
+    ssl_enabled = true
+    require_ssl = true
+    ssl_cert_path = "/etc/ssl/certs/tls.crt"
+    ssl_key_path = "/etc/ssl/private/tls.key"
+    
+    # Advanced security settings
+    security_headers = true
+    hsts_enabled = true
+    hsts_max_age = 31536000
+    
+    [database]
+    type = "postgresql"
+    host = "${DB_HOST}"
+    port = 5432
+    database = "${DB_NAME}"
+    username = "${DB_USERNAME}"
+    # Password from secret
+    ssl_mode = "require"
+    max_connections = 100
+    connection_timeout = 30
+    idle_timeout = 300
+    
+    # Connection pooling
+    pool_size = 20
+    max_overflow = 30
+    
+    [cache]
+    type = "redis"
+    host = "${REDIS_HOST}"
+    port = 6379
+    database = 0
+    # Password from secret
+    ssl_enabled = true
+    
+    # Redis clustering for production
+    cluster_enabled = true
+    sentinel_enabled = true
+    
+    [physics]
+    default_engine = "ubode"
+    max_prims = 45000
+    max_physical_prims = 2000
+    physics_timestep = 0.089
+    
+    [assets]
+    storage_type = "s3"
+    s3_bucket = "${ASSETS_BUCKET}"
+    s3_region = "${AWS_REGION}"
+    s3_endpoint = ""  # Use default AWS endpoints
+    enable_caching = true
+    cache_timeout = 86400
+    
+    # CDN configuration
+    cdn_enabled = true
+    cdn_endpoint = "${CDN_ENDPOINT}"
+    
+    [region]
+    max_avatars = 100
+    allow_script_engines = true
+    enable_physics = true
+    startup_scripts = false  # Manual startup for production
+    
+    # Performance settings
+    thread_pool_size = 16
+    io_thread_pool_size = 8
+    
+    [monitoring]
+    enable_metrics = true
+    metrics_port = 9100
+    health_check_interval = 15
+    
+    # Advanced monitoring
+    tracing_enabled = true
+    trace_sampling_rate = 0.1
+    metrics_retention = "7d"
+    
+    [security]
+    # API key from secret
+    rate_limit_enabled = true
+    rate_limit_requests = 1000
+    rate_limit_window = 60
+    
+    cors_enabled = false
+    cors_origins = []
+    
+    # Security features
+    ip_filtering_enabled = true
+    geo_blocking_enabled = true
+    ddos_protection = true
+    
+    [ziti]
+    enabled = true
+    identity_file = "/etc/ziti/identity.json"
+    config_dir = "/etc/ziti/config"
+    
+    # Zero trust policies
+    enforce_identity = true
+    require_authentication = true
+    
+    [backup]
+    enabled = true
+    schedule = "0 2 * * *"  # Daily at 2 AM
+    retention_days = 30
+    encryption_enabled = true
+    
+    s3_backup_bucket = "${BACKUP_BUCKET}"
+    compression_enabled = true
+    
+  # Production logging configuration
+  log4rs.yaml: |
+    refresh_rate: 60 seconds
+    
+    appenders:
+      stdout:
+        kind: console
+        encoder:
+          kind: json
+          
+      file:
+        kind: rolling_file
+        path: "/data/logs/opensim-prod.log"
+        policy:
+          kind: compound
+          trigger:
+            kind: size
+            limit: 100mb
+          roller:
+            kind: fixed_window
+            pattern: "/data/logs/opensim-prod.{}.log"
+            count: 10
+        encoder:
+          kind: json
+      
+      audit:
+        kind: rolling_file
+        path: "/data/logs/audit.log"
+        policy:
+          kind: compound
+          trigger:
+            kind: size
+            limit: 50mb
+          roller:
+            kind: fixed_window
+            pattern: "/data/logs/audit.{}.log"
+            count: 20
+        encoder:
+          kind: json
+    
+    root:
+      level: info
+      appenders:
+        - stdout
+        - file
+    
+    loggers:
+      opensim_next:
+        level: info
+        additive: false
+        appenders:
+          - stdout
+          - file
+      
+      opensim_next::security:
+        level: warn
+        additive: false
+        appenders:
+          - audit
+          - file
+      
+      opensim_next::auth:
+        level: warn
+        additive: false
+        appenders:
+          - audit
+          - file
+  
+  # Production initialization script
+  init-prod.sh: |
+    #!/bin/bash
+    set -e
+    
+    echo "Initializing OpenSim Next production environment..."
+    
+    # Security: Verify file permissions
+    chmod 600 /etc/ssl/private/tls.key
+    chmod 644 /etc/ssl/certs/tls.crt
+    
+    # Create production directories with secure permissions
+    mkdir -p /data/logs
+    mkdir -p /data/cache
+    mkdir -p /data/backup
+    chmod 750 /data/logs
+    chmod 755 /data/cache
+    chmod 700 /data/backup
+    
+    # Wait for dependencies with timeout
+    timeout 60 bash -c 'until pg_isready -h ${DB_HOST} -p 5432 -U ${DB_USERNAME}; do sleep 2; done'
+    timeout 60 bash -c 'until redis-cli -h ${REDIS_HOST} ping; do sleep 2; done'
+    
+    # Verify database connection
+    psql -h ${DB_HOST} -U ${DB_USERNAME} -d ${DB_NAME} -c "SELECT version();" || {
+      echo "Failed to connect to production database"
+      exit 1
+    }
+    
+    # Initialize production database with migrations
+    opensim-next --migrate --environment production
+    
+    # Verify Ziti connectivity if enabled
+    if [[ "${ZITI_ENABLED}" == "true" ]]; then
+      ziti edge list identities || echo "Warning: Ziti connectivity check failed"
+    fi
+    
+    echo "Production environment initialized successfully!"
+  
+  # Production resource limits
+  resource-limits.yaml: |
+    requests:
+      cpu: 2000m
+      memory: 4Gi
+      ephemeral-storage: 1Gi
+    limits:
+      cpu: 8000m
+      memory: 16Gi
+      ephemeral-storage: 5Gi
+  
+  # Production network policies
+  network-policy.yaml: |
+    ingress:
+      - from:
+        - namespaceSelector:
+            matchLabels:
+              name: ingress-nginx
+        ports:
+        - protocol: TCP
+          port: 9000
+        - protocol: TCP
+          port: 9001
+      
+      - from:
+        - namespaceSelector:
+            matchLabels:
+              name: monitoring
+        ports:
+        - protocol: TCP
+          port: 9100
+    
+    egress:
+      - to:
+        - namespaceSelector:
+            matchLabels:
+              name: database
+        ports:
+        - protocol: TCP
+          port: 5432
+      
+      - to:
+        - namespaceSelector:
+            matchLabels:
+              name: cache
+        ports:
+        - protocol: TCP
+          port: 6379
+      
+      # Allow egress to AWS services
+      - to: []
+        ports:
+        - protocol: TCP
+          port: 443
+
+---
+# Production secrets (managed by external secret operator)
+apiVersion: external-secrets.io/v1beta1
+kind: ExternalSecret
+metadata:
+  name: opensim-next-prod-secrets
+  namespace: opensim-next
+  labels:
+    app.kubernetes.io/name: opensim-next
+    app.kubernetes.io/component: secrets
+    environment: production
+spec:
+  refreshInterval: 15m
+  secretStoreRef:
+    name: vault-backend
+    kind: SecretStore
+  
+  target:
+    name: opensim-next-secrets
+    creationPolicy: Owner
+    template:
+      type: Opaque
+      data:
+        database-password: "{{ .database_password }}"
+        redis-password: "{{ .redis_password }}"
+        api-key: "{{ .api_key }}"
+        encryption-key: "{{ .encryption_key }}"
+        jwt-secret: "{{ .jwt_secret }}"
+        aws-access-key: "{{ .aws_access_key }}"
+        aws-secret-key: "{{ .aws_secret_key }}"
+        ziti-identity.json: "{{ .ziti_identity | toString }}"
+        backup-encryption-key: "{{ .backup_encryption_key }}"
+  
+  data:
+  - secretKey: database_password
+    remoteRef:
+      key: opensim-next/production
+      property: database_password
+  
+  - secretKey: redis_password
+    remoteRef:
+      key: opensim-next/production
+      property: redis_password
+  
+  - secretKey: api_key
+    remoteRef:
+      key: opensim-next/production
+      property: api_key
+  
+  - secretKey: encryption_key
+    remoteRef:
+      key: opensim-next/production
+      property: encryption_key
+  
+  - secretKey: jwt_secret
+    remoteRef:
+      key: opensim-next/production
+      property: jwt_secret
+  
+  - secretKey: aws_access_key
+    remoteRef:
+      key: opensim-next/production
+      property: aws_access_key
+  
+  - secretKey: aws_secret_key
+    remoteRef:
+      key: opensim-next/production
+      property: aws_secret_key
+  
+  - secretKey: ziti_identity
+    remoteRef:
+      key: opensim-next/production
+      property: ziti_identity
+  
+  - secretKey: backup_encryption_key
+    remoteRef:
+      key: opensim-next/production
+      property: backup_encryption_key

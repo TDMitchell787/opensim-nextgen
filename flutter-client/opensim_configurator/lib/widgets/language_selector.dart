@@ -1,0 +1,487 @@
+// Language Selector Widget - Flutter Web Version
+// Multi-language support with RTL handling and intelligent detection
+
+import 'package:flutter/material.dart';
+import 'package:provider/provider.dart';
+import '../providers/configurator_provider.dart';
+import '../theme/app_theme.dart';
+
+class LanguageSelector extends StatelessWidget {
+  @override
+  Widget build(BuildContext context) {
+    return Consumer<ConfiguratorProvider>(
+      builder: (context, provider, child) {
+        return PopupMenuButton<Language>(
+          icon: Icon(Icons.language),
+          tooltip: 'Select Language',
+          onSelected: (language) => provider.changeLanguage(language),
+          itemBuilder: (context) => [
+            // Auto-detect option
+            PopupMenuItem<Language>(
+              value: null,
+              child: Row(
+                children: [
+                  Icon(Icons.auto_fix_high, color: AppTheme.primaryColor, size: 20),
+                  SizedBox(width: 12),
+                  Text('Auto-detect'),
+                ],
+              ),
+            ),
+            PopupMenuDivider(),
+            
+            // Language options
+            ...supportedLanguages.map((language) => PopupMenuItem<Language>(
+              value: language,
+              child: Row(
+                children: [
+                  Text(
+                    language.flag,
+                    style: TextStyle(fontSize: 20),
+                  ),
+                  SizedBox(width: 12),
+                  Expanded(
+                    child: Column(
+                      crossAxisAlignment: CrossAxisAlignment.start,
+                      mainAxisSize: MainAxisSize.min,
+                      children: [
+                        Text(
+                          language.nativeName,
+                          style: TextStyle(fontWeight: FontWeight.w500),
+                        ),
+                        Text(
+                          language.englishName,
+                          style: TextStyle(
+                            fontSize: 12,
+                            color: AppTheme.gray600,
+                          ),
+                        ),
+                      ],
+                    ),
+                  ),
+                  if (provider.currentLanguage?.code == language.code)
+                    Icon(Icons.check, color: AppTheme.primaryColor, size: 16),
+                ],
+              ),
+            )).toList(),
+          ],
+        );
+      },
+    );
+  }
+}
+
+class LanguageSelectionDialog extends StatefulWidget {
+  @override
+  _LanguageSelectionDialogState createState() => _LanguageSelectionDialogState();
+}
+
+class _LanguageSelectionDialogState extends State<LanguageSelectionDialog> {
+  String _searchQuery = '';
+  List<Language> _filteredLanguages = supportedLanguages;
+
+  @override
+  Widget build(BuildContext context) {
+    return Dialog(
+      child: Container(
+        width: 500,
+        height: 600,
+        padding: EdgeInsets.all(24),
+        child: Column(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            // Header
+            Row(
+              children: [
+                Icon(Icons.language, color: AppTheme.primaryColor),
+                SizedBox(width: 12),
+                Text(
+                  'Select Language',
+                  style: AppTheme.titleStyle(),
+                ),
+                Spacer(),
+                IconButton(
+                  onPressed: () => Navigator.pop(context),
+                  icon: Icon(Icons.close),
+                ),
+              ],
+            ),
+            
+            SizedBox(height: 16),
+            
+            // Search field
+            TextField(
+              decoration: InputDecoration(
+                hintText: 'Search languages...',
+                prefixIcon: Icon(Icons.search),
+                border: OutlineInputBorder(
+                  borderRadius: BorderRadius.circular(8),
+                ),
+              ),
+              onChanged: (query) {
+                setState(() {
+                  _searchQuery = query.toLowerCase();
+                  _filteredLanguages = supportedLanguages.where((lang) =>
+                    lang.nativeName.toLowerCase().contains(_searchQuery) ||
+                    lang.englishName.toLowerCase().contains(_searchQuery) ||
+                    lang.code.toLowerCase().contains(_searchQuery)
+                  ).toList();
+                });
+              },
+            ),
+            
+            SizedBox(height: 16),
+            
+            // Auto-detect option
+            Consumer<ConfiguratorProvider>(
+              builder: (context, provider, child) {
+                return Card(
+                  child: ListTile(
+                    leading: Icon(Icons.auto_fix_high, color: AppTheme.primaryColor),
+                    title: Text('Auto-detect Language'),
+                    subtitle: Text('Detect language from browser settings'),
+                    trailing: provider.isAutoDetectLanguage 
+                      ? Icon(Icons.check_circle, color: AppTheme.successColor)
+                      : null,
+                    onTap: () {
+                      provider.enableAutoDetectLanguage();
+                      Navigator.pop(context);
+                    },
+                  ),
+                );
+              },
+            ),
+            
+            SizedBox(height: 16),
+            
+            Text('Available Languages', style: AppTheme.captionStyle()),
+            SizedBox(height: 8),
+            
+            // Language list
+            Expanded(
+              child: ListView.builder(
+                itemCount: _filteredLanguages.length,
+                itemBuilder: (context, index) {
+                  final language = _filteredLanguages[index];
+                  return Consumer<ConfiguratorProvider>(
+                    builder: (context, provider, child) {
+                      final isSelected = provider.currentLanguage?.code == language.code;
+                      
+                      return Card(
+                        margin: EdgeInsets.symmetric(vertical: 2),
+                        color: isSelected ? AppTheme.primaryColor.withValues(alpha: 0.1) : null,
+                        child: ListTile(
+                          leading: Container(
+                            width: 40,
+                            height: 40,
+                            decoration: BoxDecoration(
+                              shape: BoxShape.circle,
+                              color: AppTheme.gray100,
+                            ),
+                            child: Center(
+                              child: Text(
+                                language.flag,
+                                style: TextStyle(fontSize: 20),
+                              ),
+                            ),
+                          ),
+                          title: Row(
+                            children: [
+                              Expanded(
+                                child: Text(
+                                  language.nativeName,
+                                  style: TextStyle(fontWeight: FontWeight.w500),
+                                ),
+                              ),
+                              if (language.isRTL)
+                                Container(
+                                  padding: EdgeInsets.symmetric(horizontal: 6, vertical: 2),
+                                  decoration: BoxDecoration(
+                                    color: AppTheme.infoColor.withValues(alpha: 0.1),
+                                    borderRadius: BorderRadius.circular(4),
+                                  ),
+                                  child: Text(
+                                    'RTL',
+                                    style: TextStyle(
+                                      fontSize: 10,
+                                      color: AppTheme.infoColor,
+                                      fontWeight: FontWeight.bold,
+                                    ),
+                                  ),
+                                ),
+                            ],
+                          ),
+                          subtitle: Column(
+                            crossAxisAlignment: CrossAxisAlignment.start,
+                            children: [
+                              Text(language.englishName),
+                              Row(
+                                children: [
+                                  Text(
+                                    '${language.speakerCount} speakers',
+                                    style: TextStyle(
+                                      fontSize: 11,
+                                      color: AppTheme.gray500,
+                                    ),
+                                  ),
+                                  SizedBox(width: 8),
+                                  Container(
+                                    width: 60,
+                                    height: 4,
+                                    decoration: BoxDecoration(
+                                      color: AppTheme.gray200,
+                                      borderRadius: BorderRadius.circular(2),
+                                    ),
+                                    child: FractionallySizedBox(
+                                      alignment: Alignment.centerLeft,
+                                      widthFactor: language.completeness,
+                                      child: Container(
+                                        decoration: BoxDecoration(
+                                          color: language.completeness > 0.9 
+                                            ? AppTheme.successColor
+                                            : language.completeness > 0.7
+                                              ? AppTheme.warningColor
+                                              : AppTheme.errorColor,
+                                          borderRadius: BorderRadius.circular(2),
+                                        ),
+                                      ),
+                                    ),
+                                  ),
+                                  SizedBox(width: 4),
+                                  Text(
+                                    '${(language.completeness * 100).toInt()}%',
+                                    style: TextStyle(
+                                      fontSize: 10,
+                                      color: AppTheme.gray500,
+                                    ),
+                                  ),
+                                ],
+                              ),
+                            ],
+                          ),
+                          trailing: isSelected 
+                            ? Icon(Icons.check_circle, color: AppTheme.primaryColor)
+                            : null,
+                          onTap: () {
+                            provider.changeLanguage(language);
+                            Navigator.pop(context);
+                          },
+                        ),
+                      );
+                    },
+                  );
+                },
+              ),
+            ),
+            
+            SizedBox(height: 16),
+            
+            // Footer
+            Row(
+              children: [
+                Icon(Icons.info_outline, size: 16, color: AppTheme.gray500),
+                SizedBox(width: 8),
+                Expanded(
+                  child: Text(
+                    'Language selection affects the entire interface. RTL languages will automatically adjust layout direction.',
+                    style: TextStyle(
+                      fontSize: 12,
+                      color: AppTheme.gray500,
+                    ),
+                  ),
+                ),
+              ],
+            ),
+          ],
+        ),
+      ),
+    );
+  }
+}
+
+// Language data model
+class Language {
+  final String code;
+  final String nativeName;
+  final String englishName;
+  final String flag;
+  final bool isRTL;
+  final String speakerCount;
+  final double completeness;
+
+  Language({
+    required this.code,
+    required this.nativeName,
+    required this.englishName,
+    required this.flag,
+    this.isRTL = false,
+    required this.speakerCount,
+    this.completeness = 1.0,
+  });
+}
+
+// Supported languages list
+final List<Language> supportedLanguages = [
+  Language(
+    code: 'en',
+    nativeName: 'English',
+    englishName: 'English',
+    flag: '🇺🇸',
+    speakerCount: '1.5B',
+    completeness: 1.0,
+  ),
+  Language(
+    code: 'es',
+    nativeName: 'Español',
+    englishName: 'Spanish',
+    flag: '🇪🇸',
+    speakerCount: '500M',
+    completeness: 1.0,
+  ),
+  Language(
+    code: 'fr',
+    nativeName: 'Français',
+    englishName: 'French',
+    flag: '🇫🇷',
+    speakerCount: '280M',
+    completeness: 1.0,
+  ),
+  Language(
+    code: 'de',
+    nativeName: 'Deutsch',
+    englishName: 'German',
+    flag: '🇩🇪',
+    speakerCount: '130M',
+    completeness: 1.0,
+  ),
+  Language(
+    code: 'zh',
+    nativeName: '中文',
+    englishName: 'Chinese (Simplified)',
+    flag: '🇨🇳',
+    speakerCount: '1.1B',
+    completeness: 1.0,
+  ),
+  Language(
+    code: 'ja',
+    nativeName: '日本語',
+    englishName: 'Japanese',
+    flag: '🇯🇵',
+    speakerCount: '125M',
+    completeness: 1.0,
+  ),
+  Language(
+    code: 'ar',
+    nativeName: 'العربية',
+    englishName: 'Arabic',
+    flag: '🇸🇦',
+    isRTL: true,
+    speakerCount: '420M',
+    completeness: 1.0,
+  ),
+  Language(
+    code: 'ru',
+    nativeName: 'Русский',
+    englishName: 'Russian',
+    flag: '🇷🇺',
+    speakerCount: '260M',
+    completeness: 0.85,
+  ),
+  Language(
+    code: 'pt',
+    nativeName: 'Português',
+    englishName: 'Portuguese',
+    flag: '🇵🇹',
+    speakerCount: '260M',
+    completeness: 0.90,
+  ),
+  Language(
+    code: 'it',
+    nativeName: 'Italiano',
+    englishName: 'Italian',
+    flag: '🇮🇹',
+    speakerCount: '65M',
+    completeness: 0.85,
+  ),
+  Language(
+    code: 'ko',
+    nativeName: '한국어',
+    englishName: 'Korean',
+    flag: '🇰🇷',
+    speakerCount: '77M',
+    completeness: 0.80,
+  ),
+  Language(
+    code: 'hi',
+    nativeName: 'हिन्दी',
+    englishName: 'Hindi',
+    flag: '🇮🇳',
+    speakerCount: '600M',
+    completeness: 0.75,
+  ),
+  Language(
+    code: 'he',
+    nativeName: 'עברית',
+    englishName: 'Hebrew',
+    flag: '🇮🇱',
+    isRTL: true,
+    speakerCount: '9M',
+    completeness: 0.80,
+  ),
+  Language(
+    code: 'fa',
+    nativeName: 'فارسی',
+    englishName: 'Persian (Farsi)',
+    flag: '🇮🇷',
+    isRTL: true,
+    speakerCount: '110M',
+    completeness: 0.75,
+  ),
+  Language(
+    code: 'tr',
+    nativeName: 'Türkçe',
+    englishName: 'Turkish',
+    flag: '🇹🇷',
+    speakerCount: '80M',
+    completeness: 0.80,
+  ),
+  Language(
+    code: 'pl',
+    nativeName: 'Polski',
+    englishName: 'Polish',
+    flag: '🇵🇱',
+    speakerCount: '45M',
+    completeness: 0.75,
+  ),
+  Language(
+    code: 'nl',
+    nativeName: 'Nederlands',
+    englishName: 'Dutch',
+    flag: '🇳🇱',
+    speakerCount: '24M',
+    completeness: 0.80,
+  ),
+  Language(
+    code: 'sv',
+    nativeName: 'Svenska',
+    englishName: 'Swedish',
+    flag: '🇸🇪',
+    speakerCount: '10M',
+    completeness: 0.75,
+  ),
+  Language(
+    code: 'no',
+    nativeName: 'Norsk',
+    englishName: 'Norwegian',
+    flag: '🇳🇴',
+    speakerCount: '5M',
+    completeness: 0.70,
+  ),
+  Language(
+    code: 'da',
+    nativeName: 'Dansk',
+    englishName: 'Danish',
+    flag: '🇩🇰',
+    speakerCount: '6M',
+    completeness: 0.70,
+  ),
+];

@@ -1,0 +1,206 @@
+# OpenSim Next Production Dockerfile
+# Multi-stage build for optimized production images with security hardening
+
+#==============================================================================
+# Stage 1: Build Environment - Rust Builder
+#==============================================================================
+FROM rust:1.75-slim as rust-builder
+
+# Install build dependencies and security updates
+RUN apt-get update && apt-get install -y \
+    pkg-config \
+    libssl-dev \
+    libpq-dev \
+    libsqlite3-dev \
+    build-essential \
+    curl \
+    git \
+    ca-certificates \
+    && apt-get upgrade -y \
+    && rm -rf /var/lib/apt/lists/*
+
+# Create non-root user for build
+RUN useradd -m -u 1001 builder
+USER builder
+WORKDIR /home/builder
+
+# Copy Rust project files
+COPY --chown=builder:builder rust/Cargo.toml rust/Cargo.lock ./rust/
+COPY --chown=builder:builder rust/src ./rust/src/
+COPY --chown=builder:builder rust/build.rs ./rust/
+
+# Build release version with optimizations
+WORKDIR /home/builder/rust
+RUN cargo build --release --locked \
+    && strip target/release/opensim-next
+
+#==============================================================================
+# Stage 2: Zig Builder
+#==============================================================================
+FROM alpine:3.19 as zig-builder
+
+# Install Zig and build tools
+RUN apk add --no-cache \
+    curl \
+    xz \
+    build-base \
+    linux-headers
+
+# Install Zig 0.14
+RUN curl -L "https://ziglang.org/download/0.14.0/zig-linux-x86_64-0.14.0.tar.xz" \
+    | tar -xJ -C /opt \
+    && ln -s /opt/zig-linux-x86_64-0.14.0/zig /usr/local/bin/zig
+
+# Create build user
+RUN adduser -D -u 1001 zigbuilder
+USER zigbuilder
+WORKDIR /home/zigbuilder
+
+# Copy Zig project files
+COPY --chown=zigbuilder:zigbuilder zig/ ./zig/
+
+# Build Zig libraries
+WORKDIR /home/zigbuilder/zig
+RUN zig build -Doptimize=ReleaseFast
+
+#==============================================================================
+# Stage 3: Web Frontend Builder
+#==============================================================================
+FROM node:18-alpine as web-builder
+
+# Install dependencies
+RUN apk add --no-cache git python3 make g++
+
+# Create build user
+RUN adduser -D -u 1001 webbuilder
+USER webbuilder
+WORKDIR /home/webbuilder
+
+# Copy web frontend
+COPY --chown=webbuilder:webbuilder rust/web-frontend/ ./web-frontend/
+
+# Build web assets (if needed)
+WORKDIR /home/webbuilder/web-frontend
+RUN if [ -f package.json ]; then \
+        npm ci --only=production && \
+        npm run build; \
+    fi
+
+#==============================================================================
+# Stage 4: Production Runtime - Hardened Base
+#==============================================================================
+FROM debian:12-slim as production
+
+# Set build arguments
+ARG BUILD_VERSION=latest
+ARG BUILD_COMMIT=unknown
+ARG BUILD_DATE
+ARG OPENSIM_USER_UID=1001
+ARG OPENSIM_USER_GID=1001
+
+# Labels for container metadata
+LABEL maintainer="OpenSim Next Team" \
+      version="${BUILD_VERSION}" \
+      description="OpenSim Next - Revolutionary Web-Enabled Virtual World Server" \
+      commit="${BUILD_COMMIT}" \
+      build-date="${BUILD_DATE}" \
+      org.opencontainers.image.title="OpenSim Next" \
+      org.opencontainers.image.description="Production-ready virtual world server with web browser support" \
+      org.opencontainers.image.version="${BUILD_VERSION}" \
+      org.opencontainers.image.vendor="OpenSim Next" \
+      org.opencontainers.image.source="https://github.com/opensim/opensim-next"
+
+# Install runtime dependencies and security updates
+RUN apt-get update && apt-get install -y \
+    # Runtime libraries
+    libssl3 \
+    libpq5 \
+    libsqlite3-0 \
+    ca-certificates \
+    # Monitoring and debugging tools
+    curl \
+    procps \
+    # Timezone data
+    tzdata \
+    # Clean up
+    && apt-get upgrade -y \
+    && apt-get autoremove -y \
+    && apt-get clean \
+    && rm -rf /var/lib/apt/lists/* \
+    && rm -rf /tmp/* \
+    && rm -rf /var/tmp/*
+
+# Create opensim user and group with fixed UID/GID
+RUN groupadd -g ${OPENSIM_USER_GID} opensim \
+    && useradd -r -m -u ${OPENSIM_USER_UID} -g opensim -s /bin/bash opensim
+
+# Create application directories
+RUN mkdir -p /opt/opensim-next/{bin,config,data,logs,web,assets} \
+    && mkdir -p /var/lib/opensim-next \
+    && mkdir -p /var/log/opensim-next \
+    && chown -R opensim:opensim /opt/opensim-next /var/lib/opensim-next /var/log/opensim-next
+
+# Copy built binaries from build stages
+COPY --from=rust-builder --chown=opensim:opensim /home/builder/rust/target/release/opensim-next /opt/opensim-next/bin/
+
+# Copy Zig libraries
+COPY --from=zig-builder --chown=opensim:opensim /home/zigbuilder/zig/zig-out/lib/ /opt/opensim-next/lib/
+
+# Copy web frontend
+COPY --from=web-builder --chown=opensim:opensim /home/webbuilder/web-frontend/ /opt/opensim-next/web/
+
+# Copy configuration templates and assets
+COPY --chown=opensim:opensim rust/migrations/ /opt/opensim-next/migrations/
+COPY --chown=opensim:opensim rust/assets/ /opt/opensim-next/assets/
+
+# Set up configuration
+COPY --chown=opensim:opensim deploy/docker/opensim-config.toml /opt/opensim-next/config/opensim.toml
+COPY --chown=opensim:opensim deploy/docker/entrypoint.sh /opt/opensim-next/bin/
+RUN chmod +x /opt/opensim-next/bin/entrypoint.sh
+
+# Set library path for Zig libraries
+ENV LD_LIBRARY_PATH="/opt/opensim-next/lib:${LD_LIBRARY_PATH}"
+
+# Configure application environment
+ENV OPENSIM_CONFIG_PATH="/opt/opensim-next/config/opensim.toml" \
+    OPENSIM_DATA_PATH="/var/lib/opensim-next" \
+    OPENSIM_LOG_PATH="/var/log/opensim-next" \
+    OPENSIM_WEB_PATH="/opt/opensim-next/web" \
+    OPENSIM_ASSETS_PATH="/opt/opensim-next/assets" \
+    RUST_LOG="info" \
+    RUST_BACKTRACE="1"
+
+# Security hardening
+RUN chmod -R o-rwx /opt/opensim-next /var/lib/opensim-next /var/log/opensim-next
+
+# Health check
+HEALTHCHECK --interval=30s --timeout=10s --start-period=40s --retries=3 \
+    CMD curl -f http://localhost:9100/health || exit 1
+
+# Expose ports
+EXPOSE 9000 9001 8080 9100 8002
+
+# Set working directory
+WORKDIR /opt/opensim-next
+
+# Switch to non-root user
+USER opensim
+
+# Set entrypoint
+ENTRYPOINT ["/opt/opensim-next/bin/entrypoint.sh"]
+CMD ["server"]
+
+#==============================================================================
+# Build Information
+#==============================================================================
+# To build this image:
+# docker build -f deploy/docker/Dockerfile.production \
+#   --build-arg BUILD_VERSION=$(git describe --tags --always) \
+#   --build-arg BUILD_COMMIT=$(git rev-parse HEAD) \
+#   --build-arg BUILD_DATE=$(date -u +"%Y-%m-%dT%H:%M:%SZ") \
+#   -t opensim-next:latest .
+#
+# Security scan:
+# docker run --rm -v /var/run/docker.sock:/var/run/docker.sock \
+#   -v $HOME/.cache:/root/.cache/ aquasec/trivy image opensim-next:latest
+#==============================================================================

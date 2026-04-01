@@ -1,0 +1,21 @@
+<?xml version="1.0" encoding="utf-8" standalone="yes"?>
+<llsd>
+    <map>
+        <key>grids</key>
+        <map>
+            <key>564d39e-d3d7-baff-ed71-9dfc87d64a91</key>
+            <map>
+                <key>gridname</key>
+                <string>OpenSim Next Local</string>
+                <key>loginuri</key>
+                <string>http://127.0.0.1:9000/</string>
+                <key>gridnick</key>
+                <string>opensim-next</string>
+                <key>platform</key>
+                <string>OpenSim</string>
+                <key>gridmessage</key>
+                <string>OpenSim Next Development Grid</string>
+            </map>
+        </map>
+    </map>
+</llsd>

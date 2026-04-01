@@ -1,0 +1,488 @@
+# GitLab CI/CD Pipeline for OpenSim Next
+# Comprehensive CI/CD with security scanning, testing, and deployment
+
+stages:
+  - preflight
+  - build
+  - test
+  - security
+  - package
+  - deploy
+  - release
+  - cleanup
+
+variables:
+  DOCKER_DRIVER: overlay2
+  DOCKER_TLS_CERTDIR: "/certs"
+  CARGO_HOME: "${CI_PROJECT_DIR}/.cargo"
+  REGISTRY: $CI_REGISTRY_IMAGE
+  RUST_BACKTRACE: 1
+  POSTGRES_DB: opensim_test
+  POSTGRES_USER: opensim
+  POSTGRES_PASSWORD: opensim_test_password
+  REDIS_PASSWORD: redis_test_password
+
+# Global cache configuration
+.cache: &cache
+  cache:
+    key: "${CI_COMMIT_REF_SLUG}"
+    paths:
+      - .cargo/
+      - opensim-next/rust/target/
+      - opensim-next/zig/zig-cache/
+      - opensim-next/zig/zig-out/
+
+# Global before_script
+.before_script_template: &before_script
+  before_script:
+    - export PATH=$CARGO_HOME/bin:$PATH
+    - rustc --version
+    - cargo --version
+
+# Preflight checks
+preflight:changes:
+  stage: preflight
+  image: alpine:latest
+  script:
+    - apk add --no-cache git
+    - |
+      if [ -n "$CI_MERGE_REQUEST_IID" ]; then
+        git diff --name-only origin/$CI_MERGE_REQUEST_TARGET_BRANCH_NAME...HEAD > changed_files.txt
+      else
+        git diff --name-only HEAD~1 HEAD > changed_files.txt
+      fi
+    - |
+      echo "RUST_CHANGED=false" > build.env
+      echo "ZIG_CHANGED=false" >> build.env
+      echo "DOCKER_CHANGED=false" >> build.env
+      echo "K8S_CHANGED=false" >> build.env
+      
+      if grep -q "opensim-next/rust/" changed_files.txt || grep -q "Cargo." changed_files.txt; then
+        echo "RUST_CHANGED=true" >> build.env
+      fi
+      
+      if grep -q "opensim-next/zig/" changed_files.txt || grep -q "build.zig" changed_files.txt; then
+        echo "ZIG_CHANGED=true" >> build.env
+      fi
+      
+      if grep -q "opensim-next/deploy/docker/" changed_files.txt || grep -q "Dockerfile" changed_files.txt; then
+        echo "DOCKER_CHANGED=true" >> build.env
+      fi
+      
+      if grep -q "opensim-next/deploy/kubernetes/" changed_files.txt || grep -q "opensim-next/deploy/config/" changed_files.txt; then
+        echo "K8S_CHANGED=true" >> build.env
+      fi
+    - cat build.env
+  artifacts:
+    reports:
+      dotenv: build.env
+    expire_in: 1 hour
+
+# Rust build and test
+rust:format:
+  stage: build
+  image: rust:1.75
+  <<: *cache
+  <<: *before_script
+  script:
+    - cd opensim-next/rust
+    - cargo fmt --all -- --check
+  rules:
+    - if: $RUST_CHANGED == "true"
+    - if: $CI_PIPELINE_SOURCE == "schedule"
+
+rust:clippy:
+  stage: build
+  image: rust:1.75
+  <<: *cache
+  <<: *before_script
+  script:
+    - apt-get update && apt-get install -y pkg-config libssl-dev libpq-dev
+    - cd opensim-next/rust
+    - cargo clippy --all-targets --all-features -- -D warnings
+  rules:
+    - if: $RUST_CHANGED == "true"
+    - if: $CI_PIPELINE_SOURCE == "schedule"
+
+rust:build:
+  stage: build
+  image: rust:1.75
+  <<: *cache
+  <<: *before_script
+  script:
+    - apt-get update && apt-get install -y pkg-config libssl-dev libpq-dev
+    - cd opensim-next/rust
+    - cargo build --verbose --all-features
+    - cargo build --verbose --release --all-features
+  artifacts:
+    paths:
+      - opensim-next/rust/target/release/opensim-next
+    expire_in: 1 day
+  rules:
+    - if: $RUST_CHANGED == "true"
+    - if: $CI_PIPELINE_SOURCE == "schedule"
+
+rust:test:
+  stage: test
+  image: rust:1.75
+  <<: *cache
+  <<: *before_script
+  services:
+    - name: postgres:15
+      alias: postgres
+      variables:
+        POSTGRES_DB: $POSTGRES_DB
+        POSTGRES_USER: $POSTGRES_USER
+        POSTGRES_PASSWORD: $POSTGRES_PASSWORD
+    - name: redis:7-alpine
+      alias: redis
+      command: ["redis-server", "--requirepass", "$REDIS_PASSWORD"]
+  variables:
+    DATABASE_URL: "postgresql://${POSTGRES_USER}:${POSTGRES_PASSWORD}@postgres:5432/${POSTGRES_DB}"
+    REDIS_URL: "redis://:${REDIS_PASSWORD}@redis:6379"
+  script:
+    - apt-get update && apt-get install -y pkg-config libssl-dev libpq-dev postgresql-client
+    - cd opensim-next/rust
+    - |
+      # Wait for services
+      until pg_isready -h postgres -p 5432 -U $POSTGRES_USER; do sleep 1; done
+      until redis-cli -h redis -a $REDIS_PASSWORD ping; do sleep 1; done
+    - cargo test --verbose --all-features
+  coverage: '/^\s*lines:\s*\d+\.\d+\%/'
+  rules:
+    - if: $RUST_CHANGED == "true"
+    - if: $CI_PIPELINE_SOURCE == "schedule"
+
+# Zig build and test
+zig:format:
+  stage: build
+  image: alpine:latest
+  script:
+    - apk add --no-cache curl xz
+    - curl -L https://ziglang.org/download/0.14.0/zig-linux-x86_64-0.14.0.tar.xz | tar -xJ
+    - export PATH=$PWD/zig-linux-x86_64-0.14.0:$PATH
+    - cd opensim-next/zig
+    - zig fmt --check src/
+  rules:
+    - if: $ZIG_CHANGED == "true"
+    - if: $CI_PIPELINE_SOURCE == "schedule"
+
+zig:build:
+  stage: build
+  image: alpine:latest
+  script:
+    - apk add --no-cache curl xz build-base linux-headers
+    - curl -L https://ziglang.org/download/0.14.0/zig-linux-x86_64-0.14.0.tar.xz | tar -xJ
+    - export PATH=$PWD/zig-linux-x86_64-0.14.0:$PATH
+    - cd opensim-next/zig
+    - zig build
+    - zig build -Doptimize=ReleaseFast
+  artifacts:
+    paths:
+      - opensim-next/zig/zig-out/
+    expire_in: 1 day
+  rules:
+    - if: $ZIG_CHANGED == "true"
+    - if: $CI_PIPELINE_SOURCE == "schedule"
+
+zig:test:
+  stage: test
+  image: alpine:latest
+  script:
+    - apk add --no-cache curl xz build-base linux-headers
+    - curl -L https://ziglang.org/download/0.14.0/zig-linux-x86_64-0.14.0.tar.xz | tar -xJ
+    - export PATH=$PWD/zig-linux-x86_64-0.14.0:$PATH
+    - cd opensim-next/zig
+    - zig build test
+    - zig build test -Doptimize=ReleaseFast
+  rules:
+    - if: $ZIG_CHANGED == "true"
+    - if: $CI_PIPELINE_SOURCE == "schedule"
+
+# Security scanning
+security:trivy:
+  stage: security
+  image: aquasec/trivy:latest
+  script:
+    - trivy fs --format sarif --output trivy-results.sarif .
+    - trivy fs --severity HIGH,CRITICAL .
+  artifacts:
+    reports:
+      sast: trivy-results.sarif
+    expire_in: 1 week
+
+security:semgrep:
+  stage: security
+  image: returntocorp/semgrep:latest
+  script:
+    - semgrep --config=p/security-audit --config=p/secrets --config=p/rust --json --output semgrep-results.json .
+  artifacts:
+    reports:
+      sast: semgrep-results.json
+    expire_in: 1 week
+
+security:audit:
+  stage: security
+  image: rust:1.75
+  <<: *cache
+  <<: *before_script
+  script:
+    - cargo install cargo-audit
+    - cd opensim-next/rust
+    - cargo audit --json --output audit-results.json
+  artifacts:
+    reports:
+      dependency_scanning: opensim-next/rust/audit-results.json
+    expire_in: 1 week
+  rules:
+    - if: $RUST_CHANGED == "true"
+    - if: $CI_PIPELINE_SOURCE == "schedule"
+
+# Docker image building
+docker:build:
+  stage: package
+  image: docker:24-dind
+  services:
+    - docker:24-dind
+  variables:
+    DOCKER_HOST: tcp://docker:2376
+    DOCKER_TLS_VERIFY: 1
+    DOCKER_TLS_CERTDIR: "/certs"
+    DOCKER_CERT_PATH: "/certs/client"
+  script:
+    - docker login -u $CI_REGISTRY_USER -p $CI_REGISTRY_PASSWORD $CI_REGISTRY
+    - |
+      # Determine tag
+      if [[ "$CI_COMMIT_TAG" ]]; then
+        TAG=$CI_COMMIT_TAG
+      elif [[ "$CI_COMMIT_REF_NAME" == "main" ]]; then
+        TAG="latest"
+      else
+        TAG=$CI_COMMIT_REF_SLUG
+      fi
+    - |
+      docker build \
+        --tag $REGISTRY:$TAG \
+        --tag $REGISTRY:$CI_COMMIT_SHA \
+        --file opensim-next/deploy/docker/Dockerfile.production \
+        --build-arg VERSION=$TAG \
+        --build-arg BUILD_DATE=$(date -Iseconds) \
+        --build-arg VCS_REF=$CI_COMMIT_SHA \
+        opensim-next/
+    - docker push $REGISTRY:$TAG
+    - docker push $REGISTRY:$CI_COMMIT_SHA
+  rules:
+    - if: $DOCKER_CHANGED == "true"
+    - if: $RUST_CHANGED == "true"
+    - if: $ZIG_CHANGED == "true"
+    - if: $CI_COMMIT_TAG
+    - if: $CI_COMMIT_REF_NAME == "main"
+
+docker:scan:
+  stage: security
+  image: aquasec/trivy:latest
+  script:
+    - trivy image --format sarif --output docker-trivy-results.sarif $REGISTRY:$CI_COMMIT_SHA
+    - trivy image --severity HIGH,CRITICAL $REGISTRY:$CI_COMMIT_SHA
+  artifacts:
+    reports:
+      container_scanning: docker-trivy-results.sarif
+    expire_in: 1 week
+  dependencies:
+    - docker:build
+
+# Kubernetes validation
+kubernetes:validate:
+  stage: test
+  image: alpine/helm:latest
+  script:
+    - apk add --no-cache curl
+    - curl -LO https://storage.googleapis.com/kubernetes-release/release/v1.28.0/bin/linux/amd64/kubectl
+    - chmod +x kubectl && mv kubectl /usr/local/bin/
+    - curl -L https://github.com/instrumenta/kubeval/releases/latest/download/kubeval-linux-amd64.tar.gz | tar xz
+    - chmod +x kubeval && mv kubeval /usr/local/bin/
+    - cd opensim-next/deploy/kubernetes/helm
+    - helm dependency build
+    - helm lint .
+    - helm template opensim-next . --values values.yaml > /tmp/manifests.yaml
+    - kubeval /tmp/manifests.yaml
+  rules:
+    - if: $K8S_CHANGED == "true"
+    - if: $CI_PIPELINE_SOURCE == "schedule"
+
+# Integration tests
+integration:test:
+  stage: test
+  image: rust:1.75
+  <<: *cache
+  <<: *before_script
+  services:
+    - name: postgres:15
+      alias: postgres
+      variables:
+        POSTGRES_DB: $POSTGRES_DB
+        POSTGRES_USER: $POSTGRES_USER
+        POSTGRES_PASSWORD: $POSTGRES_PASSWORD
+    - name: redis:7-alpine
+      alias: redis
+      command: ["redis-server", "--requirepass", "$REDIS_PASSWORD"]
+  variables:
+    DATABASE_URL: "postgresql://${POSTGRES_USER}:${POSTGRES_PASSWORD}@postgres:5432/${POSTGRES_DB}"
+    REDIS_URL: "redis://:${REDIS_PASSWORD}@redis:6379"
+  script:
+    - apt-get update && apt-get install -y pkg-config libssl-dev libpq-dev postgresql-client
+    - cd opensim-next/rust
+    - |
+      # Wait for services
+      until pg_isready -h postgres -p 5432 -U $POSTGRES_USER; do sleep 1; done
+      until redis-cli -h redis -a $REDIS_PASSWORD ping; do sleep 1; done
+    - cargo test --test integration_tests --all-features -- --test-threads=1
+  rules:
+    - if: $RUST_CHANGED == "true"
+    - if: $CI_PIPELINE_SOURCE == "schedule"
+
+# Deployment to staging
+deploy:staging:
+  stage: deploy
+  image: alpine/helm:latest
+  environment:
+    name: staging
+    url: https://staging.opensim.example.com
+  script:
+    - apk add --no-cache curl
+    - curl -LO https://storage.googleapis.com/kubernetes-release/release/v1.28.0/bin/linux/amd64/kubectl
+    - chmod +x kubectl && mv kubectl /usr/local/bin/
+    - echo "$STAGING_KUBECONFIG" | base64 -d > /tmp/kubeconfig
+    - export KUBECONFIG=/tmp/kubeconfig
+    - |
+      helm upgrade --install opensim-next-staging \
+        opensim-next/deploy/kubernetes/helm \
+        --namespace opensim-next-staging \
+        --create-namespace \
+        --values opensim-next/deploy/kubernetes/helm/values.yaml \
+        --values opensim-next/deploy/config/environments/staging.yaml \
+        --set image.tag=$CI_COMMIT_SHA \
+        --set environment=staging \
+        --wait --timeout=15m
+    - kubectl rollout status deployment/opensim-next-staging -n opensim-next-staging --timeout=600s
+  rules:
+    - if: $CI_COMMIT_REF_NAME == "main"
+    - if: $CI_COMMIT_REF_NAME =~ /^release\/.*/
+
+# Deployment to production
+deploy:production:
+  stage: deploy
+  image: alpine/helm:latest
+  environment:
+    name: production
+    url: https://opensim.example.com
+  when: manual
+  script:
+    - apk add --no-cache curl
+    - curl -LO https://storage.googleapis.com/kubernetes-release/release/v1.28.0/bin/linux/amd64/kubectl
+    - chmod +x kubectl && mv kubectl /usr/local/bin/
+    - echo "$PROD_KUBECONFIG" | base64 -d > /tmp/kubeconfig
+    - export KUBECONFIG=/tmp/kubeconfig
+    - |
+      # Blue-Green deployment
+      CURRENT_COLOR=$(kubectl get service opensim-next-active -n opensim-next -o jsonpath='{.spec.selector.color}' 2>/dev/null || echo "blue")
+      NEW_COLOR=$([ "$CURRENT_COLOR" = "blue" ] && echo "green" || echo "blue")
+      
+      helm upgrade --install opensim-next-$NEW_COLOR \
+        opensim-next/deploy/kubernetes/helm \
+        --namespace opensim-next \
+        --create-namespace \
+        --values opensim-next/deploy/kubernetes/helm/values.yaml \
+        --values opensim-next/deploy/config/environments/production.yaml \
+        --set image.tag=$CI_COMMIT_SHA \
+        --set environment=production \
+        --set color=$NEW_COLOR \
+        --wait --timeout=20m
+      
+      kubectl rollout status deployment/opensim-next-$NEW_COLOR -n opensim-next --timeout=900s
+      
+      # Switch traffic
+      kubectl patch service opensim-next-active -n opensim-next \
+        -p '{"spec":{"selector":{"color":"'$NEW_COLOR'"}}}'
+  rules:
+    - if: $CI_COMMIT_TAG
+    - if: $CI_COMMIT_REF_NAME == "main"
+
+# Release creation
+release:create:
+  stage: release
+  image: registry.gitlab.com/gitlab-org/release-cli:latest
+  script:
+    - |
+      if [ -n "$CI_COMMIT_TAG" ]; then
+        release-cli create \
+          --name "OpenSim Next $CI_COMMIT_TAG" \
+          --tag-name $CI_COMMIT_TAG \
+          --description "Production release of OpenSim Next $CI_COMMIT_TAG"
+      fi
+  rules:
+    - if: $CI_COMMIT_TAG
+
+# Cleanup old images
+cleanup:registry:
+  stage: cleanup
+  image: alpine:latest
+  script:
+    - echo "Cleanup would remove old container images"
+    # Implement cleanup logic here
+  rules:
+    - if: $CI_PIPELINE_SOURCE == "schedule"
+  when: manual
+
+# Performance testing (scheduled)
+performance:test:
+  stage: test
+  image: rust:1.75
+  <<: *cache
+  <<: *before_script
+  script:
+    - apt-get update && apt-get install -y pkg-config libssl-dev libpq-dev
+    - cd opensim-next/rust
+    - cargo install cargo-criterion
+    - cargo criterion --output-format json > benchmark-results.json
+  artifacts:
+    paths:
+      - opensim-next/rust/benchmark-results.json
+    expire_in: 1 week
+  rules:
+    - if: $CI_PIPELINE_SOURCE == "schedule"
+
+# Code coverage (scheduled)
+coverage:report:
+  stage: test
+  image: rust:1.75
+  <<: *cache
+  <<: *before_script
+  services:
+    - name: postgres:15
+      alias: postgres
+      variables:
+        POSTGRES_DB: $POSTGRES_DB
+        POSTGRES_USER: $POSTGRES_USER
+        POSTGRES_PASSWORD: $POSTGRES_PASSWORD
+    - name: redis:7-alpine
+      alias: redis
+  variables:
+    DATABASE_URL: "postgresql://${POSTGRES_USER}:${POSTGRES_PASSWORD}@postgres:5432/${POSTGRES_DB}"
+    REDIS_URL: "redis://redis:6379"
+  script:
+    - apt-get update && apt-get install -y pkg-config libssl-dev libpq-dev postgresql-client
+    - cd opensim-next/rust
+    - cargo install cargo-tarpaulin
+    - |
+      until pg_isready -h postgres -p 5432 -U $POSTGRES_USER; do sleep 1; done
+    - cargo tarpaulin --verbose --all-features --workspace --timeout 120 --out xml
+  coverage: '/(\d+\.\d+)% coverage/'
+  artifacts:
+    reports:
+      coverage_report:
+        coverage_format: cobertura
+        path: opensim-next/rust/cobertura.xml
+    expire_in: 1 week
+  rules:
+    - if: $CI_PIPELINE_SOURCE == "schedule"

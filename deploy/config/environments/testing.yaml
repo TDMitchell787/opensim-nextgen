@@ -1,0 +1,240 @@
+# OpenSim Next Testing Environment Configuration
+# Automated testing environment with isolated resources
+
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: opensim-next-test-config
+  namespace: opensim-next-test
+  labels:
+    app.kubernetes.io/name: opensim-next
+    app.kubernetes.io/component: configuration
+    environment: testing
+data:
+  # Core application configuration
+  opensim.toml: |
+    [general]
+    environment = "testing"
+    debug = true
+    log_level = "trace"
+    instance_id = "test-${TEST_RUN_ID}"
+    region_name = "OpenSim Next Test Region"
+    
+    [network]
+    bind_address = "0.0.0.0"
+    port = 9000
+    websocket_port = 9001
+    admin_port = 9100
+    hypergrid_port = 8002
+    
+    # No SSL for testing
+    ssl_enabled = false
+    require_ssl = false
+    
+    [database]
+    type = "postgresql"
+    host = "opensim-next-test-postgresql"
+    port = 5432
+    database = "opensim_test"
+    username = "opensim"
+    # Password from secret
+    ssl_mode = "disable"
+    max_connections = 5
+    
+    [cache]
+    type = "redis"
+    host = "opensim-next-test-redis"
+    port = 6379
+    database = 2  # Separate test database
+    # Password from secret
+    
+    [physics]
+    default_engine = "basic"  # Faster for testing
+    max_prims = 1000
+    max_physical_prims = 100
+    
+    [assets]
+    storage_type = "filesystem"
+    base_path = "/tmp/test-assets"
+    enable_caching = false  # Disable for consistent testing
+    
+    [region]
+    max_avatars = 10
+    allow_script_engines = true
+    enable_physics = true
+    startup_scripts = false
+    
+    [monitoring]
+    enable_metrics = true
+    metrics_port = 9100
+    health_check_interval = 5
+    
+    [security]
+    api_key = "test-api-key"
+    rate_limit_enabled = false
+    cors_enabled = true
+    cors_origins = ["*"]
+    
+    [ziti]
+    enabled = false  # Disabled for testing
+    
+    [testing]
+    # Testing-specific configurations
+    enable_test_endpoints = true
+    mock_external_services = true
+    fast_mode = true
+    
+    # Test data configuration
+    auto_create_test_users = true
+    auto_create_test_regions = true
+    reset_data_between_tests = true
+    
+    # Performance testing
+    simulate_load = false
+    max_concurrent_users = 100
+    
+  # Testing logging configuration
+  log4rs.yaml: |
+    refresh_rate: 10 seconds
+    
+    appenders:
+      stdout:
+        kind: console
+        encoder:
+          pattern: "{d(%Y-%m-%d %H:%M:%S%.3f)} [{l}] [{t}] {m}{n}"
+      
+      test_results:
+        kind: file
+        path: "/tmp/test-results/opensim-test.log"
+        encoder:
+          kind: json
+      
+      metrics:
+        kind: file
+        path: "/tmp/test-results/metrics.log"
+        encoder:
+          kind: json
+    
+    root:
+      level: trace
+      appenders:
+        - stdout
+        - test_results
+    
+    loggers:
+      opensim_next::testing:
+        level: trace
+        additive: false
+        appenders:
+          - test_results
+      
+      opensim_next::metrics:
+        level: info
+        additive: false
+        appenders:
+          - metrics
+  
+  # Test initialization script
+  init-test.sh: |
+    #!/bin/bash
+    set -e
+    
+    echo "Initializing OpenSim Next testing environment..."
+    
+    # Wait for test dependencies (shorter timeout)
+    timeout 30 bash -c 'until pg_isready -h opensim-next-test-postgresql -p 5432 -U opensim; do sleep 1; done'
+    timeout 30 bash -c 'until redis-cli -h opensim-next-test-redis ping; do sleep 1; done'
+    
+    # Create test directories
+    mkdir -p /tmp/test-assets
+    mkdir -p /tmp/test-results
+    mkdir -p /tmp/test-data
+    chmod 777 /tmp/test-assets
+    chmod 777 /tmp/test-results
+    chmod 777 /tmp/test-data
+    
+    # Initialize clean test database
+    echo "Resetting test database..."
+    psql -h opensim-next-test-postgresql -U opensim -d postgres -c "DROP DATABASE IF EXISTS opensim_test;"
+    psql -h opensim-next-test-postgresql -U opensim -d postgres -c "CREATE DATABASE opensim_test;"
+    
+    # Run database migrations
+    opensim-next --migrate --environment testing
+    
+    # Create test data
+    echo "Creating test data..."
+    opensim-next --create-test-data
+    
+    echo "Testing environment initialized successfully!"
+  
+  # Performance test configuration
+  performance-test.yaml: |
+    scenarios:
+      - name: "user_login"
+        duration: "30s"
+        users: 10
+        spawn_rate: 2
+      
+      - name: "region_load"
+        duration: "60s"
+        users: 5
+        spawn_rate: 1
+      
+      - name: "asset_transfer"
+        duration: "45s"
+        users: 8
+        spawn_rate: 2
+    
+    thresholds:
+      response_time_p95: 500ms
+      error_rate: 0.1%
+      memory_usage: 1Gi
+      cpu_usage: 80%
+  
+  # Integration test configuration
+  integration-test.yaml: |
+    tests:
+      - name: "user_authentication"
+        enabled: true
+        timeout: 30s
+      
+      - name: "region_management"
+        enabled: true
+        timeout: 60s
+      
+      - name: "asset_operations"
+        enabled: true
+        timeout: 45s
+      
+      - name: "websocket_communication"
+        enabled: true
+        timeout: 30s
+      
+      - name: "hypergrid_connectivity"
+        enabled: false  # Disabled for unit tests
+        timeout: 120s
+    
+    reporting:
+      format: "junit"
+      output_dir: "/tmp/test-results"
+      upload_to_s3: false
+
+---
+# Testing secrets
+apiVersion: v1
+kind: Secret
+metadata:
+  name: opensim-next-test-secrets
+  namespace: opensim-next-test
+  labels:
+    app.kubernetes.io/name: opensim-next
+    app.kubernetes.io/component: secrets
+    environment: testing
+type: Opaque
+data:
+  # Base64 encoded testing credentials (simple/insecure for testing)
+  database-password: dGVzdF9wYXNzd29yZA==  # test_password
+  redis-password: dGVzdF9yZWRpc19wYXNzd29yZA==  # test_redis_password
+  api-key: dGVzdC1hcGkta2V5  # test-api-key
+  encryption-key: dGVzdC1lbmNyeXB0aW9uLWtleS0xMjM=  # test-encryption-key-123
+  jwt-secret: dGVzdC1qd3Qtc2VjcmV0LWFiYw==  # test-jwt-secret-abc

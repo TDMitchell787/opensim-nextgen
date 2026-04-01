@@ -1,0 +1,641 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>OpenSim Next Auto-Configurator</title>
+    <link rel="stylesheet" href="css/styles.css">
+    <link rel="stylesheet" href="css/config-preview.css">
+    <link rel="stylesheet" href="css/config-dashboard.css">
+    <link rel="stylesheet" href="css/usb-key-manager.css">
+    <link rel="stylesheet" href="css/help-system.css">
+    <link rel="stylesheet" href="css/config-backup-manager.css">
+    <link rel="stylesheet" href="css/config-testing-framework.css">
+    <link rel="stylesheet" href="css/i18n-support.css">
+    <link rel="manifest" href="manifest.json">
+    <meta name="theme-color" content="#2563eb">
+    <meta name="description" content="Intelligent configuration wizard for OpenSim Next virtual world server">
+    
+    <!-- Progressive Web App Features -->
+    <link rel="icon" type="image/png" sizes="192x192" href="icons/icon-192.png">
+    <link rel="apple-touch-icon" href="icons/icon-192.png">
+    
+    <!-- Security Headers -->
+    <meta http-equiv="Content-Security-Policy" content="default-src 'self'; script-src 'self' 'unsafe-inline'; style-src 'self' 'unsafe-inline';">
+</head>
+<body>
+    <div id="app">
+        <!-- Header -->
+        <header class="header">
+            <div class="container">
+                <div class="header-content">
+                    <div class="logo">
+                        <img src="icons/opensim-logo.svg" alt="OpenSim Next" class="logo-img">
+                        <h1 data-i18n="config.title">OpenSim Next Auto-Configurator</h1>
+                    </div>
+                    <div class="header-actions">
+                        <button id="help-btn" class="btn btn-secondary" data-i18n-title="help.title">
+                            <i class="icon-help"></i>
+                            <span data-i18n="nav.help">Help</span>
+                        </button>
+                        <button id="settings-btn" class="btn btn-secondary" data-i18n-title="nav.settings">
+                            <i class="icon-settings"></i>
+                            <span data-i18n="nav.settings">Settings</span>
+                        </button>
+                    </div>
+                </div>
+            </div>
+        </header>
+
+        <!-- Main Content -->
+        <main class="main">
+            <div class="container">
+                <!-- Progress Indicator -->
+                <div class="progress-section">
+                    <div class="progress-header">
+                        <h2 data-i18n="config.progress">Configuration Progress</h2>
+                        <span class="progress-text" data-i18n="config.step_of" data-i18n-params='{"current": "1", "total": "7"}'>Step 1 of 7</span>
+                    </div>
+                    <div class="progress-bar">
+                        <div class="progress-fill" id="progress-fill"></div>
+                    </div>
+                    <div class="progress-steps">
+                        <div class="step active" data-step="1">
+                            <div class="step-icon">1</div>
+                            <div class="step-label" data-i18n="config.deployment_type">Deployment Type</div>
+                        </div>
+                        <div class="step" data-step="2">
+                            <div class="step-icon">2</div>
+                            <div class="step-label" data-i18n="config.environment">Environment</div>
+                        </div>
+                        <div class="step" data-step="3">
+                            <div class="step-icon">3</div>
+                            <div class="step-label" data-i18n="config.database">Database</div>
+                        </div>
+                        <div class="step" data-step="4">
+                            <div class="step-icon">4</div>
+                            <div class="step-label" data-i18n="config.regions">Regions</div>
+                        </div>
+                        <div class="step" data-step="5">
+                            <div class="step-icon">5</div>
+                            <div class="step-label" data-i18n="config.security">Security</div>
+                        </div>
+                        <div class="step" data-step="6">
+                            <div class="step-icon">6</div>
+                            <div class="step-label" data-i18n="config.network">Network</div>
+                        </div>
+                        <div class="step" data-step="7">
+                            <div class="step-icon">7</div>
+                            <div class="step-label" data-i18n="config.review">Review</div>
+                        </div>
+                    </div>
+                </div>
+
+                <!-- Validation Status Panel -->
+                <div class="validation-panel" id="validation-panel">
+                    <div class="validation-header">
+                        <h3 data-i18n="validation.title">Configuration Validation</h3>
+                        <div class="validation-controls">
+                            <button class="btn btn-sm btn-secondary" id="run-validation">
+                                <i class="icon-check-circle"></i>
+                                <span data-i18n="action.validate">Run Validation</span>
+                            </button>
+                            <button class="btn btn-sm btn-secondary" id="run-preflight">
+                                <i class="icon-play-circle"></i>
+                                <span data-i18n="validation.preflight">Pre-flight Check</span>
+                            </button>
+                            <button class="btn btn-sm btn-secondary" id="export-validation">
+                                <i class="icon-download"></i>
+                                <span data-i18n="action.export">Export Report</span>
+                            </button>
+                        </div>
+                    </div>
+                    
+                    <div class="validation-status" id="validation-status">
+                        <div class="status-message">
+                            <i class="icon-clock"></i>
+                            <span>Validation pending - click "Run Validation" to check your configuration</span>
+                        </div>
+                    </div>
+                    
+                    <div class="validation-progress" id="validation-progress" style="display: none;">
+                        <div class="progress-bar">
+                            <div class="progress-fill" id="validation-progress-fill"></div>
+                        </div>
+                        <div class="progress-text">Validating configuration...</div>
+                    </div>
+                    
+                    <div class="validation-results" id="validation-results" style="display: none;">
+                        <!-- Validation results will be displayed here -->
+                    </div>
+                </div>
+
+                <!-- USB Key Management System -->
+                <div id="usb-key-manager"></div>
+
+                <!-- Configuration Backup/Restore System -->
+                <div id="export-import-container"></div>
+
+                <!-- Configuration Testing Framework -->
+                <div id="testing-framework-container"></div>
+
+                <!-- Configuration Dashboard -->
+                <div class="dashboard" id="dashboard">
+                    <div class="dashboard-header">
+                        <h3>Configuration Dashboard</h3>
+                        <div class="dashboard-status">
+                            <div class="status-item">
+                                <span class="status-label">Overall Progress:</span>
+                                <span class="status-value" id="overall-progress">14%</span>
+                            </div>
+                            <div class="status-item security-status">
+                                <span class="status-label">Security Status:</span>
+                                <span class="status-value warning" id="security-status">
+                                    <i class="icon-warning"></i>
+                                    3 items require attention
+                                </span>
+                            </div>
+                            <div class="status-item validation-status-item">
+                                <span class="status-label">Validation Status:</span>
+                                <span class="status-value pending" id="validation-dashboard-status">
+                                    <i class="icon-clock"></i>
+                                    Pending
+                                </span>
+                            </div>
+                        </div>
+                    </div>
+                    
+                    <div class="dashboard-grid">
+                        <!-- Deployment Type Card -->
+                        <div class="config-card completed" data-section="deployment">
+                            <div class="card-header">
+                                <h4>Deployment Type</h4>
+                                <div class="card-status">
+                                    <i class="icon-check"></i>
+                                </div>
+                            </div>
+                            <div class="card-content">
+                                <p>Development environment selected</p>
+                                <div class="card-tags">
+                                    <span class="tag">Single Region</span>
+                                    <span class="tag">SQLite</span>
+                                </div>
+                            </div>
+                            <div class="card-actions">
+                                <button class="btn btn-sm btn-secondary">Modify</button>
+                            </div>
+                        </div>
+
+                        <!-- Environment Card -->
+                        <div class="config-card in-progress" data-section="environment">
+                            <div class="card-header">
+                                <h4>Environment Configuration</h4>
+                                <div class="card-status">
+                                    <i class="icon-spinner"></i>
+                                </div>
+                            </div>
+                            <div class="card-content">
+                                <p>Basic settings configured</p>
+                                <div class="progress-mini">
+                                    <div class="progress-mini-fill" style="width: 60%"></div>
+                                </div>
+                            </div>
+                            <div class="card-actions">
+                                <button class="btn btn-sm btn-primary">Continue</button>
+                            </div>
+                        </div>
+
+                        <!-- Database Card -->
+                        <div class="config-card pending" data-section="database">
+                            <div class="card-header">
+                                <h4>Database Setup</h4>
+                                <div class="card-status">
+                                    <i class="icon-pending"></i>
+                                </div>
+                            </div>
+                            <div class="card-content">
+                                <p>SQLite configuration pending</p>
+                                <div class="requirements">
+                                    <span class="requirement">Database location</span>
+                                </div>
+                            </div>
+                            <div class="card-actions">
+                                <button class="btn btn-sm btn-outline">Configure</button>
+                            </div>
+                        </div>
+
+                        <!-- Region Setup Card -->
+                        <div class="config-card pending" data-section="regions">
+                            <div class="card-header">
+                                <h4>Region Configuration</h4>
+                                <div class="card-status">
+                                    <i class="icon-pending"></i>
+                                </div>
+                            </div>
+                            <div class="card-content">
+                                <p>Region setup required</p>
+                                <div class="requirements">
+                                    <span class="requirement">Region name</span>
+                                    <span class="requirement">Physics engine</span>
+                                </div>
+                            </div>
+                            <div class="card-actions">
+                                <button class="btn btn-sm btn-outline">Configure</button>
+                            </div>
+                        </div>
+
+                        <!-- Security Card -->
+                        <div class="config-card warning" data-section="security">
+                            <div class="card-header">
+                                <h4>Security Configuration</h4>
+                                <div class="card-status">
+                                    <i class="icon-warning"></i>
+                                </div>
+                            </div>
+                            <div class="card-content">
+                                <p class="warning-text">Security items require attention</p>
+                                <div class="security-alerts">
+                                    <div class="alert alert-warning">
+                                        <i class="icon-shield"></i>
+                                        SSL certificate required
+                                        <a href="#" class="alert-link">Learn more</a>
+                                    </div>
+                                    <div class="alert alert-warning">
+                                        <i class="icon-key"></i>
+                                        Encryption keys needed
+                                        <a href="#" class="alert-link">Learn more</a>
+                                    </div>
+                                </div>
+                            </div>
+                            <div class="card-actions">
+                                <button class="btn btn-sm btn-warning">Secure Now</button>
+                            </div>
+                        </div>
+
+                        <!-- Network Card -->
+                        <div class="config-card pending" data-section="network">
+                            <div class="card-header">
+                                <h4>Network Configuration</h4>
+                                <div class="card-status">
+                                    <i class="icon-pending"></i>
+                                </div>
+                            </div>
+                            <div class="card-content">
+                                <p>Network settings pending</p>
+                                <div class="requirements">
+                                    <span class="requirement">Server ports</span>
+                                    <span class="requirement">External hostname</span>
+                                </div>
+                            </div>
+                            <div class="card-actions">
+                                <button class="btn btn-sm btn-outline">Configure</button>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+
+                <!-- Configuration Wizard -->
+                <div class="wizard" id="wizard" style="display: none;">
+                    <div class="wizard-content">
+                        <div class="wizard-sidebar">
+                            <div class="wizard-steps">
+                                <div class="wizard-step active" data-step="deployment">
+                                    <div class="step-number">1</div>
+                                    <div class="step-info">
+                                        <div class="step-title">Deployment Type</div>
+                                        <div class="step-desc">Choose your setup type</div>
+                                    </div>
+                                </div>
+                                <div class="wizard-step" data-step="environment">
+                                    <div class="step-number">2</div>
+                                    <div class="step-info">
+                                        <div class="step-title">Environment</div>
+                                        <div class="step-desc">Basic configuration</div>
+                                    </div>
+                                </div>
+                                <div class="wizard-step" data-step="database">
+                                    <div class="step-number">3</div>
+                                    <div class="step-info">
+                                        <div class="step-title">Database</div>
+                                        <div class="step-desc">Data storage setup</div>
+                                    </div>
+                                </div>
+                                <div class="wizard-step" data-step="regions">
+                                    <div class="step-number">4</div>
+                                    <div class="step-info">
+                                        <div class="step-title">Regions</div>
+                                        <div class="step-desc">Virtual world regions</div>
+                                    </div>
+                                </div>
+                                <div class="wizard-step" data-step="security">
+                                    <div class="step-number">5</div>
+                                    <div class="step-info">
+                                        <div class="step-title">Security</div>
+                                        <div class="step-desc">Cryptographic setup</div>
+                                    </div>
+                                </div>
+                                <div class="wizard-step" data-step="network">
+                                    <div class="step-number">6</div>
+                                    <div class="step-info">
+                                        <div class="step-title">Network</div>
+                                        <div class="step-desc">Connectivity settings</div>
+                                    </div>
+                                </div>
+                                <div class="wizard-step" data-step="review">
+                                    <div class="step-number">7</div>
+                                    <div class="step-info">
+                                        <div class="step-title">Review</div>
+                                        <div class="step-desc">Final validation</div>
+                                    </div>
+                                </div>
+                            </div>
+                        </div>
+
+                        <div class="wizard-main">
+                            <div class="wizard-header">
+                                <h3 id="wizard-title">Choose Deployment Type</h3>
+                                <p id="wizard-description">Select the type of OpenSim Next deployment that best matches your needs.</p>
+                            </div>
+
+                            <div class="wizard-body">
+                                <!-- Step content will be dynamically loaded here -->
+                                <div id="wizard-step-content">
+                                    <!-- Smart Deployment Type Selection with Auto-Detection -->
+                                    <div class="deployment-auto-detection" id="deployment-auto-detection">
+                                        <div class="auto-detection-header">
+                                            <h4>🧠 Smart Deployment Detection</h4>
+                                            <p>Our intelligent system analyzes your environment to recommend the optimal deployment type</p>
+                                            <button class="btn btn-secondary" id="run-auto-detection">
+                                                <i class="icon-settings"></i>
+                                                Analyze My Environment
+                                            </button>
+                                        </div>
+                                        
+                                        <div class="auto-detection-results" id="auto-detection-results" style="display: none;">
+                                            <div class="detection-summary">
+                                                <div class="recommendation-card">
+                                                    <div class="recommendation-icon">
+                                                        <i class="icon-check"></i>
+                                                    </div>
+                                                    <div class="recommendation-content">
+                                                        <h5>Recommended: <span id="recommended-deployment"></span></h5>
+                                                        <p id="recommendation-reasoning"></p>
+                                                        <div class="confidence-meter">
+                                                            <span>Confidence: </span>
+                                                            <div class="confidence-bar">
+                                                                <div class="confidence-fill" id="confidence-fill"></div>
+                                                            </div>
+                                                            <span id="confidence-percentage"></span>
+                                                        </div>
+                                                    </div>
+                                                </div>
+                                            </div>
+                                            
+                                            <div class="detection-details">
+                                                <h6>Detection Analysis</h6>
+                                                <div id="detection-details-content"></div>
+                                            </div>
+                                        </div>
+                                    </div>
+
+                                    <!-- Deployment Type Selection -->
+                                    <div class="deployment-options">
+                                        <div class="deployment-option" data-type="development">
+                                            <div class="option-icon">
+                                                <i class="icon-laptop"></i>
+                                            </div>
+                                            <div class="option-content">
+                                                <h4>Development Environment</h4>
+                                                <p>Optimized for rapid development, testing, and learning</p>
+                                                <ul class="option-features">
+                                                    <li>SQLite database (no setup required)</li>
+                                                    <li>ODE physics engine (stable)</li>
+                                                    <li>Local network only</li>
+                                                    <li>Basic security for development</li>
+                                                    <li>15-30 minute setup time</li>
+                                                </ul>
+                                                <div class="option-specs">
+                                                    <div class="spec-item">
+                                                        <span class="spec-label">Users:</span>
+                                                        <span class="spec-value">1-10 concurrent</span>
+                                                    </div>
+                                                    <div class="spec-item">
+                                                        <span class="spec-label">Regions:</span>
+                                                        <span class="spec-value">1-4 regions</span>
+                                                    </div>
+                                                    <div class="spec-item">
+                                                        <span class="spec-label">Hardware:</span>
+                                                        <span class="spec-value">4 cores, 8GB RAM</span>
+                                                    </div>
+                                                </div>
+                                            </div>
+                                            <div class="option-select">
+                                                <button class="btn btn-outline" data-deployment="development">Select</button>
+                                            </div>
+                                        </div>
+
+                                        <div class="deployment-option" data-type="production">
+                                            <div class="option-icon">
+                                                <i class="icon-server"></i>
+                                            </div>
+                                            <div class="option-content">
+                                                <h4>Production Environment</h4>
+                                                <p>Battle-tested configuration for live virtual worlds</p>
+                                                <ul class="option-features">
+                                                    <li>PostgreSQL database (high performance)</li>
+                                                    <li>Bullet/UBODE physics engines</li>
+                                                    <li>SSL/TLS security</li>
+                                                    <li>Professional monitoring</li>
+                                                    <li>2-4 hour setup time</li>
+                                                </ul>
+                                                <div class="option-specs">
+                                                    <div class="spec-item">
+                                                        <span class="spec-label">Users:</span>
+                                                        <span class="spec-value">10-500 concurrent</span>
+                                                    </div>
+                                                    <div class="spec-item">
+                                                        <span class="spec-label">Regions:</span>
+                                                        <span class="spec-value">4-32 regions</span>
+                                                    </div>
+                                                    <div class="spec-item">
+                                                        <span class="spec-label">Hardware:</span>
+                                                        <span class="spec-value">16 cores, 32GB RAM</span>
+                                                    </div>
+                                                </div>
+                                            </div>
+                                            <div class="option-select">
+                                                <button class="btn btn-primary" data-deployment="production">Select</button>
+                                            </div>
+                                        </div>
+
+                                        <div class="deployment-option" data-type="grid">
+                                            <div class="option-icon">
+                                                <i class="icon-network"></i>
+                                            </div>
+                                            <div class="option-content">
+                                                <h4>Grid Environment</h4>
+                                                <p>Distributed multi-server architecture for massive scale</p>
+                                                <ul class="option-features">
+                                                    <li>PostgreSQL clustering</li>
+                                                    <li>POS physics with GPU acceleration</li>
+                                                    <li>Zero trust networking (OpenZiti)</li>
+                                                    <li>Enterprise security & monitoring</li>
+                                                    <li>1-2 day setup time</li>
+                                                </ul>
+                                                <div class="option-specs">
+                                                    <div class="spec-item">
+                                                        <span class="spec-label">Users:</span>
+                                                        <span class="spec-value">100-10,000+ concurrent</span>
+                                                    </div>
+                                                    <div class="spec-item">
+                                                        <span class="spec-label">Regions:</span>
+                                                        <span class="spec-value">32-1000+ regions</span>
+                                                    </div>
+                                                    <div class="spec-item">
+                                                        <span class="spec-label">Hardware:</span>
+                                                        <span class="spec-value">64+ cores, 128GB+ RAM</span>
+                                                    </div>
+                                                </div>
+                                            </div>
+                                            <div class="option-select">
+                                                <button class="btn btn-outline" data-deployment="grid">Select</button>
+                                            </div>
+                                        </div>
+                                    </div>
+
+                                    <!-- Deployment Comparison Matrix -->
+                                    <div class="deployment-comparison" id="deployment-comparison">
+                                        <h4>Deployment Type Comparison</h4>
+                                        <div class="comparison-toggle">
+                                            <button class="btn btn-sm btn-secondary" id="show-comparison">
+                                                <i class="icon-help"></i>
+                                                Show Detailed Comparison
+                                            </button>
+                                        </div>
+                                        <div class="comparison-matrix" id="comparison-matrix" style="display: none;">
+                                            <!-- Comparison matrix will be populated by JavaScript -->
+                                        </div>
+                                    </div>
+
+                                    <!-- Migration Path Information -->
+                                    <div class="migration-info" id="migration-info" style="display: none;">
+                                        <h4>Migration Path</h4>
+                                        <div class="migration-content">
+                                            <p>You can easily upgrade your deployment type later. Here's what to expect:</p>
+                                            <div id="migration-path-details"></div>
+                                        </div>
+                                    </div>
+                                </div>
+                            </div>
+
+                            <div class="wizard-footer">
+                                <div class="wizard-actions">
+                                    <button class="btn btn-secondary" id="wizard-back" disabled>
+                                        <i class="icon-chevron-left"></i>
+                                        Back
+                                    </button>
+                                    <button class="btn btn-primary" id="wizard-next">
+                                        Next
+                                        <i class="icon-chevron-right"></i>
+                                    </button>
+                                </div>
+                                <div class="wizard-info">
+                                    <span class="wizard-help">
+                                        <i class="icon-help"></i>
+                                        <a href="#" id="step-help">Need help choosing?</a>
+                                    </span>
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+
+                <!-- Quick Actions -->
+                <div class="quick-actions">
+                    <div class="action-group">
+                        <h4>Quick Actions</h4>
+                        <div class="actions">
+                            <button class="action-btn" id="import-config">
+                                <i class="icon-upload"></i>
+                                Import Configuration
+                            </button>
+                            <button class="action-btn" id="load-template">
+                                <i class="icon-template"></i>
+                                Load Template
+                            </button>
+                            <button class="action-btn" id="expert-mode">
+                                <i class="icon-code"></i>
+                                Expert Mode
+                            </button>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </main>
+
+        <!-- Footer -->
+        <footer class="footer">
+            <div class="container">
+                <div class="footer-content">
+                    <div class="footer-info">
+                        <p>&copy; 2024 OpenSim Next Auto-Configurator</p>
+                        <p>Version 1.0.0 - Secure configuration made simple</p>
+                    </div>
+                    <div class="footer-links">
+                        <a href="#" class="footer-link">Documentation</a>
+                        <a href="#" class="footer-link">Support</a>
+                        <a href="#" class="footer-link">Security</a>
+                    </div>
+                </div>
+            </div>
+        </footer>
+    </div>
+
+    <!-- Scripts -->
+    <script src="js/app.js"></script>
+    <script src="js/wizard.js"></script>
+    <script src="js/dashboard.js"></script>
+    <script src="js/config-parser.js"></script>
+    <script src="js/security.js"></script>
+    <!-- Validation system modules -->
+    <script src="js/validation.js"></script>
+    <script src="js/deployment-optimizer.js"></script>
+    <script src="js/preflight-checker.js"></script>
+    <script src="js/security-analyzer.js"></script>
+    <!-- Deployment selector module -->
+    <script src="js/deployment-selector.js"></script>
+    <script src="js/deployment-integration.js"></script>
+    <!-- Configuration preview system -->
+    <script src="js/config-diff-engine.js"></script>
+    <script src="js/preview-validation-engine.js"></script>
+    <script src="js/config-export-manager.js"></script>
+    <script src="js/config-preview.js"></script>
+    <!-- Configuration dashboard system -->
+    <script src="js/config-dashboard.js"></script>
+    <!-- USB Key management system -->
+    <script src="js/usb-key-manager.js"></script>
+    <script src="js/usb-integration.js"></script>
+    <!-- Help system -->
+    <script src="js/help-system.js"></script>
+    <script src="js/help-integration.js"></script>
+    
+    <!-- Configuration backup/restore system -->
+    <script src="js/config-backup-core.js"></script>
+    
+    <!-- Configuration testing framework -->
+    <script src="js/config-testing-framework.js"></script>
+    <script src="js/testing-integration.js"></script>
+    
+    <!-- Internationalization (i18n) system -->
+    <script src="js/i18n-manager.js"></script>
+    
+    <!-- Service Worker for PWA -->
+    <script>
+        if ('serviceWorker' in navigator) {
+            navigator.serviceWorker.register('sw.js')
+                .then(registration => console.log('SW registered'))
+                .catch(error => console.log('SW registration failed'));
+        }
+    </script>
+</body>
+</html>

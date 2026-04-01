@@ -1,0 +1,147 @@
+[package]
+name = "opensim-next"
+version = "3.0.0"
+edition = "2021"
+authors = ["OpenSim Contributors"]
+description = "Next generation OpenSim server with Rust/Zig - Database Integrated"
+license = "MIT"
+default-run = "opensim-next"
+
+[lib]
+name = "opensim_next"
+path = "src/lib.rs"
+
+[[bin]]
+name = "opensim-next"
+path = "src/main.rs"
+
+[[bin]]
+name = "mesh_physics_dump"
+path = "src/bin/mesh_physics_dump.rs"
+
+[[test]]
+name = "physics_test"
+path = "tests/physics_test.rs"
+
+[dependencies]
+# Core async runtime
+tokio = { version = "1.36", features = ["full"] }
+# Socket options (SO_REUSEADDR for UDP)
+socket2 = "0.5"
+# Error handling
+anyhow = "1.0"
+thiserror = "1.0"
+# Logging and tracing
+tracing = "0.1"
+tracing-subscriber = { version = "0.3", features = ["env-filter"] }
+# Serialization
+serde = { version = "1.0", features = ["derive"] }
+serde_json = "1.0"
+serde_urlencoded = "0.7"
+# XMLRPC for Second Life viewer login
+xmlrpc = "0.15"
+# Asset handling
+bytes = { version = "1.5", features = ["std"] }
+lru = "0.12"
+parking_lot = "0.12"
+# Network
+tokio-util = { version = "0.7", features = ["codec"] }
+futures = "0.3"
+# FFI
+libc = "0.2"
+libloading = "0.8"
+# Utilities
+uuid = { version = "1.7", features = ["v4", "v5", "serde"] }
+rand = "0.8.5"
+hex = "0.4.3"
+chrono = { version = "0.4", features = ["serde"] }
+# HTTP server
+axum = { version = "0.7", features = ["json", "ws", "multipart"] }
+headers = "0.4"
+hyper = "0.14"
+axum-server = "0.7"
+tower-http = { version = "0.5", features = ["cors"] }
+figment = { version = "0.10", features = ["toml", "env"] }
+base64 = "0.22.0"
+async-trait = "0.1"
+quick-xml = { version = "0.36.0", features = ["serialize"] }
+# CLI and client dependencies
+clap = { version = "4.0", features = ["derive", "env"] }
+reqwest = { version = "0.11", features = ["json", "multipart"] }
+urlencoding = "2.1"
+dotenvy = "0.15"
+# Database
+sqlx = { version = "0.8", features = ["runtime-tokio-rustls", "postgres", "mysql", "sqlite", "uuid", "chrono", "json"] }
+sha2 = "0.10"
+sha1 = "0.10"
+md5 = "0.7"
+# Async utilities
+tokio-stream = "0.1"
+futures-util = "0.3"
+# Caching
+redis = { version = "0.24", features = ["aio", "tokio-comp"], optional = true }
+# URL parsing
+url = "2.5"
+# Compression
+flate2 = "1.0"
+# Serialization for caching
+bincode = "1.3"
+# Image processing for avatar baking
+image = "0.25"
+# Parallel computation for Luxor raytracer
+rayon = "1.10"
+# GPU compute for Luxor raytracer
+wgpu = "23"
+bytemuck = { version = "1", features = ["derive"] }
+pollster = "0.4"
+imagequant = "4.0"
+# JPEG2000 for Second Life texture format
+jpeg2k = "0.8"
+# System info
+num_cpus = "1.16"
+# Archive support for OAR/IAR
+zip = "0.6"
+tar = "0.4"
+# 3D model import (OBJ, STL)
+tobj = "4"
+stl_io = "0.8"
+# GLC Player integration for 40+ 3D model formats
+glc-core = { path = "../../../../GLC Player Mac/glc-player/rust/crates/glc-core" }
+glc-io = { path = "../../../../GLC Player Mac/glc-player/rust/crates/glc-io", default-features = false }
+# Configuration parsing
+toml = "0.8"
+# JWT authentication
+jsonwebtoken = "9.0"
+# Cryptography for dark services
+aes-gcm = "0.10"
+pbkdf2 = "0.12"
+hmac = "0.12"
+# Version management
+semver = "1.0"
+# Text processing
+regex = "1"
+# Procedural terrain generation
+noise = "0.9"
+# Concurrent collections for security hot path
+dashmap = "5.5"
+# Cranelift JIT (optional)
+cranelift = { version = "0.110", optional = true }
+cranelift-jit = { version = "0.110", optional = true }
+cranelift-module = { version = "0.110", optional = true }
+cranelift-codegen = { version = "0.110", optional = true }
+cranelift-frontend = { version = "0.110", optional = true }
+target-lexicon = { version = "0.12", optional = true }
+
+[build-dependencies]
+cc = "1.0"
+
+[dev-dependencies]
+criterion = "0.5"
+tokio-test = "0.4"
+tempfile = "3.10"
+
+[features]
+default = ["physics-zig", "redis-cache"]
+physics-zig = []
+redis-cache = ["redis"]
+jit = ["cranelift", "cranelift-jit", "cranelift-module", "cranelift-codegen", "cranelift-frontend", "target-lexicon"]

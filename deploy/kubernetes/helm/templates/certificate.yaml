@@ -1,0 +1,111 @@
+{{- if and .Values.opensim.certificates.enabled .Values.opensim.certificates.certManager.enabled }}
+apiVersion: cert-manager.io/v1
+kind: Certificate
+metadata:
+  name: {{ include "opensim-next.fullname" . }}-tls
+  labels:
+    {{- include "opensim-next.labels" . | nindent 4 }}
+spec:
+  secretName: {{ .Values.opensim.ingress.tls.secretName | default (printf "%s-tls-secret" (include "opensim-next.fullname" .)) }}
+  duration: {{ .Values.opensim.certificates.certManager.duration | default "2160h" }}
+  renewBefore: {{ .Values.opensim.certificates.certManager.renewBefore | default "360h" }}
+  subject:
+    organizations:
+      - opensim-next
+  commonName: {{ (index .Values.opensim.ingress.hosts 0).host }}
+  dnsNames:
+    {{- range .Values.opensim.ingress.hosts }}
+    - {{ .host }}
+    {{- end }}
+    {{- if .Values.opensim.certificates.wildcard.enabled }}
+    {{- range .Values.opensim.certificates.wildcard.domains }}
+    - {{ . }}
+    {{- end }}
+    {{- end }}
+  issuerRef:
+    name: {{ .Values.opensim.certificates.certManager.issuer.name }}
+    kind: {{ .Values.opensim.certificates.certManager.issuer.type }}
+    group: cert-manager.io
+  privateKey:
+    algorithm: RSA
+    encoding: PKCS1
+    size: 2048
+  usages:
+    - digital signature
+    - key encipherment
+    - server auth
+---
+{{- if eq .Values.opensim.certificates.certManager.issuer.type "ClusterIssuer" }}
+apiVersion: cert-manager.io/v1
+kind: ClusterIssuer
+metadata:
+  name: {{ .Values.opensim.certificates.certManager.issuer.name }}
+  labels:
+    {{- include "opensim-next.labels" . | nindent 4 }}
+spec:
+  acme:
+    server: {{ .Values.opensim.certificates.certManager.issuer.acme.server }}
+    email: {{ .Values.opensim.certificates.certManager.issuer.acme.email }}
+    privateKeySecretRef:
+      name: {{ .Values.opensim.certificates.certManager.issuer.acme.privateKeySecretRef }}
+    solvers:
+      {{- range .Values.opensim.certificates.certManager.issuer.acme.solvers }}
+      - http01:
+          ingress:
+            class: {{ .http01.ingress.class }}
+      {{- end }}
+{{- else }}
+apiVersion: cert-manager.io/v1
+kind: Issuer
+metadata:
+  name: {{ .Values.opensim.certificates.certManager.issuer.name }}
+  labels:
+    {{- include "opensim-next.labels" . | nindent 4 }}
+spec:
+  acme:
+    server: {{ .Values.opensim.certificates.certManager.issuer.acme.server }}
+    email: {{ .Values.opensim.certificates.certManager.issuer.acme.email }}
+    privateKeySecretRef:
+      name: {{ .Values.opensim.certificates.certManager.issuer.acme.privateKeySecretRef }}
+    solvers:
+      {{- range .Values.opensim.certificates.certManager.issuer.acme.solvers }}
+      - http01:
+          ingress:
+            class: {{ .http01.ingress.class }}
+      {{- end }}
+{{- end }}
+{{- end }}
+
+{{- if .Values.monitoring.grafana.enabled }}
+---
+apiVersion: cert-manager.io/v1
+kind: Certificate
+metadata:
+  name: {{ include "opensim-next.fullname" . }}-grafana-tls
+  labels:
+    {{- include "opensim-next.labels" . | nindent 4 }}
+spec:
+  secretName: grafana-tls-secret
+  duration: {{ .Values.opensim.certificates.certManager.duration | default "2160h" }}
+  renewBefore: {{ .Values.opensim.certificates.certManager.renewBefore | default "360h" }}
+  subject:
+    organizations:
+      - opensim-next
+  commonName: {{ (index .Values.monitoring.grafana.ingress.hosts 0) }}
+  dnsNames:
+    {{- range .Values.monitoring.grafana.ingress.hosts }}
+    - {{ . }}
+    {{- end }}
+  issuerRef:
+    name: {{ .Values.opensim.certificates.certManager.issuer.name }}
+    kind: {{ .Values.opensim.certificates.certManager.issuer.type }}
+    group: cert-manager.io
+  privateKey:
+    algorithm: RSA
+    encoding: PKCS1
+    size: 2048
+  usages:
+    - digital signature
+    - key encipherment
+    - server auth
+{{- end }}
