@@ -1,0 +1,28 @@
+[package]
+name = "glc-io"
+version = "2.9.0"
+edition = "2021"
+license = "GPL-3.0"
+description = "3D model I/O for GLC Player — OBJ, STL, glTF, PLY, 3DXML, and more"
+
+[features]
+default = []
+assimp = ["dep:russimp-ng"]
+
+[dependencies]
+glc-core = { path = "../glc-core" }
+tobj = "4"
+stl_io = "0.8"
+quick-xml = "0.37"
+zip = { version = "2", default-features = false, features = ["deflate"] }
+gltf = { version = "1.4", features = ["names"] }
+ply-rs = "0.1"
+russimp-ng = { version = "3.2", features = ["static-link", "nozlib"], optional = true }
+thiserror = "2"
+log = "0.4"
+glam = { version = "0.29", features = ["serde", "bytemuck"] }
+image = { version = "0.25", default-features = false, features = ["jpeg", "png"] }
+serde = { version = "1", features = ["derive"] }
+
+[dev-dependencies]
+tempfile = "3"

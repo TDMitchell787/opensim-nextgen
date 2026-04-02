@@ -1,5 +1,35 @@
 const std = @import("std");
 
+fn addOdePaths(mod: *std.Build.Module, b: *std.Build) void {
+    // Check ODE_PREFIX env var first, then common locations
+    const ode_prefix: ?[]const u8 = std.process.getEnvVarOwned(b.allocator, "ODE_PREFIX") catch null;
+
+    if (ode_prefix) |prefix| {
+        const include = std.fmt.allocPrint(b.allocator, "{s}/include", .{prefix}) catch @panic("OOM");
+        const lib = std.fmt.allocPrint(b.allocator, "{s}/lib", .{prefix}) catch @panic("OOM");
+        mod.addIncludePath(.{ .cwd_relative = include });
+        mod.addLibraryPath(.{ .cwd_relative = lib });
+    } else {
+        // Try common install locations
+        const prefixes = [_][]const u8{
+            "/usr/local",
+            "/opt/homebrew",
+            "/usr",
+            "/usr/local/Cellar/ode/0.16.6",
+        };
+        for (prefixes) |prefix| {
+            const include = std.fmt.allocPrint(b.allocator, "{s}/include/ode", .{prefix}) catch @panic("OOM");
+            if (std.fs.cwd().access(include, .{})) |_| {
+                const inc = std.fmt.allocPrint(b.allocator, "{s}/include", .{prefix}) catch @panic("OOM");
+                const lib = std.fmt.allocPrint(b.allocator, "{s}/lib", .{prefix}) catch @panic("OOM");
+                mod.addIncludePath(.{ .cwd_relative = inc });
+                mod.addLibraryPath(.{ .cwd_relative = lib });
+                break;
+            } else |_| {}
+        }
+    }
+}
+
 pub fn build(b: *std.Build) void {
     const target = b.standardTargetOptions(.{});
     const optimize = b.standardOptimizeOption(.{});
@@ -11,8 +41,7 @@ pub fn build(b: *std.Build) void {
         .link_libc = true,
     });
     physics_mod.addIncludePath(b.path("../shared/ffi"));
-    physics_mod.addIncludePath(.{ .cwd_relative = "/usr/local/Cellar/ode/0.16.6/include" });
-    physics_mod.addLibraryPath(.{ .cwd_relative = "/usr/local/Cellar/ode/0.16.6/lib" });
+    addOdePaths(physics_mod, b);
     physics_mod.addLibraryPath(b.path("../bin/lib64"));
     physics_mod.linkSystemLibrary("ode", .{});
     physics_mod.linkSystemLibrary("BulletSim", .{});
@@ -65,8 +94,7 @@ pub fn build(b: *std.Build) void {
         .optimize = optimize,
         .link_libc = true,
     });
-    physics_test_mod.addIncludePath(.{ .cwd_relative = "/usr/local/Cellar/ode/0.16.6/include" });
-    physics_test_mod.addLibraryPath(.{ .cwd_relative = "/usr/local/Cellar/ode/0.16.6/lib" });
+    addOdePaths(physics_test_mod, b);
     physics_test_mod.addLibraryPath(b.path("../bin/lib64"));
     physics_test_mod.linkSystemLibrary("ode", .{});
     physics_test_mod.linkSystemLibrary("BulletSim", .{});

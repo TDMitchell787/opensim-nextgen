@@ -58,7 +58,8 @@ Thumbs.db
 *.exe
 *.config
 *.runtimeconfig.json
-lib64/
+# lib64/ — kept: bin/lib64/ contains required BulletSim physics libraries
+# lib64/
 addin-data/
 addin-dir-data/
 addon-modules/

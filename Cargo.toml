@@ -1,7 +1,6 @@
 [workspace]
 members = [
     "rust",
-    "tools/rust-analyzer",
 ]
 resolver = "2"
 

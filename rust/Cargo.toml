@@ -106,8 +106,8 @@ tar = "0.4"
 tobj = "4"
 stl_io = "0.8"
 # GLC Player integration for 40+ 3D model formats
-glc-core = { path = "../../../../GLC Player Mac/glc-player/rust/crates/glc-core" }
-glc-io = { path = "../../../../GLC Player Mac/glc-player/rust/crates/glc-io", default-features = false }
+glc-core = { path = "../vendor/glc-core" }
+glc-io = { path = "../vendor/glc-io", default-features = false }
 # Configuration parsing
 toml = "0.8"
 # JWT authentication
