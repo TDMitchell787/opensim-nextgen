@@ -1,14 +1,14 @@
 # OpenSim NextGen
 
-A high-performance virtual world server built with Rust and Zig, featuring a Flutter desktop client. OpenSim NextGen is a modern reimplementation of the OpenSimulator platform, designed for performance, scalability, and production readiness.
+A high-performance virtual world server built with Rust and Zig, featuring a Flutter desktop client. OpenSim NextGen is a modern reimplementation of the OpenSimulator platform found on Opensimular.org, designed for performance, scalability, and production readiness. While this can do single simulators it is a powerful grid system as well. This port used Claude Code Opus 4.6 and compiles easily.  The AI-NPC can be renamed in llm.ini and is a new and powerful tool that I will continue to develop. While the AI-NPC can operate with an paid account it also supports user supplied Ollama for your own llm.
 
 ## Features
 
-- **Hybrid Rust/Zig Architecture** — Rust for networking, services, and game logic; Zig for physics, collision, and SIMD math
+- **Hybrid Rust/Zig Architecture** — Rust for networking, services, and simulation logic; Zig for physics, collision, and SIMD math
 - **Multi-Protocol Support** — Compatible with Second Life viewers (Firestorm, etc.) and web browsers simultaneously
 - **Quad-Database Support** — PostgreSQL, MySQL, MariaDB, and SQLite backends
 - **Instance Management** — Run multiple independent grid instances from a single installation
-- **AI Integration** — Optional LLM-powered NPC director system
+- **AI Integration** — Optional LLM-powered NPC director system in 14 areas with 140 skills
 - **Flutter Desktop Client** — Native macOS configuration tool and user manual viewer
 - **Docker & Kubernetes** — Production deployment templates included
 
@@ -57,7 +57,7 @@ RUST_LOG=info DYLD_LIBRARY_PATH=./zig/zig-out/lib ./target/release/opensim-next
 ```
 
 The server starts on:
-- **Port 9000** — Second Life viewer connections (LLUDP)
+- **Port 9000** — Second Life viewer connections (LLUDP) or as set in Opensim.ini and Regions.ini
 - **Port 8080** — Web client interface
 - **Port 9200** — Admin dashboard
 - **Port 9100** — Prometheus metrics
@@ -113,7 +113,7 @@ opensim-nextgen/
 Avatar mesh models and LSL script libraries are maintained in separate repositories:
 
 - **Ruth2/Roth2 Avatar Mesh** — [github.com/RuthAndRoth](https://github.com/RuthAndRoth)
-- **LSL Script Library** — Available from various OpenSimulator community sources
+- **LSL Script Library** — https://github.com/Outworldz 
 
 ## Database Support
 
