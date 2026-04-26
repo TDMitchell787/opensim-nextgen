@@ -1,0 +1,130 @@
+# OpenSim NextGen — Ubuntu 24.04 Production Dockerfile
+# Multi-stage build: Rust + Zig → Ubuntu 24.04 runtime
+
+#==============================================================================
+# Stage 1: Rust Builder
+#==============================================================================
+FROM ubuntu:24.04 AS rust-builder
+
+RUN apt-get update && apt-get install -y \
+    curl build-essential pkg-config git ca-certificates \
+    libssl-dev libpq-dev libsqlite3-dev \
+    && rm -rf /var/lib/apt/lists/*
+
+# Install Rust via rustup
+RUN curl --proto '=https' --tlsv1.2 -sSf https://sh.rustup.rs | sh -s -- -y --default-toolchain 1.75.0
+ENV PATH="/root/.cargo/bin:${PATH}"
+
+WORKDIR /build
+COPY rust/Cargo.toml rust/Cargo.lock ./rust/
+COPY rust/src ./rust/src/
+COPY rust/build.rs ./rust/
+
+WORKDIR /build/rust
+RUN cargo build --release && strip target/release/opensim-next
+
+#==============================================================================
+# Stage 2: Zig Builder
+#==============================================================================
+FROM ubuntu:24.04 AS zig-builder
+
+RUN apt-get update && apt-get install -y \
+    curl xz-utils build-essential \
+    && rm -rf /var/lib/apt/lists/*
+
+RUN curl -L "https://ziglang.org/download/0.14.0/zig-linux-x86_64-0.14.0.tar.xz" \
+    | tar -xJ -C /opt \
+    && ln -s /opt/zig-linux-x86_64-0.14.0/zig /usr/local/bin/zig
+
+WORKDIR /build
+COPY zig/ ./zig/
+
+WORKDIR /build/zig
+RUN zig build -Doptimize=ReleaseFast
+
+#==============================================================================
+# Stage 3: Production Runtime — Ubuntu 24.04
+#==============================================================================
+FROM ubuntu:24.04 AS production
+
+ARG BUILD_VERSION=latest
+ARG OPENSIM_USER_UID=1001
+ARG OPENSIM_USER_GID=1001
+
+LABEL maintainer="OpenSim NextGen" \
+      version="${BUILD_VERSION}" \
+      description="OpenSim NextGen — Virtual World Server on Ubuntu 24.04" \
+      org.opencontainers.image.title="OpenSim NextGen" \
+      org.opencontainers.image.base.name="ubuntu:24.04"
+
+# Runtime dependencies
+RUN apt-get update && apt-get install -y --no-install-recommends \
+    libssl3t64 \
+    libpq5 \
+    libsqlite3-0 \
+    ca-certificates \
+    curl \
+    procps \
+    tzdata \
+    postgresql-client \
+    && apt-get clean \
+    && rm -rf /var/lib/apt/lists/* /tmp/* /var/tmp/*
+
+# Create opensim user
+RUN groupadd -g ${OPENSIM_USER_GID} opensim \
+    && useradd -r -m -u ${OPENSIM_USER_UID} -g opensim -s /bin/bash opensim
+
+# Application directories
+RUN mkdir -p /opt/opensim-next/{bin,config,data,logs,web,assets} \
+    && mkdir -p /opt/opensim-next/config/{Regions,config-include} \
+    && mkdir -p /var/lib/opensim-next \
+    && mkdir -p /var/log/opensim-next \
+    && chown -R opensim:opensim /opt/opensim-next /var/lib/opensim-next /var/log/opensim-next
+
+# Copy binaries from build stages
+COPY --from=rust-builder --chown=opensim:opensim /build/rust/target/release/opensim-next /opt/opensim-next/bin/
+COPY --from=zig-builder --chown=opensim:opensim /build/zig/zig-out/lib/ /opt/opensim-next/lib/
+
+# Copy migrations and assets
+COPY --chown=opensim:opensim rust/migrations/ /opt/opensim-next/migrations/
+COPY --chown=opensim:opensim rust/assets/ /opt/opensim-next/assets/
+
+# Copy configuration files
+COPY --chown=opensim:opensim dockerplans/config/OpenSim.ini /opt/opensim-next/config/
+COPY --chown=opensim:opensim dockerplans/config/llm.ini /opt/opensim-next/config/
+COPY --chown=opensim:opensim dockerplans/config/Regions/ /opt/opensim-next/config/Regions/
+COPY --chown=opensim:opensim dockerplans/config/config-include/ /opt/opensim-next/config/config-include/
+
+# Copy and set up entrypoint
+COPY --chown=opensim:opensim dockerplans/entrypoint.sh /opt/opensim-next/bin/
+RUN chmod +x /opt/opensim-next/bin/entrypoint.sh
+
+# Copy seed SQL for test user creation
+COPY --chown=opensim:opensim dockerplans/seed-test-user.sql /opt/opensim-next/
+
+# Zig library path
+ENV LD_LIBRARY_PATH="/opt/opensim-next/lib:${LD_LIBRARY_PATH}"
+
+# Application environment
+ENV OPENSIM_CONFIG_PATH="/opt/opensim-next/config" \
+    OPENSIM_DATA_PATH="/var/lib/opensim-next" \
+    OPENSIM_LOG_PATH="/var/log/opensim-next" \
+    OPENSIM_ASSETS_PATH="/opt/opensim-next/assets" \
+    RUST_LOG="info" \
+    RUST_BACKTRACE="1"
+
+# Security hardening
+RUN chmod -R o-rwx /opt/opensim-next /var/lib/opensim-next /var/log/opensim-next
+
+# Health check
+HEALTHCHECK --interval=30s --timeout=10s --start-period=60s --retries=3 \
+    CMD curl -f http://localhost:9100/health || exit 1
+
+# Ports: 9000-9003 (4 LLUDP regions), 8080 (web), 9200 (admin), 9100 (metrics)
+EXPOSE 9000/tcp 9000/udp 9001/udp 9002/udp 9003/udp 8080 9200 9100
+
+WORKDIR /opt/opensim-next
+USER opensim
+
+ENTRYPOINT ["/opt/opensim-next/bin/entrypoint.sh"]
+CMD ["server"]

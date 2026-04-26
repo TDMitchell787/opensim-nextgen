@@ -1,6 +1,6 @@
 # OpenSim NextGen
 
-A high-performance virtual world server built with Rust and Zig, featuring a Flutter desktop client. OpenSim NextGen is a modern reimplementation of the OpenSimulator platform found on Opensimular.org, designed for performance, scalability, and production readiness. While this can do single simulators it is a powerful grid system as well. This port used Claude Code Opus 4.6 and compiles easily.  The AI-NPC can be renamed in llm.ini and is a new and powerful tool that I will continue to develop. While the AI-NPC can operate with an paid account it also supports user supplied Ollama for your own llm.
+A high-performance virtual world server built with Rust and Zig, featuring a Flutter desktop client. OpenSim NextGen is a modern reimplementation of the OpenSimulator platform found on Opensimular.org, designed for performance, scalability, and production readiness. While this can do single simulators it is a powerful grid system as well. This port used Claude Code Opus 4.6 and compiles easily.  The AI-NPC can be renamed in llm.ini and is a new and powerful tool that will continue to develop. While the AI-NPC can operate with an paid account it also supports user supplied Ollama for your own llm.
 
 ## Features
 

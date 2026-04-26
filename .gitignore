@@ -71,3 +71,8 @@ Instances/*/.running*.json
 Instances/*/fsassets/
 Instances/*/assetcache/
 Instances/*/mesh/
+# GitNexus
+.gitnexus/
+.mcp.json
+AGENTS.md
+docker-compose.gitnexus.yaml
