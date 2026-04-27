@@ -1,51 +1,73 @@
-# OpenSim NextGen — Ubuntu 24.04 Production Dockerfile
-# Multi-stage build: Rust + Zig → Ubuntu 24.04 runtime
+# OpenSim NextGen — Ubuntu 26.04 Production Dockerfile
+# Multi-stage build: Rust + Zig → Ubuntu 26.04 runtime
 
 #==============================================================================
-# Stage 1: Rust Builder
+# Stage 1: Zig Builder (must come first; Rust links its outputs)
 #==============================================================================
-FROM ubuntu:24.04 AS rust-builder
+FROM ubuntu:26.04 AS zig-builder
+
+RUN apt-get update && apt-get install -y \
+    curl xz-utils build-essential libode-dev \
+    && rm -rf /var/lib/apt/lists/*
+
+RUN curl -L "https://ziglang.org/download/0.15.2/zig-x86_64-linux-0.15.2.tar.xz" \
+    | tar -xJ -C /opt \
+    && ln -s /opt/zig-x86_64-linux-0.15.2/zig /usr/local/bin/zig
+
+WORKDIR /build
+COPY zig/ ./zig/
+COPY bin/lib64 ./bin/lib64/
+COPY shared ./shared/
+
+WORKDIR /build/zig
+RUN zig build -Doptimize=ReleaseFast
+
+#==============================================================================
+# Stage 2: Rust Builder
+#==============================================================================
+FROM ubuntu:26.04 AS rust-builder
 
 RUN apt-get update && apt-get install -y \
     curl build-essential pkg-config git ca-certificates \
     libssl-dev libpq-dev libsqlite3-dev \
+    postgresql postgresql-contrib sudo \
     && rm -rf /var/lib/apt/lists/*
 
-# Install Rust via rustup
-RUN curl --proto '=https' --tlsv1.2 -sSf https://sh.rustup.rs | sh -s -- -y --default-toolchain 1.75.0
+RUN curl --proto '=https' --tlsv1.2 -sSf https://sh.rustup.rs | sh -s -- -y --default-toolchain 1.90.0
 ENV PATH="/root/.cargo/bin:${PATH}"
 
 WORKDIR /build
 COPY rust/Cargo.toml rust/Cargo.lock ./rust/
 COPY rust/src ./rust/src/
 COPY rust/build.rs ./rust/
+COPY rust/migrations ./rust/migrations/
+COPY rust/assets ./rust/assets/
+COPY rust/web-frontend ./rust/web-frontend/
+COPY rust/shaders ./rust/shaders/
+COPY web ./web/
+COPY docs ./docs/
+COPY templates ./templates/
+COPY vendor ./vendor/
 
+# Pull Zig outputs so the Rust linker can find -lopensim_physics / -lopensim_ffi
+COPY --from=zig-builder /build/zig/zig-out/lib /build/zig/zig-out/lib
+
+# Build with sqlx live-DB validation against an embedded postgres
 WORKDIR /build/rust
-RUN cargo build --release && strip target/release/opensim-next
+RUN set -e; \
+    pg_ctlcluster $(pg_lsclusters -h | awk '{print $1; exit}') $(pg_lsclusters -h | awk '{print $2; exit}') start; \
+    sudo -u postgres psql -c "CREATE USER opensim WITH SUPERUSER PASSWORD 'opensim';"; \
+    sudo -u postgres psql -c "CREATE DATABASE opensim OWNER opensim;"; \
+    export DATABASE_URL="postgres://opensim:opensim@localhost/opensim"; \
+    for f in migrations/postgres/*.sql; do PGPASSWORD=opensim psql -h localhost -U opensim -d opensim -v ON_ERROR_STOP=1 -f "$f"; done; \
+    DATABASE_URL="$DATABASE_URL" \
+    RUSTFLAGS="-L /build/zig/zig-out/lib" \
+    cargo build --release && strip target/release/opensim-next
 
 #==============================================================================
-# Stage 2: Zig Builder
+# Stage 3: Production Runtime — Ubuntu 26.04
 #==============================================================================
-FROM ubuntu:24.04 AS zig-builder
-
-RUN apt-get update && apt-get install -y \
-    curl xz-utils build-essential \
-    && rm -rf /var/lib/apt/lists/*
-
-RUN curl -L "https://ziglang.org/download/0.14.0/zig-linux-x86_64-0.14.0.tar.xz" \
-    | tar -xJ -C /opt \
-    && ln -s /opt/zig-linux-x86_64-0.14.0/zig /usr/local/bin/zig
-
-WORKDIR /build
-COPY zig/ ./zig/
-
-WORKDIR /build/zig
-RUN zig build -Doptimize=ReleaseFast
-
-#==============================================================================
-# Stage 3: Production Runtime — Ubuntu 24.04
-#==============================================================================
-FROM ubuntu:24.04 AS production
+FROM ubuntu:26.04 AS production
 
 ARG BUILD_VERSION=latest
 ARG OPENSIM_USER_UID=1001
@@ -53,15 +75,16 @@ ARG OPENSIM_USER_GID=1001
 
 LABEL maintainer="OpenSim NextGen" \
       version="${BUILD_VERSION}" \
-      description="OpenSim NextGen — Virtual World Server on Ubuntu 24.04" \
+      description="OpenSim NextGen — Virtual World Server on Ubuntu 26.04" \
       org.opencontainers.image.title="OpenSim NextGen" \
-      org.opencontainers.image.base.name="ubuntu:24.04"
+      org.opencontainers.image.base.name="ubuntu:26.04"
 
 # Runtime dependencies
 RUN apt-get update && apt-get install -y --no-install-recommends \
-    libssl3t64 \
+    libssl3 \
     libpq5 \
     libsqlite3-0 \
+    libode8t64 \
     ca-certificates \
     curl \
     procps \
@@ -84,6 +107,7 @@ RUN mkdir -p /opt/opensim-next/{bin,config,data,logs,web,assets} \
 # Copy binaries from build stages
 COPY --from=rust-builder --chown=opensim:opensim /build/rust/target/release/opensim-next /opt/opensim-next/bin/
 COPY --from=zig-builder --chown=opensim:opensim /build/zig/zig-out/lib/ /opt/opensim-next/lib/
+COPY --chown=opensim:opensim bin/lib64/libBulletSim.so /opt/opensim-next/lib/
 
 # Copy migrations and assets
 COPY --chown=opensim:opensim rust/migrations/ /opt/opensim-next/migrations/

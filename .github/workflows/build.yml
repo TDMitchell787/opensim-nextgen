@@ -1,0 +1,111 @@
+name: build-check
+
+# Lean preflight pipeline: catches the build failures users actually hit
+# (sqlx::query! type-inference errors, missing toolchain, link errors).
+# Independent of the larger ci-cd.yml pipeline.
+
+on:
+  push:
+    branches: [main, develop]
+  pull_request:
+    branches: [main, develop]
+  workflow_dispatch:
+
+env:
+  CARGO_TERM_COLOR: always
+  RUST_TOOLCHAIN: "1.90.0"
+  ZIG_VERSION: "0.15.2"
+  DATABASE_URL: postgres://opensim:opensim@localhost:5432/opensim
+
+jobs:
+  cargo-check:
+    name: cargo check (rust + sqlx schema)
+    runs-on: ubuntu-latest
+
+    services:
+      postgres:
+        image: postgres:16
+        env:
+          POSTGRES_USER: opensim
+          POSTGRES_PASSWORD: opensim
+          POSTGRES_DB: opensim
+        ports:
+          - 5432:5432
+        options: >-
+          --health-cmd "pg_isready -U opensim -d opensim"
+          --health-interval 10s
+          --health-timeout 5s
+          --health-retries 5
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Install Rust ${{ env.RUST_TOOLCHAIN }}
+        uses: dtolnay/rust-toolchain@stable
+        with:
+          toolchain: ${{ env.RUST_TOOLCHAIN }}
+
+      - name: Cache cargo registry / target
+        uses: actions/cache@v4
+        with:
+          path: |
+            ~/.cargo/registry/index/
+            ~/.cargo/registry/cache/
+            ~/.cargo/git/db/
+            rust/target/
+          key: ${{ runner.os }}-cargo-${{ env.RUST_TOOLCHAIN }}-${{ hashFiles('rust/Cargo.lock') }}
+          restore-keys: |
+            ${{ runner.os }}-cargo-${{ env.RUST_TOOLCHAIN }}-
+
+      - name: Apply Postgres migrations (so sqlx::query! macros can validate)
+        run: |
+          sudo apt-get update -qq
+          sudo apt-get install -y --no-install-recommends postgresql-client
+          for f in rust/migrations/postgres/*.sql; do
+            echo "→ $f"
+            PGPASSWORD=opensim psql -h localhost -U opensim -d opensim -v ON_ERROR_STOP=1 -f "$f"
+          done
+
+      - name: cargo check
+        working-directory: rust
+        run: cargo check --release --all-targets
+
+  zig-build:
+    name: zig build (physics + ffi libs)
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Install Zig ${{ env.ZIG_VERSION }}
+        run: |
+          curl -L "https://ziglang.org/download/${ZIG_VERSION}/zig-x86_64-linux-${ZIG_VERSION}.tar.xz" \
+            | sudo tar -xJ -C /opt
+          sudo ln -sf "/opt/zig-x86_64-linux-${ZIG_VERSION}/zig" /usr/local/bin/zig
+          zig version
+
+      - name: Install ODE
+        run: sudo apt-get update -qq && sudo apt-get install -y --no-install-recommends libode-dev
+
+      - name: zig build
+        working-directory: zig
+        run: zig build -Doptimize=ReleaseFast
+
+  docker-build:
+    name: docker build (full image)
+    runs-on: ubuntu-latest
+    needs: [cargo-check, zig-build]
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Set up Docker Buildx
+        uses: docker/setup-buildx-action@v3
+
+      - name: Build image (no push)
+        uses: docker/build-push-action@v6
+        with:
+          context: .
+          file: dockerplans/Dockerfile.ubuntu26
+          push: false
+          tags: opensim-next:ci
+          cache-from: type=gha
+          cache-to: type=gha,mode=max

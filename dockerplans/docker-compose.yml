@@ -2,7 +2,7 @@ services:
   opensim-next:
     build:
       context: ../
-      dockerfile: dockerplans/Dockerfile.ubuntu24
+      dockerfile: dockerplans/Dockerfile.ubuntu26
     container_name: opensim-nextgen
     env_file: .env  # copy .env.example to .env before first run
     environment:

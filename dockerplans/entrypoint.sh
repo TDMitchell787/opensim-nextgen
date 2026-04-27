@@ -120,10 +120,7 @@ start_server() {
     log "  Ports:   9000-9003 (LLUDP), 8080 (web), 9200 (admin), 9100 (metrics)"
 
     cd /opt/opensim-next
-    ./bin/opensim-next \
-        --config "${OPENSIM_CONFIG_PATH}" \
-        --data-path "${OPENSIM_DATA_PATH}" \
-        --log-path "${OPENSIM_LOG_PATH}" \
+    ./bin/opensim-next start --mode standalone \
         > "${OPENSIM_LOG_PATH}/server.log" 2>&1 &
 
     OPENSIM_PID=$!
