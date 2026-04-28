@@ -109,9 +109,14 @@ COPY --from=rust-builder --chown=opensim:opensim /build/rust/target/release/open
 COPY --from=zig-builder --chown=opensim:opensim /build/zig/zig-out/lib/ /opt/opensim-next/lib/
 COPY --chown=opensim:opensim bin/lib64/libBulletSim.so /opt/opensim-next/lib/
 
-# Copy migrations and assets
+# Copy migrations and assets.
+# bin/assets is the OpenSim-style asset bundle (TexturesAssetSet, etc.) that
+# the asset loader seeds into the DB on first start. The loader resolves
+# `../bin/assets` relative to the server's CWD (/opt/opensim-next), so the
+# folder must live at /opt/bin/assets — that path is intentional.
 COPY --chown=opensim:opensim rust/migrations/ /opt/opensim-next/migrations/
 COPY --chown=opensim:opensim rust/assets/ /opt/opensim-next/assets/
+COPY --chown=opensim:opensim bin/assets/ /opt/bin/assets/
 
 # Copy configuration files
 COPY --chown=opensim:opensim dockerplans/config/OpenSim.ini /opt/opensim-next/config/
