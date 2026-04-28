@@ -1,27 +1,29 @@
 -- OpenSim NextGen — Test User Seed
--- Creates a test user account after migrations have run
+-- Creates a test user account after migrations have run.
 -- Login: First=Test Last=User Password=test_password
 --
--- Password hash format (OpenSim compatible):
---   passwordHash = md5( md5(plaintext_password) || ':' || salt )
---   The viewer sends $1$<md5(password)> and the server verifies against this.
+-- Password hash format (OpenSim-compatible salted MD5):
+--   passwordhash = md5( md5(plaintext) || ':' || salt )
+--   The viewer sends "$1$<md5(plaintext)>"; the server strips "$1$",
+--   recomputes md5(viewer_hash || ':' || salt) and compares to passwordhash.
+--   See rust/src/database/user_accounts.rs::authenticate_user_opensim.
+--
+-- All identifiers are unquoted/lowercase to match the schema produced by
+-- the SQLx migrations (Postgres folds unquoted identifiers to lowercase).
+-- The salt is 32 hex chars to fit `passwordsalt character(32)`.
 
 DO $$
 DECLARE
     test_user_id UUID := 'aaaaaaaa-bbbb-cccc-dddd-eeeeeeeeeeee';
-    test_salt TEXT := 'a1b2c3d4-e5f6-7890-abcd-ef1234567890';
-    password_md5 TEXT;
+    test_salt CHAR(32) := 'a1b2c3d4e5f67890abcdef1234567890';
     password_hash TEXT;
     root_folder_id UUID := 'aaaaaaaa-bbbb-cccc-dddd-ffffffffffff';
 BEGIN
-    -- Compute password hash: md5(md5('test_password') || ':' || salt)
-    password_md5 := md5('test_password');
-    password_hash := md5(password_md5 || ':' || test_salt);
+    password_hash := md5(md5('test_password') || ':' || test_salt);
 
-    -- Insert into UserAccounts (if table exists and user doesn't already exist)
     IF EXISTS (SELECT 1 FROM information_schema.tables WHERE table_name = 'useraccounts') THEN
-        INSERT INTO "UserAccounts" ("PrincipalID", "ScopeID", "FirstName", "LastName", "Email",
-            "ServiceURLs", "Created", "UserLevel", "UserFlags", "UserTitle", "active")
+        INSERT INTO useraccounts (principalid, scopeid, firstname, lastname, email,
+            serviceurls, created, userlevel, userflags, usertitle, active)
         VALUES (
             test_user_id,
             '00000000-0000-0000-0000-000000000000',
@@ -31,16 +33,15 @@ BEGIN
             EXTRACT(EPOCH FROM NOW())::INTEGER,
             0, 0, '', 1
         )
-        ON CONFLICT ("PrincipalID") DO NOTHING;
+        ON CONFLICT (principalid) DO NOTHING;
 
-        RAISE NOTICE 'UserAccounts: Test User created or already exists';
+        RAISE NOTICE 'useraccounts: Test User created or already exists';
     ELSE
-        RAISE NOTICE 'UserAccounts table not found — migrations may not have run yet';
+        RAISE NOTICE 'useraccounts table not found — migrations may not have run yet';
     END IF;
 
-    -- Insert into auth table
     IF EXISTS (SELECT 1 FROM information_schema.tables WHERE table_name = 'auth') THEN
-        INSERT INTO auth (uuid, "passwordHash", "passwordSalt", "webLoginKey", "accountType")
+        INSERT INTO auth (uuid, passwordhash, passwordsalt, webloginkey, accounttype)
         VALUES (
             test_user_id,
             password_hash,
@@ -55,9 +56,8 @@ BEGIN
         RAISE NOTICE 'auth table not found — migrations may not have run yet';
     END IF;
 
-    -- Create root inventory folder
     IF EXISTS (SELECT 1 FROM information_schema.tables WHERE table_name = 'inventoryfolders') THEN
-        INSERT INTO inventoryfolders ("folderID", "agentID", "parentFolderID", "folderName", type, version)
+        INSERT INTO inventoryfolders (folderid, agentid, parentfolderid, foldername, type, version)
         VALUES
             (root_folder_id, test_user_id, '00000000-0000-0000-0000-000000000000', 'My Inventory', 8, 1),
             (uuid_generate_v4(), test_user_id, root_folder_id, 'Animations', 20, 1),
@@ -78,7 +78,7 @@ BEGIN
             (uuid_generate_v4(), test_user_id, root_folder_id, 'Trash', 14, 1),
             (uuid_generate_v4(), test_user_id, root_folder_id, 'Settings', 56, 1),
             (uuid_generate_v4(), test_user_id, root_folder_id, 'Materials', 57, 1)
-        ON CONFLICT ("folderID") DO NOTHING;
+        ON CONFLICT (folderid) DO NOTHING;
 
         RAISE NOTICE 'inventoryfolders: 19 folders created for Test User';
     ELSE
