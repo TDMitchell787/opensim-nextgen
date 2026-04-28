@@ -1,5 +1,5 @@
 //! Terminal command interface for OpenSim Robust-style admin commands
-//! 
+//!
 //! Provides a command-line interface that mirrors the classic OpenSim Robust console
 //! commands, implemented as a modern REST API client with comprehensive validation.
 
@@ -29,27 +29,102 @@ pub struct CommandResult {
 /// Terminal command types matching OpenSim Robust commands
 #[derive(Debug, Clone)]
 pub enum TerminalCommand {
-    CreateUser { firstname: String, lastname: String, password: String, email: String, user_level: Option<i32> },
-    ResetUserPassword { firstname: String, lastname: String, new_password: String },
-    ResetUserEmail { firstname: String, lastname: String, new_email: String },
-    SetUserLevel { firstname: String, lastname: String, user_level: i32 },
-    ShowAccount { firstname: String, lastname: String },
-    ShowUsers { limit: Option<i32> },
-    DeleteUser { firstname: String, lastname: String },
+    CreateUser {
+        firstname: String,
+        lastname: String,
+        password: String,
+        email: String,
+        user_level: Option<i32>,
+    },
+    ResetUserPassword {
+        firstname: String,
+        lastname: String,
+        new_password: String,
+    },
+    ResetUserEmail {
+        firstname: String,
+        lastname: String,
+        new_email: String,
+    },
+    SetUserLevel {
+        firstname: String,
+        lastname: String,
+        user_level: i32,
+    },
+    ShowAccount {
+        firstname: String,
+        lastname: String,
+    },
+    ShowUsers {
+        limit: Option<i32>,
+    },
+    DeleteUser {
+        firstname: String,
+        lastname: String,
+    },
     DatabaseStats,
-    DatabaseBackup { backup_name: String, include_users: bool, include_regions: bool, include_assets: bool, include_inventory: bool },
-    DatabaseRestore { backup_file: String, overwrite_existing: bool },
-    DatabaseMaintenance { vacuum: bool, reindex: bool, analyze: bool, cleanup: bool },
-    DatabaseMigration { target_version: String, dry_run: bool, backup_before: bool },
+    DatabaseBackup {
+        backup_name: String,
+        include_users: bool,
+        include_regions: bool,
+        include_assets: bool,
+        include_inventory: bool,
+    },
+    DatabaseRestore {
+        backup_file: String,
+        overwrite_existing: bool,
+    },
+    DatabaseMaintenance {
+        vacuum: bool,
+        reindex: bool,
+        analyze: bool,
+        cleanup: bool,
+    },
+    DatabaseMigration {
+        target_version: String,
+        dry_run: bool,
+        backup_before: bool,
+    },
     DatabaseHealth,
-    DatabaseListBackups { directory: Option<String> },
-    LoadIar { firstname: String, lastname: String, file_path: String, merge: bool },
-    SaveIar { firstname: String, lastname: String, file_path: String, include_assets: bool },
-    LoadOar { region_name: String, file_path: String, merge: bool, force_terrain: bool, force_parcels: bool },
-    SaveOar { region_name: String, file_path: String, include_assets: bool, include_terrain: bool, include_objects: bool, include_parcels: bool },
-    ShowArchiveJobs { limit: Option<i32> },
-    ShowArchiveJob { job_id: String },
-    CancelArchiveJob { job_id: String },
+    DatabaseListBackups {
+        directory: Option<String>,
+    },
+    LoadIar {
+        firstname: String,
+        lastname: String,
+        file_path: String,
+        merge: bool,
+    },
+    SaveIar {
+        firstname: String,
+        lastname: String,
+        file_path: String,
+        include_assets: bool,
+    },
+    LoadOar {
+        region_name: String,
+        file_path: String,
+        merge: bool,
+        force_terrain: bool,
+        force_parcels: bool,
+    },
+    SaveOar {
+        region_name: String,
+        file_path: String,
+        include_assets: bool,
+        include_terrain: bool,
+        include_objects: bool,
+        include_parcels: bool,
+    },
+    ShowArchiveJobs {
+        limit: Option<i32>,
+    },
+    ShowArchiveJob {
+        job_id: String,
+    },
+    CancelArchiveJob {
+        job_id: String,
+    },
     Help,
     Exit,
 }
@@ -59,57 +134,55 @@ impl TerminalCommandProcessor {
     pub fn new() -> Self {
         let api_base_url = env::var("OPENSIM_ADMIN_API_URL")
             .unwrap_or_else(|_| "http://localhost:9200".to_string());
-        let api_key = env::var("OPENSIM_API_KEY")
-            .unwrap_or_else(|_| "default-key-change-me".to_string());
-        
+        let api_key =
+            env::var("OPENSIM_API_KEY").unwrap_or_else(|_| "default-key-change-me".to_string());
+
         Self {
             client: Client::new(),
             api_base_url,
             api_key,
         }
     }
-    
+
     /// Start interactive terminal session
     pub async fn start_interactive_session(&self) -> Result<()> {
         println!("🎯 OpenSim Next - Robust-Style Admin Terminal");
         println!("===============================================");
         println!("Type 'help' for available commands or 'exit' to quit.");
         println!("All commands mirror classic OpenSim Robust server syntax.\n");
-        
+
         loop {
             print!("OpenSimNext> ");
             io::stdout().flush()?;
-            
+
             let mut input = String::new();
             io::stdin().read_line(&mut input)?;
             let input = input.trim();
-            
+
             if input.is_empty() {
                 continue;
             }
-            
+
             match self.parse_command(input) {
                 Ok(TerminalCommand::Exit) => {
                     println!("👋 Goodbye!");
                     break;
                 }
-                Ok(command) => {
-                    match self.execute_command(command).await {
-                        Ok(result) => {
-                            if result.success {
-                                println!("✅ {}", result.message);
-                                if let Some(data) = result.data {
-                                    println!("{}", serde_json::to_string_pretty(&data)?);
-                                }
-                            } else {
-                                println!("❌ {}", result.message);
+                Ok(command) => match self.execute_command(command).await {
+                    Ok(result) => {
+                        if result.success {
+                            println!("✅ {}", result.message);
+                            if let Some(data) = result.data {
+                                println!("{}", serde_json::to_string_pretty(&data)?);
                             }
-                        }
-                        Err(e) => {
-                            println!("🔥 Command failed: {}", e);
+                        } else {
+                            println!("❌ {}", result.message);
                         }
                     }
-                }
+                    Err(e) => {
+                        println!("🔥 Command failed: {}", e);
+                    }
+                },
                 Err(e) => {
                     println!("💥 Invalid command: {}", e);
                     println!("Type 'help' for available commands.");
@@ -117,17 +190,17 @@ impl TerminalCommandProcessor {
             }
             println!();
         }
-        
+
         Ok(())
     }
-    
+
     /// Parse user input into terminal command
     pub fn parse_command(&self, input: &str) -> Result<TerminalCommand> {
         let parts: Vec<&str> = input.split_whitespace().collect();
         if parts.is_empty() {
             return Err(anyhow::anyhow!("Empty command"));
         }
-        
+
         match parts[0].to_lowercase().as_str() {
             "help" => Ok(TerminalCommand::Help),
             "exit" | "quit" => Ok(TerminalCommand::Exit),
@@ -144,23 +217,27 @@ impl TerminalCommandProcessor {
             _ => Err(anyhow::anyhow!("Unknown command: {}", parts[0])),
         }
     }
-    
+
     /// Parse 'create user' command
     fn parse_create_command(&self, parts: &[&str]) -> Result<TerminalCommand> {
         if parts.len() < 2 || parts[1] != "user" {
-            return Err(anyhow::anyhow!("Expected 'create user firstname lastname password email [user_level]'"));
+            return Err(anyhow::anyhow!(
+                "Expected 'create user firstname lastname password email [user_level]'"
+            ));
         }
-        
+
         if parts.len() < 6 {
-            return Err(anyhow::anyhow!("create user requires: firstname lastname password email [user_level]"));
+            return Err(anyhow::anyhow!(
+                "create user requires: firstname lastname password email [user_level]"
+            ));
         }
-        
+
         let user_level = if parts.len() > 6 {
             Some(parts[6].parse::<i32>()?)
         } else {
             None
         };
-        
+
         Ok(TerminalCommand::CreateUser {
             firstname: parts[2].to_string(),
             lastname: parts[3].to_string(),
@@ -169,17 +246,21 @@ impl TerminalCommandProcessor {
             user_level,
         })
     }
-    
+
     /// Parse 'reset user' commands
     fn parse_reset_command(&self, parts: &[&str]) -> Result<TerminalCommand> {
         if parts.len() < 3 || parts[1] != "user" {
-            return Err(anyhow::anyhow!("Expected 'reset user password|email firstname lastname value'"));
+            return Err(anyhow::anyhow!(
+                "Expected 'reset user password|email firstname lastname value'"
+            ));
         }
-        
+
         match parts[2] {
             "password" => {
                 if parts.len() < 6 {
-                    return Err(anyhow::anyhow!("reset user password requires: firstname lastname new_password"));
+                    return Err(anyhow::anyhow!(
+                        "reset user password requires: firstname lastname new_password"
+                    ));
                 }
                 Ok(TerminalCommand::ResetUserPassword {
                     firstname: parts[3].to_string(),
@@ -189,7 +270,9 @@ impl TerminalCommandProcessor {
             }
             "email" => {
                 if parts.len() < 6 {
-                    return Err(anyhow::anyhow!("reset user email requires: firstname lastname new_email"));
+                    return Err(anyhow::anyhow!(
+                        "reset user email requires: firstname lastname new_email"
+                    ));
                 }
                 Ok(TerminalCommand::ResetUserEmail {
                     firstname: parts[3].to_string(),
@@ -200,34 +283,38 @@ impl TerminalCommandProcessor {
             _ => Err(anyhow::anyhow!("reset user accepts: password or email")),
         }
     }
-    
+
     /// Parse 'set user' commands
     fn parse_set_command(&self, parts: &[&str]) -> Result<TerminalCommand> {
         if parts.len() < 3 || parts[1] != "user" {
-            return Err(anyhow::anyhow!("Expected 'set user level firstname lastname level'"));
+            return Err(anyhow::anyhow!(
+                "Expected 'set user level firstname lastname level'"
+            ));
         }
-        
+
         if parts[2] != "level" {
             return Err(anyhow::anyhow!("set user currently supports: level"));
         }
-        
+
         if parts.len() < 6 {
-            return Err(anyhow::anyhow!("set user level requires: firstname lastname level"));
+            return Err(anyhow::anyhow!(
+                "set user level requires: firstname lastname level"
+            ));
         }
-        
+
         Ok(TerminalCommand::SetUserLevel {
             firstname: parts[3].to_string(),
             lastname: parts[4].to_string(),
             user_level: parts[5].parse::<i32>()?,
         })
     }
-    
+
     /// Parse 'show' commands
     fn parse_show_command(&self, parts: &[&str]) -> Result<TerminalCommand> {
         if parts.len() < 2 {
             return Err(anyhow::anyhow!("Expected 'show account|users'"));
         }
-        
+
         match parts[1] {
             "account" => {
                 if parts.len() < 4 {
@@ -249,29 +336,29 @@ impl TerminalCommandProcessor {
             _ => Err(anyhow::anyhow!("show accepts: account or users")),
         }
     }
-    
+
     /// Parse 'delete user' command
     fn parse_delete_command(&self, parts: &[&str]) -> Result<TerminalCommand> {
         if parts.len() < 2 || parts[1] != "user" {
             return Err(anyhow::anyhow!("Expected 'delete user firstname lastname'"));
         }
-        
+
         if parts.len() < 4 {
             return Err(anyhow::anyhow!("delete user requires: firstname lastname"));
         }
-        
+
         Ok(TerminalCommand::DeleteUser {
             firstname: parts[2].to_string(),
             lastname: parts[3].to_string(),
         })
     }
-    
+
     /// Parse 'database' commands
     fn parse_database_command(&self, parts: &[&str]) -> Result<TerminalCommand> {
         if parts.len() < 2 {
             return Err(anyhow::anyhow!("Expected: database <command>"));
         }
-        
+
         match parts[1] {
             "stats" => Ok(TerminalCommand::DatabaseStats),
             "health" => Ok(TerminalCommand::DatabaseHealth),
@@ -283,19 +370,21 @@ impl TerminalCommandProcessor {
             _ => Err(anyhow::anyhow!("database accepts: stats, health, backup, restore, maintenance, migration, list-backups")),
         }
     }
-    
+
     /// Parse 'database backup' command
     fn parse_database_backup_command(&self, parts: &[&str]) -> Result<TerminalCommand> {
         if parts.len() < 3 {
-            return Err(anyhow::anyhow!("Expected: database backup <backup_name> [options]"));
+            return Err(anyhow::anyhow!(
+                "Expected: database backup <backup_name> [options]"
+            ));
         }
-        
+
         let backup_name = parts[2].to_string();
         let mut include_users = true;
         let mut include_regions = true;
         let mut include_assets = false;
         let mut include_inventory = false;
-        
+
         // Parse optional flags
         for part in parts.iter().skip(3) {
             match *part {
@@ -306,7 +395,7 @@ impl TerminalCommandProcessor {
                 _ => return Err(anyhow::anyhow!("Unknown backup option: {}", part)),
             }
         }
-        
+
         Ok(TerminalCommand::DatabaseBackup {
             backup_name,
             include_users,
@@ -315,29 +404,31 @@ impl TerminalCommandProcessor {
             include_inventory,
         })
     }
-    
+
     /// Parse 'database restore' command
     fn parse_database_restore_command(&self, parts: &[&str]) -> Result<TerminalCommand> {
         if parts.len() < 3 {
-            return Err(anyhow::anyhow!("Expected: database restore <backup_file> [--overwrite]"));
+            return Err(anyhow::anyhow!(
+                "Expected: database restore <backup_file> [--overwrite]"
+            ));
         }
-        
+
         let backup_file = parts[2].to_string();
         let overwrite_existing = parts.len() > 3 && parts[3] == "--overwrite";
-        
+
         Ok(TerminalCommand::DatabaseRestore {
             backup_file,
             overwrite_existing,
         })
     }
-    
+
     /// Parse 'database maintenance' command
     fn parse_database_maintenance_command(&self, parts: &[&str]) -> Result<TerminalCommand> {
         let mut vacuum = false;
         let mut reindex = false;
         let mut analyze = false;
         let mut cleanup = false;
-        
+
         if parts.len() == 2 {
             // Default: run all maintenance operations
             vacuum = true;
@@ -356,7 +447,7 @@ impl TerminalCommandProcessor {
                 }
             }
         }
-        
+
         Ok(TerminalCommand::DatabaseMaintenance {
             vacuum,
             reindex,
@@ -364,17 +455,19 @@ impl TerminalCommandProcessor {
             cleanup,
         })
     }
-    
+
     /// Parse 'database migration' command
     fn parse_database_migration_command(&self, parts: &[&str]) -> Result<TerminalCommand> {
         if parts.len() < 3 {
-            return Err(anyhow::anyhow!("Expected: database migration <version> [--dry-run] [--backup]"));
+            return Err(anyhow::anyhow!(
+                "Expected: database migration <version> [--dry-run] [--backup]"
+            ));
         }
-        
+
         let target_version = parts[2].to_string();
         let mut dry_run = false;
         let mut backup_before = false;
-        
+
         for part in parts.iter().skip(3) {
             match *part {
                 "--dry-run" => dry_run = true,
@@ -382,14 +475,14 @@ impl TerminalCommandProcessor {
                 _ => return Err(anyhow::anyhow!("Unknown migration option: {}", part)),
             }
         }
-        
+
         Ok(TerminalCommand::DatabaseMigration {
             target_version,
             dry_run,
             backup_before,
         })
     }
-    
+
     /// Parse 'database list-backups' command
     fn parse_database_list_backups_command(&self, parts: &[&str]) -> Result<TerminalCommand> {
         let directory = if parts.len() > 2 {
@@ -410,7 +503,9 @@ impl TerminalCommandProcessor {
         match parts[1].to_lowercase().as_str() {
             "iar" => {
                 if parts.len() < 5 {
-                    return Err(anyhow::anyhow!("load iar requires: firstname lastname filepath [--merge]"));
+                    return Err(anyhow::anyhow!(
+                        "load iar requires: firstname lastname filepath [--merge]"
+                    ));
                 }
                 let merge = parts.iter().any(|p| *p == "--merge");
                 Ok(TerminalCommand::LoadIar {
@@ -448,7 +543,9 @@ impl TerminalCommandProcessor {
         match parts[1].to_lowercase().as_str() {
             "iar" => {
                 if parts.len() < 5 {
-                    return Err(anyhow::anyhow!("save iar requires: firstname lastname filepath [--no-assets]"));
+                    return Err(anyhow::anyhow!(
+                        "save iar requires: firstname lastname filepath [--no-assets]"
+                    ));
                 }
                 let include_assets = !parts.iter().any(|p| *p == "--no-assets");
                 Ok(TerminalCommand::SaveIar {
@@ -520,82 +617,160 @@ impl TerminalCommandProcessor {
     /// Execute terminal command via REST API
     pub async fn execute_command(&self, command: TerminalCommand) -> Result<CommandResult> {
         match command {
-            TerminalCommand::Help => {
-                Ok(CommandResult {
-                    success: true,
-                    message: self.get_help_text(),
-                    data: None,
-                })
+            TerminalCommand::Help => Ok(CommandResult {
+                success: true,
+                message: self.get_help_text(),
+                data: None,
+            }),
+            TerminalCommand::CreateUser {
+                firstname,
+                lastname,
+                password,
+                email,
+                user_level,
+            } => {
+                self.create_user_api(firstname, lastname, password, email, user_level)
+                    .await
             }
-            TerminalCommand::CreateUser { firstname, lastname, password, email, user_level } => {
-                self.create_user_api(firstname, lastname, password, email, user_level).await
+            TerminalCommand::ResetUserPassword {
+                firstname,
+                lastname,
+                new_password,
+            } => {
+                self.reset_password_api(firstname, lastname, new_password)
+                    .await
             }
-            TerminalCommand::ResetUserPassword { firstname, lastname, new_password } => {
-                self.reset_password_api(firstname, lastname, new_password).await
+            TerminalCommand::ResetUserEmail {
+                firstname,
+                lastname,
+                new_email,
+            } => self.reset_email_api(firstname, lastname, new_email).await,
+            TerminalCommand::SetUserLevel {
+                firstname,
+                lastname,
+                user_level,
+            } => {
+                self.set_user_level_api(firstname, lastname, user_level)
+                    .await
             }
-            TerminalCommand::ResetUserEmail { firstname, lastname, new_email } => {
-                self.reset_email_api(firstname, lastname, new_email).await
+            TerminalCommand::ShowAccount {
+                firstname,
+                lastname,
+            } => self.show_account_api(firstname, lastname).await,
+            TerminalCommand::ShowUsers { limit } => self.show_users_api(limit).await,
+            TerminalCommand::DeleteUser {
+                firstname,
+                lastname,
+            } => self.delete_user_api(firstname, lastname).await,
+            TerminalCommand::DatabaseStats => self.database_stats_api().await,
+            TerminalCommand::DatabaseHealth => self.database_health_api().await,
+            TerminalCommand::DatabaseBackup {
+                backup_name,
+                include_users,
+                include_regions,
+                include_assets,
+                include_inventory,
+            } => {
+                self.database_backup_api(
+                    backup_name,
+                    include_users,
+                    include_regions,
+                    include_assets,
+                    include_inventory,
+                )
+                .await
             }
-            TerminalCommand::SetUserLevel { firstname, lastname, user_level } => {
-                self.set_user_level_api(firstname, lastname, user_level).await
+            TerminalCommand::DatabaseRestore {
+                backup_file,
+                overwrite_existing,
+            } => {
+                self.database_restore_api(backup_file, overwrite_existing)
+                    .await
             }
-            TerminalCommand::ShowAccount { firstname, lastname } => {
-                self.show_account_api(firstname, lastname).await
+            TerminalCommand::DatabaseMaintenance {
+                vacuum,
+                reindex,
+                analyze,
+                cleanup,
+            } => {
+                self.database_maintenance_api(vacuum, reindex, analyze, cleanup)
+                    .await
             }
-            TerminalCommand::ShowUsers { limit } => {
-                self.show_users_api(limit).await
-            }
-            TerminalCommand::DeleteUser { firstname, lastname } => {
-                self.delete_user_api(firstname, lastname).await
-            }
-            TerminalCommand::DatabaseStats => {
-                self.database_stats_api().await
-            }
-            TerminalCommand::DatabaseHealth => {
-                self.database_health_api().await
-            }
-            TerminalCommand::DatabaseBackup { backup_name, include_users, include_regions, include_assets, include_inventory } => {
-                self.database_backup_api(backup_name, include_users, include_regions, include_assets, include_inventory).await
-            }
-            TerminalCommand::DatabaseRestore { backup_file, overwrite_existing } => {
-                self.database_restore_api(backup_file, overwrite_existing).await
-            }
-            TerminalCommand::DatabaseMaintenance { vacuum, reindex, analyze, cleanup } => {
-                self.database_maintenance_api(vacuum, reindex, analyze, cleanup).await
-            }
-            TerminalCommand::DatabaseMigration { target_version, dry_run, backup_before } => {
-                self.database_migration_api(target_version, dry_run, backup_before).await
+            TerminalCommand::DatabaseMigration {
+                target_version,
+                dry_run,
+                backup_before,
+            } => {
+                self.database_migration_api(target_version, dry_run, backup_before)
+                    .await
             }
             TerminalCommand::DatabaseListBackups { directory } => {
                 self.database_list_backups_api(directory).await
             }
-            TerminalCommand::LoadIar { firstname, lastname, file_path, merge } => {
-                self.load_iar_api(firstname, lastname, file_path, merge).await
+            TerminalCommand::LoadIar {
+                firstname,
+                lastname,
+                file_path,
+                merge,
+            } => {
+                self.load_iar_api(firstname, lastname, file_path, merge)
+                    .await
             }
-            TerminalCommand::SaveIar { firstname, lastname, file_path, include_assets } => {
-                self.save_iar_api(firstname, lastname, file_path, include_assets).await
+            TerminalCommand::SaveIar {
+                firstname,
+                lastname,
+                file_path,
+                include_assets,
+            } => {
+                self.save_iar_api(firstname, lastname, file_path, include_assets)
+                    .await
             }
-            TerminalCommand::LoadOar { region_name, file_path, merge, force_terrain, force_parcels } => {
-                self.load_oar_api(region_name, file_path, merge, force_terrain, force_parcels).await
+            TerminalCommand::LoadOar {
+                region_name,
+                file_path,
+                merge,
+                force_terrain,
+                force_parcels,
+            } => {
+                self.load_oar_api(region_name, file_path, merge, force_terrain, force_parcels)
+                    .await
             }
-            TerminalCommand::SaveOar { region_name, file_path, include_assets, include_terrain, include_objects, include_parcels } => {
-                self.save_oar_api(region_name, file_path, include_assets, include_terrain, include_objects, include_parcels).await
+            TerminalCommand::SaveOar {
+                region_name,
+                file_path,
+                include_assets,
+                include_terrain,
+                include_objects,
+                include_parcels,
+            } => {
+                self.save_oar_api(
+                    region_name,
+                    file_path,
+                    include_assets,
+                    include_terrain,
+                    include_objects,
+                    include_parcels,
+                )
+                .await
             }
-            TerminalCommand::ShowArchiveJobs { limit } => {
-                self.show_archive_jobs_api(limit).await
-            }
-            TerminalCommand::ShowArchiveJob { job_id } => {
-                self.show_archive_job_api(job_id).await
-            }
+            TerminalCommand::ShowArchiveJobs { limit } => self.show_archive_jobs_api(limit).await,
+            TerminalCommand::ShowArchiveJob { job_id } => self.show_archive_job_api(job_id).await,
             TerminalCommand::CancelArchiveJob { job_id } => {
                 self.cancel_archive_job_api(job_id).await
             }
             TerminalCommand::Exit => unreachable!(),
         }
     }
-    
+
     /// Create user via API
-    async fn create_user_api(&self, firstname: String, lastname: String, password: String, email: String, user_level: Option<i32>) -> Result<CommandResult> {
+    async fn create_user_api(
+        &self,
+        firstname: String,
+        lastname: String,
+        password: String,
+        email: String,
+        user_level: Option<i32>,
+    ) -> Result<CommandResult> {
         let payload = serde_json::json!({
             "firstname": firstname,
             "lastname": lastname,
@@ -603,213 +778,276 @@ impl TerminalCommandProcessor {
             "email": email,
             "user_level": user_level
         });
-        
+
         info!("Creating user: {} {}", firstname, lastname);
-        
-        let response = self.client
+
+        let response = self
+            .client
             .post(&format!("{}/admin/users", self.api_base_url))
             .header("X-API-Key", &self.api_key)
             .header("Content-Type", "application/json")
             .json(&payload)
             .send()
             .await?;
-        
+
         let result: serde_json::Value = response.json().await?;
-        
+
         Ok(CommandResult {
             success: result["success"].as_bool().unwrap_or(false),
-            message: result["message"].as_str().unwrap_or("Unknown response").to_string(),
+            message: result["message"]
+                .as_str()
+                .unwrap_or("Unknown response")
+                .to_string(),
             data: result.get("data").cloned(),
         })
     }
-    
+
     /// Reset user password via API
-    async fn reset_password_api(&self, firstname: String, lastname: String, new_password: String) -> Result<CommandResult> {
+    async fn reset_password_api(
+        &self,
+        firstname: String,
+        lastname: String,
+        new_password: String,
+    ) -> Result<CommandResult> {
         let payload = serde_json::json!({
             "firstname": firstname,
             "lastname": lastname,
             "new_password": new_password
         });
-        
+
         warn!("Resetting password for user: {} {}", firstname, lastname);
-        
-        let response = self.client
+
+        let response = self
+            .client
             .put(&format!("{}/admin/users/password", self.api_base_url))
             .header("X-API-Key", &self.api_key)
             .header("Content-Type", "application/json")
             .json(&payload)
             .send()
             .await?;
-        
+
         let result: serde_json::Value = response.json().await?;
-        
+
         Ok(CommandResult {
             success: result["success"].as_bool().unwrap_or(false),
-            message: result["message"].as_str().unwrap_or("Unknown response").to_string(),
+            message: result["message"]
+                .as_str()
+                .unwrap_or("Unknown response")
+                .to_string(),
             data: result.get("data").cloned(),
         })
     }
-    
+
     /// Reset user email via API
-    async fn reset_email_api(&self, firstname: String, lastname: String, new_email: String) -> Result<CommandResult> {
+    async fn reset_email_api(
+        &self,
+        firstname: String,
+        lastname: String,
+        new_email: String,
+    ) -> Result<CommandResult> {
         let payload = serde_json::json!({
             "firstname": firstname,
             "lastname": lastname,
             "new_email": new_email
         });
-        
+
         info!("Resetting email for user: {} {}", firstname, lastname);
-        
-        let response = self.client
+
+        let response = self
+            .client
             .put(&format!("{}/admin/users/email", self.api_base_url))
             .header("X-API-Key", &self.api_key)
             .header("Content-Type", "application/json")
             .json(&payload)
             .send()
             .await?;
-        
+
         let result: serde_json::Value = response.json().await?;
-        
+
         Ok(CommandResult {
             success: result["success"].as_bool().unwrap_or(false),
-            message: result["message"].as_str().unwrap_or("Unknown response").to_string(),
+            message: result["message"]
+                .as_str()
+                .unwrap_or("Unknown response")
+                .to_string(),
             data: result.get("data").cloned(),
         })
     }
-    
+
     /// Set user level via API
-    async fn set_user_level_api(&self, firstname: String, lastname: String, user_level: i32) -> Result<CommandResult> {
+    async fn set_user_level_api(
+        &self,
+        firstname: String,
+        lastname: String,
+        user_level: i32,
+    ) -> Result<CommandResult> {
         let payload = serde_json::json!({
             "firstname": firstname,
             "lastname": lastname,
             "user_level": user_level
         });
-        
-        warn!("Setting user level for {} {} to {}", firstname, lastname, user_level);
-        
-        let response = self.client
+
+        warn!(
+            "Setting user level for {} {} to {}",
+            firstname, lastname, user_level
+        );
+
+        let response = self
+            .client
             .put(&format!("{}/admin/users/level", self.api_base_url))
             .header("X-API-Key", &self.api_key)
             .header("Content-Type", "application/json")
             .json(&payload)
             .send()
             .await?;
-        
+
         let result: serde_json::Value = response.json().await?;
-        
+
         Ok(CommandResult {
             success: result["success"].as_bool().unwrap_or(false),
-            message: result["message"].as_str().unwrap_or("Unknown response").to_string(),
+            message: result["message"]
+                .as_str()
+                .unwrap_or("Unknown response")
+                .to_string(),
             data: result.get("data").cloned(),
         })
     }
-    
+
     /// Show user account via API
     async fn show_account_api(&self, firstname: String, lastname: String) -> Result<CommandResult> {
-        let url = format!("{}/admin/users/account?firstname={}&lastname={}", 
-                         self.api_base_url, 
-                         urlencoding::encode(&firstname),
-                         urlencoding::encode(&lastname));
-        
-        let response = self.client
+        let url = format!(
+            "{}/admin/users/account?firstname={}&lastname={}",
+            self.api_base_url,
+            urlencoding::encode(&firstname),
+            urlencoding::encode(&lastname)
+        );
+
+        let response = self
+            .client
             .get(&url)
             .header("X-API-Key", &self.api_key)
             .send()
             .await?;
-        
+
         let result: serde_json::Value = response.json().await?;
-        
+
         Ok(CommandResult {
             success: result["success"].as_bool().unwrap_or(false),
-            message: result["message"].as_str().unwrap_or("Unknown response").to_string(),
+            message: result["message"]
+                .as_str()
+                .unwrap_or("Unknown response")
+                .to_string(),
             data: result.get("data").cloned(),
         })
     }
-    
+
     /// Show users via API
     async fn show_users_api(&self, limit: Option<i32>) -> Result<CommandResult> {
         let mut url = format!("{}/admin/users", self.api_base_url);
         if let Some(limit) = limit {
             url = format!("{}?limit={}", url, limit);
         }
-        
-        let response = self.client
+
+        let response = self
+            .client
             .get(&url)
             .header("X-API-Key", &self.api_key)
             .send()
             .await?;
-        
+
         let result: serde_json::Value = response.json().await?;
-        
+
         Ok(CommandResult {
             success: result["success"].as_bool().unwrap_or(false),
-            message: result["message"].as_str().unwrap_or("Unknown response").to_string(),
+            message: result["message"]
+                .as_str()
+                .unwrap_or("Unknown response")
+                .to_string(),
             data: result.get("data").cloned(),
         })
     }
-    
+
     /// Delete user via API
     async fn delete_user_api(&self, firstname: String, lastname: String) -> Result<CommandResult> {
         let payload = serde_json::json!({
             "firstname": firstname,
             "lastname": lastname
         });
-        
+
         error!("DESTRUCTIVE: Deleting user {} {}", firstname, lastname);
-        
-        let response = self.client
+
+        let response = self
+            .client
             .delete(&format!("{}/admin/users/delete", self.api_base_url))
             .header("X-API-Key", &self.api_key)
             .header("Content-Type", "application/json")
             .json(&payload)
             .send()
             .await?;
-        
+
         let result: serde_json::Value = response.json().await?;
-        
+
         Ok(CommandResult {
             success: result["success"].as_bool().unwrap_or(false),
-            message: result["message"].as_str().unwrap_or("Unknown response").to_string(),
+            message: result["message"]
+                .as_str()
+                .unwrap_or("Unknown response")
+                .to_string(),
             data: result.get("data").cloned(),
         })
     }
-    
+
     /// Get database statistics via API
     async fn database_stats_api(&self) -> Result<CommandResult> {
-        let response = self.client
+        let response = self
+            .client
             .get(&format!("{}/admin/database/stats", self.api_base_url))
             .header("X-API-Key", &self.api_key)
             .send()
             .await?;
-        
+
         let result: serde_json::Value = response.json().await?;
-        
+
         Ok(CommandResult {
             success: result["success"].as_bool().unwrap_or(false),
-            message: result["message"].as_str().unwrap_or("Unknown response").to_string(),
+            message: result["message"]
+                .as_str()
+                .unwrap_or("Unknown response")
+                .to_string(),
             data: result.get("data").cloned(),
         })
     }
 
     /// Database health check via API
     async fn database_health_api(&self) -> Result<CommandResult> {
-        let response = self.client
+        let response = self
+            .client
             .get(&format!("{}/admin/database/health", self.api_base_url))
             .header("X-API-Key", &self.api_key)
             .send()
             .await?;
-        
+
         let result: serde_json::Value = response.json().await?;
-        
+
         Ok(CommandResult {
             success: result["success"].as_bool().unwrap_or(false),
-            message: result["message"].as_str().unwrap_or("Unknown response").to_string(),
+            message: result["message"]
+                .as_str()
+                .unwrap_or("Unknown response")
+                .to_string(),
             data: result.get("data").cloned(),
         })
     }
 
     /// Create database backup via API
-    async fn database_backup_api(&self, backup_name: String, include_users: bool, include_regions: bool, include_assets: bool, include_inventory: bool) -> Result<CommandResult> {
+    async fn database_backup_api(
+        &self,
+        backup_name: String,
+        include_users: bool,
+        include_regions: bool,
+        include_assets: bool,
+        include_inventory: bool,
+    ) -> Result<CommandResult> {
         let payload = serde_json::json!({
             "backup_name": backup_name,
             "include_user_data": include_users,
@@ -819,28 +1057,36 @@ impl TerminalCommandProcessor {
             "compression": true,
             "backup_path": null
         });
-        
+
         info!("Creating database backup: {}", backup_name);
-        
-        let response = self.client
+
+        let response = self
+            .client
             .post(&format!("{}/admin/database/backup", self.api_base_url))
             .header("X-API-Key", &self.api_key)
             .header("Content-Type", "application/json")
             .json(&payload)
             .send()
             .await?;
-        
+
         let result: serde_json::Value = response.json().await?;
-        
+
         Ok(CommandResult {
             success: result["success"].as_bool().unwrap_or(false),
-            message: result["message"].as_str().unwrap_or("Unknown response").to_string(),
+            message: result["message"]
+                .as_str()
+                .unwrap_or("Unknown response")
+                .to_string(),
             data: result.get("data").cloned(),
         })
     }
 
     /// Restore database from backup via API
-    async fn database_restore_api(&self, backup_file: String, overwrite_existing: bool) -> Result<CommandResult> {
+    async fn database_restore_api(
+        &self,
+        backup_file: String,
+        overwrite_existing: bool,
+    ) -> Result<CommandResult> {
         let payload = serde_json::json!({
             "backup_file": backup_file,
             "restore_users": true,
@@ -849,28 +1095,38 @@ impl TerminalCommandProcessor {
             "restore_inventory": true,
             "overwrite_existing": overwrite_existing
         });
-        
+
         info!("Restoring database from backup: {}", backup_file);
-        
-        let response = self.client
+
+        let response = self
+            .client
             .post(&format!("{}/admin/database/restore", self.api_base_url))
             .header("X-API-Key", &self.api_key)
             .header("Content-Type", "application/json")
             .json(&payload)
             .send()
             .await?;
-        
+
         let result: serde_json::Value = response.json().await?;
-        
+
         Ok(CommandResult {
             success: result["success"].as_bool().unwrap_or(false),
-            message: result["message"].as_str().unwrap_or("Unknown response").to_string(),
+            message: result["message"]
+                .as_str()
+                .unwrap_or("Unknown response")
+                .to_string(),
             data: result.get("data").cloned(),
         })
     }
 
     /// Perform database maintenance via API
-    async fn database_maintenance_api(&self, vacuum: bool, reindex: bool, analyze: bool, cleanup: bool) -> Result<CommandResult> {
+    async fn database_maintenance_api(
+        &self,
+        vacuum: bool,
+        reindex: bool,
+        analyze: bool,
+        cleanup: bool,
+    ) -> Result<CommandResult> {
         let payload = serde_json::json!({
             "vacuum_tables": vacuum,
             "reindex_tables": reindex,
@@ -878,49 +1134,62 @@ impl TerminalCommandProcessor {
             "cleanup_orphaned": cleanup,
             "compress_tables": false
         });
-        
+
         info!("Performing database maintenance");
-        
-        let response = self.client
+
+        let response = self
+            .client
             .post(&format!("{}/admin/database/maintenance", self.api_base_url))
             .header("X-API-Key", &self.api_key)
             .header("Content-Type", "application/json")
             .json(&payload)
             .send()
             .await?;
-        
+
         let result: serde_json::Value = response.json().await?;
-        
+
         Ok(CommandResult {
             success: result["success"].as_bool().unwrap_or(false),
-            message: result["message"].as_str().unwrap_or("Unknown response").to_string(),
+            message: result["message"]
+                .as_str()
+                .unwrap_or("Unknown response")
+                .to_string(),
             data: result.get("data").cloned(),
         })
     }
 
     /// Run database migration via API
-    async fn database_migration_api(&self, target_version: String, dry_run: bool, backup_before: bool) -> Result<CommandResult> {
+    async fn database_migration_api(
+        &self,
+        target_version: String,
+        dry_run: bool,
+        backup_before: bool,
+    ) -> Result<CommandResult> {
         let payload = serde_json::json!({
             "target_version": target_version,
             "dry_run": dry_run,
             "backup_before": backup_before
         });
-        
+
         info!("Running database migration to version: {}", target_version);
-        
-        let response = self.client
+
+        let response = self
+            .client
             .post(&format!("{}/admin/database/migration", self.api_base_url))
             .header("X-API-Key", &self.api_key)
             .header("Content-Type", "application/json")
             .json(&payload)
             .send()
             .await?;
-        
+
         let result: serde_json::Value = response.json().await?;
-        
+
         Ok(CommandResult {
             success: result["success"].as_bool().unwrap_or(false),
-            message: result["message"].as_str().unwrap_or("Unknown response").to_string(),
+            message: result["message"]
+                .as_str()
+                .unwrap_or("Unknown response")
+                .to_string(),
             data: result.get("data").cloned(),
         })
     }
@@ -932,7 +1201,8 @@ impl TerminalCommandProcessor {
             url.push_str(&format!("?directory={}", urlencoding::encode(&dir)));
         }
 
-        let response = self.client
+        let response = self
+            .client
             .get(&url)
             .header("X-API-Key", &self.api_key)
             .send()
@@ -942,13 +1212,22 @@ impl TerminalCommandProcessor {
 
         Ok(CommandResult {
             success: result["success"].as_bool().unwrap_or(false),
-            message: result["message"].as_str().unwrap_or("Unknown response").to_string(),
+            message: result["message"]
+                .as_str()
+                .unwrap_or("Unknown response")
+                .to_string(),
             data: result.get("data").cloned(),
         })
     }
 
     /// Load IAR via API
-    async fn load_iar_api(&self, firstname: String, lastname: String, file_path: String, merge: bool) -> Result<CommandResult> {
+    async fn load_iar_api(
+        &self,
+        firstname: String,
+        lastname: String,
+        file_path: String,
+        merge: bool,
+    ) -> Result<CommandResult> {
         let payload = serde_json::json!({
             "file_path": file_path,
             "user_firstname": firstname,
@@ -958,7 +1237,8 @@ impl TerminalCommandProcessor {
 
         info!("Loading IAR for user: {} {}", firstname, lastname);
 
-        let response = self.client
+        let response = self
+            .client
             .post(&format!("{}/admin/archives/iar/load", self.api_base_url))
             .header("X-API-Key", &self.api_key)
             .header("Content-Type", "application/json")
@@ -970,13 +1250,24 @@ impl TerminalCommandProcessor {
 
         Ok(CommandResult {
             success: result["success"].as_bool().unwrap_or(false),
-            message: result["message"].as_str().unwrap_or("Unknown response").to_string(),
-            data: result.get("job_id").map(|id| serde_json::json!({"job_id": id})),
+            message: result["message"]
+                .as_str()
+                .unwrap_or("Unknown response")
+                .to_string(),
+            data: result
+                .get("job_id")
+                .map(|id| serde_json::json!({"job_id": id})),
         })
     }
 
     /// Save IAR via API
-    async fn save_iar_api(&self, firstname: String, lastname: String, file_path: String, include_assets: bool) -> Result<CommandResult> {
+    async fn save_iar_api(
+        &self,
+        firstname: String,
+        lastname: String,
+        file_path: String,
+        include_assets: bool,
+    ) -> Result<CommandResult> {
         let payload = serde_json::json!({
             "output_path": file_path,
             "user_firstname": firstname,
@@ -986,7 +1277,8 @@ impl TerminalCommandProcessor {
 
         info!("Saving IAR for user: {} {}", firstname, lastname);
 
-        let response = self.client
+        let response = self
+            .client
             .post(&format!("{}/admin/archives/iar/save", self.api_base_url))
             .header("X-API-Key", &self.api_key)
             .header("Content-Type", "application/json")
@@ -998,13 +1290,25 @@ impl TerminalCommandProcessor {
 
         Ok(CommandResult {
             success: result["success"].as_bool().unwrap_or(false),
-            message: result["message"].as_str().unwrap_or("Unknown response").to_string(),
-            data: result.get("job_id").map(|id| serde_json::json!({"job_id": id})),
+            message: result["message"]
+                .as_str()
+                .unwrap_or("Unknown response")
+                .to_string(),
+            data: result
+                .get("job_id")
+                .map(|id| serde_json::json!({"job_id": id})),
         })
     }
 
     /// Load OAR via API
-    async fn load_oar_api(&self, region_name: String, file_path: String, merge: bool, force_terrain: bool, force_parcels: bool) -> Result<CommandResult> {
+    async fn load_oar_api(
+        &self,
+        region_name: String,
+        file_path: String,
+        merge: bool,
+        force_terrain: bool,
+        force_parcels: bool,
+    ) -> Result<CommandResult> {
         let payload = serde_json::json!({
             "file_path": file_path,
             "region_name": region_name,
@@ -1015,7 +1319,8 @@ impl TerminalCommandProcessor {
 
         info!("Loading OAR for region: {}", region_name);
 
-        let response = self.client
+        let response = self
+            .client
             .post(&format!("{}/admin/archives/oar/load", self.api_base_url))
             .header("X-API-Key", &self.api_key)
             .header("Content-Type", "application/json")
@@ -1027,13 +1332,26 @@ impl TerminalCommandProcessor {
 
         Ok(CommandResult {
             success: result["success"].as_bool().unwrap_or(false),
-            message: result["message"].as_str().unwrap_or("Unknown response").to_string(),
-            data: result.get("job_id").map(|id| serde_json::json!({"job_id": id})),
+            message: result["message"]
+                .as_str()
+                .unwrap_or("Unknown response")
+                .to_string(),
+            data: result
+                .get("job_id")
+                .map(|id| serde_json::json!({"job_id": id})),
         })
     }
 
     /// Save OAR via API
-    async fn save_oar_api(&self, region_name: String, file_path: String, include_assets: bool, include_terrain: bool, include_objects: bool, include_parcels: bool) -> Result<CommandResult> {
+    async fn save_oar_api(
+        &self,
+        region_name: String,
+        file_path: String,
+        include_assets: bool,
+        include_terrain: bool,
+        include_objects: bool,
+        include_parcels: bool,
+    ) -> Result<CommandResult> {
         let payload = serde_json::json!({
             "output_path": file_path,
             "region_name": region_name,
@@ -1045,7 +1363,8 @@ impl TerminalCommandProcessor {
 
         info!("Saving OAR for region: {}", region_name);
 
-        let response = self.client
+        let response = self
+            .client
             .post(&format!("{}/admin/archives/oar/save", self.api_base_url))
             .header("X-API-Key", &self.api_key)
             .header("Content-Type", "application/json")
@@ -1057,8 +1376,13 @@ impl TerminalCommandProcessor {
 
         Ok(CommandResult {
             success: result["success"].as_bool().unwrap_or(false),
-            message: result["message"].as_str().unwrap_or("Unknown response").to_string(),
-            data: result.get("job_id").map(|id| serde_json::json!({"job_id": id})),
+            message: result["message"]
+                .as_str()
+                .unwrap_or("Unknown response")
+                .to_string(),
+            data: result
+                .get("job_id")
+                .map(|id| serde_json::json!({"job_id": id})),
         })
     }
 
@@ -1069,7 +1393,8 @@ impl TerminalCommandProcessor {
             url.push_str(&format!("?limit={}", l));
         }
 
-        let response = self.client
+        let response = self
+            .client
             .get(&url)
             .header("X-API-Key", &self.api_key)
             .send()
@@ -1079,15 +1404,22 @@ impl TerminalCommandProcessor {
 
         Ok(CommandResult {
             success: result["success"].as_bool().unwrap_or(false),
-            message: result["message"].as_str().unwrap_or("Unknown response").to_string(),
+            message: result["message"]
+                .as_str()
+                .unwrap_or("Unknown response")
+                .to_string(),
             data: result.get("data").cloned(),
         })
     }
 
     /// Show single archive job via API
     async fn show_archive_job_api(&self, job_id: String) -> Result<CommandResult> {
-        let response = self.client
-            .get(&format!("{}/admin/archives/jobs/{}", self.api_base_url, job_id))
+        let response = self
+            .client
+            .get(&format!(
+                "{}/admin/archives/jobs/{}",
+                self.api_base_url, job_id
+            ))
             .header("X-API-Key", &self.api_key)
             .send()
             .await?;
@@ -1096,15 +1428,22 @@ impl TerminalCommandProcessor {
 
         Ok(CommandResult {
             success: result["success"].as_bool().unwrap_or(false),
-            message: result["message"].as_str().unwrap_or("Unknown response").to_string(),
+            message: result["message"]
+                .as_str()
+                .unwrap_or("Unknown response")
+                .to_string(),
             data: result.get("data").cloned(),
         })
     }
 
     /// Cancel archive job via API
     async fn cancel_archive_job_api(&self, job_id: String) -> Result<CommandResult> {
-        let response = self.client
-            .post(&format!("{}/admin/archives/jobs/{}/cancel", self.api_base_url, job_id))
+        let response = self
+            .client
+            .post(&format!(
+                "{}/admin/archives/jobs/{}/cancel",
+                self.api_base_url, job_id
+            ))
             .header("X-API-Key", &self.api_key)
             .send()
             .await?;
@@ -1113,7 +1452,10 @@ impl TerminalCommandProcessor {
 
         Ok(CommandResult {
             success: result["success"].as_bool().unwrap_or(false),
-            message: result["message"].as_str().unwrap_or("Unknown response").to_string(),
+            message: result["message"]
+                .as_str()
+                .unwrap_or("Unknown response")
+                .to_string(),
             data: None,
         })
     }
@@ -1250,7 +1592,8 @@ General:
   - Commands are logged for audit purposes
   - API key authentication required for all operations
   - Invalid operations return detailed error messages
-        "#.to_string()
+        "#
+        .to_string()
     }
 }
 
@@ -1259,97 +1602,104 @@ pub fn validate_user_input(firstname: &str, lastname: &str, email: Option<&str>)
     if firstname.trim().is_empty() {
         return Err(anyhow::anyhow!("First name cannot be empty"));
     }
-    
+
     if lastname.trim().is_empty() {
         return Err(anyhow::anyhow!("Last name cannot be empty"));
     }
-    
+
     if let Some(email) = email {
         if email.trim().is_empty() || !email.contains('@') {
             return Err(anyhow::anyhow!("Valid email address required"));
         }
     }
-    
+
     Ok(())
 }
 
 #[cfg(test)]
 mod tests {
     use super::*;
-    
+
     #[test]
     fn test_parse_create_user_command() {
         let processor = TerminalCommandProcessor::new();
-        
+
         // Valid create user command
         let result = processor.parse_command("create user John Doe password123 john@example.com 0");
         assert!(result.is_ok());
-        
-        if let Ok(TerminalCommand::CreateUser { firstname, lastname, password, email, user_level }) = result {
+
+        if let Ok(TerminalCommand::CreateUser {
+            firstname,
+            lastname,
+            password,
+            email,
+            user_level,
+        }) = result
+        {
             assert_eq!(firstname, "John");
             assert_eq!(lastname, "Doe");
             assert_eq!(password, "password123");
             assert_eq!(email, "john@example.com");
             assert_eq!(user_level, Some(0));
         }
-        
+
         // Invalid create user command
         let result = processor.parse_command("create user John");
         assert!(result.is_err());
     }
-    
+
     #[test]
     fn test_parse_reset_commands() {
         let processor = TerminalCommandProcessor::new();
-        
+
         // Valid reset password command
         let result = processor.parse_command("reset user password John Doe newpass123");
         assert!(result.is_ok());
-        
+
         // Valid reset email command
         let result = processor.parse_command("reset user email John Doe newemail@example.com");
         assert!(result.is_ok());
-        
+
         // Invalid reset command
         let result = processor.parse_command("reset user invalid John Doe value");
         assert!(result.is_err());
     }
-    
+
     #[test]
     fn test_parse_show_commands() {
         let processor = TerminalCommandProcessor::new();
-        
+
         // Valid show account command
         let result = processor.parse_command("show account John Doe");
         assert!(result.is_ok());
-        
+
         // Valid show users command
         let result = processor.parse_command("show users 50");
         assert!(result.is_ok());
-        
+
         // Valid show users without limit
         let result = processor.parse_command("show users");
         assert!(result.is_ok());
     }
-    
+
     #[test]
     fn test_validate_user_input() {
         // Valid input
         assert!(validate_user_input("John", "Doe", Some("john@example.com")).is_ok());
-        
+
         // Invalid inputs
         assert!(validate_user_input("", "Doe", Some("john@example.com")).is_err());
         assert!(validate_user_input("John", "", Some("john@example.com")).is_err());
         assert!(validate_user_input("John", "Doe", Some("invalid-email")).is_err());
         assert!(validate_user_input("John", "Doe", Some("")).is_err());
     }
-    
+
     #[test]
     fn test_help_command() {
         let processor = TerminalCommandProcessor::new();
         let result = processor.parse_command("help");
         assert!(result.is_ok());
-        
+
         if let Ok(TerminalCommand::Help) = result {
             // Help command parsed correctly
         } else {

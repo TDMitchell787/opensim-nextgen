@@ -169,14 +169,18 @@ impl LandManagementModule {
                     Ok(rows) => {
                         use sqlx::Row;
                         for row in rows {
-                            let parcel_uuid: Uuid = row.try_get("uuid").unwrap_or_else(|_| Uuid::new_v4());
-                            let owner_uuid: Uuid = row.try_get("owneruuid").unwrap_or_else(|_| Uuid::nil());
-                            let group_uuid: Uuid = row.try_get("groupuuid").unwrap_or_else(|_| Uuid::nil());
-                            let snapshot_uuid: Uuid = row.try_get("snapshotuuid").unwrap_or_else(|_| Uuid::nil());
-                            let auth_buyer_uuid: Uuid = row.try_get("authbuyerid").unwrap_or_else(|_| Uuid::nil());
+                            let parcel_uuid: Uuid =
+                                row.try_get("uuid").unwrap_or_else(|_| Uuid::new_v4());
+                            let owner_uuid: Uuid =
+                                row.try_get("owneruuid").unwrap_or_else(|_| Uuid::nil());
+                            let group_uuid: Uuid =
+                                row.try_get("groupuuid").unwrap_or_else(|_| Uuid::nil());
+                            let snapshot_uuid: Uuid =
+                                row.try_get("snapshotuuid").unwrap_or_else(|_| Uuid::nil());
+                            let auth_buyer_uuid: Uuid =
+                                row.try_get("authbuyerid").unwrap_or_else(|_| Uuid::nil());
 
-                            let bitmap_data: Option<Vec<u8>> =
-                                row.try_get("bitmap").ok();
+                            let bitmap_data: Option<Vec<u8>> = row.try_get("bitmap").ok();
                             let bitmap = bitmap_data.unwrap_or_else(|| vec![0xFF; BITMAP_BYTES]);
 
                             let p = Parcel {
@@ -193,9 +197,8 @@ impl LandManagementModule {
                                 description: row.try_get("description").unwrap_or_default(),
                                 flags: row.try_get::<i32, _>("landflags").unwrap_or(0x03FFFFFF)
                                     as u32,
-                                landing_type: row
-                                    .try_get::<i32, _>("landingtype")
-                                    .unwrap_or(0) as u8,
+                                landing_type: row.try_get::<i32, _>("landingtype").unwrap_or(0)
+                                    as u8,
                                 landing_point: [
                                     row.try_get::<f32, _>("userlocationx").unwrap_or(128.0),
                                     row.try_get::<f32, _>("userlocationy").unwrap_or(128.0),
@@ -394,16 +397,17 @@ impl RegionModule for LandManagementModule {
             100,
         );
 
-        scene.service_registry.write().register::<LandManagementModule>(
-            Arc::new(LandManagementModule {
+        scene
+            .service_registry
+            .write()
+            .register::<LandManagementModule>(Arc::new(LandManagementModule {
                 parcels: self.parcels.clone(),
                 region_uuid: self.region_uuid,
                 socket: self.socket.clone(),
                 session_manager: self.session_manager.clone(),
                 avatar_states: self.avatar_states.clone(),
                 db: self.db.clone(),
-            }),
-        );
+            }));
 
         info!(
             "[LAND MODULE] Added to region '{}' with {} parcels",
@@ -553,11 +557,7 @@ impl ParcelEventHandler {
 
 #[async_trait]
 impl EventHandler for ParcelEventHandler {
-    async fn handle_event(
-        &self,
-        event: &SceneEvent,
-        scene: &SceneContext,
-    ) -> Result<()> {
+    async fn handle_event(&self, event: &SceneEvent, scene: &SceneContext) -> Result<()> {
         match event {
             SceneEvent::OnParcelPropertiesRequest {
                 agent_id,
@@ -603,16 +603,11 @@ impl EventHandler for ParcelEventHandler {
                         }
                         parcel.flags = *parcel_flags;
                         parcel.sale_price = *sale_price;
-                        info!(
-                            "[LAND MODULE] Updated parcel {} by {}",
-                            local_id,
-                            agent_id
-                        );
+                        info!("[LAND MODULE] Updated parcel {} by {}", local_id, agent_id);
                     } else {
                         warn!(
                             "[LAND MODULE] Agent {} denied update to parcel {}",
-                            agent_id,
-                            local_id
+                            agent_id, local_id
                         );
                     }
                 }

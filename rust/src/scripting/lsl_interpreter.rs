@@ -1,10 +1,10 @@
 //! LSL language interpreter and parser
 
-use std::collections::HashMap;
 use anyhow::{anyhow, Result};
+use std::collections::HashMap;
 use tracing::{debug, warn};
 
-use super::{LSLValue, LSLVector, LSLRotation};
+use super::{LSLRotation, LSLValue, LSLVector};
 
 #[derive(Debug, Clone, Copy, PartialEq)]
 pub struct SourceLocation {
@@ -20,7 +20,7 @@ pub enum Token {
     Float(f32),
     String(String),
     Identifier(String),
-    
+
     // Keywords
     Default,
     State,
@@ -31,7 +31,7 @@ pub enum Token {
     Do,
     Return,
     Jump,
-    
+
     // Types
     IntegerType,
     FloatType,
@@ -40,7 +40,7 @@ pub enum Token {
     VectorType,
     RotationType,
     ListType,
-    
+
     // Operators
     Plus,
     Minus,
@@ -80,7 +80,7 @@ pub enum Token {
     // Additional
     At,
     Dot,
-    
+
     // Delimiters
     LeftParen,
     RightParen,
@@ -90,7 +90,7 @@ pub enum Token {
     RightBracket,
     Semicolon,
     Comma,
-    
+
     // Special
     Newline,
     Eof,
@@ -217,7 +217,10 @@ impl LSLLexer {
     }
 
     pub fn location(&self) -> SourceLocation {
-        SourceLocation { line: self.line, col: self.col }
+        SourceLocation {
+            line: self.line,
+            col: self.col,
+        }
     }
 
     fn advance(&mut self) {
@@ -262,7 +265,7 @@ impl LSLLexer {
     fn skip_block_comment(&mut self) -> Result<()> {
         self.advance(); // Skip '/'
         self.advance(); // Skip '*'
-        
+
         while let Some(ch) = self.current_char {
             if ch == '*' {
                 self.advance();
@@ -274,7 +277,7 @@ impl LSLLexer {
                 self.advance();
             }
         }
-        
+
         Err(anyhow!("Unterminated block comment"))
     }
 
@@ -298,8 +301,7 @@ impl LSLLexer {
                     if number.is_empty() {
                         return Ok(Token::Integer(0));
                     }
-                    let value = i32::from_str_radix(&number, 16)
-                        .unwrap_or(0);
+                    let value = i32::from_str_radix(&number, 16).unwrap_or(0);
                     return Ok(Token::Integer(value));
                 }
             }
@@ -332,12 +334,12 @@ impl LSLLexer {
         }
 
         if is_float {
-            let value = number.parse::<f32>()
+            let value = number
+                .parse::<f32>()
                 .map_err(|_| anyhow!("Invalid float: {}", number))?;
             Ok(Token::Float(value))
         } else {
-            let value = number.parse::<i32>()
-                .unwrap_or(0);
+            let value = number.parse::<i32>().unwrap_or(0);
             Ok(Token::Integer(value))
         }
     }
@@ -382,7 +384,7 @@ impl LSLLexer {
     fn read_string(&mut self) -> Result<Token> {
         let mut string = String::new();
         self.advance(); // Skip opening quote
-        
+
         while let Some(ch) = self.current_char {
             if ch == '"' {
                 self.advance(); // Skip closing quote
@@ -408,14 +410,14 @@ impl LSLLexer {
                 self.advance();
             }
         }
-        
+
         Err(anyhow!("Unterminated string literal"))
     }
 
     /// Read an identifier or keyword
     fn read_identifier(&mut self) -> Token {
         let mut identifier = String::new();
-        
+
         while let Some(ch) = self.current_char {
             if ch.is_alphanumeric() || ch == '_' {
                 identifier.push(ch);
@@ -424,7 +426,7 @@ impl LSLLexer {
                 break;
             }
         }
-        
+
         // Check for keywords
         match identifier.as_str() {
             "default" => Token::Default,
@@ -649,17 +651,17 @@ impl LSLLexer {
     /// Tokenize the entire input
     pub fn tokenize(&mut self) -> Result<Vec<Token>> {
         let mut tokens = Vec::new();
-        
+
         loop {
             let token = self.next_token()?;
             let is_eof = matches!(token, Token::Eof);
             tokens.push(token);
-            
+
             if is_eof {
                 break;
             }
         }
-        
+
         Ok(tokens)
     }
 }
@@ -675,7 +677,7 @@ pub struct LSLParser {
 impl LSLParser {
     pub fn new(tokens: Vec<Token>) -> Self {
         let current_token = tokens.get(0).cloned().unwrap_or(Token::Eof);
-        
+
         Self {
             tokens,
             position: 0,
@@ -687,7 +689,11 @@ impl LSLParser {
     /// Advance to the next token
     fn advance(&mut self) {
         self.position += 1;
-        self.current_token = self.tokens.get(self.position).cloned().unwrap_or(Token::Eof);
+        self.current_token = self
+            .tokens
+            .get(self.position)
+            .cloned()
+            .unwrap_or(Token::Eof);
     }
 
     /// Check if current token matches expected type
@@ -703,23 +709,27 @@ impl LSLParser {
             self.advance();
             Ok(())
         } else {
-            Err(anyhow!("Expected {:?}, found {:?}", expected, self.current_token))
+            Err(anyhow!(
+                "Expected {:?}, found {:?}",
+                expected,
+                self.current_token
+            ))
         }
     }
 
     /// Parse the entire program
     pub fn parse(&mut self) -> Result<ASTNode> {
         let mut statements = Vec::new();
-        
+
         while !matches!(self.current_token, Token::Eof) {
             if matches!(self.current_token, Token::Newline) {
                 self.advance();
                 continue;
             }
-            
+
             statements.push(self.parse_top_level()?);
         }
-        
+
         Ok(ASTNode::Program(statements))
     }
 
@@ -728,10 +738,13 @@ impl LSLParser {
         match &self.current_token {
             Token::Default => self.parse_state(),
             Token::State => self.parse_state(),
-            Token::IntegerType | Token::FloatType | Token::StringType | 
-            Token::KeyType | Token::VectorType | Token::RotationType | Token::ListType => {
-                self.parse_global_declaration()
-            }
+            Token::IntegerType
+            | Token::FloatType
+            | Token::StringType
+            | Token::KeyType
+            | Token::VectorType
+            | Token::RotationType
+            | Token::ListType => self.parse_global_declaration(),
             Token::Identifier(name) => {
                 let name = name.clone();
                 self.advance();
@@ -742,7 +755,10 @@ impl LSLParser {
                     Err(anyhow!("Unexpected identifier at top level: {}", name))
                 }
             }
-            _ => Err(anyhow!("Unexpected token at top level: {:?}", self.current_token)),
+            _ => Err(anyhow!(
+                "Unexpected token at top level: {:?}",
+                self.current_token
+            )),
         }
     }
 
@@ -763,32 +779,58 @@ impl LSLParser {
         };
 
         self.expect(Token::LeftBrace)?;
-        
+
         let mut body = Vec::new();
-        while !matches!(self.current_token, Token::RightBrace) && !matches!(self.current_token, Token::Eof) {
+        while !matches!(self.current_token, Token::RightBrace)
+            && !matches!(self.current_token, Token::Eof)
+        {
             if matches!(self.current_token, Token::Newline) {
                 self.advance();
                 continue;
             }
-            
+
             body.push(self.parse_event_or_function()?);
         }
-        
+
         self.expect(Token::RightBrace)?;
-        
-        Ok(ASTNode::State { name: state_name, body })
+
+        Ok(ASTNode::State {
+            name: state_name,
+            body,
+        })
     }
 
     /// Parse global variable or function declaration
     fn parse_global_declaration(&mut self) -> Result<ASTNode> {
         let type_name = match &self.current_token {
-            Token::IntegerType => { self.advance(); "integer".to_string() }
-            Token::FloatType => { self.advance(); "float".to_string() }
-            Token::StringType => { self.advance(); "string".to_string() }
-            Token::KeyType => { self.advance(); "key".to_string() }
-            Token::VectorType => { self.advance(); "vector".to_string() }
-            Token::RotationType => { self.advance(); "rotation".to_string() }
-            Token::ListType => { self.advance(); "list".to_string() }
+            Token::IntegerType => {
+                self.advance();
+                "integer".to_string()
+            }
+            Token::FloatType => {
+                self.advance();
+                "float".to_string()
+            }
+            Token::StringType => {
+                self.advance();
+                "string".to_string()
+            }
+            Token::KeyType => {
+                self.advance();
+                "key".to_string()
+            }
+            Token::VectorType => {
+                self.advance();
+                "vector".to_string()
+            }
+            Token::RotationType => {
+                self.advance();
+                "rotation".to_string()
+            }
+            Token::ListType => {
+                self.advance();
+                "list".to_string()
+            }
             _ => return Err(anyhow!("Expected type name")),
         };
         self.skip_newlines();
@@ -811,9 +853,9 @@ impl LSLParser {
                     } else {
                         None
                     };
-                    
+
                     self.expect(Token::Semicolon)?;
-                    
+
                     Ok(ASTNode::Variable {
                         var_type: type_name,
                         name,
@@ -837,13 +879,34 @@ impl LSLParser {
         while !matches!(self.current_token, Token::RightParen) {
             self.skip_newlines();
             let param_type = match &self.current_token {
-                Token::IntegerType => { self.advance(); "integer".to_string() }
-                Token::FloatType => { self.advance(); "float".to_string() }
-                Token::StringType => { self.advance(); "string".to_string() }
-                Token::KeyType => { self.advance(); "key".to_string() }
-                Token::VectorType => { self.advance(); "vector".to_string() }
-                Token::RotationType => { self.advance(); "rotation".to_string() }
-                Token::ListType => { self.advance(); "list".to_string() }
+                Token::IntegerType => {
+                    self.advance();
+                    "integer".to_string()
+                }
+                Token::FloatType => {
+                    self.advance();
+                    "float".to_string()
+                }
+                Token::StringType => {
+                    self.advance();
+                    "string".to_string()
+                }
+                Token::KeyType => {
+                    self.advance();
+                    "key".to_string()
+                }
+                Token::VectorType => {
+                    self.advance();
+                    "vector".to_string()
+                }
+                Token::RotationType => {
+                    self.advance();
+                    "rotation".to_string()
+                }
+                Token::ListType => {
+                    self.advance();
+                    "list".to_string()
+                }
                 _ => return Err(anyhow!("Expected parameter type")),
             };
             self.skip_newlines();
@@ -867,9 +930,9 @@ impl LSLParser {
 
         self.expect(Token::RightParen)?;
         self.expect(Token::LeftBrace)?;
-        
+
         let body = self.parse_block()?;
-        
+
         Ok(ASTNode::Function {
             name,
             return_type,
@@ -892,13 +955,34 @@ impl LSLParser {
             while !matches!(self.current_token, Token::RightParen) {
                 self.skip_newlines();
                 let param_type = match &self.current_token {
-                    Token::IntegerType => { self.advance(); "integer".to_string() }
-                    Token::FloatType => { self.advance(); "float".to_string() }
-                    Token::StringType => { self.advance(); "string".to_string() }
-                    Token::KeyType => { self.advance(); "key".to_string() }
-                    Token::VectorType => { self.advance(); "vector".to_string() }
-                    Token::RotationType => { self.advance(); "rotation".to_string() }
-                    Token::ListType => { self.advance(); "list".to_string() }
+                    Token::IntegerType => {
+                        self.advance();
+                        "integer".to_string()
+                    }
+                    Token::FloatType => {
+                        self.advance();
+                        "float".to_string()
+                    }
+                    Token::StringType => {
+                        self.advance();
+                        "string".to_string()
+                    }
+                    Token::KeyType => {
+                        self.advance();
+                        "key".to_string()
+                    }
+                    Token::VectorType => {
+                        self.advance();
+                        "vector".to_string()
+                    }
+                    Token::RotationType => {
+                        self.advance();
+                        "rotation".to_string()
+                    }
+                    Token::ListType => {
+                        self.advance();
+                        "list".to_string()
+                    }
                     _ => return Err(anyhow!("Expected parameter type")),
                 };
                 self.skip_newlines();
@@ -922,9 +1006,9 @@ impl LSLParser {
 
             self.expect(Token::RightParen)?;
             self.expect(Token::LeftBrace)?;
-            
+
             let body = self.parse_block()?;
-            
+
             Ok(ASTNode::Event {
                 name,
                 parameters,
@@ -938,16 +1022,18 @@ impl LSLParser {
     /// Parse a block of statements
     fn parse_block(&mut self) -> Result<Vec<ASTNode>> {
         let mut statements = Vec::new();
-        
-        while !matches!(self.current_token, Token::RightBrace) && !matches!(self.current_token, Token::Eof) {
+
+        while !matches!(self.current_token, Token::RightBrace)
+            && !matches!(self.current_token, Token::Eof)
+        {
             if matches!(self.current_token, Token::Newline) {
                 self.advance();
                 continue;
             }
-            
+
             statements.push(self.parse_statement()?);
         }
-        
+
         self.expect(Token::RightBrace)?;
         Ok(statements)
     }
@@ -1006,11 +1092,13 @@ impl LSLParser {
                 let statements = self.parse_block()?;
                 Ok(ASTNode::Block(statements))
             }
-            Token::IntegerType | Token::FloatType | Token::StringType
-            | Token::KeyType | Token::VectorType | Token::RotationType
-            | Token::ListType => {
-                self.parse_local_variable()
-            }
+            Token::IntegerType
+            | Token::FloatType
+            | Token::StringType
+            | Token::KeyType
+            | Token::VectorType
+            | Token::RotationType
+            | Token::ListType => self.parse_local_variable(),
             _ => {
                 let expr = self.parse_expression()?;
                 self.expect(Token::Semicolon)?;
@@ -1083,10 +1171,15 @@ impl LSLParser {
     }
 
     fn is_type_token(token: &Token) -> bool {
-        matches!(token,
-            Token::IntegerType | Token::FloatType | Token::StringType
-            | Token::KeyType | Token::VectorType | Token::RotationType
-            | Token::ListType
+        matches!(
+            token,
+            Token::IntegerType
+                | Token::FloatType
+                | Token::StringType
+                | Token::KeyType
+                | Token::VectorType
+                | Token::RotationType
+                | Token::ListType
         )
     }
 
@@ -1096,14 +1189,14 @@ impl LSLParser {
         self.expect(Token::LeftParen)?;
         let condition = Box::new(self.parse_expression()?);
         self.expect(Token::RightParen)?;
-        
+
         let then_body = if matches!(self.current_token, Token::LeftBrace) {
             self.advance();
             self.parse_block()?
         } else {
             vec![self.parse_statement()?]
         };
-        
+
         self.skip_newlines();
         let else_body = if matches!(self.current_token, Token::Else) {
             self.advance();
@@ -1117,7 +1210,7 @@ impl LSLParser {
         } else {
             None
         };
-        
+
         Ok(ASTNode::If {
             condition,
             then_body,
@@ -1131,14 +1224,14 @@ impl LSLParser {
         self.expect(Token::LeftParen)?;
         let condition = Box::new(self.parse_expression()?);
         self.expect(Token::RightParen)?;
-        
+
         let body = if matches!(self.current_token, Token::LeftBrace) {
             self.advance();
             self.parse_block()?
         } else {
             vec![self.parse_statement()?]
         };
-        
+
         Ok(ASTNode::While { condition, body })
     }
 
@@ -1167,14 +1260,14 @@ impl LSLParser {
             Some(Box::new(self.parse_comma_expression()?))
         };
         self.expect(Token::RightParen)?;
-        
+
         let body = if matches!(self.current_token, Token::LeftBrace) {
             self.advance();
             self.parse_block()?
         } else {
             vec![self.parse_statement()?]
         };
-        
+
         Ok(ASTNode::For {
             init,
             condition,
@@ -1186,13 +1279,13 @@ impl LSLParser {
     /// Parse a return statement
     fn parse_return(&mut self) -> Result<ASTNode> {
         self.expect(Token::Return)?;
-        
+
         let value = if matches!(self.current_token, Token::Semicolon) {
             None
         } else {
             Some(Box::new(self.parse_expression()?))
         };
-        
+
         self.expect(Token::Semicolon)?;
         Ok(ASTNode::Return(value))
     }
@@ -1231,8 +1324,11 @@ impl LSLParser {
                     value: Box::new(value),
                 })
             }
-            Token::PlusAssign | Token::MinusAssign | Token::MultiplyAssign
-            | Token::DivideAssign | Token::ModuloAssign => {
+            Token::PlusAssign
+            | Token::MinusAssign
+            | Token::MultiplyAssign
+            | Token::DivideAssign
+            | Token::ModuloAssign => {
                 let operator = self.current_token.clone();
                 self.advance();
                 self.skip_newlines();
@@ -1252,7 +1348,9 @@ impl LSLParser {
 
         loop {
             self.skip_newlines();
-            if !matches!(self.current_token, Token::Or) { break; }
+            if !matches!(self.current_token, Token::Or) {
+                break;
+            }
             let operator = self.current_token.clone();
             self.advance();
             self.skip_newlines();
@@ -1272,7 +1370,9 @@ impl LSLParser {
 
         loop {
             self.skip_newlines();
-            if !matches!(self.current_token, Token::And) { break; }
+            if !matches!(self.current_token, Token::And) {
+                break;
+            }
             let operator = self.current_token.clone();
             self.advance();
             self.skip_newlines();
@@ -1292,7 +1392,9 @@ impl LSLParser {
 
         loop {
             self.skip_newlines();
-            if !matches!(self.current_token, Token::BitOr) { break; }
+            if !matches!(self.current_token, Token::BitOr) {
+                break;
+            }
             let operator = self.current_token.clone();
             self.advance();
             self.skip_newlines();
@@ -1312,7 +1414,9 @@ impl LSLParser {
 
         loop {
             self.skip_newlines();
-            if !matches!(self.current_token, Token::BitXor) { break; }
+            if !matches!(self.current_token, Token::BitXor) {
+                break;
+            }
             let operator = self.current_token.clone();
             self.advance();
             self.skip_newlines();
@@ -1332,7 +1436,9 @@ impl LSLParser {
 
         loop {
             self.skip_newlines();
-            if !matches!(self.current_token, Token::BitAnd) { break; }
+            if !matches!(self.current_token, Token::BitAnd) {
+                break;
+            }
             let operator = self.current_token.clone();
             self.advance();
             self.skip_newlines();
@@ -1352,7 +1458,9 @@ impl LSLParser {
 
         loop {
             self.skip_newlines();
-            if !matches!(self.current_token, Token::Equal | Token::NotEqual) { break; }
+            if !matches!(self.current_token, Token::Equal | Token::NotEqual) {
+                break;
+            }
             let operator = self.current_token.clone();
             self.advance();
             self.skip_newlines();
@@ -1396,7 +1504,9 @@ impl LSLParser {
 
         loop {
             self.skip_newlines();
-            if !matches!(self.current_token, Token::ShiftLeft | Token::ShiftRight) { break; }
+            if !matches!(self.current_token, Token::ShiftLeft | Token::ShiftRight) {
+                break;
+            }
             let operator = self.current_token.clone();
             self.advance();
             self.skip_newlines();
@@ -1416,7 +1526,9 @@ impl LSLParser {
 
         loop {
             self.skip_newlines();
-            if !matches!(self.current_token, Token::Plus | Token::Minus) { break; }
+            if !matches!(self.current_token, Token::Plus | Token::Minus) {
+                break;
+            }
             let operator = self.current_token.clone();
             self.advance();
             self.skip_newlines();
@@ -1436,7 +1548,12 @@ impl LSLParser {
 
         loop {
             self.skip_newlines();
-            if !matches!(self.current_token, Token::Multiply | Token::Divide | Token::Modulo) { break; }
+            if !matches!(
+                self.current_token,
+                Token::Multiply | Token::Divide | Token::Modulo
+            ) {
+                break;
+            }
             let operator = self.current_token.clone();
             self.advance();
             self.skip_newlines();
@@ -1553,10 +1670,7 @@ impl LSLParser {
 
                     self.expect(Token::RightParen)?;
 
-                    Ok(ASTNode::FunctionCall {
-                        name,
-                        arguments,
-                    })
+                    Ok(ASTNode::FunctionCall { name, arguments })
                 } else {
                     Ok(ASTNode::Identifier(name))
                 }
@@ -1578,9 +1692,7 @@ impl LSLParser {
                     Ok(expr)
                 }
             }
-            Token::Less => {
-                self.parse_vector_or_rotation_literal()
-            }
+            Token::Less => self.parse_vector_or_rotation_literal(),
             Token::LeftBracket => {
                 self.advance();
                 self.skip_newlines();
@@ -1600,7 +1712,11 @@ impl LSLParser {
                 self.expect(Token::RightBracket)?;
                 Ok(ASTNode::ListLiteral(elements))
             }
-            _ => Err(anyhow!("Unexpected token in expression: {:?} at token #{}", self.current_token, self.position)),
+            _ => Err(anyhow!(
+                "Unexpected token in expression: {:?} at token #{}",
+                self.current_token,
+                self.position
+            )),
         }
     }
 
@@ -1649,7 +1765,8 @@ pub struct LSLInterpreter {
 impl LSLInterpreter {
     pub fn new() -> Self {
         let constant_map = super::lsl_constants::build_constant_map();
-        let constants: HashMap<String, LSLValue> = constant_map.into_iter()
+        let constants: HashMap<String, LSLValue> = constant_map
+            .into_iter()
             .map(|(k, v)| (k.to_string(), v))
             .collect();
         Self {
@@ -1668,12 +1785,12 @@ impl LSLInterpreter {
         };
         let mut lexer = LSLLexer::new(effective_source);
         let tokens = lexer.tokenize()?;
-        
+
         debug!("Tokenized {} tokens", tokens.len());
-        
+
         let mut parser = LSLParser::new(tokens);
         let ast = parser.parse()?;
-        
+
         debug!("Parsed AST successfully");
         Ok(ast)
     }
@@ -1682,13 +1799,17 @@ impl LSLInterpreter {
     pub fn evaluate(&mut self, node: &ASTNode) -> Result<LSLValue> {
         match node {
             ASTNode::Literal(value) => Ok(value.clone()),
-            ASTNode::Identifier(name) => {
-                self.variables.get(name)
-                    .or_else(|| self.constants.get(name))
-                    .cloned()
-                    .ok_or_else(|| anyhow!("Undefined variable: {}", name))
-            }
-            ASTNode::BinaryOp { left, operator, right } => {
+            ASTNode::Identifier(name) => self
+                .variables
+                .get(name)
+                .or_else(|| self.constants.get(name))
+                .cloned()
+                .ok_or_else(|| anyhow!("Undefined variable: {}", name)),
+            ASTNode::BinaryOp {
+                left,
+                operator,
+                right,
+            } => {
                 let left_val = self.evaluate(left)?;
                 let right_val = self.evaluate(right)?;
                 self.evaluate_binary_op(&left_val, operator, &right_val)
@@ -1714,26 +1835,75 @@ impl LSLInterpreter {
     }
 
     /// Evaluate binary operations
-    fn evaluate_binary_op(&self, left: &LSLValue, operator: &Token, right: &LSLValue) -> Result<LSLValue> {
+    fn evaluate_binary_op(
+        &self,
+        left: &LSLValue,
+        operator: &Token,
+        right: &LSLValue,
+    ) -> Result<LSLValue> {
         match operator {
             Token::Plus => Ok(self.add_values(left, right)?),
             Token::Minus => Ok(self.subtract_values(left, right)?),
             Token::Multiply => Ok(self.multiply_values(left, right)?),
             Token::Divide => Ok(self.divide_values(left, right)?),
-            Token::Equal => Ok(LSLValue::Integer(if self.values_equal(left, right) { 1 } else { 0 })),
-            Token::NotEqual => Ok(LSLValue::Integer(if !self.values_equal(left, right) { 1 } else { 0 })),
-            Token::Less => Ok(LSLValue::Integer(if self.compare_values(left, right)? < 0 { 1 } else { 0 })),
-            Token::Greater => Ok(LSLValue::Integer(if self.compare_values(left, right)? > 0 { 1 } else { 0 })),
-            Token::LessEqual => Ok(LSLValue::Integer(if self.compare_values(left, right)? <= 0 { 1 } else { 0 })),
-            Token::GreaterEqual => Ok(LSLValue::Integer(if self.compare_values(left, right)? >= 0 { 1 } else { 0 })),
-            Token::And => Ok(LSLValue::Integer(if left.is_true() && right.is_true() { 1 } else { 0 })),
-            Token::Or => Ok(LSLValue::Integer(if left.is_true() || right.is_true() { 1 } else { 0 })),
+            Token::Equal => Ok(LSLValue::Integer(if self.values_equal(left, right) {
+                1
+            } else {
+                0
+            })),
+            Token::NotEqual => Ok(LSLValue::Integer(if !self.values_equal(left, right) {
+                1
+            } else {
+                0
+            })),
+            Token::Less => Ok(LSLValue::Integer(
+                if self.compare_values(left, right)? < 0 {
+                    1
+                } else {
+                    0
+                },
+            )),
+            Token::Greater => Ok(LSLValue::Integer(
+                if self.compare_values(left, right)? > 0 {
+                    1
+                } else {
+                    0
+                },
+            )),
+            Token::LessEqual => Ok(LSLValue::Integer(
+                if self.compare_values(left, right)? <= 0 {
+                    1
+                } else {
+                    0
+                },
+            )),
+            Token::GreaterEqual => Ok(LSLValue::Integer(
+                if self.compare_values(left, right)? >= 0 {
+                    1
+                } else {
+                    0
+                },
+            )),
+            Token::And => Ok(LSLValue::Integer(if left.is_true() && right.is_true() {
+                1
+            } else {
+                0
+            })),
+            Token::Or => Ok(LSLValue::Integer(if left.is_true() || right.is_true() {
+                1
+            } else {
+                0
+            })),
             Token::Modulo => Ok(self.modulo_values(left, right)?),
             Token::BitAnd => Ok(LSLValue::Integer(left.to_integer() & right.to_integer())),
             Token::BitOr => Ok(LSLValue::Integer(left.to_integer() | right.to_integer())),
             Token::BitXor => Ok(LSLValue::Integer(left.to_integer() ^ right.to_integer())),
-            Token::ShiftLeft => Ok(LSLValue::Integer(left.to_integer() << (right.to_integer() & 31))),
-            Token::ShiftRight => Ok(LSLValue::Integer(left.to_integer() >> (right.to_integer() & 31))),
+            Token::ShiftLeft => Ok(LSLValue::Integer(
+                left.to_integer() << (right.to_integer() & 31),
+            )),
+            Token::ShiftRight => Ok(LSLValue::Integer(
+                left.to_integer() >> (right.to_integer() & 31),
+            )),
             Token::Comma => Ok(right.clone()),
             _ => Err(anyhow!("Unsupported binary operator: {:?}", operator)),
         }
@@ -1742,19 +1912,13 @@ impl LSLInterpreter {
     /// Evaluate unary operations
     fn evaluate_unary_op(&self, operator: &Token, operand: &LSLValue) -> Result<LSLValue> {
         match operator {
-            Token::Minus => {
-                match operand {
-                    LSLValue::Integer(i) => Ok(LSLValue::Integer(-i)),
-                    LSLValue::Float(f) => Ok(LSLValue::Float(-f)),
-                    _ => Err(anyhow!("Cannot negate non-numeric value")),
-                }
-            }
-            Token::Not => {
-                Ok(LSLValue::Integer(if operand.is_true() { 0 } else { 1 }))
-            }
-            Token::BitNot => {
-                Ok(LSLValue::Integer(!operand.to_integer()))
-            }
+            Token::Minus => match operand {
+                LSLValue::Integer(i) => Ok(LSLValue::Integer(-i)),
+                LSLValue::Float(f) => Ok(LSLValue::Float(-f)),
+                _ => Err(anyhow!("Cannot negate non-numeric value")),
+            },
+            Token::Not => Ok(LSLValue::Integer(if operand.is_true() { 0 } else { 1 })),
+            Token::BitNot => Ok(LSLValue::Integer(!operand.to_integer())),
             _ => Err(anyhow!("Unsupported unary operator: {:?}", operator)),
         }
     }
@@ -1766,7 +1930,9 @@ impl LSLInterpreter {
             (LSLValue::Float(a), LSLValue::Float(b)) => Ok(LSLValue::Float(a + b)),
             (LSLValue::Integer(a), LSLValue::Float(b)) => Ok(LSLValue::Float(*a as f32 + b)),
             (LSLValue::Float(a), LSLValue::Integer(b)) => Ok(LSLValue::Float(a + *b as f32)),
-            (LSLValue::String(a), LSLValue::String(b)) => Ok(LSLValue::String(format!("{}{}", a, b))),
+            (LSLValue::String(a), LSLValue::String(b)) => {
+                Ok(LSLValue::String(format!("{}{}", a, b)))
+            }
             (LSLValue::Vector(a), LSLValue::Vector(b)) => Ok(LSLValue::Vector(*a + *b)),
             (LSLValue::List(a), LSLValue::List(b)) => {
                 let mut result = a.clone();
@@ -1858,20 +2024,32 @@ impl LSLInterpreter {
     fn modulo_values(&self, left: &LSLValue, right: &LSLValue) -> Result<LSLValue> {
         match (left, right) {
             (LSLValue::Integer(a), LSLValue::Integer(b)) => {
-                if *b == 0 { Err(anyhow!("Division by zero")) }
-                else { Ok(LSLValue::Integer(a % b)) }
+                if *b == 0 {
+                    Err(anyhow!("Division by zero"))
+                } else {
+                    Ok(LSLValue::Integer(a % b))
+                }
             }
             (LSLValue::Float(a), LSLValue::Float(b)) => {
-                if *b == 0.0 { Err(anyhow!("Division by zero")) }
-                else { Ok(LSLValue::Float(a % b)) }
+                if *b == 0.0 {
+                    Err(anyhow!("Division by zero"))
+                } else {
+                    Ok(LSLValue::Float(a % b))
+                }
             }
             (LSLValue::Integer(a), LSLValue::Float(b)) => {
-                if *b == 0.0 { Err(anyhow!("Division by zero")) }
-                else { Ok(LSLValue::Float(*a as f32 % b)) }
+                if *b == 0.0 {
+                    Err(anyhow!("Division by zero"))
+                } else {
+                    Ok(LSLValue::Float(*a as f32 % b))
+                }
             }
             (LSLValue::Float(a), LSLValue::Integer(b)) => {
-                if *b == 0 { Err(anyhow!("Division by zero")) }
-                else { Ok(LSLValue::Float(a % *b as f32)) }
+                if *b == 0 {
+                    Err(anyhow!("Division by zero"))
+                } else {
+                    Ok(LSLValue::Float(a % *b as f32))
+                }
             }
             _ => Err(anyhow!("Cannot modulo these types")),
         }
@@ -1894,7 +2072,9 @@ impl LSLInterpreter {
     fn compare_values(&self, left: &LSLValue, right: &LSLValue) -> Result<i32> {
         match (left, right) {
             (LSLValue::Integer(a), LSLValue::Integer(b)) => Ok(a.cmp(b) as i32),
-            (LSLValue::Float(a), LSLValue::Float(b)) => Ok(a.partial_cmp(b).unwrap_or(std::cmp::Ordering::Equal) as i32),
+            (LSLValue::Float(a), LSLValue::Float(b)) => {
+                Ok(a.partial_cmp(b).unwrap_or(std::cmp::Ordering::Equal) as i32)
+            }
             (LSLValue::String(a), LSLValue::String(b)) => Ok(a.cmp(b) as i32),
             _ => Err(anyhow!("Cannot compare these types")),
         }
@@ -1909,12 +2089,12 @@ mod tests {
     fn test_lexer_basic_tokens() -> Result<()> {
         let mut lexer = LSLLexer::new("42 3.14 \"hello\" identifier".to_string());
         let tokens = lexer.tokenize()?;
-        
+
         assert!(matches!(tokens[0], Token::Integer(42)));
         assert!(matches!(tokens[1], Token::Float(f) if (f - 3.14).abs() < f32::EPSILON));
         assert!(matches!(tokens[2], Token::String(ref s) if s == "hello"));
         assert!(matches!(tokens[3], Token::Identifier(ref s) if s == "identifier"));
-        
+
         Ok(())
     }
 
@@ -1924,13 +2104,23 @@ mod tests {
         let tokens = lexer.tokenize()?;
 
         let expected = vec![
-            Token::Plus, Token::Minus, Token::Multiply, Token::Divide,
-            Token::Equal, Token::NotEqual, Token::Less, Token::Greater,
-            Token::LessEqual, Token::GreaterEqual,
+            Token::Plus,
+            Token::Minus,
+            Token::Multiply,
+            Token::Divide,
+            Token::Equal,
+            Token::NotEqual,
+            Token::Less,
+            Token::Greater,
+            Token::LessEqual,
+            Token::GreaterEqual,
         ];
 
         for (i, expected_token) in expected.iter().enumerate() {
-            assert_eq!(std::mem::discriminant(&tokens[i]), std::mem::discriminant(expected_token));
+            assert_eq!(
+                std::mem::discriminant(&tokens[i]),
+                std::mem::discriminant(expected_token)
+            );
         }
 
         Ok(())
@@ -2050,10 +2240,21 @@ mod tests {
 
         let ast = parser.parse_expression()?;
 
-        if let ASTNode::BinaryOp { left, operator, right } = ast {
-            assert!(matches!(left.as_ref(), ASTNode::Literal(LSLValue::Integer(1))));
+        if let ASTNode::BinaryOp {
+            left,
+            operator,
+            right,
+        } = ast
+        {
+            assert!(matches!(
+                left.as_ref(),
+                ASTNode::Literal(LSLValue::Integer(1))
+            ));
             assert!(matches!(operator, Token::Plus));
-            assert!(matches!(right.as_ref(), ASTNode::Literal(LSLValue::Integer(2))));
+            assert!(matches!(
+                right.as_ref(),
+                ASTNode::Literal(LSLValue::Integer(2))
+            ));
         } else {
             panic!("Expected binary operation, got: {:?}", &ast);
         }

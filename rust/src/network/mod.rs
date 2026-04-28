@@ -1,64 +1,63 @@
 //! Network layer for OpenSim
-//! 
+//!
 //! This module handles network communication, client connections, and protocol management.
 
-pub mod protocol;
-pub mod security;
-pub mod rate_limiting;
-pub mod llsd;
-pub mod client;
-pub mod session;
-pub mod handlers;
-pub mod region_crossing;
-pub mod inter_region;
-pub mod grid_events;
-pub mod distributed;
-pub mod remote_admin;
-pub mod websocket;
-pub mod web_client;
-pub mod rest_api;
-pub mod auth;
-pub mod authentication;
 pub mod admin_api;
 pub mod admin_security;
-pub mod terminal_commands;
-pub mod dark_services;
-pub mod crypto_manager;
-pub mod loopback;
-pub mod hypergrid;
-pub mod fwdfe_api;
 pub mod ai_api;
+pub mod auth;
+pub mod authentication;
+pub mod client;
 pub mod console_api;
+pub mod crypto_manager;
+pub mod dark_services;
+pub mod distributed;
+pub mod fwdfe_api;
+pub mod grid_events;
+pub mod handlers;
+pub mod hypergrid;
+pub mod inter_region;
+pub mod llsd;
+pub mod loopback;
+pub mod protocol;
+pub mod rate_limiting;
+pub mod region_crossing;
+pub mod remote_admin;
+pub mod rest_api;
+pub mod security;
+pub mod session;
 pub mod skill_api;
+pub mod terminal_commands;
+pub mod web_client;
+pub mod websocket;
 pub mod ziti_manager;
 pub mod ziti_policies;
 
+use anyhow::Result;
+use bytes::{BufMut, BytesMut};
 use std::{
     net::SocketAddr,
     sync::Arc,
     time::{Duration, Instant},
 };
-use anyhow::Result;
-use bytes::{BytesMut, BufMut};
 use tokio::net::TcpListener;
 use tokio_util::codec::{Decoder, Encoder};
-use tracing::{info, error};
+use tracing::{error, info};
 
 use crate::{
+    database::user_accounts::UserAccountDatabase,
+    monitoring::MonitoringSystem,
     network::{
-        client::{ClientConnection, ClientManager},
-        session::SessionManager,
-        security::SecurityManager,
-        websocket::{WebSocketServer, WebSocketConfig},
-        rest_api::{RestApiService, RestApiConfig},
         auth::AuthenticationService,
+        client::{ClientConnection, ClientManager},
+        rest_api::{RestApiConfig, RestApiService},
+        security::SecurityManager,
+        session::SessionManager,
+        websocket::{WebSocketConfig, WebSocketServer},
     },
     region::RegionManager,
-    monitoring::MonitoringSystem,
     state::StateManager,
-    database::user_accounts::UserAccountDatabase,
 };
-
 
 // Message codec for JSON serialization
 pub struct JsonCodec;
@@ -184,14 +183,14 @@ impl NetworkManager {
             region_manager.clone(),
             state_manager.clone(),
         ));
-        
+
         let inter_region_manager = Arc::new(inter_region::InterRegionManager::new(
             region_manager.clone(),
             state_manager.clone(),
         ));
-        
+
         let security_manager = Arc::new(SecurityManager::new()?);
-        
+
         // Create WebSocket server if enabled
         let websocket_server = if config.websocket.enabled {
             Some(Arc::new(WebSocketServer::new(
@@ -207,19 +206,20 @@ impl NetworkManager {
         } else {
             None
         };
-        
+
         // Create REST API service if enabled
         let rest_api_service = if config.rest_api.enabled {
             let auth_service = Arc::new(AuthenticationService::new(
-                crate::network::auth::AuthConfig::default()
+                crate::network::auth::AuthConfig::default(),
             ));
-            
-            let database_url = std::env::var("DATABASE_URL")
-                .unwrap_or_else(|_| "sqlite://opensim.db".to_string());
+
+            let database_url =
+                std::env::var("DATABASE_URL").unwrap_or_else(|_| "sqlite://opensim.db".to_string());
 
             let _orig_skip = std::env::var("OPENSIM_SERVICE_MODE").ok();
             std::env::set_var("OPENSIM_SERVICE_MODE", "grid");
-            let database_manager = match crate::database::DatabaseManager::new(&database_url).await {
+            let database_manager = match crate::database::DatabaseManager::new(&database_url).await
+            {
                 Ok(db) => Arc::new(db),
                 Err(e) => {
                     error!("Failed to create database manager for REST API: {}", e);
@@ -236,7 +236,7 @@ impl NetworkManager {
             } else {
                 std::env::remove_var("OPENSIM_SERVICE_MODE");
             }
-            
+
             Some(Arc::new(RestApiService::new(
                 config.rest_api.clone(),
                 asset_manager.clone(),
@@ -248,9 +248,13 @@ impl NetworkManager {
         } else {
             None
         };
-        
+
         Ok(Self {
-            client_manager: Arc::new(ClientManager::new(monitoring.clone(), session_manager.clone(), config)),
+            client_manager: Arc::new(ClientManager::new(
+                monitoring.clone(),
+                session_manager.clone(),
+                config,
+            )),
             session_manager,
             security_manager,
             region_manager,
@@ -269,7 +273,7 @@ impl NetworkManager {
     pub async fn start(&self, address: &str) -> Result<()> {
         // Start inter-region communication system
         self.inter_region_manager.start().await?;
-        
+
         // Start WebSocket server if configured
         if let Some(websocket_server) = &self.websocket_server {
             let ws_server = websocket_server.clone();
@@ -278,9 +282,12 @@ impl NetworkManager {
                     error!("WebSocket server error: {}", e);
                 }
             });
-            info!("WebSocket server started on port {}", websocket_server.get_port());
+            info!(
+                "WebSocket server started on port {}",
+                websocket_server.get_port()
+            );
         }
-        
+
         // Start REST API service if configured
         if let Some(rest_api_service) = &self.rest_api_service {
             let api_service = rest_api_service.clone();
@@ -289,9 +296,12 @@ impl NetworkManager {
                     error!("REST API server error: {}", e);
                 }
             });
-            info!("REST API server started on port {}", rest_api_service.get_port());
+            info!(
+                "REST API server started on port {}",
+                rest_api_service.get_port()
+            );
         }
-        
+
         let listener = TcpListener::bind(address).await?;
         info!("NetworkManager listening on {}", address);
 
@@ -307,7 +317,7 @@ impl NetworkManager {
             let state_manager = self.state_manager.clone();
             let asset_manager = self.asset_manager.clone();
             let user_account_database = self.user_account_database.clone();
-            
+
             tokio::spawn(async move {
                 let (client_connection, message_rx, _shutdown_rx) = ClientConnection::new(
                     stream,
@@ -320,9 +330,11 @@ impl NetworkManager {
                     asset_manager,
                     user_account_database,
                 );
-                
+
                 let client_id = client_connection.id;
-                client_manager.add_client(client_id, client_connection.message_tx.clone()).await;
+                client_manager
+                    .add_client(client_id, client_connection.message_tx.clone())
+                    .await;
 
                 if let Err(e) = client_connection.handle_connection(message_rx).await {
                     error!("Error handling client connection: {}", e);
@@ -335,7 +347,9 @@ impl NetworkManager {
 
     /// Gracefully shutdown the network manager by disconnecting all clients
     pub async fn shutdown(&self) -> Result<()> {
-        self.client_manager.broadcast(crate::network::client::ClientMessage::Shutdown).await;
+        self.client_manager
+            .broadcast(crate::network::client::ClientMessage::Shutdown)
+            .await;
         Ok(())
     }
 
@@ -351,12 +365,12 @@ impl NetworkManager {
             uptime: self.monitoring.get_uptime(),
         }
     }
-    
+
     /// Get WebSocket server reference
     pub fn websocket_server(&self) -> Option<&Arc<WebSocketServer>> {
         self.websocket_server.as_ref()
     }
-    
+
     /// Get WebSocket statistics
     pub async fn get_websocket_stats(&self) -> Option<websocket::WebSocketStats> {
         if let Some(ws_server) = &self.websocket_server {
@@ -365,9 +379,12 @@ impl NetworkManager {
             None
         }
     }
-    
+
     /// Broadcast a WebSocket message to all connected clients
-    pub async fn broadcast_websocket_message(&self, message: websocket::WebSocketMessage) -> Result<()> {
+    pub async fn broadcast_websocket_message(
+        &self,
+        message: websocket::WebSocketMessage,
+    ) -> Result<()> {
         if let Some(ws_server) = &self.websocket_server {
             ws_server.broadcast_message(message).await?;
         }
@@ -391,27 +408,33 @@ pub struct NetworkStats {
 #[cfg(test)]
 mod tests {
     use super::*;
-    use crate::state::StateManager;
     use crate::ffi::physics::PhysicsBridge;
+    use crate::state::StateManager;
 
     #[tokio::test]
     #[ignore]
     async fn test_network_manager_creation() {
-        let monitoring = Arc::new(MonitoringSystem::new(crate::monitoring::MonitoringConfig::default()).unwrap());
+        let monitoring = Arc::new(
+            MonitoringSystem::new(crate::monitoring::MonitoringConfig::default()).unwrap(),
+        );
         let session_manager = Arc::new(SessionManager::new(Duration::from_secs(600)));
         let physics_bridge = Arc::new(PhysicsBridge::new().unwrap());
         let state_manager = Arc::new(StateManager::new().unwrap());
         let region_manager = Arc::new(RegionManager::new(physics_bridge, state_manager.clone()));
         // Create test dependencies for AssetManager
-        use crate::database::DatabaseManager;
         use crate::asset::{
-            cache::{AssetCache, CacheConfig}, 
-            cdn::{CdnManager, CdnConfig}, 
-            storage::StorageBackend, 
-            AssetManagerConfig
+            cache::{AssetCache, CacheConfig},
+            cdn::{CdnConfig, CdnManager},
+            storage::StorageBackend,
+            AssetManagerConfig,
         };
-        
-        let database = Arc::new(DatabaseManager::new("postgresql://opensim:password123@localhost/opensim_pg").await.unwrap());
+        use crate::database::DatabaseManager;
+
+        let database = Arc::new(
+            DatabaseManager::new("postgresql://opensim:password123@localhost/opensim_pg")
+                .await
+                .unwrap(),
+        );
         let cache_config = CacheConfig {
             memory_cache_size: 100,
             memory_ttl_seconds: 3600,
@@ -433,16 +456,34 @@ mod tests {
             regions: vec![],
         };
         let cdn = Arc::new(CdnManager::new(cdn_config).await.unwrap());
-        let storage: Arc<dyn StorageBackend> = Arc::new(crate::asset::storage::FileSystemStorage::new(std::path::PathBuf::from("./test_assets")).unwrap());
+        let storage: Arc<dyn StorageBackend> = Arc::new(
+            crate::asset::storage::FileSystemStorage::new(std::path::PathBuf::from(
+                "./test_assets",
+            ))
+            .unwrap(),
+        );
         let config = AssetManagerConfig::default();
-        
-        let asset_manager = Arc::new(crate::asset::AssetManager::new(database.clone(), cache, cdn, storage, config).await.unwrap());
+
+        let asset_manager = Arc::new(
+            crate::asset::AssetManager::new(database.clone(), cache, cdn, storage, config)
+                .await
+                .unwrap(),
+        );
 
         let user_account_database = database.user_accounts();
-        
-        let manager = NetworkManager::new(monitoring, session_manager, region_manager, state_manager, asset_manager, user_account_database).await.unwrap();
+
+        let manager = NetworkManager::new(
+            monitoring,
+            session_manager,
+            region_manager,
+            state_manager,
+            asset_manager,
+            user_account_database,
+        )
+        .await
+        .unwrap();
         let stats = manager.get_stats().await;
         assert_eq!(stats.active_connections, 0);
         assert_eq!(stats.max_connections, 1000);
     }
-} 
+}

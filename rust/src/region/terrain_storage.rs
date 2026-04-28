@@ -254,14 +254,23 @@ impl TerrainStorage {
                 let total = (size_x as usize) * (size_y as usize);
                 let expected_len = 8 + total * 4;
                 if data.len() != expected_len {
-                    anyhow::bail!("Invalid Variable2D terrain data length: got {} expected {}", data.len(), expected_len);
+                    anyhow::bail!(
+                        "Invalid Variable2D terrain data length: got {} expected {}",
+                        data.len(),
+                        expected_len
+                    );
                 }
 
                 let mut heightmap = Vec::with_capacity(total);
                 let mut offset = 8;
 
                 for _ in 0..total {
-                    let bytes = [data[offset], data[offset + 1], data[offset + 2], data[offset + 3]];
+                    let bytes = [
+                        data[offset],
+                        data[offset + 1],
+                        data[offset + 2],
+                        data[offset + 3],
+                    ];
                     heightmap.push(f32::from_le_bytes(bytes));
                     offset += 4;
                 }
@@ -298,7 +307,11 @@ impl TerrainStorage {
                 let total = (size_x as usize) * (size_y as usize);
                 let expected_len = 12 + total * 2;
                 if data.len() != expected_len {
-                    anyhow::bail!("Invalid Compressed2D terrain data length: got {} expected {}", data.len(), expected_len);
+                    anyhow::bail!(
+                        "Invalid Compressed2D terrain data length: got {} expected {}",
+                        data.len(),
+                        expected_len
+                    );
                 }
 
                 let mut heightmap = Vec::with_capacity(total);
@@ -357,7 +370,6 @@ impl TerrainStorage {
                         expected_f64
                     );
                 }
-
             }
         }
     }

@@ -4,44 +4,44 @@
 //! encrypted, and policy-based communication between virtual world components.
 
 pub mod config;
+pub mod ffi;
 pub mod identity;
-pub mod services;
+pub mod integration;
+pub mod monitoring;
 pub mod overlay;
 pub mod policies;
-pub mod monitoring;
-pub mod ffi;
-pub mod integration;
+pub mod services;
 
+use anyhow::{anyhow, Result};
+use serde::{Deserialize, Serialize};
 use std::collections::HashMap;
 use std::sync::Arc;
 use tokio::sync::RwLock;
 use uuid::Uuid;
-use serde::{Deserialize, Serialize};
-use anyhow::{Result, anyhow};
 
 /// OpenZiti network manager for zero trust virtual world networking
 pub struct ZitiNetworkManager {
     /// Network configuration
     config: config::ZitiConfig,
-    
+
     /// Identity manager for zero trust authentication
     identity_manager: identity::ZitiIdentityManager,
-    
+
     /// Service manager for dark services and communication
     service_manager: services::ZitiServiceManager,
-    
+
     /// Overlay network manager for secure tunneling
     overlay_manager: overlay::ZitiOverlayManager,
-    
+
     /// Policy engine for access control
     policy_engine: policies::ZitiPolicyEngine,
-    
+
     /// Monitoring and analytics
     monitoring: monitoring::ZitiMonitoring,
-    
+
     /// Active connections
     connections: Arc<RwLock<HashMap<String, ZitiConnection>>>,
-    
+
     /// Network state
     is_initialized: bool,
     is_connected: bool,
@@ -176,9 +176,7 @@ impl ZitiNetworkManager {
     /// Connect to the zero trust network
     pub async fn connect(&mut self) -> Result<()> {
         if !self.is_initialized {
-            return Err(anyhow!(
-                "ZitiNetworkManager not initialized".to_string()
-            ));
+            return Err(anyhow!("ZitiNetworkManager not initialized".to_string()));
         }
 
         if self.is_connected {
@@ -228,9 +226,7 @@ impl ZitiNetworkManager {
     /// Create a secure service for zero trust access
     pub async fn create_service(&mut self, service: ZitiService) -> Result<String> {
         if !self.is_connected {
-            return Err(anyhow!(
-                "Not connected to zero trust network".to_string()
-            ));
+            return Err(anyhow!("Not connected to zero trust network".to_string()));
         }
 
         let service_id = self.service_manager.create_service(service).await?;
@@ -239,18 +235,25 @@ impl ZitiNetworkManager {
     }
 
     /// Establish a secure connection to a service
-    pub async fn connect_to_service(&mut self, service_name: &str, identity_id: &str) -> Result<String> {
+    pub async fn connect_to_service(
+        &mut self,
+        service_name: &str,
+        identity_id: &str,
+    ) -> Result<String> {
         if !self.is_connected {
-            return Err(anyhow!(
-                "Not connected to zero trust network".to_string()
-            ));
+            return Err(anyhow!("Not connected to zero trust network".to_string()));
         }
 
         // Verify identity and policies
-        self.policy_engine.verify_access(identity_id, service_name).await?;
+        self.policy_engine
+            .verify_access(identity_id, service_name)
+            .await?;
 
         // Create secure connection
-        let connection = self.overlay_manager.create_connection(service_name, identity_id).await?;
+        let connection = self
+            .overlay_manager
+            .create_connection(service_name, identity_id)
+            .await?;
         let connection_id = connection.connection_id.clone();
 
         // Store connection
@@ -258,10 +261,15 @@ impl ZitiNetworkManager {
         connections.insert(connection_id.clone(), connection);
 
         // Update monitoring
-        self.monitoring.record_connection(&connection_id, service_name, "default-identity").await?;
+        self.monitoring
+            .record_connection(&connection_id, service_name, "default-identity")
+            .await?;
 
-        tracing::info!("Established secure connection to service: {} (connection: {})", 
-                      service_name, connection_id);
+        tracing::info!(
+            "Established secure connection to service: {} (connection: {})",
+            service_name,
+            connection_id
+        );
         Ok(connection_id)
     }
 
@@ -270,21 +278,22 @@ impl ZitiNetworkManager {
         let connections = self.connections.read().await;
         if let Some(connection) = connections.get(connection_id) {
             if connection.status != ZitiConnectionStatus::Connected {
-                return Err(anyhow!(
-                    format!("Connection {} not in connected state", connection_id)
-                ));
+                return Err(anyhow!(format!(
+                    "Connection {} not in connected state",
+                    connection_id
+                )));
             }
 
             let bytes_sent = self.overlay_manager.send_data(connection_id, data).await?;
-            
+
             // Update monitoring
-            self.monitoring.record_data_sent(connection_id, bytes_sent, None).await?;
-            
+            self.monitoring
+                .record_data_sent(connection_id, bytes_sent, None)
+                .await?;
+
             Ok(bytes_sent)
         } else {
-            Err(anyhow!(
-                format!("Connection {} not found", connection_id)
-            ))
+            Err(anyhow!(format!("Connection {} not found", connection_id)))
         }
     }
 
@@ -293,21 +302,25 @@ impl ZitiNetworkManager {
         let connections = self.connections.read().await;
         if let Some(connection) = connections.get(connection_id) {
             if connection.status != ZitiConnectionStatus::Connected {
-                return Err(anyhow!(
-                    format!("Connection {} not in connected state", connection_id)
-                ));
+                return Err(anyhow!(format!(
+                    "Connection {} not in connected state",
+                    connection_id
+                )));
             }
 
-            let bytes_received = self.overlay_manager.receive_data(connection_id, buffer).await?;
-            
+            let bytes_received = self
+                .overlay_manager
+                .receive_data(connection_id, buffer)
+                .await?;
+
             // Update monitoring
-            self.monitoring.record_data_received(connection_id, bytes_received, None).await?;
-            
+            self.monitoring
+                .record_data_received(connection_id, bytes_received, None)
+                .await?;
+
             Ok(bytes_received)
         } else {
-            Err(anyhow!(
-                format!("Connection {} not found", connection_id)
-            ))
+            Err(anyhow!(format!("Connection {} not found", connection_id)))
         }
     }
 
@@ -316,13 +329,15 @@ impl ZitiNetworkManager {
         let mut connections = self.connections.write().await;
         if let Some(mut connection) = connections.remove(connection_id) {
             connection.status = ZitiConnectionStatus::Terminated;
-            
+
             // Close overlay connection
             self.overlay_manager.close_connection(connection_id).await?;
-            
+
             // Update monitoring
-            self.monitoring.record_connection_closed(connection_id).await?;
-            
+            self.monitoring
+                .record_connection_closed(connection_id)
+                .await?;
+
             tracing::info!("Closed secure connection: {}", connection_id);
         }
         Ok(())
@@ -346,7 +361,9 @@ impl ZitiNetworkManager {
 
     /// Check if identity has access to service
     pub async fn check_access(&self, identity_id: &str, service_name: &str) -> Result<bool> {
-        self.policy_engine.check_access(identity_id, service_name).await
+        self.policy_engine
+            .check_access(identity_id, service_name)
+            .await
     }
 
     /// Get configuration
@@ -382,19 +399,32 @@ impl ZitiNetworkManager {
 pub enum ZitiNetworkEvent {
     /// Identity authenticated
     IdentityAuthenticated { identity_id: String },
-    
+
     /// Service created
-    ServiceCreated { service_id: String, service_name: String },
-    
+    ServiceCreated {
+        service_id: String,
+        service_name: String,
+    },
+
     /// Connection established
-    ConnectionEstablished { connection_id: String, service_name: String },
-    
+    ConnectionEstablished {
+        connection_id: String,
+        service_name: String,
+    },
+
     /// Connection closed
-    ConnectionClosed { connection_id: String, reason: String },
-    
+    ConnectionClosed {
+        connection_id: String,
+        reason: String,
+    },
+
     /// Policy violation
-    PolicyViolation { identity_id: String, service_name: String, reason: String },
-    
+    PolicyViolation {
+        identity_id: String,
+        service_name: String,
+        reason: String,
+    },
+
     /// Network error
     NetworkError { error: String },
 }

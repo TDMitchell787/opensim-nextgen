@@ -2,13 +2,13 @@
 // Database operations for region data storage and retrieval
 
 use async_trait::async_trait;
-use sqlx::{Pool, Row};
-use uuid::Uuid;
 use chrono::{DateTime, Utc};
 use serde_json;
+use sqlx::{Pool, Row};
+use uuid::Uuid;
 
-use crate::database::DatabaseManager;
 use super::data_model::*;
+use crate::database::DatabaseManager;
 
 /// Result type for region store operations
 pub type RegionStoreResult<T> = Result<T, RegionStoreError>;
@@ -18,22 +18,22 @@ pub type RegionStoreResult<T> = Result<T, RegionStoreError>;
 pub enum RegionStoreError {
     #[error("Database error: {0}")]
     Database(#[from] sqlx::Error),
-    
+
     #[error("Serialization error: {0}")]
     Serialization(#[from] serde_json::Error),
-    
+
     #[error("Region not found: {0}")]
     RegionNotFound(Uuid),
-    
+
     #[error("Land parcel not found: {0}")]
     LandNotFound(Uuid),
-    
+
     #[error("Object not found: {0}")]
     ObjectNotFound(Uuid),
-    
+
     #[error("Invalid data: {0}")]
     InvalidData(String),
-    
+
     #[error("Internal error: {0}")]
     Internal(String),
 }
@@ -46,32 +46,39 @@ pub trait RegionStore: Send + Sync {
     async fn store_region(&self, region: &RegionInfo) -> RegionStoreResult<()>;
     async fn delete_region(&self, region_id: Uuid) -> RegionStoreResult<()>;
     async fn list_regions(&self) -> RegionStoreResult<Vec<RegionInfo>>;
-    
+
     // Region settings operations
-    async fn load_region_settings(&self, region_id: Uuid) -> RegionStoreResult<Option<RegionSettings>>;
+    async fn load_region_settings(
+        &self,
+        region_id: Uuid,
+    ) -> RegionStoreResult<Option<RegionSettings>>;
     async fn store_region_settings(&self, settings: &RegionSettings) -> RegionStoreResult<()>;
-    
+
     // Object operations
     async fn load_objects(&self, region_id: Uuid) -> RegionStoreResult<Vec<SceneObjectPart>>;
-    async fn store_objects(&self, region_id: Uuid, objects: &[SceneObjectPart]) -> RegionStoreResult<()>;
+    async fn store_objects(
+        &self,
+        region_id: Uuid,
+        objects: &[SceneObjectPart],
+    ) -> RegionStoreResult<()>;
     async fn store_object(&self, object: &SceneObjectPart) -> RegionStoreResult<()>;
     async fn delete_object(&self, object_id: Uuid) -> RegionStoreResult<()>;
-    
+
     // Prim shape operations
     async fn load_prim_shapes(&self, region_id: Uuid) -> RegionStoreResult<Vec<PrimShape>>;
     async fn store_prim_shape(&self, shape: &PrimShape) -> RegionStoreResult<()>;
     async fn delete_prim_shape(&self, prim_id: Uuid) -> RegionStoreResult<()>;
-    
+
     // Terrain operations
     async fn load_terrain(&self, region_id: Uuid) -> RegionStoreResult<Option<TerrainData>>;
     async fn store_terrain(&self, region_id: Uuid, terrain: &TerrainData) -> RegionStoreResult<()>;
-    
+
     // Land parcel operations
     async fn load_parcels(&self, region_id: Uuid) -> RegionStoreResult<Vec<LandData>>;
     async fn store_parcels(&self, region_id: Uuid, parcels: &[LandData]) -> RegionStoreResult<()>;
     async fn store_parcel(&self, parcel: &LandData) -> RegionStoreResult<()>;
     async fn delete_parcel(&self, parcel_id: Uuid) -> RegionStoreResult<()>;
-    
+
     // Spawn point operations
     async fn load_spawn_points(&self, region_id: Uuid) -> RegionStoreResult<Vec<SpawnPoint>>;
     async fn store_spawn_point(&self, spawn_point: &SpawnPoint) -> RegionStoreResult<()>;
@@ -87,12 +94,14 @@ impl PostgresRegionStore {
     pub fn new(db: DatabaseManager) -> Self {
         Self { db }
     }
-    
+
     /// Get database pool for operations
     async fn get_pool(&self) -> RegionStoreResult<&Pool<sqlx::Postgres>> {
-        self.db.legacy_pool().map_err(|e| RegionStoreError::Database(
-            sqlx::Error::Configuration(format!("Failed to get database pool: {:?}", e).into())
-        ))
+        self.db.legacy_pool().map_err(|e| {
+            RegionStoreError::Database(sqlx::Error::Configuration(
+                format!("Failed to get database pool: {:?}", e).into(),
+            ))
+        })
     }
 }
 
@@ -100,14 +109,12 @@ impl PostgresRegionStore {
 impl RegionStore for PostgresRegionStore {
     async fn load_region(&self, region_id: Uuid) -> RegionStoreResult<Option<RegionInfo>> {
         let pool = self.get_pool().await?;
-        
-        let row = sqlx::query(
-            "SELECT * FROM regions WHERE id = $1"
-        )
-        .bind(region_id.to_string())
-        .fetch_optional(pool)
-        .await?;
-        
+
+        let row = sqlx::query("SELECT * FROM regions WHERE id = $1")
+            .bind(region_id.to_string())
+            .fetch_optional(pool)
+            .await?;
+
         if let Some(row) = row {
             let region = RegionInfo {
                 region_id: Uuid::parse_str(&row.try_get::<String, _>("id")?)
@@ -124,23 +131,36 @@ impl RegionStore for PostgresRegionStore {
                 internal_ip: row.try_get("internal_ip")?,
                 internal_port: row.try_get::<i32, _>("internal_port")? as u32,
                 external_host_name: row.try_get("external_host_name")?,
-                master_avatar_id: row.try_get::<Option<String>, _>("master_avatar_id")?
+                master_avatar_id: row
+                    .try_get::<Option<String>, _>("master_avatar_id")?
                     .map(|s| Uuid::parse_str(&s))
                     .transpose()
-                    .map_err(|e| RegionStoreError::InvalidData(format!("Invalid master avatar UUID: {}", e)))?
+                    .map_err(|e| {
+                        RegionStoreError::InvalidData(format!("Invalid master avatar UUID: {}", e))
+                    })?
                     .unwrap_or(Uuid::nil()),
-                owner_id: row.try_get::<Option<String>, _>("owner_id")?
+                owner_id: row
+                    .try_get::<Option<String>, _>("owner_id")?
                     .map(|s| Uuid::parse_str(&s))
                     .transpose()
-                    .map_err(|e| RegionStoreError::InvalidData(format!("Invalid owner UUID: {}", e)))?,
+                    .map_err(|e| {
+                        RegionStoreError::InvalidData(format!("Invalid owner UUID: {}", e))
+                    })?,
                 estate_id: 1, // Default estate
-                scope_id: row.try_get::<Option<String>, _>("scope_id")?
+                scope_id: row
+                    .try_get::<Option<String>, _>("scope_id")?
                     .map(|s| Uuid::parse_str(&s))
                     .transpose()
-                    .map_err(|e| RegionStoreError::InvalidData(format!("Invalid scope UUID: {}", e)))?
+                    .map_err(|e| {
+                        RegionStoreError::InvalidData(format!("Invalid scope UUID: {}", e))
+                    })?
                     .unwrap_or(Uuid::nil()),
-                region_secret: row.try_get::<Option<String>, _>("region_secret")?.unwrap_or_default(),
-                token: row.try_get::<Option<String>, _>("token")?.unwrap_or_default(),
+                region_secret: row
+                    .try_get::<Option<String>, _>("region_secret")?
+                    .unwrap_or_default(),
+                token: row
+                    .try_get::<Option<String>, _>("token")?
+                    .unwrap_or_default(),
                 flags: row.try_get::<i32, _>("flags")? as u32,
                 maturity: 1, // Default to Mature
                 last_seen: row.try_get::<DateTime<Utc>, _>("last_seen")?,
@@ -154,10 +174,10 @@ impl RegionStore for PostgresRegionStore {
             Ok(None)
         }
     }
-    
+
     async fn store_region(&self, region: &RegionInfo) -> RegionStoreResult<()> {
         let pool = self.get_pool().await?;
-        
+
         sqlx::query(
             r#"
             INSERT INTO regions (
@@ -209,28 +229,28 @@ impl RegionStore for PostgresRegionStore {
         .bind(region.updated_at)
         .execute(pool)
         .await?;
-        
+
         Ok(())
     }
-    
+
     async fn delete_region(&self, region_id: Uuid) -> RegionStoreResult<()> {
         let pool = self.get_pool().await?;
-        
+
         sqlx::query("DELETE FROM regions WHERE id = $1")
             .bind(region_id.to_string())
             .execute(pool)
             .await?;
-        
+
         Ok(())
     }
-    
+
     async fn list_regions(&self) -> RegionStoreResult<Vec<RegionInfo>> {
         let pool = self.get_pool().await?;
-        
+
         let rows = sqlx::query("SELECT * FROM regions ORDER BY region_name")
             .fetch_all(pool)
             .await?;
-        
+
         let mut regions = Vec::new();
         for row in rows {
             let region = RegionInfo {
@@ -248,23 +268,36 @@ impl RegionStore for PostgresRegionStore {
                 internal_ip: row.try_get("internal_ip")?,
                 internal_port: row.try_get::<i32, _>("internal_port")? as u32,
                 external_host_name: row.try_get("external_host_name")?,
-                master_avatar_id: row.try_get::<Option<String>, _>("master_avatar_id")?
+                master_avatar_id: row
+                    .try_get::<Option<String>, _>("master_avatar_id")?
                     .map(|s| Uuid::parse_str(&s))
                     .transpose()
-                    .map_err(|e| RegionStoreError::InvalidData(format!("Invalid master avatar UUID: {}", e)))?
+                    .map_err(|e| {
+                        RegionStoreError::InvalidData(format!("Invalid master avatar UUID: {}", e))
+                    })?
                     .unwrap_or(Uuid::nil()),
-                owner_id: row.try_get::<Option<String>, _>("owner_id")?
+                owner_id: row
+                    .try_get::<Option<String>, _>("owner_id")?
                     .map(|s| Uuid::parse_str(&s))
                     .transpose()
-                    .map_err(|e| RegionStoreError::InvalidData(format!("Invalid owner UUID: {}", e)))?,
+                    .map_err(|e| {
+                        RegionStoreError::InvalidData(format!("Invalid owner UUID: {}", e))
+                    })?,
                 estate_id: 1,
-                scope_id: row.try_get::<Option<String>, _>("scope_id")?
+                scope_id: row
+                    .try_get::<Option<String>, _>("scope_id")?
                     .map(|s| Uuid::parse_str(&s))
                     .transpose()
-                    .map_err(|e| RegionStoreError::InvalidData(format!("Invalid scope UUID: {}", e)))?
+                    .map_err(|e| {
+                        RegionStoreError::InvalidData(format!("Invalid scope UUID: {}", e))
+                    })?
                     .unwrap_or(Uuid::nil()),
-                region_secret: row.try_get::<Option<String>, _>("region_secret")?.unwrap_or_default(),
-                token: row.try_get::<Option<String>, _>("token")?.unwrap_or_default(),
+                region_secret: row
+                    .try_get::<Option<String>, _>("region_secret")?
+                    .unwrap_or_default(),
+                token: row
+                    .try_get::<Option<String>, _>("token")?
+                    .unwrap_or_default(),
                 flags: row.try_get::<i32, _>("flags")? as u32,
                 maturity: 1,
                 last_seen: row.try_get::<DateTime<Utc>, _>("last_seen")?,
@@ -275,18 +308,21 @@ impl RegionStore for PostgresRegionStore {
             };
             regions.push(region);
         }
-        
+
         Ok(regions)
     }
-    
-    async fn load_region_settings(&self, region_id: Uuid) -> RegionStoreResult<Option<RegionSettings>> {
+
+    async fn load_region_settings(
+        &self,
+        region_id: Uuid,
+    ) -> RegionStoreResult<Option<RegionSettings>> {
         let pool = self.get_pool().await?;
-        
+
         let row = sqlx::query("SELECT * FROM region_settings WHERE region_id = $1")
             .bind(region_id.to_string())
             .fetch_optional(pool)
             .await?;
-        
+
         if let Some(row) = row {
             let settings = RegionSettings {
                 region_id,
@@ -303,22 +339,46 @@ impl RegionStore for PostgresRegionStore {
                 disable_scripts: row.try_get("disable_scripts")?,
                 disable_collisions: row.try_get("disable_collisions")?,
                 disable_physics: row.try_get("disable_physics")?,
-                terrain_texture_1: row.try_get::<Option<String>, _>("terrain_texture_1")?
+                terrain_texture_1: row
+                    .try_get::<Option<String>, _>("terrain_texture_1")?
                     .map(|s| Uuid::parse_str(&s))
                     .transpose()
-                    .map_err(|e| RegionStoreError::InvalidData(format!("Invalid terrain texture UUID: {}", e)))?,
-                terrain_texture_2: row.try_get::<Option<String>, _>("terrain_texture_2")?
+                    .map_err(|e| {
+                        RegionStoreError::InvalidData(format!(
+                            "Invalid terrain texture UUID: {}",
+                            e
+                        ))
+                    })?,
+                terrain_texture_2: row
+                    .try_get::<Option<String>, _>("terrain_texture_2")?
                     .map(|s| Uuid::parse_str(&s))
                     .transpose()
-                    .map_err(|e| RegionStoreError::InvalidData(format!("Invalid terrain texture UUID: {}", e)))?,
-                terrain_texture_3: row.try_get::<Option<String>, _>("terrain_texture_3")?
+                    .map_err(|e| {
+                        RegionStoreError::InvalidData(format!(
+                            "Invalid terrain texture UUID: {}",
+                            e
+                        ))
+                    })?,
+                terrain_texture_3: row
+                    .try_get::<Option<String>, _>("terrain_texture_3")?
                     .map(|s| Uuid::parse_str(&s))
                     .transpose()
-                    .map_err(|e| RegionStoreError::InvalidData(format!("Invalid terrain texture UUID: {}", e)))?,
-                terrain_texture_4: row.try_get::<Option<String>, _>("terrain_texture_4")?
+                    .map_err(|e| {
+                        RegionStoreError::InvalidData(format!(
+                            "Invalid terrain texture UUID: {}",
+                            e
+                        ))
+                    })?,
+                terrain_texture_4: row
+                    .try_get::<Option<String>, _>("terrain_texture_4")?
                     .map(|s| Uuid::parse_str(&s))
                     .transpose()
-                    .map_err(|e| RegionStoreError::InvalidData(format!("Invalid terrain texture UUID: {}", e)))?,
+                    .map_err(|e| {
+                        RegionStoreError::InvalidData(format!(
+                            "Invalid terrain texture UUID: {}",
+                            e
+                        ))
+                    })?,
                 elevation_1_nw: row.try_get("elevation_1_nw")?,
                 elevation_2_nw: row.try_get("elevation_2_nw")?,
                 elevation_1_ne: row.try_get("elevation_1_ne")?,
@@ -333,10 +393,13 @@ impl RegionStore for PostgresRegionStore {
                 use_estate_sun: row.try_get("use_estate_sun")?,
                 fixed_sun: row.try_get("fixed_sun")?,
                 sun_position: row.try_get("sun_position")?,
-                covenant: row.try_get::<Option<String>, _>("covenant")?
+                covenant: row
+                    .try_get::<Option<String>, _>("covenant")?
                     .map(|s| Uuid::parse_str(&s))
                     .transpose()
-                    .map_err(|e| RegionStoreError::InvalidData(format!("Invalid covenant UUID: {}", e)))?,
+                    .map_err(|e| {
+                        RegionStoreError::InvalidData(format!("Invalid covenant UUID: {}", e))
+                    })?,
                 covenant_datetime: row.try_get("covenant_datetime")?,
                 sandbox: row.try_get("sandbox")?,
                 sunvectorx: row.try_get("sunvectorx")?,
@@ -344,14 +407,20 @@ impl RegionStore for PostgresRegionStore {
                 sunvectorz: row.try_get("sunvectorz")?,
                 loaded_creation_id: row.try_get("loaded_creation_id")?,
                 loaded_creation_datetime: row.try_get("loaded_creation_datetime")?,
-                map_tile_id: row.try_get::<Option<String>, _>("map_tile_id")?
+                map_tile_id: row
+                    .try_get::<Option<String>, _>("map_tile_id")?
                     .map(|s| Uuid::parse_str(&s))
                     .transpose()
-                    .map_err(|e| RegionStoreError::InvalidData(format!("Invalid map tile UUID: {}", e)))?,
-                telehub_id: row.try_get::<Option<String>, _>("telehub_id")?
+                    .map_err(|e| {
+                        RegionStoreError::InvalidData(format!("Invalid map tile UUID: {}", e))
+                    })?,
+                telehub_id: row
+                    .try_get::<Option<String>, _>("telehub_id")?
                     .map(|s| Uuid::parse_str(&s))
                     .transpose()
-                    .map_err(|e| RegionStoreError::InvalidData(format!("Invalid telehub UUID: {}", e)))?,
+                    .map_err(|e| {
+                        RegionStoreError::InvalidData(format!("Invalid telehub UUID: {}", e))
+                    })?,
                 spawn_point_routing: row.try_get::<i32, _>("spawn_point_routing")? as u32,
                 created_at: row.try_get("created_at")?,
                 updated_at: row.try_get("updated_at")?,
@@ -361,10 +430,10 @@ impl RegionStore for PostgresRegionStore {
             Ok(None)
         }
     }
-    
+
     async fn store_region_settings(&self, settings: &RegionSettings) -> RegionStoreResult<()> {
         let pool = self.get_pool().await?;
-        
+
         sqlx::query(
             r#"
             INSERT INTO region_settings (
@@ -429,7 +498,7 @@ impl RegionStore for PostgresRegionStore {
                 telehub_id = EXCLUDED.telehub_id,
                 spawn_point_routing = EXCLUDED.spawn_point_routing,
                 updated_at = EXCLUDED.updated_at
-            "#
+            "#,
         )
         .bind(settings.region_id.to_string())
         .bind(settings.block_terraform)
@@ -478,24 +547,27 @@ impl RegionStore for PostgresRegionStore {
         .bind(settings.updated_at)
         .execute(pool)
         .await?;
-        
+
         Ok(())
     }
-    
+
     async fn load_objects(&self, region_id: Uuid) -> RegionStoreResult<Vec<SceneObjectPart>> {
         let pool = self.get_pool().await?;
-        
-        let rows = sqlx::query("SELECT * FROM scene_objects WHERE region_id = $1 ORDER BY created_at")
-            .bind(region_id.to_string())
-            .fetch_all(pool)
-            .await?;
-        
+
+        let rows =
+            sqlx::query("SELECT * FROM scene_objects WHERE region_id = $1 ORDER BY created_at")
+                .bind(region_id.to_string())
+                .fetch_all(pool)
+                .await?;
+
         let mut objects = Vec::new();
         for row in rows {
             let object = SceneObjectPart {
-                uuid: Uuid::parse_str(&row.try_get::<String, _>("id")?)
-                    .map_err(|e| RegionStoreError::InvalidData(format!("Invalid object UUID: {}", e)))?,
-                parent_id: row.try_get::<Option<String>, _>("parent_id")?
+                uuid: Uuid::parse_str(&row.try_get::<String, _>("id")?).map_err(|e| {
+                    RegionStoreError::InvalidData(format!("Invalid object UUID: {}", e))
+                })?,
+                parent_id: row
+                    .try_get::<Option<String>, _>("parent_id")?
                     .and_then(|s| s.parse().ok())
                     .unwrap_or(0),
                 creation_date: Utc::now().timestamp() as i32,
@@ -504,16 +576,22 @@ impl RegionStore for PostgresRegionStore {
                 sit_name: String::new(),
                 touch_name: String::new(),
                 object_flags: row.try_get::<i32, _>("object_flags")? as u32,
-                creator_id: Uuid::parse_str(&row.try_get::<String, _>("creator_id")?)
-                    .map_err(|e| RegionStoreError::InvalidData(format!("Invalid creator UUID: {}", e)))?,
-                owner_id: Uuid::parse_str(&row.try_get::<String, _>("owner_id")?)
-                    .map_err(|e| RegionStoreError::InvalidData(format!("Invalid owner UUID: {}", e)))?,
-                group_id: Uuid::parse_str(&row.try_get::<String, _>("group_id")?)
-                    .map_err(|e| RegionStoreError::InvalidData(format!("Invalid group UUID: {}", e)))?,
-                last_owner_id: row.try_get::<Option<String>, _>("last_owner_id")?
+                creator_id: Uuid::parse_str(&row.try_get::<String, _>("creator_id")?).map_err(
+                    |e| RegionStoreError::InvalidData(format!("Invalid creator UUID: {}", e)),
+                )?,
+                owner_id: Uuid::parse_str(&row.try_get::<String, _>("owner_id")?).map_err(|e| {
+                    RegionStoreError::InvalidData(format!("Invalid owner UUID: {}", e))
+                })?,
+                group_id: Uuid::parse_str(&row.try_get::<String, _>("group_id")?).map_err(|e| {
+                    RegionStoreError::InvalidData(format!("Invalid group UUID: {}", e))
+                })?,
+                last_owner_id: row
+                    .try_get::<Option<String>, _>("last_owner_id")?
                     .map(|s| Uuid::parse_str(&s))
                     .transpose()
-                    .map_err(|e| RegionStoreError::InvalidData(format!("Invalid last owner UUID: {}", e)))?
+                    .map_err(|e| {
+                        RegionStoreError::InvalidData(format!("Invalid last owner UUID: {}", e))
+                    })?
                     .unwrap_or(Uuid::nil()),
                 region_handle: 0,
                 group_position: Vector3::new(
@@ -559,29 +637,41 @@ impl RegionStore for PostgresRegionStore {
                     row.try_get("color_b")?,
                 ),
                 alpha: row.try_get("color_a")?,
-                texture_entry: row.try_get::<Option<Vec<u8>>, _>("texture_entry")?.unwrap_or_default(),
-                extra_physics_data: row.try_get::<Option<Vec<u8>>, _>("extra_physics_data")?.unwrap_or_default(),
-                shape_data: row.try_get::<Option<String>, _>("shape_data")?.unwrap_or_default(),
-                script_state: row.try_get::<Option<Vec<u8>>, _>("script_state")?.unwrap_or_default(),
+                texture_entry: row
+                    .try_get::<Option<Vec<u8>>, _>("texture_entry")?
+                    .unwrap_or_default(),
+                extra_physics_data: row
+                    .try_get::<Option<Vec<u8>>, _>("extra_physics_data")?
+                    .unwrap_or_default(),
+                shape_data: row
+                    .try_get::<Option<String>, _>("shape_data")?
+                    .unwrap_or_default(),
+                script_state: row
+                    .try_get::<Option<Vec<u8>>, _>("script_state")?
+                    .unwrap_or_default(),
                 created_at: row.try_get("created_at")?,
                 updated_at: row.try_get("updated_at")?,
             };
             objects.push(object);
         }
-        
+
         Ok(objects)
     }
-    
-    async fn store_objects(&self, region_id: Uuid, objects: &[SceneObjectPart]) -> RegionStoreResult<()> {
+
+    async fn store_objects(
+        &self,
+        region_id: Uuid,
+        objects: &[SceneObjectPart],
+    ) -> RegionStoreResult<()> {
         for object in objects {
             self.store_object(object).await?;
         }
         Ok(())
     }
-    
+
     async fn store_object(&self, object: &SceneObjectPart) -> RegionStoreResult<()> {
         let pool = self.get_pool().await?;
-        
+
         sqlx::query(
             r#"
             INSERT INTO scene_objects (
@@ -675,42 +765,44 @@ impl RegionStore for PostgresRegionStore {
         .bind(object.updated_at)
         .execute(pool)
         .await?;
-        
+
         Ok(())
     }
-    
+
     async fn delete_object(&self, object_id: Uuid) -> RegionStoreResult<()> {
         let pool = self.get_pool().await?;
-        
+
         sqlx::query("DELETE FROM scene_objects WHERE id = $1")
             .bind(object_id.to_string())
             .execute(pool)
             .await?;
-        
+
         Ok(())
     }
-    
+
     async fn load_prim_shapes(&self, region_id: Uuid) -> RegionStoreResult<Vec<PrimShape>> {
         let pool = self.get_pool().await?;
-        
+
         let rows = sqlx::query(
             r#"
             SELECT ps.* FROM prim_shapes ps
             JOIN scene_objects so ON ps.prim_id = so.id
             WHERE so.region_id = $1
-            "#
+            "#,
         )
         .bind(region_id.to_string())
         .fetch_all(pool)
         .await?;
-        
+
         let mut shapes = Vec::new();
         for row in rows {
             let shape = PrimShape {
-                uuid: Uuid::parse_str(&row.try_get::<String, _>("uuid")?)
-                    .map_err(|e| RegionStoreError::InvalidData(format!("Invalid shape UUID: {}", e)))?,
-                prim_id: Uuid::parse_str(&row.try_get::<String, _>("prim_id")?)
-                    .map_err(|e| RegionStoreError::InvalidData(format!("Invalid prim UUID: {}", e)))?,
+                uuid: Uuid::parse_str(&row.try_get::<String, _>("uuid")?).map_err(|e| {
+                    RegionStoreError::InvalidData(format!("Invalid shape UUID: {}", e))
+                })?,
+                prim_id: Uuid::parse_str(&row.try_get::<String, _>("prim_id")?).map_err(|e| {
+                    RegionStoreError::InvalidData(format!("Invalid prim UUID: {}", e))
+                })?,
                 shape_type: row.try_get::<i32, _>("shape_type")? as u32,
                 path_begin: row.try_get::<i32, _>("path_begin")? as u32,
                 path_end: row.try_get::<i32, _>("path_end")? as u32,
@@ -730,23 +822,29 @@ impl RegionStore for PostgresRegionStore {
                 profile_end: row.try_get::<i32, _>("profile_end")? as u32,
                 profile_curve: row.try_get::<i32, _>("profile_curve")? as u32,
                 profile_hollow: row.try_get::<i32, _>("profile_hollow")? as u32,
-                texture_entry: row.try_get::<Option<Vec<u8>>, _>("texture_entry")?.unwrap_or_default(),
-                extra_params: row.try_get::<Option<Vec<u8>>, _>("extra_params")?.unwrap_or_default(),
+                texture_entry: row
+                    .try_get::<Option<Vec<u8>>, _>("texture_entry")?
+                    .unwrap_or_default(),
+                extra_params: row
+                    .try_get::<Option<Vec<u8>>, _>("extra_params")?
+                    .unwrap_or_default(),
                 state: row.try_get::<i32, _>("state")? as u32,
                 last_attach_point: row.try_get::<i32, _>("last_attach_point")? as u32,
-                media: row.try_get::<Option<String>, _>("media")?.unwrap_or_default(),
+                media: row
+                    .try_get::<Option<String>, _>("media")?
+                    .unwrap_or_default(),
                 created_at: row.try_get("created_at")?,
                 updated_at: row.try_get("updated_at")?,
             };
             shapes.push(shape);
         }
-        
+
         Ok(shapes)
     }
-    
+
     async fn store_prim_shape(&self, shape: &PrimShape) -> RegionStoreResult<()> {
         let pool = self.get_pool().await?;
-        
+
         sqlx::query(
             r#"
             INSERT INTO prim_shapes (
@@ -785,7 +883,7 @@ impl RegionStore for PostgresRegionStore {
                 last_attach_point = EXCLUDED.last_attach_point,
                 media = EXCLUDED.media,
                 updated_at = EXCLUDED.updated_at
-            "#
+            "#,
         )
         .bind(shape.uuid.to_string())
         .bind(shape.prim_id.to_string())
@@ -817,33 +915,35 @@ impl RegionStore for PostgresRegionStore {
         .bind(shape.updated_at)
         .execute(pool)
         .await?;
-        
+
         Ok(())
     }
-    
+
     async fn delete_prim_shape(&self, prim_id: Uuid) -> RegionStoreResult<()> {
         let pool = self.get_pool().await?;
-        
+
         sqlx::query("DELETE FROM prim_shapes WHERE prim_id = $1")
             .bind(prim_id.to_string())
             .execute(pool)
             .await?;
-        
+
         Ok(())
     }
-    
+
     async fn load_terrain(&self, region_id: Uuid) -> RegionStoreResult<Option<TerrainData>> {
         let pool = self.get_pool().await?;
-        
+
         let row = sqlx::query("SELECT * FROM region_terrain WHERE region_id = $1")
             .bind(region_id.to_string())
             .fetch_optional(pool)
             .await?;
-        
+
         if let Some(row) = row {
             let terrain = TerrainData {
                 region_id,
-                terrain_data: row.try_get::<Option<Vec<u8>>, _>("terrain_data")?.unwrap_or_default(),
+                terrain_data: row
+                    .try_get::<Option<Vec<u8>>, _>("terrain_data")?
+                    .unwrap_or_default(),
                 terrain_revision: row.try_get::<i32, _>("terrain_revision")? as u32,
                 terrain_seed: row.try_get::<i32, _>("terrain_seed")? as u32,
                 water_height: row.try_get("water_height")?,
@@ -852,10 +952,13 @@ impl RegionStore for PostgresRegionStore {
                 use_estate_sun: row.try_get("use_estate_sun")?,
                 fixed_sun: row.try_get("fixed_sun")?,
                 sun_position: row.try_get("sun_position")?,
-                covenant: row.try_get::<Option<String>, _>("covenant")?
+                covenant: row
+                    .try_get::<Option<String>, _>("covenant")?
                     .map(|s| Uuid::parse_str(&s))
                     .transpose()
-                    .map_err(|e| RegionStoreError::InvalidData(format!("Invalid covenant UUID: {}", e)))?,
+                    .map_err(|e| {
+                        RegionStoreError::InvalidData(format!("Invalid covenant UUID: {}", e))
+                    })?,
                 covenant_timestamp: row.try_get("covenant_timestamp")?,
                 created_at: row.try_get("created_at")?,
                 updated_at: row.try_get("updated_at")?,
@@ -865,10 +968,10 @@ impl RegionStore for PostgresRegionStore {
             Ok(None)
         }
     }
-    
+
     async fn store_terrain(&self, region_id: Uuid, terrain: &TerrainData) -> RegionStoreResult<()> {
         let pool = self.get_pool().await?;
-        
+
         sqlx::query(
             r#"
             INSERT INTO region_terrain (
@@ -890,7 +993,7 @@ impl RegionStore for PostgresRegionStore {
                 covenant = EXCLUDED.covenant,
                 covenant_timestamp = EXCLUDED.covenant_timestamp,
                 updated_at = EXCLUDED.updated_at
-            "#
+            "#,
         )
         .bind(region_id.to_string())
         .bind(&terrain.terrain_data)
@@ -908,34 +1011,42 @@ impl RegionStore for PostgresRegionStore {
         .bind(terrain.updated_at)
         .execute(pool)
         .await?;
-        
+
         Ok(())
     }
-    
+
     async fn load_parcels(&self, region_id: Uuid) -> RegionStoreResult<Vec<LandData>> {
         let pool = self.get_pool().await?;
-        
-        let rows = sqlx::query("SELECT * FROM land_parcels WHERE region_id = $1 ORDER BY local_land_id")
-            .bind(region_id.to_string())
-            .fetch_all(pool)
-            .await?;
-        
+
+        let rows =
+            sqlx::query("SELECT * FROM land_parcels WHERE region_id = $1 ORDER BY local_land_id")
+                .bind(region_id.to_string())
+                .fetch_all(pool)
+                .await?;
+
         let mut parcels = Vec::new();
         for row in rows {
             let parcel = LandData {
-                uuid: Uuid::parse_str(&row.try_get::<String, _>("uuid")?)
-                    .map_err(|e| RegionStoreError::InvalidData(format!("Invalid parcel UUID: {}", e)))?,
+                uuid: Uuid::parse_str(&row.try_get::<String, _>("uuid")?).map_err(|e| {
+                    RegionStoreError::InvalidData(format!("Invalid parcel UUID: {}", e))
+                })?,
                 region_id,
                 local_land_id: row.try_get::<i32, _>("local_land_id")? as u32,
-                bitmap: row.try_get::<Option<Vec<u8>>, _>("bitmap")?.unwrap_or_default(),
+                bitmap: row
+                    .try_get::<Option<Vec<u8>>, _>("bitmap")?
+                    .unwrap_or_default(),
                 name: row.try_get("name")?,
                 description: row.try_get("description")?,
-                owner_id: Uuid::parse_str(&row.try_get::<String, _>("owner_id")?)
-                    .map_err(|e| RegionStoreError::InvalidData(format!("Invalid owner UUID: {}", e)))?,
-                group_id: row.try_get::<Option<String>, _>("group_id")?
+                owner_id: Uuid::parse_str(&row.try_get::<String, _>("owner_id")?).map_err(|e| {
+                    RegionStoreError::InvalidData(format!("Invalid owner UUID: {}", e))
+                })?,
+                group_id: row
+                    .try_get::<Option<String>, _>("group_id")?
                     .map(|s| Uuid::parse_str(&s))
                     .transpose()
-                    .map_err(|e| RegionStoreError::InvalidData(format!("Invalid group UUID: {}", e)))?,
+                    .map_err(|e| {
+                        RegionStoreError::InvalidData(format!("Invalid group UUID: {}", e))
+                    })?,
                 is_group_owned: row.try_get("is_group_owned")?,
                 area: row.try_get::<i32, _>("area")? as u32,
                 auction_id: row.try_get::<i32, _>("auction_id")? as u32,
@@ -964,22 +1075,31 @@ impl RegionStore for PostgresRegionStore {
                     row.try_get("user_look_at_y")?,
                     row.try_get("user_look_at_z")?,
                 ),
-                auth_buyer_id: row.try_get::<Option<String>, _>("auth_buyer_id")?
+                auth_buyer_id: row
+                    .try_get::<Option<String>, _>("auth_buyer_id")?
                     .map(|s| Uuid::parse_str(&s))
                     .transpose()
-                    .map_err(|e| RegionStoreError::InvalidData(format!("Invalid auth buyer UUID: {}", e)))?,
-                snapshot_id: row.try_get::<Option<String>, _>("snapshot_id")?
+                    .map_err(|e| {
+                        RegionStoreError::InvalidData(format!("Invalid auth buyer UUID: {}", e))
+                    })?,
+                snapshot_id: row
+                    .try_get::<Option<String>, _>("snapshot_id")?
                     .map(|s| Uuid::parse_str(&s))
                     .transpose()
-                    .map_err(|e| RegionStoreError::InvalidData(format!("Invalid snapshot UUID: {}", e)))?,
+                    .map_err(|e| {
+                        RegionStoreError::InvalidData(format!("Invalid snapshot UUID: {}", e))
+                    })?,
                 other_clean_time: row.try_get("other_clean_time")?,
                 dwell: row.try_get("dwell")?,
                 media_auto_scale: row.try_get::<i32, _>("media_auto_scale")? as u32,
                 media_loop_set: row.try_get("media_loop_set")?,
-                media_texture_id: row.try_get::<Option<String>, _>("media_texture_id")?
+                media_texture_id: row
+                    .try_get::<Option<String>, _>("media_texture_id")?
                     .map(|s| Uuid::parse_str(&s))
                     .transpose()
-                    .map_err(|e| RegionStoreError::InvalidData(format!("Invalid media texture UUID: {}", e)))?,
+                    .map_err(|e| {
+                        RegionStoreError::InvalidData(format!("Invalid media texture UUID: {}", e))
+                    })?,
                 media_url: row.try_get("media_url")?,
                 music_url: row.try_get("music_url")?,
                 pass_hours: row.try_get("pass_hours")?,
@@ -1003,20 +1123,20 @@ impl RegionStore for PostgresRegionStore {
             };
             parcels.push(parcel);
         }
-        
+
         Ok(parcels)
     }
-    
+
     async fn store_parcels(&self, region_id: Uuid, parcels: &[LandData]) -> RegionStoreResult<()> {
         for parcel in parcels {
             self.store_parcel(parcel).await?;
         }
         Ok(())
     }
-    
+
     async fn store_parcel(&self, parcel: &LandData) -> RegionStoreResult<()> {
         let pool = self.get_pool().await?;
-        
+
         sqlx::query(
             r#"
             INSERT INTO land_parcels (
@@ -1140,34 +1260,36 @@ impl RegionStore for PostgresRegionStore {
         .bind(parcel.updated_at)
         .execute(pool)
         .await?;
-        
+
         Ok(())
     }
-    
+
     async fn delete_parcel(&self, parcel_id: Uuid) -> RegionStoreResult<()> {
         let pool = self.get_pool().await?;
-        
+
         sqlx::query("DELETE FROM land_parcels WHERE uuid = $1")
             .bind(parcel_id.to_string())
             .execute(pool)
             .await?;
-        
+
         Ok(())
     }
-    
+
     async fn load_spawn_points(&self, region_id: Uuid) -> RegionStoreResult<Vec<SpawnPoint>> {
         let pool = self.get_pool().await?;
-        
-        let rows = sqlx::query("SELECT * FROM region_spawn_points WHERE region_id = $1 ORDER BY name")
-            .bind(region_id.to_string())
-            .fetch_all(pool)
-            .await?;
-        
+
+        let rows =
+            sqlx::query("SELECT * FROM region_spawn_points WHERE region_id = $1 ORDER BY name")
+                .bind(region_id.to_string())
+                .fetch_all(pool)
+                .await?;
+
         let mut spawn_points = Vec::new();
         for row in rows {
             let spawn_point = SpawnPoint {
-                id: Uuid::parse_str(&row.try_get::<String, _>("id")?)
-                    .map_err(|e| RegionStoreError::InvalidData(format!("Invalid spawn point UUID: {}", e)))?,
+                id: Uuid::parse_str(&row.try_get::<String, _>("id")?).map_err(|e| {
+                    RegionStoreError::InvalidData(format!("Invalid spawn point UUID: {}", e))
+                })?,
                 region_id,
                 position: Vector3::new(
                     row.try_get("spawn_point_x")?,
@@ -1186,13 +1308,13 @@ impl RegionStore for PostgresRegionStore {
             };
             spawn_points.push(spawn_point);
         }
-        
+
         Ok(spawn_points)
     }
-    
+
     async fn store_spawn_point(&self, spawn_point: &SpawnPoint) -> RegionStoreResult<()> {
         let pool = self.get_pool().await?;
-        
+
         sqlx::query(
             r#"
             INSERT INTO region_spawn_points (
@@ -1210,7 +1332,7 @@ impl RegionStore for PostgresRegionStore {
                 name = EXCLUDED.name,
                 description = EXCLUDED.description,
                 is_default = EXCLUDED.is_default
-            "#
+            "#,
         )
         .bind(spawn_point.id.to_string())
         .bind(spawn_point.region_id.to_string())
@@ -1226,18 +1348,18 @@ impl RegionStore for PostgresRegionStore {
         .bind(spawn_point.created_at)
         .execute(pool)
         .await?;
-        
+
         Ok(())
     }
-    
+
     async fn delete_spawn_point(&self, spawn_point_id: Uuid) -> RegionStoreResult<()> {
         let pool = self.get_pool().await?;
-        
+
         sqlx::query("DELETE FROM region_spawn_points WHERE id = $1")
             .bind(spawn_point_id.to_string())
             .execute(pool)
             .await?;
-        
+
         Ok(())
     }
 }
@@ -1248,7 +1370,9 @@ mod tests {
     use crate::database::DatabaseManager;
 
     async fn create_test_store() -> PostgresRegionStore {
-        let db = DatabaseManager::new("postgresql://test:test@localhost/test_db").await.unwrap();
+        let db = DatabaseManager::new("postgresql://test:test@localhost/test_db")
+            .await
+            .unwrap();
         PostgresRegionStore::new(db)
     }
 
@@ -1256,7 +1380,7 @@ mod tests {
     async fn test_region_round_trip() {
         let store = create_test_store().await;
         let region = RegionInfo::new("Test Region".to_string(), 1000, 1000);
-        
+
         // This test would require a test database to be set up
         // For now, just verify the structure compiles
         assert_eq!(region.region_name, "Test Region");
@@ -1268,7 +1392,7 @@ mod tests {
     async fn test_terrain_data_creation() {
         let region_id = Uuid::new_v4();
         let terrain = TerrainData::new(region_id);
-        
+
         assert_eq!(terrain.region_id, region_id);
         assert_eq!(terrain.terrain_revision, 1);
         assert_eq!(terrain.water_height, 20.0);
@@ -1279,7 +1403,7 @@ mod tests {
         let region_id = Uuid::new_v4();
         let owner_id = Uuid::new_v4();
         let land = LandData::new(region_id, 1, owner_id);
-        
+
         assert_eq!(land.region_id, region_id);
         assert_eq!(land.local_land_id, 1);
         assert_eq!(land.owner_id, owner_id);

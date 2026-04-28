@@ -1,16 +1,13 @@
 //! Handles avatar-related messages
 
-use std::{collections::HashMap, sync::Arc};
 use anyhow::Result;
+use std::{collections::HashMap, sync::Arc};
 use tracing::{info, warn};
 
 use crate::{
-    network::{session::Session, llsd::LLSDValue},
-    region::{
-        avatar::appearance::Appearance,
-        RegionManager,
-    },
     asset::AssetManager,
+    network::{llsd::LLSDValue, session::Session},
+    region::{avatar::appearance::Appearance, RegionManager},
 };
 
 /// Wearable types in Second Life
@@ -102,14 +99,24 @@ impl AvatarHandler {
         let agent_id = session_guard.agent_id.clone();
         drop(session_guard);
 
-        info!("Handling agent wearables request for session: {}", session_id);
+        info!(
+            "Handling agent wearables request for session: {}",
+            session_id
+        );
 
         // Get current avatar appearance from region manager
-        let appearance = match region_manager.get_avatar_appearance(&agent_id.to_string()).await {
+        let appearance = match region_manager
+            .get_avatar_appearance(&agent_id.to_string())
+            .await
+        {
             Ok(Some(appearance)) => appearance,
             Ok(None) => {
-                info!("No appearance found for agent {}, creating default", agent_id);
-                self.create_default_appearance(&agent_id.to_string(), &asset_manager).await?
+                info!(
+                    "No appearance found for agent {}, creating default",
+                    agent_id
+                );
+                self.create_default_appearance(&agent_id.to_string(), &asset_manager)
+                    .await?
             }
             Err(e) => {
                 warn!("Failed to get appearance for agent {}: {}", agent_id, e);
@@ -124,18 +131,27 @@ impl AvatarHandler {
         let mut wearables_array = Vec::new();
         for wearable in wearables {
             let mut wearable_map = HashMap::new();
-            wearable_map.insert("type".to_string(), LLSDValue::Integer(wearable.wearable_type as i32));
+            wearable_map.insert(
+                "type".to_string(),
+                LLSDValue::Integer(wearable.wearable_type as i32),
+            );
             wearable_map.insert("asset_id".to_string(), LLSDValue::String(wearable.asset_id));
             wearable_map.insert("item_id".to_string(), LLSDValue::String(wearable.item_id));
             wearable_map.insert("name".to_string(), LLSDValue::String(wearable.name));
-            wearable_map.insert("permissions".to_string(), LLSDValue::Integer(wearable.permissions as i32));
-            
+            wearable_map.insert(
+                "permissions".to_string(),
+                LLSDValue::Integer(wearable.permissions as i32),
+            );
+
             wearables_array.push(LLSDValue::Map(wearable_map));
         }
 
         let mut response = HashMap::new();
         response.insert("wearables".to_string(), LLSDValue::Array(wearables_array));
-        response.insert("agent_id".to_string(), LLSDValue::String(agent_id.to_string()));
+        response.insert(
+            "agent_id".to_string(),
+            LLSDValue::String(agent_id.to_string()),
+        );
 
         info!("Sent wearables data for session {}", session_id);
         Ok(LLSDValue::Map(response))
@@ -162,12 +178,10 @@ impl AvatarHandler {
         ];
 
         // Create default textures
-        let textures = vec![
-            crate::region::avatar::appearance::TextureEntry {
-                texture_id: uuid::Uuid::new_v4(),
-                face: 0,
-            },
-        ];
+        let textures = vec![crate::region::avatar::appearance::TextureEntry {
+            texture_id: uuid::Uuid::new_v4(),
+            face: 0,
+        }];
 
         // Set default visual parameters
         let mut visual_params = crate::region::avatar::appearance::VisualParams::default();
@@ -199,7 +213,7 @@ impl AvatarHandler {
                 3 => WearableType::Eyes,
                 _ => WearableType::Shirt,
             };
-            
+
             let handler_wearable = Wearable {
                 wearable_type: wearable_type.clone(),
                 asset_id: wearable.asset_id.to_string(),
@@ -226,8 +240,8 @@ impl AvatarHandler {
             0x90, 0x77, 0x53, 0xDE, // CRC
             0x00, 0x00, 0x00, 0x0C, // IDAT chunk length
             0x49, 0x44, 0x41, 0x54, // IDAT
-            0x08, 0x99, 0x01, 0x01, 0x00, 0x00, 0xFF, 0xFF,
-            0x00, 0x00, 0x00, 0x02, // Minimal image data
+            0x08, 0x99, 0x01, 0x01, 0x00, 0x00, 0xFF, 0xFF, 0x00, 0x00, 0x00,
+            0x02, // Minimal image data
             0x00, 0x01, 0x01, 0x24, // CRC
             0x00, 0x00, 0x00, 0x00, // IEND chunk length
             0x49, 0x45, 0x4E, 0x44, // IEND
@@ -236,4 +250,4 @@ impl AvatarHandler {
 
         bytes::Bytes::from(placeholder_png)
     }
-} 
+}

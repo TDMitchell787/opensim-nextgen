@@ -1,24 +1,24 @@
 //! Monitoring and metrics collection for OpenSim
-//! 
+//!
 //! This module provides comprehensive monitoring, metrics collection,
 //! performance tracking, and health checks for the OpenSim server.
 
-pub mod metrics;
 pub mod health;
+pub mod metrics;
 pub mod profiling;
 
+use anyhow::Result;
 use std::{
     collections::HashMap,
     sync::Arc,
     time::{Duration, Instant},
 };
-use anyhow::Result;
-use tracing::{info, error};
+use tracing::{error, info};
 
 // Re-export commonly used types
-pub use self::metrics::MetricsCollector;
 pub use self::health::HealthChecker;
-pub use self::profiling::{PerformanceProfiler, PerformanceProfile, PerformanceEvent};
+pub use self::metrics::MetricsCollector;
+pub use self::profiling::{PerformanceEvent, PerformanceProfile, PerformanceProfiler};
 
 /// Main monitoring system for OpenSim
 pub struct MonitoringSystem {
@@ -59,8 +59,8 @@ impl Default for MonitoringConfig {
             enable_metrics: true,
             enable_health_checks: true,
             enable_profiling: false,
-            metrics_interval: 60, // 1 minute
-            health_check_interval: 30, // 30 seconds
+            metrics_interval: 60,       // 1 minute
+            health_check_interval: 30,  // 30 seconds
             profiling_sample_rate: 0.1, // 10% sampling
             max_metrics_history: 1000,
         }
@@ -142,10 +142,10 @@ impl MonitoringSystem {
 
         tokio::spawn(async move {
             let mut interval_timer = tokio::time::interval(interval);
-            
+
             loop {
                 interval_timer.tick().await;
-                
+
                 if let Err(e) = metrics.collect_system_metrics().await {
                     error!("Failed to collect metrics: {}", e);
                 }
@@ -162,10 +162,10 @@ impl MonitoringSystem {
 
         tokio::spawn(async move {
             let mut interval_timer = tokio::time::interval(interval);
-            
+
             loop {
                 interval_timer.tick().await;
-                
+
                 if let Err(e) = health.run_health_checks().await {
                     error!("Health check failed: {}", e);
                 }
@@ -225,7 +225,12 @@ impl MonitoringSystem {
     }
 
     /// Record a custom metric
-    pub async fn record_metric(&self, name: &str, value: f64, tags: HashMap<String, String>) -> Result<()> {
+    pub async fn record_metric(
+        &self,
+        name: &str,
+        value: f64,
+        tags: HashMap<String, String>,
+    ) -> Result<()> {
         self.metrics.record_custom_metric(name, value, tags).await
     }
 
@@ -251,7 +256,7 @@ impl MonitoringSystem {
     /// Stop the monitoring system
     pub async fn stop(&self) -> Result<()> {
         info!("Stopping monitoring system");
-        
+
         if self.config.enable_profiling {
             self.profiler.stop_profiling().await?;
         }
@@ -283,4 +288,4 @@ impl Default for MonitoringSystem {
     fn default() -> Self {
         Self::new(MonitoringConfig::default()).expect("Failed to create MonitoringSystem")
     }
-} 
+}

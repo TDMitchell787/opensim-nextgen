@@ -7,17 +7,17 @@
 //! - User authentication and profiles
 //! - Content management and moderation tools
 
+pub mod content_moderation;
 pub mod developer_portal;
 pub mod forums;
 pub mod knowledge_base;
 pub mod user_management;
-pub mod content_moderation;
 
 use anyhow::Result;
 use serde::{Deserialize, Serialize};
 use std::collections::HashMap;
-use tokio::sync::RwLock;
 use std::sync::Arc;
+use tokio::sync::RwLock;
 
 /// Community platform configuration
 #[derive(Debug, Clone, Serialize, Deserialize)]
@@ -129,23 +129,21 @@ impl CommunityPlatform {
     /// Create new community platform instance
     pub async fn new(config: CommunityConfig) -> Result<Self> {
         let developer_portal = Arc::new(RwLock::new(
-            developer_portal::DeveloperPortal::new(config.clone()).await?
+            developer_portal::DeveloperPortal::new(config.clone()).await?,
         ));
-        
-        let forums = Arc::new(RwLock::new(
-            forums::ForumSystem::new(config.clone()).await?
-        ));
-        
+
+        let forums = Arc::new(RwLock::new(forums::ForumSystem::new(config.clone()).await?));
+
         let knowledge_base = Arc::new(RwLock::new(
-            knowledge_base::KnowledgeBase::new(config.clone()).await?
+            knowledge_base::KnowledgeBase::new(config.clone()).await?,
         ));
-        
+
         let user_manager = Arc::new(RwLock::new(
-            user_management::UserManager::new(config.clone()).await?
+            user_management::UserManager::new(config.clone()).await?,
         ));
-        
+
         let content_moderator = Arc::new(RwLock::new(
-            content_moderation::ContentModerator::new(config.clone()).await?
+            content_moderation::ContentModerator::new(config.clone()).await?,
         ));
 
         Ok(Self {
@@ -182,11 +180,12 @@ impl CommunityPlatform {
         let moderation_health = self.content_moderator.read().await.health_check().await?;
 
         Ok(CommunityHealthStatus {
-            overall_status: if portal_health.is_healthy() && 
-                              forums_health.is_healthy() && 
-                              kb_health.is_healthy() && 
-                              user_health.is_healthy() && 
-                              moderation_health.is_healthy() {
+            overall_status: if portal_health.is_healthy()
+                && forums_health.is_healthy()
+                && kb_health.is_healthy()
+                && user_health.is_healthy()
+                && moderation_health.is_healthy()
+            {
                 "healthy".to_string()
             } else {
                 "degraded".to_string()

@@ -1,6 +1,6 @@
-use super::camera::{Ray, dot, sub, normalize, scale, reflect};
+use super::camera::{dot, normalize, reflect, scale, sub, Ray};
+use super::geometry::{intersect_terrain, BVHNode, HitRecord};
 use super::lighting::{LightingRig, LuxorLight};
-use super::geometry::{HitRecord, BVHNode, intersect_terrain};
 use super::scene_capture::{CapturedPrim, SceneGeometry};
 
 #[derive(Debug, Clone, Copy)]
@@ -58,9 +58,18 @@ pub fn shade_hit(
     let base_color = [prim.color[0], prim.color[1], prim.color[2]];
 
     let ambient = [
-        base_color[0] * lighting.ambient_color[0] * lighting.ambient_intensity * params.ambient_weight,
-        base_color[1] * lighting.ambient_color[1] * lighting.ambient_intensity * params.ambient_weight,
-        base_color[2] * lighting.ambient_color[2] * lighting.ambient_intensity * params.ambient_weight,
+        base_color[0]
+            * lighting.ambient_color[0]
+            * lighting.ambient_intensity
+            * params.ambient_weight,
+        base_color[1]
+            * lighting.ambient_color[1]
+            * lighting.ambient_intensity
+            * params.ambient_weight,
+        base_color[2]
+            * lighting.ambient_color[2]
+            * lighting.ambient_intensity
+            * params.ambient_weight,
     ];
 
     let mut total = ambient;
@@ -96,7 +105,8 @@ pub fn shade_hit(
                 dir_to_light[2] + view_dir[2],
             ]);
             let n_dot_h = dot(hit.normal, half_vec).max(0.0);
-            let spec = n_dot_h.powf(params.specular_power) * params.specular_weight * intensity * 0.001;
+            let spec =
+                n_dot_h.powf(params.specular_power) * params.specular_weight * intensity * 0.001;
 
             total[0] += light_color[0] * spec;
             total[1] += light_color[1] * spec;
@@ -129,19 +139,32 @@ pub fn shade_terrain(
     };
 
     let ambient = [
-        base_color[0] * lighting.ambient_color[0] * lighting.ambient_intensity * params.ambient_weight,
-        base_color[1] * lighting.ambient_color[1] * lighting.ambient_intensity * params.ambient_weight,
-        base_color[2] * lighting.ambient_color[2] * lighting.ambient_intensity * params.ambient_weight,
+        base_color[0]
+            * lighting.ambient_color[0]
+            * lighting.ambient_intensity
+            * params.ambient_weight,
+        base_color[1]
+            * lighting.ambient_color[1]
+            * lighting.ambient_intensity
+            * params.ambient_weight,
+        base_color[2]
+            * lighting.ambient_color[2]
+            * lighting.ambient_intensity
+            * params.ambient_weight,
     ];
 
     let mut total = ambient;
 
     for light in &lighting.lights {
         let (intensity, light_color, dir_to_light) = light.evaluate_at(hit.position);
-        if intensity < 0.001 { continue; }
+        if intensity < 0.001 {
+            continue;
+        }
 
         let in_shadow = is_in_shadow(hit, light, scene, bvh);
-        if in_shadow { continue; }
+        if in_shadow {
+            continue;
+        }
 
         let n_dot_l = dot(hit.normal, dir_to_light).max(0.0);
         let diffuse_scale = intensity * n_dot_l * params.diffuse_weight * 0.001;
@@ -261,22 +284,31 @@ pub fn sky_color(ray: &Ray, lighting: &LightingRig) -> [f32; 3] {
 
 #[cfg(test)]
 mod tests {
-    use super::*;
     use super::super::scene_capture::PrimShape;
+    use super::*;
 
     #[test]
     fn test_terrain_color_bands() {
         let underwater = terrain_color(-5.0);
-        assert!(underwater[2] > underwater[0], "Underwater should be blueish");
+        assert!(
+            underwater[2] > underwater[0],
+            "Underwater should be blueish"
+        );
 
         let beach = terrain_color(2.0);
         assert!(beach[0] > beach[2], "Beach should be sandy/warm");
 
         let grass = terrain_color(30.0);
-        assert!(grass[1] > grass[0] && grass[1] > grass[2], "Mid terrain should be green");
+        assert!(
+            grass[1] > grass[0] && grass[1] > grass[2],
+            "Mid terrain should be green"
+        );
 
         let rock = terrain_color(120.0);
-        assert!((rock[0] - rock[1]).abs() < 0.1, "High terrain should be gray");
+        assert!(
+            (rock[0] - rock[1]).abs() < 0.1,
+            "High terrain should be gray"
+        );
     }
 
     #[test]
@@ -293,8 +325,10 @@ mod tests {
 
         let sky_up = sky_color(&up_ray, &rig);
         let sky_horiz = sky_color(&horizon_ray, &rig);
-        assert!(sky_up[2] > sky_horiz[2] || (sky_up[2] - sky_horiz[2]).abs() < 0.3,
-            "Sky should be bluer up top");
+        assert!(
+            sky_up[2] > sky_horiz[2] || (sky_up[2] - sky_horiz[2]).abs() < 0.3,
+            "Sky should be bluer up top"
+        );
     }
 
     #[test]
@@ -331,7 +365,10 @@ mod tests {
         let rig = LightingRig::default();
 
         let color = shade_hit(&hit, &ray, &prim, &scene, None, &rig);
-        assert!((color[0] - 1.0).abs() < 0.01, "Fullbright should return exact color");
+        assert!(
+            (color[0] - 1.0).abs() < 0.01,
+            "Fullbright should return exact color"
+        );
         assert!((color[1] - 0.5).abs() < 0.01);
     }
 

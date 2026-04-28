@@ -1,14 +1,14 @@
 //! OpenSim Next REST API Client
 //! Command-line tool for interacting with the REST API
 
+use anyhow::{anyhow, Result};
+use clap::{Args, Parser, Subcommand};
+use reqwest::{multipart, Client};
+use serde::{Deserialize, Serialize};
+use serde_json::{json, Value};
 use std::collections::HashMap;
 use std::fs;
 use std::path::PathBuf;
-use anyhow::{anyhow, Result};
-use clap::{Parser, Subcommand, Args};
-use reqwest::{Client, multipart};
-use serde::{Deserialize, Serialize};
-use serde_json::{json, Value};
 use tokio::fs as async_fs;
 use uuid::Uuid;
 
@@ -20,31 +20,31 @@ struct Cli {
     /// API server URL
     #[arg(long, default_value = "http://localhost:8080")]
     server: String,
-    
+
     /// API version
     #[arg(long, default_value = "v1")]
     version: String,
-    
+
     /// Authentication token
     #[arg(long, env = "OPENSIM_API_TOKEN")]
     token: Option<String>,
-    
+
     /// Username for authentication
     #[arg(long, env = "OPENSIM_USERNAME")]
     username: Option<String>,
-    
+
     /// Password for authentication
     #[arg(long, env = "OPENSIM_PASSWORD")]
     password: Option<String>,
-    
+
     /// Output format (json, table, csv)
     #[arg(long, default_value = "json")]
     format: String,
-    
+
     /// Verbose output
     #[arg(short, long)]
     verbose: bool,
-    
+
     #[command(subcommand)]
     command: Commands,
 }
@@ -459,7 +459,7 @@ struct RestApiClient {
 impl RestApiClient {
     fn new(server: String, version: String, token: Option<String>, verbose: bool) -> Self {
         let base_url = format!("{}/{}", server.trim_end_matches('/'), version);
-        
+
         Self {
             client: Client::new(),
             base_url,
@@ -467,49 +467,53 @@ impl RestApiClient {
             verbose,
         }
     }
-    
+
     async fn login(&mut self, username: String, password: String) -> Result<LoginResponse> {
         let request = LoginRequest {
             username,
             password,
             remember_me: Some(false),
         };
-        
-        let response = self.client
+
+        let response = self
+            .client
             .post(&format!("{}/auth/login", self.base_url))
             .json(&request)
             .send()
             .await?;
-        
+
         if !response.status().is_success() {
             return Err(anyhow!("Login failed: HTTP {}", response.status()));
         }
-        
+
         let api_response: ApiResponse<LoginResponse> = response.json().await?;
-        
+
         if !api_response.success {
-            return Err(anyhow!("Login failed: {}", api_response.error.unwrap_or_default()));
+            return Err(anyhow!(
+                "Login failed: {}",
+                api_response.error.unwrap_or_default()
+            ));
         }
-        
+
         let login_data = api_response.data.unwrap();
         self.token = Some(login_data.access_token.clone());
-        
+
         Ok(login_data)
     }
-    
+
     async fn make_request<T>(&self, method: &str, path: &str, body: Option<Value>) -> Result<T>
     where
         T: for<'de> Deserialize<'de>,
     {
         let url = format!("{}/{}", self.base_url, path);
-        
+
         if self.verbose {
             println!("Making {} request to: {}", method, url);
             if let Some(ref body) = body {
                 println!("Request body: {}", serde_json::to_string_pretty(body)?);
             }
         }
-        
+
         let mut request_builder = match method {
             "GET" => self.client.get(&url),
             "POST" => self.client.post(&url),
@@ -517,96 +521,109 @@ impl RestApiClient {
             "DELETE" => self.client.delete(&url),
             _ => return Err(anyhow!("Unsupported HTTP method: {}", method)),
         };
-        
+
         // Add authentication header if token is available
         if let Some(ref token) = self.token {
             request_builder = request_builder.bearer_auth(token);
         }
-        
+
         // Add JSON body if provided
         if let Some(body) = body {
             request_builder = request_builder.json(&body);
         }
-        
+
         let response = request_builder.send().await?;
-        
+
         if self.verbose {
             println!("Response status: {}", response.status());
         }
-        
+
         let status = response.status();
         let response_text = response.text().await?;
-        
+
         if self.verbose {
             println!("Response body: {}", response_text);
         }
-        
+
         if !status.is_success() {
             return Err(anyhow!("HTTP error {}: {}", status, response_text));
         }
-        
+
         let api_response: ApiResponse<T> = serde_json::from_str(&response_text)?;
-        
+
         if !api_response.success {
-            return Err(anyhow!("API error: {}", api_response.error.unwrap_or_default()));
+            return Err(anyhow!(
+                "API error: {}",
+                api_response.error.unwrap_or_default()
+            ));
         }
-        
-        api_response.data.ok_or_else(|| anyhow!("No data in response"))
+
+        api_response
+            .data
+            .ok_or_else(|| anyhow!("No data in response"))
     }
-    
+
     async fn upload_file(&self, path: &str, file_path: &PathBuf, metadata: Value) -> Result<Value> {
         let url = format!("{}/{}", self.base_url, path);
-        
+
         if self.verbose {
             println!("Uploading file to: {}", url);
             println!("File: {}", file_path.display());
             println!("Metadata: {}", serde_json::to_string_pretty(&metadata)?);
         }
-        
+
         // Read file data
         let file_data = async_fs::read(file_path).await?;
-        let file_name = file_path.file_name()
+        let file_name = file_path
+            .file_name()
             .and_then(|name| name.to_str())
             .ok_or_else(|| anyhow!("Invalid file name"))?;
-        
+
         // Create multipart form
-        let mut form = multipart::Form::new()
-            .part("metadata", multipart::Part::text(metadata.to_string()));
-        
-        form = form.part("file", multipart::Part::bytes(file_data)
-            .file_name(file_name.to_string()));
-        
+        let mut form =
+            multipart::Form::new().part("metadata", multipart::Part::text(metadata.to_string()));
+
+        form = form.part(
+            "file",
+            multipart::Part::bytes(file_data).file_name(file_name.to_string()),
+        );
+
         let mut request_builder = self.client.post(&url).multipart(form);
-        
+
         // Add authentication header if token is available
         if let Some(ref token) = self.token {
             request_builder = request_builder.bearer_auth(token);
         }
-        
+
         let response = request_builder.send().await?;
-        
+
         if self.verbose {
             println!("Upload response status: {}", response.status());
         }
-        
+
         let status = response.status();
         let response_text = response.text().await?;
-        
+
         if self.verbose {
             println!("Upload response body: {}", response_text);
         }
-        
+
         if !status.is_success() {
             return Err(anyhow!("Upload failed: HTTP {}: {}", status, response_text));
         }
-        
+
         let api_response: ApiResponse<Value> = serde_json::from_str(&response_text)?;
-        
+
         if !api_response.success {
-            return Err(anyhow!("Upload failed: {}", api_response.error.unwrap_or_default()));
+            return Err(anyhow!(
+                "Upload failed: {}",
+                api_response.error.unwrap_or_default()
+            ));
         }
-        
-        api_response.data.ok_or_else(|| anyhow!("No data in upload response"))
+
+        api_response
+            .data
+            .ok_or_else(|| anyhow!("No data in upload response"))
     }
 }
 
@@ -625,86 +642,112 @@ fn format_output(data: &Value, format: &str) -> Result<String> {
 #[tokio::main]
 async fn main() -> Result<()> {
     let cli = Cli::parse();
-    
-    let mut client = RestApiClient::new(
-        cli.server,
-        cli.version,
-        cli.token,
-        cli.verbose,
-    );
-    
+
+    let mut client = RestApiClient::new(cli.server, cli.version, cli.token, cli.verbose);
+
     // Handle authentication if username/password provided
     if let (Some(username), Some(password)) = (cli.username, cli.password) {
         if client.token.is_none() {
             println!("Logging in as {}...", username);
             let login_response = client.login(username, password).await?;
             println!("✅ Login successful");
-            println!("Access token expires in {} seconds", login_response.expires_in);
+            println!(
+                "Access token expires in {} seconds",
+                login_response.expires_in
+            );
         }
     }
-    
+
     match cli.command {
         Commands::Info => {
             let data: Value = client.make_request("GET", "", None).await?;
             println!("{}", format_output(&data, &cli.format)?);
         }
-        
+
         Commands::Health => {
             let data: Value = client.make_request("GET", "health", None).await?;
             println!("{}", format_output(&data, &cli.format)?);
         }
-        
+
         Commands::Version => {
             let data: Value = client.make_request("GET", "version", None).await?;
             println!("{}", format_output(&data, &cli.format)?);
         }
-        
-        Commands::Auth { action } => {
-            match action {
-                AuthCommands::Login => {
-                    println!("Use --username and --password for login");
-                }
-                AuthCommands::Logout => {
-                    let _: Value = client.make_request("POST", "auth/logout", None).await?;
-                    println!("✅ Logged out successfully");
-                }
-                AuthCommands::Refresh => {
-                    let data: Value = client.make_request("POST", "auth/refresh", None).await?;
-                    println!("{}", format_output(&data, &cli.format)?);
-                }
-                AuthCommands::Validate => {
-                    let data: Value = client.make_request("GET", "auth/validate", None).await?;
-                    println!("{}", format_output(&data, &cli.format)?);
-                }
+
+        Commands::Auth { action } => match action {
+            AuthCommands::Login => {
+                println!("Use --username and --password for login");
             }
-        }
-        
+            AuthCommands::Logout => {
+                let _: Value = client.make_request("POST", "auth/logout", None).await?;
+                println!("✅ Logged out successfully");
+            }
+            AuthCommands::Refresh => {
+                let data: Value = client.make_request("POST", "auth/refresh", None).await?;
+                println!("{}", format_output(&data, &cli.format)?);
+            }
+            AuthCommands::Validate => {
+                let data: Value = client.make_request("GET", "auth/validate", None).await?;
+                println!("{}", format_output(&data, &cli.format)?);
+            }
+        },
+
         Commands::Assets { action } => {
             match action {
-                AssetCommands::List { query, asset_type, creator_id, public, page, limit } => {
+                AssetCommands::List {
+                    query,
+                    asset_type,
+                    creator_id,
+                    public,
+                    page,
+                    limit,
+                } => {
                     let mut params = Vec::new();
-                    if let Some(q) = query { params.push(format!("query={}", q)); }
-                    if let Some(t) = asset_type { params.push(format!("asset_type={}", t)); }
-                    if let Some(c) = creator_id { params.push(format!("creator_id={}", c)); }
-                    if public { params.push("is_public=true".to_string()); }
+                    if let Some(q) = query {
+                        params.push(format!("query={}", q));
+                    }
+                    if let Some(t) = asset_type {
+                        params.push(format!("asset_type={}", t));
+                    }
+                    if let Some(c) = creator_id {
+                        params.push(format!("creator_id={}", c));
+                    }
+                    if public {
+                        params.push("is_public=true".to_string());
+                    }
                     params.push(format!("page={}", page));
                     params.push(format!("limit={}", limit));
-                    
-                    let query_string = if params.is_empty() { String::new() } else { format!("?{}", params.join("&")) };
-                    let data: Value = client.make_request("GET", &format!("assets{}", query_string), None).await?;
+
+                    let query_string = if params.is_empty() {
+                        String::new()
+                    } else {
+                        format!("?{}", params.join("&"))
+                    };
+                    let data: Value = client
+                        .make_request("GET", &format!("assets{}", query_string), None)
+                        .await?;
                     println!("{}", format_output(&data, &cli.format)?);
                 }
-                
+
                 AssetCommands::Get { id } => {
-                    let data: Value = client.make_request("GET", &format!("assets/{}", id), None).await?;
+                    let data: Value = client
+                        .make_request("GET", &format!("assets/{}", id), None)
+                        .await?;
                     println!("{}", format_output(&data, &cli.format)?);
                 }
-                
-                AssetCommands::Upload { file, name, description, asset_type, public, tags } => {
+
+                AssetCommands::Upload {
+                    file,
+                    name,
+                    description,
+                    asset_type,
+                    public,
+                    tags,
+                } => {
                     if !file.exists() {
                         return Err(anyhow!("File not found: {}", file.display()));
                     }
-                    
+
                     let metadata = json!({
                         "name": name,
                         "description": description,
@@ -712,60 +755,88 @@ async fn main() -> Result<()> {
                         "is_public": public,
                         "tags": tags.map(|t| t.split(',').map(|s| s.trim().to_string()).collect::<Vec<String>>())
                     });
-                    
+
                     let data = client.upload_file("assets", &file, metadata).await?;
                     println!("✅ Asset uploaded successfully");
                     println!("{}", format_output(&data, &cli.format)?);
                 }
-                
+
                 AssetCommands::Download { id, output } => {
                     // This would download the asset data
                     println!("Downloading asset {} to {}", id, output.display());
                     println!("⚠️  Download functionality not yet implemented");
                 }
-                
-                AssetCommands::Update { id, name, description, public, tags } => {
+
+                AssetCommands::Update {
+                    id,
+                    name,
+                    description,
+                    public,
+                    tags,
+                } => {
                     let mut updates = json!({});
-                    if let Some(n) = name { updates["name"] = json!(n); }
-                    if let Some(d) = description { updates["description"] = json!(d); }
-                    if let Some(p) = public { updates["is_public"] = json!(p); }
-                    if let Some(t) = tags { 
+                    if let Some(n) = name {
+                        updates["name"] = json!(n);
+                    }
+                    if let Some(d) = description {
+                        updates["description"] = json!(d);
+                    }
+                    if let Some(p) = public {
+                        updates["is_public"] = json!(p);
+                    }
+                    if let Some(t) = tags {
                         updates["tags"] = json!(t.split(',').map(|s| s.trim()).collect::<Vec<_>>());
                     }
-                    
-                    let data: Value = client.make_request("PUT", &format!("assets/{}", id), Some(updates)).await?;
+
+                    let data: Value = client
+                        .make_request("PUT", &format!("assets/{}", id), Some(updates))
+                        .await?;
                     println!("✅ Asset updated successfully");
                     println!("{}", format_output(&data, &cli.format)?);
                 }
-                
+
                 AssetCommands::Delete { id, confirm } => {
                     if !confirm {
                         return Err(anyhow!("Use --confirm to confirm deletion"));
                     }
-                    
-                    let _: Value = client.make_request("DELETE", &format!("assets/{}", id), None).await?;
+
+                    let _: Value = client
+                        .make_request("DELETE", &format!("assets/{}", id), None)
+                        .await?;
                     println!("✅ Asset deleted successfully");
                 }
-                
-                AssetCommands::Search { query, asset_type, tags, page, limit } => {
+
+                AssetCommands::Search {
+                    query,
+                    asset_type,
+                    tags,
+                    page,
+                    limit,
+                } => {
                     let mut params = vec![format!("query={}", query)];
-                    if let Some(t) = asset_type { params.push(format!("asset_type={}", t)); }
-                    if let Some(t) = tags { params.push(format!("tags={}", t)); }
+                    if let Some(t) = asset_type {
+                        params.push(format!("asset_type={}", t));
+                    }
+                    if let Some(t) = tags {
+                        params.push(format!("tags={}", t));
+                    }
                     params.push(format!("page={}", page));
                     params.push(format!("limit={}", limit));
-                    
+
                     let query_string = format!("?{}", params.join("&"));
-                    let data: Value = client.make_request("GET", &format!("assets/search{}", query_string), None).await?;
+                    let data: Value = client
+                        .make_request("GET", &format!("assets/search{}", query_string), None)
+                        .await?;
                     println!("{}", format_output(&data, &cli.format)?);
                 }
             }
         }
-        
+
         // Add other command handlers here...
         _ => {
             println!("⚠️  Command not yet implemented");
         }
     }
-    
+
     Ok(())
 }

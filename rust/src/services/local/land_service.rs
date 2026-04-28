@@ -1,11 +1,11 @@
-use std::sync::Arc;
 use anyhow::Result;
 use async_trait::async_trait;
-use uuid::Uuid;
+use std::sync::Arc;
 use tracing::debug;
+use uuid::Uuid;
 
-use crate::services::traits::{LandServiceTrait, LandData};
 use crate::database::DatabaseConnection;
+use crate::services::traits::{LandData, LandServiceTrait};
 
 pub struct LocalLandService {
     db: Arc<DatabaseConnection>,
@@ -32,10 +32,15 @@ impl LandServiceTrait for LocalLandService {
         x: u32,
         y: u32,
     ) -> Result<Option<LandData>> {
-        let pool = self.db.postgres_pool()
+        let pool = self
+            .db
+            .postgres_pool()
             .ok_or_else(|| anyhow::anyhow!("No PG pool"))?;
 
-        debug!("[LAND] get_land_data: handle={} x={} y={}", region_handle, x, y);
+        debug!(
+            "[LAND] get_land_data: handle={} x={} y={}",
+            region_handle, x, y
+        );
 
         let row = sqlx::query(
             "SELECT uuid, name, description, owneruuid, isgroupowned, area, \
@@ -56,7 +61,10 @@ impl LandServiceTrait for LocalLandService {
                 return Ok(None);
             }
             Err(e) => {
-                debug!("[LAND] Query error (falling back to direct regionuuid): {}", e);
+                debug!(
+                    "[LAND] Query error (falling back to direct regionuuid): {}",
+                    e
+                );
                 return Ok(None);
             }
         };

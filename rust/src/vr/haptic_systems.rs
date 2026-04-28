@@ -2,13 +2,13 @@
 // Revolutionary haptic feedback system supporting force feedback, tactile sensations, and full-body haptic suits
 // Compatible with advanced haptic devices and next-generation VR controllers
 
-use crate::vr::{VRError, HapticCapabilities, VRFrameData, TactilePattern, HapticFeedback};
 use crate::monitoring::metrics::MetricsCollector;
+use crate::vr::{HapticCapabilities, HapticFeedback, TactilePattern, VRError, VRFrameData};
+use serde::{Deserialize, Serialize};
+use std::collections::HashMap;
 use std::sync::Arc;
 use tokio::sync::RwLock;
-use serde::{Deserialize, Serialize};
 use uuid::Uuid;
-use std::collections::HashMap;
 
 #[derive(Debug)]
 pub struct HapticSystemsManager {
@@ -704,7 +704,7 @@ impl HapticSystemsManager {
             force_feedback_enabled: true,
             tactile_feedback_enabled: true,
             fullbody_haptics_enabled: false, // Advanced feature
-            max_force_newton: 10.0, // Safe default
+            max_force_newton: 10.0,          // Safe default
             tactile_frequency_range: (20.0, 1000.0),
             haptic_update_rate_hz: config.haptic_refresh_rate,
             force_smoothing_factor: 0.1,
@@ -808,14 +808,22 @@ impl HapticSystemsManager {
         Ok(Arc::new(manager))
     }
 
-    pub async fn initialize_user_haptics(&self, user_id: Uuid, capabilities: &HapticCapabilities) -> Result<(), VRError> {
+    pub async fn initialize_user_haptics(
+        &self,
+        user_id: Uuid,
+        capabilities: &HapticCapabilities,
+    ) -> Result<(), VRError> {
         let profile = UserHapticProfile {
             user_id,
             haptic_preferences: HapticPreferences {
                 force_feedback_intensity: 0.8,
                 tactile_feedback_intensity: 0.7,
                 vibration_intensity: 0.6,
-                preferred_feedback_types: vec![FeedbackType::Force, FeedbackType::Tactile, FeedbackType::Vibration],
+                preferred_feedback_types: vec![
+                    FeedbackType::Force,
+                    FeedbackType::Tactile,
+                    FeedbackType::Vibration,
+                ],
                 disabled_feedback_types: Vec::new(),
             },
             device_mappings: HashMap::new(),
@@ -853,7 +861,11 @@ impl HapticSystemsManager {
         Ok(())
     }
 
-    pub async fn generate_haptic_frame(&self, user_id: Uuid, frame_data: &VRFrameData) -> Result<HapticFeedback, VRError> {
+    pub async fn generate_haptic_frame(
+        &self,
+        user_id: Uuid,
+        frame_data: &VRFrameData,
+    ) -> Result<HapticFeedback, VRError> {
         // Generate comprehensive haptic feedback based on VR frame data
         let mut feedback = HapticFeedback {
             force_feedback: None,
@@ -863,7 +875,8 @@ impl HapticSystemsManager {
 
         // Generate force feedback based on hand positions and interactions
         if self.config.force_feedback_enabled {
-            feedback.force_feedback = Some(self.calculate_force_feedback(user_id, frame_data).await?);
+            feedback.force_feedback =
+                Some(self.calculate_force_feedback(user_id, frame_data).await?);
         }
 
         // Generate tactile patterns based on virtual object interactions
@@ -875,7 +888,11 @@ impl HapticSystemsManager {
         Ok(feedback)
     }
 
-    async fn calculate_force_feedback(&self, user_id: Uuid, frame_data: &VRFrameData) -> Result<[f32; 3], VRError> {
+    async fn calculate_force_feedback(
+        &self,
+        user_id: Uuid,
+        frame_data: &VRFrameData,
+    ) -> Result<[f32; 3], VRError> {
         // Simplified force calculation - in real implementation, this would use physics simulation
         let mut force = [0.0, 0.0, 0.0];
 
@@ -891,14 +908,19 @@ impl HapticSystemsManager {
         Ok(force)
     }
 
-    async fn generate_tactile_patterns(&self, user_id: Uuid, frame_data: &VRFrameData) -> Result<Vec<TactilePattern>, VRError> {
+    async fn generate_tactile_patterns(
+        &self,
+        user_id: Uuid,
+        frame_data: &VRFrameData,
+    ) -> Result<Vec<TactilePattern>, VRError> {
         let mut patterns = Vec::new();
 
         // Example tactile pattern generation
         if let Some(hand_data) = &frame_data.hand_tracking_data {
             // Generate tactile feedback for finger contact
             for (i, joint) in hand_data.left_hand.finger_joints.iter().enumerate() {
-                if i % 5 == 0 { // Fingertip joints
+                if i % 5 == 0 {
+                    // Fingertip joints
                     patterns.push(TactilePattern {
                         location: joint.position,
                         intensity: 0.5,
@@ -921,7 +943,10 @@ impl HapticSystemsManager {
             ForceModel {
                 model_name: "Spring".to_string(),
                 model_type: ForceModelType::Spring,
-                parameters: [("stiffness".to_string(), 1000.0)].iter().cloned().collect(),
+                parameters: [("stiffness".to_string(), 1000.0)]
+                    .iter()
+                    .cloned()
+                    .collect(),
             },
             ForceModel {
                 model_name: "Damper".to_string(),
@@ -932,78 +957,81 @@ impl HapticSystemsManager {
     }
 
     fn create_synthesis_algorithms() -> Vec<SynthesisAlgorithm> {
-        vec![
-            SynthesisAlgorithm {
-                algorithm_name: "Waveform Synthesis".to_string(),
-                algorithm_type: SynthesisType::WaveformSynthesis,
-                parameters: HashMap::new(),
-            },
-        ]
+        vec![SynthesisAlgorithm {
+            algorithm_name: "Waveform Synthesis".to_string(),
+            algorithm_type: SynthesisType::WaveformSynthesis,
+            parameters: HashMap::new(),
+        }]
     }
 
     fn create_default_textures() -> HashMap<String, HapticTexture> {
         let mut textures = HashMap::new();
-        
-        textures.insert("smooth".to_string(), HapticTexture {
-            texture_name: "Smooth Surface".to_string(),
-            roughness: 0.1,
-            stiffness: 0.5,
-            friction: 0.2,
-            temperature: 20.0,
-            vibration_pattern: vec![
-                VibrationComponent {
+
+        textures.insert(
+            "smooth".to_string(),
+            HapticTexture {
+                texture_name: "Smooth Surface".to_string(),
+                roughness: 0.1,
+                stiffness: 0.5,
+                friction: 0.2,
+                temperature: 20.0,
+                vibration_pattern: vec![VibrationComponent {
                     frequency: 100.0,
                     amplitude: 0.1,
                     phase: 0.0,
                     duration_ms: 1000,
-                },
-            ],
-        });
+                }],
+            },
+        );
 
-        textures.insert("rough".to_string(), HapticTexture {
-            texture_name: "Rough Surface".to_string(),
-            roughness: 0.8,
-            stiffness: 0.7,
-            friction: 0.8,
-            temperature: 20.0,
-            vibration_pattern: vec![
-                VibrationComponent {
+        textures.insert(
+            "rough".to_string(),
+            HapticTexture {
+                texture_name: "Rough Surface".to_string(),
+                roughness: 0.8,
+                stiffness: 0.7,
+                friction: 0.8,
+                temperature: 20.0,
+                vibration_pattern: vec![VibrationComponent {
                     frequency: 300.0,
                     amplitude: 0.6,
                     phase: 0.0,
                     duration_ms: 500,
-                },
-            ],
-        });
+                }],
+            },
+        );
 
         textures
     }
 
     fn create_default_patterns() -> HashMap<String, HapticPattern> {
         let mut patterns = HashMap::new();
-        
-        patterns.insert("heartbeat".to_string(), HapticPattern {
-            pattern_id: "heartbeat_001".to_string(),
-            pattern_name: "Heartbeat".to_string(),
-            events: vec![
-                HapticEvent {
-                    timestamp_ms: 0,
-                    event_type: FeedbackType::Vibration,
-                    intensity: 0.8,
-                    duration_ms: 100,
-                    position: Some([0.0, 0.0, 0.0]),
-                },
-                HapticEvent {
-                    timestamp_ms: 200,
-                    event_type: FeedbackType::Vibration,
-                    intensity: 0.6,
-                    duration_ms: 80,
-                    position: Some([0.0, 0.0, 0.0]),
-                },
-            ],
-            loop_count: 0, // Infinite loop
-            total_duration_ms: 1000,
-        });
+
+        patterns.insert(
+            "heartbeat".to_string(),
+            HapticPattern {
+                pattern_id: "heartbeat_001".to_string(),
+                pattern_name: "Heartbeat".to_string(),
+                events: vec![
+                    HapticEvent {
+                        timestamp_ms: 0,
+                        event_type: FeedbackType::Vibration,
+                        intensity: 0.8,
+                        duration_ms: 100,
+                        position: Some([0.0, 0.0, 0.0]),
+                    },
+                    HapticEvent {
+                        timestamp_ms: 200,
+                        event_type: FeedbackType::Vibration,
+                        intensity: 0.6,
+                        duration_ms: 80,
+                        position: Some([0.0, 0.0, 0.0]),
+                    },
+                ],
+                loop_count: 0, // Infinite loop
+                total_duration_ms: 1000,
+            },
+        );
 
         patterns
     }
@@ -1027,39 +1055,38 @@ impl HapticSystemsManager {
 
     fn create_kinematic_model() -> KinematicModel {
         KinematicModel {
-            joints: vec![
-                Joint {
-                    joint_name: "shoulder_left".to_string(),
-                    joint_type: JointType::Spherical,
-                    position: [-0.2, 0.0, 0.0],
-                    rotation_limits: RotationLimits {
-                        min_rotation: [-180.0, -90.0, -180.0],
-                        max_rotation: [180.0, 90.0, 180.0],
-                    },
+            joints: vec![Joint {
+                joint_name: "shoulder_left".to_string(),
+                joint_type: JointType::Spherical,
+                position: [-0.2, 0.0, 0.0],
+                rotation_limits: RotationLimits {
+                    min_rotation: [-180.0, -90.0, -180.0],
+                    max_rotation: [180.0, 90.0, 180.0],
                 },
-            ],
-            body_segments: vec![
-                BodySegment {
-                    segment_name: "upper_arm_left".to_string(),
-                    length: 0.3,
-                    mass: 2.0,
-                    inertia: [0.1, 0.1, 0.02],
-                },
-            ],
+            }],
+            body_segments: vec![BodySegment {
+                segment_name: "upper_arm_left".to_string(),
+                length: 0.3,
+                mass: 2.0,
+                inertia: [0.1, 0.1, 0.02],
+            }],
             movement_constraints: Vec::new(),
         }
     }
 
     fn create_sensitivity_map() -> HashMap<String, SensitivityRegion> {
         let mut map = HashMap::new();
-        
-        map.insert("palm".to_string(), SensitivityRegion {
-            region_name: "Palm".to_string(),
-            base_sensitivity: 0.8,
-            adaptation_rate: 0.1,
-            maximum_sensitivity: 1.0,
-            minimum_sensitivity: 0.2,
-        });
+
+        map.insert(
+            "palm".to_string(),
+            SensitivityRegion {
+                region_name: "Palm".to_string(),
+                base_sensitivity: 0.8,
+                adaptation_rate: 0.1,
+                maximum_sensitivity: 1.0,
+                minimum_sensitivity: 0.2,
+            },
+        );
 
         map
     }

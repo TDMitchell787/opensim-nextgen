@@ -20,7 +20,8 @@ pub fn parse_mesh_header(data: &[u8]) -> Result<MeshAssetHeader> {
     if pos + 4 > data.len() {
         bail!("Truncated map count");
     }
-    let entry_count = u32::from_be_bytes([data[pos], data[pos+1], data[pos+2], data[pos+3]]) as usize;
+    let entry_count =
+        u32::from_be_bytes([data[pos], data[pos + 1], data[pos + 2], data[pos + 3]]) as usize;
     pos += 4;
 
     for _ in 0..entry_count {
@@ -65,7 +66,8 @@ fn read_llsd_key(data: &[u8], pos: &mut usize) -> Result<String> {
     if *pos + 4 > data.len() {
         bail!("Not enough bytes for key length");
     }
-    let len = u32::from_be_bytes([data[*pos], data[*pos + 1], data[*pos + 2], data[*pos + 3]]) as usize;
+    let len =
+        u32::from_be_bytes([data[*pos], data[*pos + 1], data[*pos + 2], data[*pos + 3]]) as usize;
     *pos += 4;
 
     if *pos + len > data.len() {
@@ -84,7 +86,8 @@ fn read_llsd_block_ref(data: &[u8], pos: &mut usize) -> Result<BlockRef> {
     if *pos + 4 > data.len() {
         bail!("Truncated inner map count");
     }
-    let inner_count = u32::from_be_bytes([data[*pos], data[*pos+1], data[*pos+2], data[*pos+3]]) as usize;
+    let inner_count =
+        u32::from_be_bytes([data[*pos], data[*pos + 1], data[*pos + 2], data[*pos + 3]]) as usize;
     *pos += 4;
 
     let mut offset = 0usize;
@@ -121,7 +124,8 @@ fn read_llsd_integer(data: &[u8], pos: &mut usize) -> Result<i32> {
             if *pos + 4 > data.len() {
                 bail!("Not enough bytes for integer");
             }
-            let val = i32::from_be_bytes([data[*pos], data[*pos + 1], data[*pos + 2], data[*pos + 3]]);
+            let val =
+                i32::from_be_bytes([data[*pos], data[*pos + 1], data[*pos + 2], data[*pos + 3]]);
             *pos += 4;
             Ok(val)
         }
@@ -137,34 +141,56 @@ fn skip_llsd_value(data: &[u8], pos: &mut usize) -> Result<()> {
         bail!("No data to skip");
     }
     match data[*pos] {
-        0x00 | b'!' | b'1' | b'0' => { *pos += 1; }
-        b'i' => { *pos += 5; }
-        b'r' => { *pos += 9; }
-        b'u' => { *pos += 17; }
+        0x00 | b'!' | b'1' | b'0' => {
+            *pos += 1;
+        }
+        b'i' => {
+            *pos += 5;
+        }
+        b'r' => {
+            *pos += 9;
+        }
+        b'u' => {
+            *pos += 17;
+        }
         b's' | b'b' | b'l' => {
             *pos += 1;
-            if *pos + 4 > data.len() { bail!("Truncated"); }
-            let len = u32::from_be_bytes([data[*pos], data[*pos+1], data[*pos+2], data[*pos+3]]) as usize;
+            if *pos + 4 > data.len() {
+                bail!("Truncated");
+            }
+            let len =
+                u32::from_be_bytes([data[*pos], data[*pos + 1], data[*pos + 2], data[*pos + 3]])
+                    as usize;
             *pos += 4 + len;
         }
         b'{' => {
             *pos += 1;
-            if *pos + 4 <= data.len() { *pos += 4; }
+            if *pos + 4 <= data.len() {
+                *pos += 4;
+            }
             while *pos < data.len() && data[*pos] != b'}' {
                 read_llsd_key(data, pos)?;
                 skip_llsd_value(data, pos)?;
             }
-            if *pos < data.len() { *pos += 1; }
+            if *pos < data.len() {
+                *pos += 1;
+            }
         }
         b'[' => {
             *pos += 1;
-            if *pos + 4 <= data.len() { *pos += 4; }
+            if *pos + 4 <= data.len() {
+                *pos += 4;
+            }
             while *pos < data.len() && data[*pos] != b']' {
                 skip_llsd_value(data, pos)?;
             }
-            if *pos < data.len() { *pos += 1; }
+            if *pos < data.len() {
+                *pos += 1;
+            }
         }
-        b'd' => { *pos += 9; }
+        b'd' => {
+            *pos += 9;
+        }
         other => {
             bail!("Unknown LLSD type marker: 0x{:02x} at {}", other, *pos);
         }
@@ -176,20 +202,27 @@ fn skip_llsd_value(data: &[u8], pos: &mut usize) -> Result<()> {
 }
 
 pub fn extract_physics_convex(data: &[u8], header: &MeshAssetHeader) -> Result<ConvexPhysicsData> {
-    let block_ref = header.physics_convex.as_ref()
+    let block_ref = header
+        .physics_convex
+        .as_ref()
         .ok_or_else(|| anyhow!("No physics_convex block in mesh header"))?;
 
     let abs_offset = header.data_start + block_ref.offset;
     if abs_offset + block_ref.size > data.len() {
-        bail!("physics_convex block out of bounds: abs_offset={} size={} datalen={}",
-            abs_offset, block_ref.size, data.len());
+        bail!(
+            "physics_convex block out of bounds: abs_offset={} size={} datalen={}",
+            abs_offset,
+            block_ref.size,
+            data.len()
+        );
     }
 
     let compressed = &data[abs_offset..abs_offset + block_ref.size];
 
     let mut decoder = ZlibDecoder::new(compressed);
     let mut decompressed = Vec::new();
-    decoder.read_to_end(&mut decompressed)
+    decoder
+        .read_to_end(&mut decompressed)
         .map_err(|e| anyhow!("zlib decompression failed: {}", e))?;
 
     parse_physics_convex_llsd(&decompressed)
@@ -205,7 +238,8 @@ fn parse_physics_convex_llsd(data: &[u8]) -> Result<ConvexPhysicsData> {
     if pos + 4 > data.len() {
         bail!("Truncated physics_convex map count");
     }
-    let entry_count = u32::from_be_bytes([data[pos], data[pos+1], data[pos+2], data[pos+3]]) as usize;
+    let entry_count =
+        u32::from_be_bytes([data[pos], data[pos + 1], data[pos + 2], data[pos + 3]]) as usize;
     pos += 4;
 
     let mut min = [0.0f32; 3];
@@ -215,7 +249,9 @@ fn parse_physics_convex_llsd(data: &[u8]) -> Result<ConvexPhysicsData> {
     let mut bounding_verts_data: Vec<u8> = Vec::new();
 
     for _ in 0..entry_count {
-        if pos >= data.len() { break; }
+        if pos >= data.len() {
+            break;
+        }
 
         let key = read_llsd_key(data, &mut pos)?;
 
@@ -256,12 +292,20 @@ fn parse_physics_convex_llsd(data: &[u8]) -> Result<ConvexPhysicsData> {
         }
     } else {
         for &count_byte in &hull_list_data {
-            let vert_count = if count_byte == 0 { 256usize } else { count_byte as usize };
+            let vert_count = if count_byte == 0 {
+                256usize
+            } else {
+                count_byte as usize
+            };
             let byte_count = vert_count * 6;
 
             if vert_offset + byte_count > positions_data.len() {
-                warn!("Hull vertex data truncated: need {} bytes at offset {}, have {}",
-                    byte_count, vert_offset, positions_data.len());
+                warn!(
+                    "Hull vertex data truncated: need {} bytes at offset {}, have {}",
+                    byte_count,
+                    vert_offset,
+                    positions_data.len()
+                );
                 break;
             }
 
@@ -292,7 +336,9 @@ fn read_llsd_vector3_binary(data: &[u8], pos: &mut usize) -> Result<[f32; 3]> {
         b'b' => {
             let bytes = read_llsd_binary(data, pos)?;
             if bytes.len() == 12 {
-                let x = f64::from_le_bytes([bytes[0], bytes[1], bytes[2], bytes[3], bytes[4], bytes[5], bytes[6], bytes[7]]) as f32;
+                let x = f64::from_le_bytes([
+                    bytes[0], bytes[1], bytes[2], bytes[3], bytes[4], bytes[5], bytes[6], bytes[7],
+                ]) as f32;
                 let y_start = 8;
                 if bytes.len() >= y_start + 4 {
                     Ok([
@@ -322,27 +368,33 @@ fn read_llsd_vector3_binary(data: &[u8], pos: &mut usize) -> Result<[f32; 3]> {
         }
         b'[' => {
             *pos += 1;
-            if *pos + 4 <= data.len() { *pos += 4; }
+            if *pos + 4 <= data.len() {
+                *pos += 4;
+            }
             let mut vals = [0.0f32; 3];
             for i in 0..3 {
-                if *pos < data.len() && data[*pos] == b']' { break; }
+                if *pos < data.len() && data[*pos] == b']' {
+                    break;
+                }
                 if *pos < data.len() && data[*pos] == b'r' {
                     *pos += 1;
                     if *pos + 8 <= data.len() {
-                        vals[i] = f64::from_be_bytes(data[*pos..*pos+8].try_into()?) as f32;
+                        vals[i] = f64::from_be_bytes(data[*pos..*pos + 8].try_into()?) as f32;
                         *pos += 8;
                     }
                 } else if *pos < data.len() && data[*pos] == b'i' {
                     *pos += 1;
                     if *pos + 4 <= data.len() {
-                        vals[i] = i32::from_be_bytes(data[*pos..*pos+4].try_into()?) as f32;
+                        vals[i] = i32::from_be_bytes(data[*pos..*pos + 4].try_into()?) as f32;
                         *pos += 4;
                     }
                 } else {
                     skip_llsd_value(data, pos)?;
                 }
             }
-            if *pos < data.len() && data[*pos] == b']' { *pos += 1; }
+            if *pos < data.len() && data[*pos] == b']' {
+                *pos += 1;
+            }
             Ok(vals)
         }
         _ => {
@@ -360,7 +412,8 @@ fn read_llsd_binary(data: &[u8], pos: &mut usize) -> Result<Vec<u8>> {
     if *pos + 4 > data.len() {
         bail!("Not enough bytes for binary length");
     }
-    let len = u32::from_be_bytes([data[*pos], data[*pos+1], data[*pos+2], data[*pos+3]]) as usize;
+    let len =
+        u32::from_be_bytes([data[*pos], data[*pos + 1], data[*pos + 2], data[*pos + 3]]) as usize;
     *pos += 4;
     if *pos + len > data.len() {
         bail!("Binary data length {} exceeds available data", len);
@@ -396,15 +449,20 @@ pub fn extract_skin_data(data: &[u8], header: &MeshAssetHeader) -> Result<Option
 
     let abs_offset = header.data_start + block_ref.offset;
     if abs_offset + block_ref.size > data.len() {
-        bail!("skin block out of bounds: abs_offset={} size={} datalen={}",
-            abs_offset, block_ref.size, data.len());
+        bail!(
+            "skin block out of bounds: abs_offset={} size={} datalen={}",
+            abs_offset,
+            block_ref.size,
+            data.len()
+        );
     }
 
     let compressed = &data[abs_offset..abs_offset + block_ref.size];
 
     let mut decoder = ZlibDecoder::new(compressed);
     let mut decompressed = Vec::new();
-    decoder.read_to_end(&mut decompressed)
+    decoder
+        .read_to_end(&mut decompressed)
         .map_err(|e| anyhow!("skin zlib decompression failed: {}", e))?;
 
     Ok(Some(decompressed))

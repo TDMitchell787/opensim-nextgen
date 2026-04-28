@@ -1,5 +1,5 @@
 //! Enhanced Avatar System for OpenSim Next
-//! 
+//!
 //! This module provides advanced avatar management capabilities including:
 //! - Advanced appearance and customization
 //! - Avatar behavior and animation systems
@@ -17,21 +17,21 @@ pub mod persistence;
 pub mod social;
 // pub mod social_stub;
 // pub use social_stub as social;
-pub mod manager;
 pub mod api;
+pub mod manager;
 
+pub use api::*;
 pub use appearance::*;
 pub use behavior::*;
 pub use factory::*;
+pub use manager::*;
 pub use persistence::*;
 pub use social::*;
-pub use manager::*;
-pub use api::*;
 
+use chrono::{DateTime, Utc};
 use serde::{Deserialize, Serialize};
 use std::collections::HashMap;
 use uuid::Uuid;
-use chrono::{DateTime, Utc};
 
 /// Enhanced avatar information structure
 #[derive(Debug, Clone, Serialize, Deserialize)]
@@ -274,11 +274,22 @@ pub struct AutoBehavior {
 /// Behavior trigger conditions
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub enum BehaviorTrigger {
-    Idle { duration_seconds: f32 },
-    Movement { movement_type: MovementType },
-    Interaction { interaction_type: InteractionType },
-    Time { schedule: String },
-    Random { probability: f32, interval_seconds: f32 },
+    Idle {
+        duration_seconds: f32,
+    },
+    Movement {
+        movement_type: MovementType,
+    },
+    Interaction {
+        interaction_type: InteractionType,
+    },
+    Time {
+        schedule: String,
+    },
+    Random {
+        probability: f32,
+        interval_seconds: f32,
+    },
 }
 
 /// Movement types for behavior triggers
@@ -305,11 +316,24 @@ pub enum InteractionType {
 /// Behavior actions
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub enum BehaviorAction {
-    PlayAnimation { animation_id: Uuid, duration: Option<f32> },
-    PlaySound { sound_id: Uuid, volume: f32 },
-    SendChat { message: String, channel: i32 },
-    ChangeExpression { expression: FacialExpression },
-    TriggerGesture { gesture_id: Uuid },
+    PlayAnimation {
+        animation_id: Uuid,
+        duration: Option<f32>,
+    },
+    PlaySound {
+        sound_id: Uuid,
+        volume: f32,
+    },
+    SendChat {
+        message: String,
+        channel: i32,
+    },
+    ChangeExpression {
+        expression: FacialExpression,
+    },
+    TriggerGesture {
+        gesture_id: Uuid,
+    },
 }
 
 /// Facial expression configuration
@@ -438,7 +462,7 @@ pub struct AvatarPersistenceData {
     pub last_rotation: Quaternion,
     pub last_region: Uuid,
     pub session_time: i64, // seconds
-    pub total_time: i64, // seconds
+    pub total_time: i64,   // seconds
     pub visit_count: i64,
     pub last_login: DateTime<Utc>,
     pub inventory_snapshot: Option<String>, // JSON snapshot
@@ -490,22 +514,22 @@ pub struct NotificationSettings {
 pub enum AvatarError {
     #[error("Avatar not found: {id}")]
     NotFound { id: Uuid },
-    
+
     #[error("Invalid avatar data: {reason}")]
     InvalidData { reason: String },
-    
+
     #[error("Permission denied for avatar operation")]
     PermissionDenied,
-    
+
     #[error("Avatar system error: {message}")]
     SystemError { message: String },
-    
+
     #[error("Database error: {0}")]
     DatabaseError(#[from] sqlx::Error),
-    
+
     #[error("Serialization error: {0}")]
     SerializationError(#[from] serde_json::Error),
-    
+
     #[error("Database connection error: {0}")]
     ConnectionError(#[from] anyhow::Error),
 }
@@ -535,13 +559,22 @@ pub struct AvatarMessage {
 
 impl Default for Vector3 {
     fn default() -> Self {
-        Self { x: 0.0, y: 0.0, z: 0.0 }
+        Self {
+            x: 0.0,
+            y: 0.0,
+            z: 0.0,
+        }
     }
 }
 
 impl Default for Quaternion {
     fn default() -> Self {
-        Self { x: 0.0, y: 0.0, z: 0.0, w: 1.0 }
+        Self {
+            x: 0.0,
+            y: 0.0,
+            z: 0.0,
+            w: 1.0,
+        }
     }
 }
 

@@ -9,7 +9,10 @@ impl GridGenerator {
 
         ini.push_str(&format!("[{}]\n", region.name));
         ini.push_str(&format!("RegionUUID = {}\n", region.uuid));
-        ini.push_str(&format!("Location = {},{}\n", region.location_x, region.location_y));
+        ini.push_str(&format!(
+            "Location = {},{}\n",
+            region.location_x, region.location_y
+        ));
         ini.push_str("InternalAddress = 0.0.0.0\n");
         ini.push_str(&format!("InternalPort = {}\n", region.internal_port));
         ini.push_str("AllowAlternatePorts = False\n");
@@ -37,11 +40,28 @@ impl GridGenerator {
         let mut ini = String::new();
 
         ini.push_str("; OpenSim Multi-Region Configuration\n");
-        ini.push_str(&format!("; Grid: {} ({} regions)\n", config.grid_name, config.generated_regions.len()));
-        ini.push_str(&format!("; Layout: {}x{}\n", config.grid_layout.grid_width, config.grid_layout.grid_height));
-        ini.push_str(&format!("; Base Location: {},{}\n", config.grid_layout.base_location_x, config.grid_layout.base_location_y));
-        ini.push_str(&format!("; Port Range: {}-{}\n", config.grid_layout.base_port, config.grid_layout.port_range_end()));
-        ini.push_str(&format!("; Terrain Type: {:?} (height: {})\n", config.terrain_type, config.terrain_base_height));
+        ini.push_str(&format!(
+            "; Grid: {} ({} regions)\n",
+            config.grid_name,
+            config.generated_regions.len()
+        ));
+        ini.push_str(&format!(
+            "; Layout: {}x{}\n",
+            config.grid_layout.grid_width, config.grid_layout.grid_height
+        ));
+        ini.push_str(&format!(
+            "; Base Location: {},{}\n",
+            config.grid_layout.base_location_x, config.grid_layout.base_location_y
+        ));
+        ini.push_str(&format!(
+            "; Port Range: {}-{}\n",
+            config.grid_layout.base_port,
+            config.grid_layout.port_range_end()
+        ));
+        ini.push_str(&format!(
+            "; Terrain Type: {:?} (height: {})\n",
+            config.terrain_type, config.terrain_base_height
+        ));
         ini.push_str("\n");
 
         for region in &config.generated_regions {
@@ -62,19 +82,29 @@ impl GridGenerator {
             grid_height: config.grid_layout.grid_height,
             world_size_x: config.grid_layout.world_size_x(),
             world_size_y: config.grid_layout.world_size_y(),
-            base_location: (config.grid_layout.base_location_x, config.grid_layout.base_location_y),
-            port_range: (config.grid_layout.base_port, config.grid_layout.port_range_end()),
+            base_location: (
+                config.grid_layout.base_location_x,
+                config.grid_layout.base_location_y,
+            ),
+            port_range: (
+                config.grid_layout.base_port,
+                config.grid_layout.port_range_end(),
+            ),
             terrain_type: config.terrain_type.clone(),
             terrain_height: config.terrain_base_height,
             total_agent_capacity: config.max_agents_per_region * total_regions,
             total_prim_capacity: config.max_prims_per_region * total_regions,
-            regions: config.generated_regions.iter().map(|r| RegionSummary {
-                index: r.index,
-                name: r.name.clone(),
-                location: (r.location_x, r.location_y),
-                port: r.internal_port,
-                ini_file: r.ini_filename.clone(),
-            }).collect(),
+            regions: config
+                .generated_regions
+                .iter()
+                .map(|r| RegionSummary {
+                    index: r.index,
+                    name: r.name.clone(),
+                    location: (r.location_x, r.location_y),
+                    port: r.internal_port,
+                    ini_file: r.ini_filename.clone(),
+                })
+                .collect(),
         }
     }
 
@@ -93,8 +123,10 @@ impl GridGenerator {
             issues.push(GridValidationIssue {
                 severity: IssueSeverity::Warning,
                 field: "grid_layout".to_string(),
-                message: format!("Large grid ({}x{}) may require significant server resources",
-                    config.grid_layout.grid_width, config.grid_layout.grid_height),
+                message: format!(
+                    "Large grid ({}x{}) may require significant server resources",
+                    config.grid_layout.grid_width, config.grid_layout.grid_height
+                ),
             });
         }
 
@@ -103,7 +135,10 @@ impl GridGenerator {
             issues.push(GridValidationIssue {
                 severity: IssueSeverity::Warning,
                 field: "total_regions".to_string(),
-                message: format!("{} regions is very large - ensure adequate server capacity", total_regions),
+                message: format!(
+                    "{} regions is very large - ensure adequate server capacity",
+                    total_regions
+                ),
             });
         }
 
@@ -129,8 +164,10 @@ impl GridGenerator {
             issues.push(GridValidationIssue {
                 severity: IssueSeverity::Warning,
                 field: "region_size".to_string(),
-                message: format!("Non-standard region size {}. Standard sizes: 256, 512, 768, 1024",
-                    config.grid_layout.region_size),
+                message: format!(
+                    "Non-standard region size {}. Standard sizes: 256, 512, 768, 1024",
+                    config.grid_layout.region_size
+                ),
             });
         }
 
@@ -160,17 +197,19 @@ impl GridGenerator {
                             config.terrain_base_height),
                     });
                 }
-            },
+            }
             TerrainType::Land => {
                 if config.terrain_base_height < 20 {
                     issues.push(GridValidationIssue {
                         severity: IssueSeverity::Warning,
                         field: "terrain_height".to_string(),
-                        message: format!("Land terrain typically uses height 22+ (current: {})",
-                            config.terrain_base_height),
+                        message: format!(
+                            "Land terrain typically uses height 22+ (current: {})",
+                            config.terrain_base_height
+                        ),
                     });
                 }
-            },
+            }
             _ => {}
         }
 
@@ -187,11 +226,17 @@ impl GridGenerator {
                 width: square_side,
                 height: (region_count as f64 / square_side as f64).ceil() as i32,
                 description: "Square-ish layout".to_string(),
-                efficiency: (region_count as f64 / (square_side * square_side) as f64 * 100.0) as i32,
+                efficiency: (region_count as f64 / (square_side * square_side) as f64 * 100.0)
+                    as i32,
             });
         }
 
-        for (w, h) in [(1, region_count), (2, (region_count + 1) / 2), (4, (region_count + 3) / 4), (8, (region_count + 7) / 8)] {
+        for (w, h) in [
+            (1, region_count),
+            (2, (region_count + 1) / 2),
+            (4, (region_count + 3) / 4),
+            (8, (region_count + 7) / 8),
+        ] {
             if w * h >= region_count && w <= 16 && h <= 16 {
                 suggestions.push(GridLayoutSuggestion {
                     width: w,
@@ -328,7 +373,9 @@ mod tests {
         };
 
         let issues = GridGenerator::validate_grid_config(&config);
-        assert!(issues.iter().any(|i| i.severity == IssueSeverity::Warning && i.field == "grid_layout"));
+        assert!(issues
+            .iter()
+            .any(|i| i.severity == IssueSeverity::Warning && i.field == "grid_layout"));
     }
 
     #[test]

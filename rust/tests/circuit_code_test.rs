@@ -1,7 +1,7 @@
-use std::time::Duration;
-use tokio::time::sleep;
 use opensim_next::login_session::{CircuitCodeRegistry, LoginSession};
 use opensim_next::opensim_compatibility::protocols::LLUDPClientStack;
+use std::time::Duration;
+use tokio::time::sleep;
 
 #[tokio::test]
 async fn test_circuit_code_registration_and_validation() {
@@ -20,15 +20,20 @@ async fn test_circuit_code_registration_and_validation() {
         is_xmlrpc_session: false,
     };
 
-    println!("Registering circuit code {} for user {} {}",
-        circuit_code, session.first_name, session.last_name);
+    println!(
+        "Registering circuit code {} for user {} {}",
+        circuit_code, session.first_name, session.last_name
+    );
 
     registry.register_login(session.clone()).await;
 
     println!("Validating circuit code {}...", circuit_code);
     let validated_session = registry.validate_circuit_code(circuit_code).await;
 
-    assert!(validated_session.is_some(), "Circuit code validation should succeed");
+    assert!(
+        validated_session.is_some(),
+        "Circuit code validation should succeed"
+    );
     let validated = validated_session.unwrap();
 
     assert_eq!(validated.circuit_code, circuit_code);
@@ -44,7 +49,10 @@ async fn test_circuit_code_registration_and_validation() {
     assert!(removed_session.is_some(), "Circuit code should be removed");
 
     let invalid_validation = registry.validate_circuit_code(circuit_code).await;
-    assert!(invalid_validation.is_none(), "Circuit code should no longer be valid after removal");
+    assert!(
+        invalid_validation.is_none(),
+        "Circuit code should no longer be valid after removal"
+    );
 
     println!("✓ Circuit code removal successful!");
 }
@@ -69,7 +77,10 @@ async fn test_circuit_code_expiration() {
     registry.register_login(expired_session).await;
 
     let validation_result = registry.validate_circuit_code(circuit_code).await;
-    assert!(validation_result.is_none(), "Expired circuit code should not validate");
+    assert!(
+        validation_result.is_none(),
+        "Expired circuit code should not validate"
+    );
 
     println!("✓ Circuit code expiration test successful!");
 }
@@ -83,7 +94,10 @@ async fn test_invalid_circuit_code() {
     let invalid_code = 88888_u32;
     let validation_result = registry.validate_circuit_code(invalid_code).await;
 
-    assert!(validation_result.is_none(), "Invalid circuit code should not validate");
+    assert!(
+        validation_result.is_none(),
+        "Invalid circuit code should not validate"
+    );
 
     println!("✓ Invalid circuit code test successful!");
 }
@@ -126,17 +140,24 @@ async fn test_multiple_concurrent_logins() {
 
     for session in &sessions {
         registry.register_login(session.clone()).await;
-        println!("Registered circuit code {} for user {}",
-            session.circuit_code, session.first_name);
+        println!(
+            "Registered circuit code {} for user {}",
+            session.circuit_code, session.first_name
+        );
     }
 
     for session in &sessions {
         let validated = registry.validate_circuit_code(session.circuit_code).await;
-        assert!(validated.is_some(), "All registered circuit codes should validate");
+        assert!(
+            validated.is_some(),
+            "All registered circuit codes should validate"
+        );
         let validated_session = validated.unwrap();
         assert_eq!(validated_session.first_name, session.first_name);
-        println!("✓ Validated circuit code {} for user {}",
-            session.circuit_code, session.first_name);
+        println!(
+            "✓ Validated circuit code {} for user {}",
+            session.circuit_code, session.first_name
+        );
     }
 
     println!("✓ Multiple concurrent login test successful!");
@@ -153,7 +174,9 @@ fn test_unique_circuit_code_generation() {
         let circuit_code = (std::time::SystemTime::now()
             .duration_since(std::time::UNIX_EPOCH)
             .unwrap_or_default()
-            .as_secs() as u32) ^ (rand::random::<u32>() & 0xFFFF) ^ (i as u32);
+            .as_secs() as u32)
+            ^ (rand::random::<u32>() & 0xFFFF)
+            ^ (i as u32);
 
         if !generated_codes.insert(circuit_code) {
             duplicates += 1;
@@ -162,11 +185,22 @@ fn test_unique_circuit_code_generation() {
         std::thread::sleep(std::time::Duration::from_nanos(1));
     }
 
-    println!("✓ Generated {} unique circuit codes with {} duplicates",
-        generated_codes.len(), duplicates);
+    println!(
+        "✓ Generated {} unique circuit codes with {} duplicates",
+        generated_codes.len(),
+        duplicates
+    );
 
-    assert!(duplicates < 50, "Too many duplicate circuit codes: {}", duplicates);
-    assert!(generated_codes.len() > 950, "Not enough unique codes generated: {}", generated_codes.len());
+    assert!(
+        duplicates < 50,
+        "Too many duplicate circuit codes: {}",
+        duplicates
+    );
+    assert!(
+        generated_codes.len() > 950,
+        "Not enough unique codes generated: {}",
+        generated_codes.len()
+    );
 
     println!("✓ Circuit code generation test successful!");
 }
@@ -180,7 +214,8 @@ async fn test_full_login_flow_simulation() {
     let circuit_code = (std::time::SystemTime::now()
         .duration_since(std::time::UNIX_EPOCH)
         .unwrap_or_default()
-        .as_secs() as u32) ^ (rand::random::<u32>() & 0xFFFF);
+        .as_secs() as u32)
+        ^ (rand::random::<u32>() & 0xFFFF);
 
     let login_session = LoginSession {
         circuit_code,
@@ -192,34 +227,50 @@ async fn test_full_login_flow_simulation() {
         is_xmlrpc_session: false,
     };
 
-    println!("Step 1: XML-RPC Login - Generated circuit code {} for user {} {}",
-        circuit_code, login_session.first_name, login_session.last_name);
+    println!(
+        "Step 1: XML-RPC Login - Generated circuit code {} for user {} {}",
+        circuit_code, login_session.first_name, login_session.last_name
+    );
 
     circuit_registry.register_login(login_session.clone()).await;
     println!("Step 2: Login service registered circuit code with LLUDP server");
 
-    println!("Step 3: Viewer received login response with circuit code {}", circuit_code);
+    println!(
+        "Step 3: Viewer received login response with circuit code {}",
+        circuit_code
+    );
 
     println!("Step 4: Viewer connecting to LLUDP server with UseCircuitCode...");
 
     let validation_result = circuit_registry.validate_circuit_code(circuit_code).await;
-    assert!(validation_result.is_some(), "LLUDP server should validate circuit code successfully");
+    assert!(
+        validation_result.is_some(),
+        "LLUDP server should validate circuit code successfully"
+    );
 
     let validated_session = validation_result.unwrap();
     assert_eq!(validated_session.circuit_code, circuit_code);
     assert_eq!(validated_session.first_name, "firestorm");
     assert_eq!(validated_session.last_name, "user");
 
-    println!("Step 5: ✓ LLUDP server validated circuit code {} for user {} {}",
-        circuit_code, validated_session.first_name, validated_session.last_name);
+    println!(
+        "Step 5: ✓ LLUDP server validated circuit code {} for user {} {}",
+        circuit_code, validated_session.first_name, validated_session.last_name
+    );
 
     let removed_session = circuit_registry.remove_circuit_code(circuit_code).await;
-    assert!(removed_session.is_some(), "Circuit code should be removed after authentication");
+    assert!(
+        removed_session.is_some(),
+        "Circuit code should be removed after authentication"
+    );
 
     println!("Step 6: ✓ Circuit code removed after successful authentication");
 
     let second_validation = circuit_registry.validate_circuit_code(circuit_code).await;
-    assert!(second_validation.is_none(), "Circuit code should not validate after being used");
+    assert!(
+        second_validation.is_none(),
+        "Circuit code should not validate after being used"
+    );
 
     println!("Step 7: ✓ Circuit code cannot be reused");
 
@@ -253,7 +304,10 @@ async fn test_realistic_timing_scenarios() {
     registry.register_login(session_1).await;
 
     let validation_1 = registry.validate_circuit_code(circuit_code_1).await;
-    assert!(validation_1.is_some(), "Immediate circuit code use should succeed");
+    assert!(
+        validation_1.is_some(),
+        "Immediate circuit code use should succeed"
+    );
     registry.remove_circuit_code(circuit_code_1).await;
 
     println!("✓ Test 1: Immediate circuit code use - SUCCESS");
@@ -274,7 +328,10 @@ async fn test_realistic_timing_scenarios() {
     sleep(Duration::from_secs(30)).await;
 
     let validation_2 = registry.validate_circuit_code(circuit_code_2).await;
-    assert!(validation_2.is_some(), "Circuit code should still be valid after 30 seconds");
+    assert!(
+        validation_2.is_some(),
+        "Circuit code should still be valid after 30 seconds"
+    );
     registry.remove_circuit_code(circuit_code_2).await;
 
     println!("✓ Test 2: 30-second delayed circuit code use - SUCCESS");
@@ -295,7 +352,10 @@ async fn test_realistic_timing_scenarios() {
     sleep(Duration::from_secs(120)).await;
 
     let validation_3 = registry.validate_circuit_code(circuit_code_3).await;
-    assert!(validation_3.is_some(), "Circuit code should still be valid after 2 minutes");
+    assert!(
+        validation_3.is_some(),
+        "Circuit code should still be valid after 2 minutes"
+    );
     registry.remove_circuit_code(circuit_code_3).await;
 
     println!("✓ Test 3: 2-minute delayed circuit code use - SUCCESS");

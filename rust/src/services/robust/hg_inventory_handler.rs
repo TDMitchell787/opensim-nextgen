@@ -1,13 +1,13 @@
 use axum::extract::State;
+use axum::http::{header, StatusCode};
 use axum::response::IntoResponse;
-use axum::http::{StatusCode, header};
 use std::collections::HashMap;
 use tracing::{debug, info, warn};
 use uuid::Uuid;
 
-use super::RobustState;
-use super::xml_response::*;
 use super::inventory_handler::{folder_to_fields, item_to_fields};
+use super::xml_response::*;
+use super::RobustState;
 use crate::services::traits::{InventoryFolder, InventoryItem};
 
 pub async fn handle_hg_inventory(
@@ -18,14 +18,26 @@ pub async fn handle_hg_inventory(
         Some(svc) => svc.clone(),
         None => {
             warn!("[HG-INVENTORY] HG inventory not enabled, rejecting request");
-            return (StatusCode::OK, [(header::CONTENT_TYPE, "text/xml; charset=utf-8")], failure_result("HG inventory not enabled"));
+            return (
+                StatusCode::OK,
+                [(header::CONTENT_TYPE, "text/xml; charset=utf-8")],
+                failure_result("HG inventory not enabled"),
+            );
         }
     };
 
     let params = parse_form_body(&body);
-    let method = params.get("METHOD").or_else(|| params.get("method")).cloned().unwrap_or_default();
+    let method = params
+        .get("METHOD")
+        .or_else(|| params.get("method"))
+        .cloned()
+        .unwrap_or_default();
 
-    info!("[HG-INVENTORY] Received request: METHOD={}, body_len={}", method, body.len());
+    info!(
+        "[HG-INVENTORY] Received request: METHOD={}, body_len={}",
+        method,
+        body.len()
+    );
     debug!("[HG-INVENTORY] Body: {}", body);
 
     let xml = match method.to_uppercase().as_str() {
@@ -66,11 +78,17 @@ pub async fn handle_hg_inventory(
         "GETFOLDERCONTENT" => {
             let principal_id = parse_uuid(&params, "PRINCIPAL");
             let folder_id = parse_uuid(&params, "FOLDER");
-            info!("[HG-INVENTORY] GETFOLDERCONTENT principal={}, folder={}", principal_id, folder_id);
+            info!(
+                "[HG-INVENTORY] GETFOLDERCONTENT principal={}, folder={}",
+                principal_id, folder_id
+            );
             match svc.get_folder_content(principal_id, folder_id).await {
                 Ok(collection) => {
-                    info!("[HG-INVENTORY] GETFOLDERCONTENT result: {} folders, {} items",
-                        collection.folders.len(), collection.items.len());
+                    info!(
+                        "[HG-INVENTORY] GETFOLDERCONTENT result: {} folders, {} items",
+                        collection.folders.len(),
+                        collection.items.len()
+                    );
                     let mut data = HashMap::new();
                     data.insert("FID".to_string(), XmlValue::Str(folder_id.to_string()));
                     data.insert("VERSION".to_string(), XmlValue::Str("1".to_string()));
@@ -100,7 +118,10 @@ pub async fn handle_hg_inventory(
         "GETFOLDERITEMS" => {
             let principal_id = parse_uuid(&params, "PRINCIPAL");
             let folder_id = parse_uuid(&params, "FOLDER");
-            info!("[HG-INVENTORY] GETFOLDERITEMS principal={}, folder={}", principal_id, folder_id);
+            info!(
+                "[HG-INVENTORY] GETFOLDERITEMS principal={}, folder={}",
+                principal_id, folder_id
+            );
             match svc.get_folder_content(principal_id, folder_id).await {
                 Ok(collection) => {
                     let mut data = HashMap::new();
@@ -120,7 +141,10 @@ pub async fn handle_hg_inventory(
         }
         "GETINVENTORYSKELETON" => {
             let principal_id = parse_uuid(&params, "PRINCIPAL");
-            info!("[HG-INVENTORY] GETINVENTORYSKELETON principal={}", principal_id);
+            info!(
+                "[HG-INVENTORY] GETINVENTORYSKELETON principal={}",
+                principal_id
+            );
             match svc.get_inventory_skeleton(principal_id).await {
                 Ok(folders) => {
                     info!("[HG-INVENTORY] GETINVENTORYSKELETON result: {} folders (suitcase-filtered)", folders.len());
@@ -141,8 +165,14 @@ pub async fn handle_hg_inventory(
         }
         "GETFOLDERFORTYPE" => {
             let principal_id = parse_uuid(&params, "PRINCIPAL");
-            let folder_type: i32 = params.get("TYPE").and_then(|s| s.parse().ok()).unwrap_or(-1);
-            info!("[HG-INVENTORY] GETFOLDERFORTYPE principal={}, type={}", principal_id, folder_type);
+            let folder_type: i32 = params
+                .get("TYPE")
+                .and_then(|s| s.parse().ok())
+                .unwrap_or(-1);
+            info!(
+                "[HG-INVENTORY] GETFOLDERFORTYPE principal={}, type={}",
+                principal_id, folder_type
+            );
             match svc.get_inventory_skeleton(principal_id).await {
                 Ok(folders) => {
                     if let Some(folder) = folders.iter().find(|f| f.folder_type == folder_type) {
@@ -179,12 +209,20 @@ pub async fn handle_hg_inventory(
         }
         "GETMULTIPLEITEMS" => {
             let _principal_id = parse_uuid(&params, "PRINCIPAL");
-            let count: usize = params.get("COUNT").and_then(|s| s.parse().ok()).unwrap_or(0);
+            let count: usize = params
+                .get("COUNT")
+                .and_then(|s| s.parse().ok())
+                .unwrap_or(0);
             let item_ids_str = params.get("ITEMS").cloned().unwrap_or_default();
-            let item_ids: Vec<Uuid> = item_ids_str.split(',')
+            let item_ids: Vec<Uuid> = item_ids_str
+                .split(',')
                 .filter_map(|id| Uuid::parse_str(id.trim()).ok())
                 .collect();
-            info!("[HG-INVENTORY] GETMULTIPLEITEMS count={}, ids={}", count, item_ids.len());
+            info!(
+                "[HG-INVENTORY] GETMULTIPLEITEMS count={}, ids={}",
+                count,
+                item_ids.len()
+            );
             let mut data = HashMap::new();
             let mut items_dict = HashMap::new();
             for (i, item_id) in item_ids.iter().enumerate() {
@@ -204,7 +242,10 @@ pub async fn handle_hg_inventory(
         }
         "CREATEFOLDER" | "ADDFOLDER" => {
             let folder = params_to_folder(&params);
-            info!("[HG-INVENTORY] CREATEFOLDER owner={}, parent={}, name={}", folder.owner_id, folder.parent_id, folder.name);
+            info!(
+                "[HG-INVENTORY] CREATEFOLDER owner={}, parent={}, name={}",
+                folder.owner_id, folder.parent_id, folder.name
+            );
             match svc.create_folder(&folder).await {
                 Ok(true) => success_result(),
                 Ok(false) => failure_result("Create folder blocked by suitcase policy"),
@@ -213,7 +254,10 @@ pub async fn handle_hg_inventory(
         }
         "UPDATEFOLDER" => {
             let folder = params_to_folder(&params);
-            info!("[HG-INVENTORY] UPDATEFOLDER owner={}, id={}", folder.owner_id, folder.folder_id);
+            info!(
+                "[HG-INVENTORY] UPDATEFOLDER owner={}, id={}",
+                folder.owner_id, folder.folder_id
+            );
             match svc.update_folder(&folder).await {
                 Ok(true) => success_result(),
                 Ok(false) => failure_result("Update folder blocked by suitcase policy"),
@@ -232,7 +276,9 @@ pub async fn handle_hg_inventory(
             if item.asset_id.is_nil() && !raw_asset_id.is_empty() {
                 warn!("[HG-INVENTORY] ADDITEM asset_id parsed as NIL from raw='{}' — foreign format not recognized", raw_asset_id);
             }
-            let foreign_grid_uri = if raw_asset_id.contains('|') || (raw_asset_id.starts_with("http://") || raw_asset_id.starts_with("https://")) {
+            let foreign_grid_uri = if raw_asset_id.contains('|')
+                || (raw_asset_id.starts_with("http://") || raw_asset_id.starts_with("https://"))
+            {
                 if let Some(pipe_pos) = raw_asset_id.find('|') {
                     Some(raw_asset_id[..pipe_pos].to_string())
                 } else if let Some(slash_pos) = raw_asset_id.rfind('/') {
@@ -246,7 +292,12 @@ pub async fn handle_hg_inventory(
             if let Some(ref uri) = foreign_grid_uri {
                 info!("[HG-INVENTORY] Foreign asset detected from grid '{}', will attempt fetch for asset_id={}", uri, item.asset_id);
                 if !item.asset_id.is_nil() {
-                    match crate::services::hypergrid::hg_asset_service::fetch_foreign_asset(uri, item.asset_id).await {
+                    match crate::services::hypergrid::hg_asset_service::fetch_foreign_asset(
+                        uri,
+                        item.asset_id,
+                    )
+                    .await
+                    {
                         Ok(mut asset) => {
                             asset.asset_type = item.asset_type as i8;
                             asset.id = item.asset_id.to_string();
@@ -255,17 +306,26 @@ pub async fn handle_hg_inventory(
                                 Err(e) => warn!("[HG-INVENTORY] Failed to cache foreign asset {}: {}", item.asset_id, e),
                             }
                         }
-                        Err(e) => warn!("[HG-INVENTORY] Failed to fetch foreign asset {} from {}: {}", item.asset_id, uri, e),
+                        Err(e) => warn!(
+                            "[HG-INVENTORY] Failed to fetch foreign asset {} from {}: {}",
+                            item.asset_id, uri, e
+                        ),
                     }
                 }
             }
             match svc.add_item(&item).await {
                 Ok(true) => {
-                    info!("[HG-INVENTORY] ADDITEM success: item={} asset={} name='{}'", item.item_id, item.asset_id, item.name);
+                    info!(
+                        "[HG-INVENTORY] ADDITEM success: item={} asset={} name='{}'",
+                        item.item_id, item.asset_id, item.name
+                    );
                     success_result()
                 }
                 Ok(false) => {
-                    warn!("[HG-INVENTORY] ADDITEM blocked by suitcase policy: item={} name='{}'", item.item_id, item.name);
+                    warn!(
+                        "[HG-INVENTORY] ADDITEM blocked by suitcase policy: item={} name='{}'",
+                        item.item_id, item.name
+                    );
                     failure_result("Add item blocked by suitcase policy")
                 }
                 Err(e) => failure_result(&format!("{}", e)),
@@ -273,7 +333,10 @@ pub async fn handle_hg_inventory(
         }
         "UPDATEITEM" => {
             let item = params_to_item(&params);
-            info!("[HG-INVENTORY] UPDATEITEM owner={}, id={}", item.owner_id, item.item_id);
+            info!(
+                "[HG-INVENTORY] UPDATEITEM owner={}, id={}",
+                item.owner_id, item.item_id
+            );
             match svc.update_item(&item).await {
                 Ok(true) => success_result(),
                 Ok(false) => failure_result("Update item blocked by suitcase policy"),
@@ -288,9 +351,19 @@ pub async fn handle_hg_inventory(
             let principal_id = parse_uuid(&params, "PRINCIPAL");
             let id_list_str = params.get("IDLIST").cloned().unwrap_or_default();
             let dest_list_str = params.get("DESTLIST").cloned().unwrap_or_default();
-            let ids: Vec<Uuid> = id_list_str.split(',').filter_map(|s| Uuid::parse_str(s.trim()).ok()).collect();
-            let dests: Vec<Uuid> = dest_list_str.split(',').filter_map(|s| Uuid::parse_str(s.trim()).ok()).collect();
-            info!("[HG-INVENTORY] MOVEITEMS principal={}, count={}", principal_id, ids.len());
+            let ids: Vec<Uuid> = id_list_str
+                .split(',')
+                .filter_map(|s| Uuid::parse_str(s.trim()).ok())
+                .collect();
+            let dests: Vec<Uuid> = dest_list_str
+                .split(',')
+                .filter_map(|s| Uuid::parse_str(s.trim()).ok())
+                .collect();
+            info!(
+                "[HG-INVENTORY] MOVEITEMS principal={}, count={}",
+                principal_id,
+                ids.len()
+            );
             if ids.len() != dests.len() {
                 failure_result("IDLIST and DESTLIST count mismatch")
             } else {
@@ -312,7 +385,10 @@ pub async fn handle_hg_inventory(
         }
         "GETACTIVEGESTURES" => {
             let principal_id = parse_uuid(&params, "PRINCIPAL");
-            info!("[HG-INVENTORY] GETACTIVEGESTURES principal={}", principal_id);
+            info!(
+                "[HG-INVENTORY] GETACTIVEGESTURES principal={}",
+                principal_id
+            );
             match svc.get_active_gestures(principal_id).await {
                 Ok(items) => {
                     let mut data = HashMap::new();
@@ -333,13 +409,26 @@ pub async fn handle_hg_inventory(
         "GETMULTIPLEFOLDERSCONTENT" => {
             let principal_id = parse_uuid(&params, "PRINCIPAL");
             let folders_str = params.get("FOLDERS").cloned().unwrap_or_default();
-            let folder_ids: Vec<Uuid> = folders_str.split(',').filter_map(|s| Uuid::parse_str(s.trim()).ok()).collect();
-            info!("[HG-INVENTORY] GETMULTIPLEFOLDERSCONTENT principal={}, count={}", principal_id, folder_ids.len());
-            match svc.get_multiple_folders_content(principal_id, &folder_ids).await {
+            let folder_ids: Vec<Uuid> = folders_str
+                .split(',')
+                .filter_map(|s| Uuid::parse_str(s.trim()).ok())
+                .collect();
+            info!(
+                "[HG-INVENTORY] GETMULTIPLEFOLDERSCONTENT principal={}, count={}",
+                principal_id,
+                folder_ids.len()
+            );
+            match svc
+                .get_multiple_folders_content(principal_id, &folder_ids)
+                .await
+            {
                 Ok(collections) => {
                     let mut data = HashMap::new();
                     for (ci, collection) in collections.iter().enumerate() {
-                        let fid = folder_ids.get(ci).map(|id| id.to_string()).unwrap_or_default();
+                        let fid = folder_ids
+                            .get(ci)
+                            .map(|id| id.to_string())
+                            .unwrap_or_default();
                         let mut coll_dict = HashMap::new();
                         coll_dict.insert("FID".to_string(), XmlValue::Str(fid));
                         coll_dict.insert("VERSION".to_string(), XmlValue::Str("1".to_string()));
@@ -374,12 +463,21 @@ pub async fn handle_hg_inventory(
         }
     };
 
-    debug!("[HG-INVENTORY] Response for {}: {}", method, &xml[..xml.len().min(500)]);
-    (StatusCode::OK, [(header::CONTENT_TYPE, "text/xml; charset=utf-8")], xml)
+    debug!(
+        "[HG-INVENTORY] Response for {}: {}",
+        method,
+        &xml[..xml.len().min(500)]
+    );
+    (
+        StatusCode::OK,
+        [(header::CONTENT_TYPE, "text/xml; charset=utf-8")],
+        xml,
+    )
 }
 
 fn parse_uuid(params: &HashMap<String, String>, key: &str) -> Uuid {
-    params.get(key)
+    params
+        .get(key)
         .and_then(|s| parse_uuid_or_foreign(s))
         .unwrap_or(Uuid::nil())
 }
@@ -412,8 +510,14 @@ fn params_to_folder(params: &HashMap<String, String>) -> InventoryFolder {
         parent_id: parse_uuid(params, "ParentID"),
         owner_id: parse_uuid(params, "Owner"),
         name: params.get("Name").cloned().unwrap_or_default(),
-        folder_type: params.get("Type").and_then(|s| s.parse().ok()).unwrap_or(-1),
-        version: params.get("Version").and_then(|s| s.parse().ok()).unwrap_or(1),
+        folder_type: params
+            .get("Type")
+            .and_then(|s| s.parse().ok())
+            .unwrap_or(-1),
+        version: params
+            .get("Version")
+            .and_then(|s| s.parse().ok())
+            .unwrap_or(1),
     }
 }
 
@@ -427,18 +531,54 @@ fn params_to_item(params: &HashMap<String, String>) -> InventoryItem {
         creator_data: params.get("CreatorData").cloned().unwrap_or_default(),
         name: params.get("Name").cloned().unwrap_or_default(),
         description: params.get("Description").cloned().unwrap_or_default(),
-        asset_type: params.get("AssetType").and_then(|s| s.parse().ok()).unwrap_or(0),
-        inv_type: params.get("InvType").and_then(|s| s.parse().ok()).unwrap_or(0),
-        flags: params.get("Flags").and_then(|s| s.parse().ok()).unwrap_or(0),
-        creation_date: params.get("CreationDate").and_then(|s| s.parse().ok()).unwrap_or(0),
-        base_permissions: params.get("BasePermissions").and_then(|s| s.parse().ok()).unwrap_or(0x7FFFFFFF),
-        current_permissions: params.get("CurrentPermissions").and_then(|s| s.parse().ok()).unwrap_or(0x7FFFFFFF),
-        everyone_permissions: params.get("EveryOnePermissions").and_then(|s| s.parse().ok()).unwrap_or(0),
-        next_permissions: params.get("NextPermissions").and_then(|s| s.parse().ok()).unwrap_or(0x7FFFFFFF),
-        group_permissions: params.get("GroupPermissions").and_then(|s| s.parse().ok()).unwrap_or(0),
+        asset_type: params
+            .get("AssetType")
+            .and_then(|s| s.parse().ok())
+            .unwrap_or(0),
+        inv_type: params
+            .get("InvType")
+            .and_then(|s| s.parse().ok())
+            .unwrap_or(0),
+        flags: params
+            .get("Flags")
+            .and_then(|s| s.parse().ok())
+            .unwrap_or(0),
+        creation_date: params
+            .get("CreationDate")
+            .and_then(|s| s.parse().ok())
+            .unwrap_or(0),
+        base_permissions: params
+            .get("BasePermissions")
+            .and_then(|s| s.parse().ok())
+            .unwrap_or(0x7FFFFFFF),
+        current_permissions: params
+            .get("CurrentPermissions")
+            .and_then(|s| s.parse().ok())
+            .unwrap_or(0x7FFFFFFF),
+        everyone_permissions: params
+            .get("EveryOnePermissions")
+            .and_then(|s| s.parse().ok())
+            .unwrap_or(0),
+        next_permissions: params
+            .get("NextPermissions")
+            .and_then(|s| s.parse().ok())
+            .unwrap_or(0x7FFFFFFF),
+        group_permissions: params
+            .get("GroupPermissions")
+            .and_then(|s| s.parse().ok())
+            .unwrap_or(0),
         group_id: parse_uuid(params, "GroupID"),
-        group_owned: params.get("GroupOwned").map(|s| s == "True" || s == "true").unwrap_or(false),
-        sale_price: params.get("SalePrice").and_then(|s| s.parse().ok()).unwrap_or(0),
-        sale_type: params.get("SaleType").and_then(|s| s.parse().ok()).unwrap_or(0),
+        group_owned: params
+            .get("GroupOwned")
+            .map(|s| s == "True" || s == "true")
+            .unwrap_or(false),
+        sale_price: params
+            .get("SalePrice")
+            .and_then(|s| s.parse().ok())
+            .unwrap_or(0),
+        sale_type: params
+            .get("SaleType")
+            .and_then(|s| s.parse().ok())
+            .unwrap_or(0),
     }
 }

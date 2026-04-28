@@ -11,8 +11,8 @@ use std::sync::Arc;
 use tracing::{debug, info, warn};
 use uuid::Uuid;
 
-use crate::services::traits::{PresenceServiceTrait, PresenceInfo};
 use crate::database::multi_backend::DatabaseConnection;
+use crate::services::traits::{PresenceInfo, PresenceServiceTrait};
 
 pub struct LocalPresenceService {
     connection: Arc<DatabaseConnection>,
@@ -27,7 +27,9 @@ impl LocalPresenceService {
     fn get_pg_pool(&self) -> Result<&sqlx::PgPool> {
         match self.connection.as_ref() {
             DatabaseConnection::PostgreSQL(pool) => Ok(pool),
-            _ => Err(anyhow!("LocalPresenceService requires PostgreSQL connection")),
+            _ => Err(anyhow!(
+                "LocalPresenceService requires PostgreSQL connection"
+            )),
         }
     }
 
@@ -47,7 +49,13 @@ impl LocalPresenceService {
 
 #[async_trait]
 impl PresenceServiceTrait for LocalPresenceService {
-    async fn login_agent(&self, user_id: Uuid, session_id: Uuid, secure_session_id: Uuid, region_id: Uuid) -> Result<bool> {
+    async fn login_agent(
+        &self,
+        user_id: Uuid,
+        session_id: Uuid,
+        secure_session_id: Uuid,
+        region_id: Uuid,
+    ) -> Result<bool> {
         info!("Logging in agent: {} to region: {}", user_id, region_id);
 
         let now = chrono::Utc::now().timestamp();
@@ -61,7 +69,7 @@ impl PresenceServiceTrait for LocalPresenceService {
                 regionid = EXCLUDED.regionid,
                 securesessionid = EXCLUDED.securesessionid,
                 login = EXCLUDED.login
-            "#
+            "#,
         )
         .bind(user_id)
         .bind(session_id)
@@ -82,14 +90,12 @@ impl PresenceServiceTrait for LocalPresenceService {
         let now = chrono::Utc::now().timestamp();
 
         let pool = self.get_pg_pool()?;
-        let result = sqlx::query(
-            "UPDATE presence SET logout = $1 WHERE sessionid = $2"
-        )
-        .bind(now)
-        .bind(session_id)
-        .execute(pool)
-        .await
-        .map_err(|e| anyhow!("Failed to logout agent: {}", e))?;
+        let result = sqlx::query("UPDATE presence SET logout = $1 WHERE sessionid = $2")
+            .bind(now)
+            .bind(session_id)
+            .execute(pool)
+            .await
+            .map_err(|e| anyhow!("Failed to logout agent: {}", e))?;
 
         if result.rows_affected() > 0 {
             sqlx::query("DELETE FROM presence WHERE sessionid = $1")
@@ -106,17 +112,18 @@ impl PresenceServiceTrait for LocalPresenceService {
     }
 
     async fn report_agent(&self, session_id: Uuid, region_id: Uuid) -> Result<bool> {
-        debug!("Reporting agent location: {} in region: {}", session_id, region_id);
+        debug!(
+            "Reporting agent location: {} in region: {}",
+            session_id, region_id
+        );
 
         let pool = self.get_pg_pool()?;
-        let result = sqlx::query(
-            "UPDATE presence SET regionid = $1 WHERE sessionid = $2"
-        )
-        .bind(region_id)
-        .bind(session_id)
-        .execute(pool)
-        .await
-        .map_err(|e| anyhow!("Failed to report agent: {}", e))?;
+        let result = sqlx::query("UPDATE presence SET regionid = $1 WHERE sessionid = $2")
+            .bind(region_id)
+            .bind(session_id)
+            .execute(pool)
+            .await
+            .map_err(|e| anyhow!("Failed to report agent: {}", e))?;
 
         Ok(result.rows_affected() > 0)
     }

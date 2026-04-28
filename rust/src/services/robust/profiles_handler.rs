@@ -1,9 +1,9 @@
 use axum::extract::State;
+use axum::http::{header, StatusCode};
 use axum::response::IntoResponse;
-use axum::http::{StatusCode, header};
-use tracing::{info, warn, debug};
-use uuid::Uuid;
 use serde_json::{json, Value};
+use tracing::{debug, info, warn};
+use uuid::Uuid;
 
 use super::RobustState;
 
@@ -38,10 +38,15 @@ pub async fn handle_profiles(
             let creator_id = parse_uuid(params, "creatorId");
             match svc.get_classifieds(creator_id).await {
                 Ok(list) => {
-                    let items: Vec<Value> = list.iter().map(|c| json!({
-                        "ClassifiedId": c.classified_id.to_string(),
-                        "Name": c.name,
-                    })).collect();
+                    let items: Vec<Value> = list
+                        .iter()
+                        .map(|c| {
+                            json!({
+                                "ClassifiedId": c.classified_id.to_string(),
+                                "Name": c.name,
+                            })
+                        })
+                        .collect();
                     jsonrpc_result(id, json!(items))
                 }
                 Err(e) => jsonrpc_error(id, -32603, "Internal error", &e.to_string()),
@@ -90,10 +95,15 @@ pub async fn handle_profiles(
             let creator_id = parse_uuid(params, "creatorId");
             match svc.get_picks(creator_id).await {
                 Ok(list) => {
-                    let items: Vec<Value> = list.iter().map(|p| json!({
-                        "PickId": p.pick_id.to_string(),
-                        "Name": p.name,
-                    })).collect();
+                    let items: Vec<Value> = list
+                        .iter()
+                        .map(|p| {
+                            json!({
+                                "PickId": p.pick_id.to_string(),
+                                "Name": p.name,
+                            })
+                        })
+                        .collect();
                     jsonrpc_result(id, json!(items))
                 }
                 Err(e) => jsonrpc_error(id, -32603, "Internal error", &e.to_string()),
@@ -140,16 +150,22 @@ pub async fn handle_profiles(
             let user_id = parse_uuid(params, "UserId");
             let target_id = parse_uuid(params, "TargetId");
             match svc.get_notes(user_id, target_id).await {
-                Ok(Some(n)) => jsonrpc_result(id, json!({
-                    "UserId": n.user_id.to_string(),
-                    "TargetId": n.target_id.to_string(),
-                    "Notes": n.notes,
-                })),
-                Ok(None) => jsonrpc_result(id, json!({
-                    "UserId": user_id.to_string(),
-                    "TargetId": target_id.to_string(),
-                    "Notes": "",
-                })),
+                Ok(Some(n)) => jsonrpc_result(
+                    id,
+                    json!({
+                        "UserId": n.user_id.to_string(),
+                        "TargetId": n.target_id.to_string(),
+                        "Notes": n.notes,
+                    }),
+                ),
+                Ok(None) => jsonrpc_result(
+                    id,
+                    json!({
+                        "UserId": user_id.to_string(),
+                        "TargetId": target_id.to_string(),
+                        "Notes": "",
+                    }),
+                ),
                 Err(e) => jsonrpc_error(id, -32603, "Internal error", &e.to_string()),
             }
         }
@@ -168,15 +184,18 @@ pub async fn handle_profiles(
             let user_id = parse_uuid(params, "UserId");
             match svc.get_properties(user_id).await {
                 Ok(Some(p)) => jsonrpc_result(id, properties_to_json(&p)),
-                Ok(None) => jsonrpc_result(id, json!({
-                    "UserId": user_id.to_string(),
-                    "PartnerId": Uuid::nil().to_string(),
-                    "ProfileUrl": "",
-                    "ImageId": Uuid::nil().to_string(),
-                    "AboutText": "",
-                    "FirstLifeImageId": Uuid::nil().to_string(),
-                    "FirstLifeText": "",
-                })),
+                Ok(None) => jsonrpc_result(
+                    id,
+                    json!({
+                        "UserId": user_id.to_string(),
+                        "PartnerId": Uuid::nil().to_string(),
+                        "ProfileUrl": "",
+                        "ImageId": Uuid::nil().to_string(),
+                        "AboutText": "",
+                        "FirstLifeImageId": Uuid::nil().to_string(),
+                        "FirstLifeText": "",
+                    }),
+                ),
                 Err(e) => jsonrpc_error(id, -32603, "Internal error", &e.to_string()),
             }
         }
@@ -203,15 +222,29 @@ pub async fn handle_profiles(
         "avatar_interests_update" | "AvatarInterestsUpdate" => {
             let user_id = parse_uuid(params, "UserId");
             let existing = svc.get_properties(user_id).await.ok().flatten();
-            let mut props = existing.unwrap_or_else(|| crate::services::traits::UserProfileProperties {
-                user_id,
-                ..Default::default()
-            });
-            props.want_to_text = params["WantToText"].as_str().unwrap_or(&props.want_to_text).to_string();
-            props.want_to_mask = params["WantToMask"].as_i64().unwrap_or(props.want_to_mask as i64) as i32;
-            props.skills_text = params["SkillsText"].as_str().unwrap_or(&props.skills_text).to_string();
-            props.skills_mask = params["SkillsMask"].as_i64().unwrap_or(props.skills_mask as i64) as i32;
-            props.languages = params["Languages"].as_str().unwrap_or(&props.languages).to_string();
+            let mut props =
+                existing.unwrap_or_else(|| crate::services::traits::UserProfileProperties {
+                    user_id,
+                    ..Default::default()
+                });
+            props.want_to_text = params["WantToText"]
+                .as_str()
+                .unwrap_or(&props.want_to_text)
+                .to_string();
+            props.want_to_mask = params["WantToMask"]
+                .as_i64()
+                .unwrap_or(props.want_to_mask as i64) as i32;
+            props.skills_text = params["SkillsText"]
+                .as_str()
+                .unwrap_or(&props.skills_text)
+                .to_string();
+            props.skills_mask = params["SkillsMask"]
+                .as_i64()
+                .unwrap_or(props.skills_mask as i64) as i32;
+            props.languages = params["Languages"]
+                .as_str()
+                .unwrap_or(&props.languages)
+                .to_string();
             match svc.update_properties(&props).await {
                 Ok(_) => jsonrpc_result(id, json!(true)),
                 Err(e) => jsonrpc_error(id, -32603, "Internal error", &e.to_string()),
@@ -220,18 +253,24 @@ pub async fn handle_profiles(
         "user_preferences_request" | "UserPreferencesRequest" => {
             let user_id = parse_uuid(params, "UserId");
             match svc.get_preferences(user_id).await {
-                Ok(Some(p)) => jsonrpc_result(id, json!({
-                    "UserId": p.user_id.to_string(),
-                    "IMViaEmail": p.im_via_email,
-                    "Visible": p.visible,
-                    "EMail": p.email,
-                })),
-                Ok(None) => jsonrpc_result(id, json!({
-                    "UserId": user_id.to_string(),
-                    "IMViaEmail": false,
-                    "Visible": true,
-                    "EMail": "",
-                })),
+                Ok(Some(p)) => jsonrpc_result(
+                    id,
+                    json!({
+                        "UserId": p.user_id.to_string(),
+                        "IMViaEmail": p.im_via_email,
+                        "Visible": p.visible,
+                        "EMail": p.email,
+                    }),
+                ),
+                Ok(None) => jsonrpc_result(
+                    id,
+                    json!({
+                        "UserId": user_id.to_string(),
+                        "IMViaEmail": false,
+                        "Visible": true,
+                        "EMail": "",
+                    }),
+                ),
                 Err(e) => jsonrpc_error(id, -32603, "Internal error", &e.to_string()),
             }
         }
@@ -255,7 +294,8 @@ pub async fn handle_profiles(
 }
 
 fn parse_uuid(params: &Value, key: &str) -> Uuid {
-    params[key].as_str()
+    params[key]
+        .as_str()
         .and_then(|s| Uuid::parse_str(s).ok())
         .unwrap_or_default()
 }
@@ -266,7 +306,12 @@ fn jsonrpc_result(id: i64, result: Value) -> axum::response::Response {
         "id": id,
         "result": result,
     });
-    (StatusCode::OK, [(header::CONTENT_TYPE, "application/json")], resp.to_string()).into_response()
+    (
+        StatusCode::OK,
+        [(header::CONTENT_TYPE, "application/json")],
+        resp.to_string(),
+    )
+        .into_response()
 }
 
 fn jsonrpc_error(id: i64, code: i32, message: &str, data: &str) -> axum::response::Response {
@@ -279,7 +324,12 @@ fn jsonrpc_error(id: i64, code: i32, message: &str, data: &str) -> axum::respons
             "data": data,
         }
     });
-    (StatusCode::OK, [(header::CONTENT_TYPE, "application/json")], resp.to_string()).into_response()
+    (
+        StatusCode::OK,
+        [(header::CONTENT_TYPE, "application/json")],
+        resp.to_string(),
+    )
+        .into_response()
 }
 
 fn classified_to_json(c: &crate::services::traits::UserClassifiedAdd) -> Value {

@@ -28,11 +28,11 @@ impl LoginInventoryResponse {
             inventory_lib_owner: Vec::new(),
         }
     }
-    
+
     /// Convert to XMLRPC format for login response
     pub fn to_xmlrpc_members(&self) -> String {
         let mut xmlrpc = String::new();
-        
+
         // Inventory root
         xmlrpc.push_str(&format!(
             r#"<member>
@@ -51,7 +51,7 @@ impl LoginInventoryResponse {
                 .collect::<Vec<_>>()
                 .join("\n                  ")
         ));
-        
+
         // Inventory skeleton
         xmlrpc.push_str(&format!(
             r#"
@@ -71,7 +71,7 @@ impl LoginInventoryResponse {
                 .collect::<Vec<_>>()
                 .join("\n                  ")
         ));
-        
+
         // Library root - OpenSim only sends folder_id for lib-root
         xmlrpc.push_str(&format!(
             r#"
@@ -87,18 +87,21 @@ impl LoginInventoryResponse {
           </member>"#,
             self.inventory_lib_root
                 .iter()
-                .map(|f| format!(r#"<value>
+                .map(|f| format!(
+                    r#"<value>
               <struct>
                 <member>
                   <name>folder_id</name>
                   <value><string>{}</string></value>
                 </member>
               </struct>
-            </value>"#, f.folder_id))
+            </value>"#,
+                    f.folder_id
+                ))
                 .collect::<Vec<_>>()
                 .join("\n                  ")
         ));
-        
+
         // Library skeleton (usually empty)
         xmlrpc.push_str(&format!(
             r#"
@@ -118,7 +121,7 @@ impl LoginInventoryResponse {
                 .collect::<Vec<_>>()
                 .join("\n                  ")
         ));
-        
+
         // Library owner (usually empty)
         xmlrpc.push_str(&format!(
             r#"
@@ -138,15 +141,15 @@ impl LoginInventoryResponse {
                 .collect::<Vec<_>>()
                 .join("\n                  ")
         ));
-        
+
         xmlrpc
     }
-    
+
     /// Get folder count
     pub fn folder_count(&self) -> usize {
         self.inventory_root.len() + self.inventory_skeleton.len()
     }
-    
+
     /// Check if inventory is empty
     pub fn is_empty(&self) -> bool {
         self.inventory_root.is_empty() && self.inventory_skeleton.is_empty()
@@ -198,27 +201,30 @@ impl LoginInventoryService {
             inventory_manager: InventoryManager::new(),
         }
     }
-    
+
     /// Get inventory response for user login
     pub fn get_login_inventory(&mut self, user_id: Uuid) -> LoginInventoryResponse {
-        debug!("🔍 INVENTORY TRACE: Starting get_login_inventory for user: {}", user_id);
+        debug!(
+            "🔍 INVENTORY TRACE: Starting get_login_inventory for user: {}",
+            user_id
+        );
         debug!("🔍 INVENTORY TRACE: About to call inventory_manager.get_login_inventory");
         let result = self.inventory_manager.get_login_inventory(user_id);
         debug!("🔍 INVENTORY TRACE: inventory_manager.get_login_inventory completed successfully");
         result
     }
-    
+
     /// Create default inventory for new user
     pub fn create_default_inventory(&mut self, user_id: Uuid) -> LoginInventoryResponse {
         info!("Creating default inventory for new user: {}", user_id);
-        
+
         // Clear any existing cache
         self.inventory_manager.clear_user_cache(user_id);
-        
+
         // Get fresh inventory (will create default)
         self.get_login_inventory(user_id)
     }
-    
+
     /// Get library inventory from loaded library assets
     pub fn get_library_inventory() -> LoginInventoryResponse {
         use crate::opensim_compatibility::library_assets::get_global_library_manager;
@@ -265,8 +271,12 @@ impl LoginInventoryService {
                     })
                     .collect();
 
-                info!("Loaded library inventory: {} root folders, {} skeleton folders, {} owners",
-                      inventory_lib_root.len(), inventory_skel_lib.len(), inventory_lib_owner.len());
+                info!(
+                    "Loaded library inventory: {} root folders, {} skeleton folders, {} owners",
+                    inventory_lib_root.len(),
+                    inventory_skel_lib.len(),
+                    inventory_lib_owner.len()
+                );
 
                 return LoginInventoryResponse {
                     inventory_root: Vec::new(),
@@ -281,12 +291,12 @@ impl LoginInventoryService {
         debug!("Library asset manager not available, returning empty library inventory");
         LoginInventoryResponse::empty()
     }
-    
+
     /// Clear user inventory cache
     pub fn clear_cache(&mut self, user_id: Uuid) {
         self.inventory_manager.clear_user_cache(user_id);
     }
-    
+
     /// Get cache statistics
     pub fn cache_stats(&self) -> InventoryCacheStats {
         InventoryCacheStats {
@@ -342,46 +352,47 @@ mod tests {
     #[test]
     fn test_empty_inventory_response() {
         let response = LoginInventoryResponse::empty();
-        
+
         assert!(response.is_empty());
         assert_eq!(response.folder_count(), 0);
         assert!(response.inventory_root.is_empty());
         assert!(response.inventory_skeleton.is_empty());
     }
-    
+
     #[test]
     fn test_login_inventory_service() {
         let mut service = LoginInventoryService::new();
         let user_id = Uuid::new_v4();
-        
+
         let response = service.get_login_inventory(user_id);
-        
+
         assert!(!response.is_empty());
         assert!(response.folder_count() > 0);
         assert_eq!(response.inventory_root.len(), 1); // Root folder
         assert!(response.inventory_skeleton.len() > 0); // System folders
     }
-    
+
     #[test]
     fn test_default_inventory_creation() {
         let mut service = LoginInventoryService::new();
         let user_id = Uuid::new_v4();
-        
+
         let response = service.create_default_inventory(user_id);
-        
+
         assert!(!response.is_empty());
-        
+
         // Check root folder
         assert_eq!(response.inventory_root.len(), 1);
         let root = &response.inventory_root[0];
         assert_eq!(root.name, "My Inventory");
         assert_eq!(root.type_default, "8"); // Root type
         assert_eq!(root.parent_id, "00000000-0000-0000-0000-000000000000");
-        
+
         // Check system folders (20 system folders + root in skeleton = 21)
         assert!(response.inventory_skeleton.len() >= 20);
 
-        let folder_names: Vec<&String> = response.inventory_skeleton
+        let folder_names: Vec<&String> = response
+            .inventory_skeleton
             .iter()
             .map(|f| &f.name)
             .collect();
@@ -400,41 +411,41 @@ mod tests {
         assert!(folder_names.contains(&&"Received Items".to_string()));
         assert!(folder_names.contains(&&"Materials".to_string()));
     }
-    
+
     #[test]
     fn test_library_inventory() {
         let response = LoginInventoryService::get_library_inventory();
-        
+
         assert!(response.is_empty());
         assert_eq!(response.inventory_lib_root.len(), 0);
         assert_eq!(response.inventory_skel_lib.len(), 0);
     }
-    
+
     #[test]
     fn test_cache_operations() {
         let mut service = LoginInventoryService::new();
         let user_id = Uuid::new_v4();
-        
+
         // Initial cache should be empty
         assert_eq!(service.cache_stats().cached_users, 0);
-        
+
         // Getting inventory should cache it
         let _response = service.get_login_inventory(user_id);
         assert_eq!(service.cache_stats().cached_users, 1);
-        
+
         // Clear cache
         service.clear_cache(user_id);
         assert_eq!(service.cache_stats().cached_users, 0);
     }
-    
+
     #[test]
     fn test_xmlrpc_generation() {
         let mut service = LoginInventoryService::new();
         let user_id = Uuid::new_v4();
-        
+
         let response = service.get_login_inventory(user_id);
         let xmlrpc = response.to_xmlrpc_members();
-        
+
         assert!(xmlrpc.contains("inventory-root"));
         assert!(xmlrpc.contains("inventory-skeleton"));
         assert!(xmlrpc.contains("inventory-lib-root"));
@@ -442,11 +453,11 @@ mod tests {
         assert!(xmlrpc.contains("folder_id"));
         assert!(xmlrpc.contains("type_default"));
     }
-    
+
     #[test]
     fn test_inventory_config() {
         let config = InventoryLoginConfig::default();
-        
+
         assert!(config.enabled);
         assert!(!config.include_library);
         assert_eq!(config.max_folders, 1000);

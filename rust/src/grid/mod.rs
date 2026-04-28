@@ -1,63 +1,63 @@
 //! Enterprise Grid Federation & Scaling Platform
-//! 
+//!
 //! Phase 34: Revolutionary grid federation system supporting multi-grid management,
 //! enterprise-scale region distribution, advanced load balancing, and seamless
 //! grid-to-grid communication with zero trust security.
 
+use anyhow::Result;
+use chrono::{DateTime, Utc};
 use serde::{Deserialize, Serialize};
 use std::collections::HashMap;
 use std::sync::Arc;
 use tokio::sync::RwLock;
+use tracing::{debug, error, info, warn};
 use uuid::Uuid;
-use chrono::{DateTime, Utc};
-use anyhow::Result;
-use tracing::{info, warn, error, debug};
 
 pub mod federation;
-pub mod scaling;
-pub mod load_balancer;
-pub mod inter_grid;
-pub mod region_distributor;
 pub mod health_monitor;
+pub mod inter_grid;
+pub mod load_balancer;
+pub mod region_distributor;
+pub mod scaling;
 
 // Re-export main components
 pub use federation::*;
-pub use scaling::*;
-pub use load_balancer::*;
-pub use inter_grid::*;
-pub use region_distributor::*;
 pub use health_monitor::*;
+pub use inter_grid::*;
+pub use load_balancer::*;
+pub use region_distributor::*;
+pub use scaling::*;
 
 /// Grid federation error types
 #[derive(Debug, thiserror::Error)]
 pub enum GridError {
     #[error("Grid not found: {grid_id}")]
     GridNotFound { grid_id: Uuid },
-    
+
     #[error("Region not found: {region_id}")]
     RegionNotFound { region_id: Uuid },
-    
+
     #[error("Federation failed: {reason}")]
     FederationFailed { reason: String },
-    
+
     #[error("Load balancing failed: {reason}")]
     LoadBalancingFailed { reason: String },
-    
+
     #[error("Scaling operation failed: {reason}")]
     ScalingFailed { reason: String },
-    
+
     #[error("Inter-grid communication failed: {reason}")]
     InterGridCommunicationFailed { reason: String },
-    
+
     #[error("Grid capacity exceeded: {current}/{max}")]
     CapacityExceeded { current: u32, max: u32 },
-    
+
     #[error("Authentication failed: {reason}")]
     AuthenticationFailed { reason: String },
-    
+
     #[error("Configuration error: {message}")]
     ConfigurationError { message: String },
-    
+
     #[error("Network error: {source}")]
     NetworkError { source: anyhow::Error },
 }

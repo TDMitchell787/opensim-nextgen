@@ -2,14 +2,14 @@
 // Revolutionary mixed reality engine blending virtual worlds with real environments
 // Supporting AR overlays, real-world object integration, and cross-reality collaboration
 
-use crate::vr::{VRError, Pose3D, VRFrameData};
-use crate::monitoring::metrics::MetricsCollector;
 use crate::database::DatabaseManager;
+use crate::monitoring::metrics::MetricsCollector;
+use crate::vr::{Pose3D, VRError, VRFrameData};
+use serde::{Deserialize, Serialize};
+use std::collections::HashMap;
 use std::sync::Arc;
 use tokio::sync::RwLock;
-use serde::{Deserialize, Serialize};
 use uuid::Uuid;
-use std::collections::HashMap;
 
 #[derive(Debug)]
 pub struct MixedRealityEngine {
@@ -71,7 +71,12 @@ pub struct AROverlay {
 }
 
 impl AROverlaySystem {
-    pub async fn generate_overlays(&self, session_id: Uuid, frame_data: &VRFrameData, recognized_objects: &[RecognizedObject]) -> Result<Vec<AROverlay>, VRError> {
+    pub async fn generate_overlays(
+        &self,
+        session_id: Uuid,
+        frame_data: &VRFrameData,
+        recognized_objects: &[RecognizedObject],
+    ) -> Result<Vec<AROverlay>, VRError> {
         let mut overlays = Vec::new();
         let overlay_layers = self.overlay_layers.read().await;
 
@@ -184,12 +189,12 @@ pub struct OverlayLayer {
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub enum OverlayType {
-    WorldLocked,     // Fixed in world space
-    HeadLocked,      // Follows user's head
-    HandLocked,      // Attached to hand
-    ObjectAnchored,  // Anchored to real-world object
+    WorldLocked,      // Fixed in world space
+    HeadLocked,       // Follows user's head
+    HandLocked,       // Attached to hand
+    ObjectAnchored,   // Anchored to real-world object
     SurfaceProjected, // Projected onto surfaces
-    Volumetric,      // 3D volumetric display
+    Volumetric,       // 3D volumetric display
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
@@ -882,7 +887,10 @@ pub struct PanelStyle {
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub enum PanelSize {
     Fixed([f32; 2]),
-    Adaptive { min_size: [f32; 2], max_size: [f32; 2] },
+    Adaptive {
+        min_size: [f32; 2],
+        max_size: [f32; 2],
+    },
     ContentFit,
 }
 
@@ -1137,7 +1145,10 @@ pub struct SpatialMappingSystem {
 }
 
 impl SpatialMappingSystem {
-    pub async fn update_mapping(&self, frame_data: &VRFrameData) -> Result<Vec<SpatialUpdate>, VRError> {
+    pub async fn update_mapping(
+        &self,
+        frame_data: &VRFrameData,
+    ) -> Result<Vec<SpatialUpdate>, VRError> {
         let mut updates = Vec::new();
 
         if !self.config.enabled {
@@ -1162,8 +1173,16 @@ impl SpatialMappingSystem {
                 let half_width = plane.extents[0] / 2.0;
                 let half_height = plane.extents[1] / 2.0;
                 let affected_region = BoundingBox {
-                    min: [plane.center[0] - half_width, plane.center[1] - 0.01, plane.center[2] - half_height],
-                    max: [plane.center[0] + half_width, plane.center[1] + 0.01, plane.center[2] + half_height],
+                    min: [
+                        plane.center[0] - half_width,
+                        plane.center[1] - 0.01,
+                        plane.center[2] - half_height,
+                    ],
+                    max: [
+                        plane.center[0] + half_width,
+                        plane.center[1] + 0.01,
+                        plane.center[2] + half_height,
+                    ],
                     center: plane.center,
                     extents: [half_width, 0.01, half_height],
                 };
@@ -1213,24 +1232,39 @@ impl SpatialMappingSystem {
             return planes;
         }
 
-        let floor_vertices: Vec<_> = mesh.vertices.iter()
+        let floor_vertices: Vec<_> = mesh
+            .vertices
+            .iter()
             .enumerate()
             .filter(|(i, v)| {
-                v[1] < 0.1 && mesh.semantic_labels.get(*i)
-                    .map(|l| matches!(l, SemanticLabel::Floor))
-                    .unwrap_or(false)
+                v[1] < 0.1
+                    && mesh
+                        .semantic_labels
+                        .get(*i)
+                        .map(|l| matches!(l, SemanticLabel::Floor))
+                        .unwrap_or(false)
             })
             .collect();
 
         if floor_vertices.len() >= 3 {
-            let min_x = floor_vertices.iter().map(|(_, v)| v[0]).fold(f32::INFINITY, f32::min);
-            let max_x = floor_vertices.iter().map(|(_, v)| v[0]).fold(f32::NEG_INFINITY, f32::max);
-            let min_z = floor_vertices.iter().map(|(_, v)| v[2]).fold(f32::INFINITY, f32::min);
-            let max_z = floor_vertices.iter().map(|(_, v)| v[2]).fold(f32::NEG_INFINITY, f32::max);
+            let min_x = floor_vertices
+                .iter()
+                .map(|(_, v)| v[0])
+                .fold(f32::INFINITY, f32::min);
+            let max_x = floor_vertices
+                .iter()
+                .map(|(_, v)| v[0])
+                .fold(f32::NEG_INFINITY, f32::max);
+            let min_z = floor_vertices
+                .iter()
+                .map(|(_, v)| v[2])
+                .fold(f32::INFINITY, f32::min);
+            let max_z = floor_vertices
+                .iter()
+                .map(|(_, v)| v[2])
+                .fold(f32::NEG_INFINITY, f32::max);
 
-            let plane_vertices: Vec<[f32; 3]> = floor_vertices.iter()
-                .map(|(_, v)| **v)
-                .collect();
+            let plane_vertices: Vec<[f32; 3]> = floor_vertices.iter().map(|(_, v)| **v).collect();
 
             planes.push(DetectedPlane {
                 plane_id: Uuid::new_v4().to_string(),
@@ -1970,7 +2004,10 @@ pub struct ObjectRecognitionSystem {
 }
 
 impl ObjectRecognitionSystem {
-    pub async fn process_frame(&self, frame_data: &VRFrameData) -> Result<Vec<RecognizedObject>, VRError> {
+    pub async fn process_frame(
+        &self,
+        frame_data: &VRFrameData,
+    ) -> Result<Vec<RecognizedObject>, VRError> {
         let mut recognized_objects = Vec::new();
 
         if self.recognition_models.is_empty() {
@@ -1999,13 +2036,19 @@ impl ObjectRecognitionSystem {
         }
 
         recognized_objects.sort_by(|a, b| {
-            b.confidence.partial_cmp(&a.confidence).unwrap_or(std::cmp::Ordering::Equal)
+            b.confidence
+                .partial_cmp(&a.confidence)
+                .unwrap_or(std::cmp::Ordering::Equal)
         });
 
         Ok(recognized_objects)
     }
 
-    fn run_object_detection(&self, model: &RecognitionModel, frame_data: &VRFrameData) -> Result<Vec<RecognizedObject>, VRError> {
+    fn run_object_detection(
+        &self,
+        model: &RecognitionModel,
+        frame_data: &VRFrameData,
+    ) -> Result<Vec<RecognizedObject>, VRError> {
         let mut objects = Vec::new();
 
         let head_pos = frame_data.head_pose.position;
@@ -2047,21 +2090,29 @@ impl ObjectRecognitionSystem {
         Ok(objects)
     }
 
-    fn detect_hands(&self, _model: &RecognitionModel, frame_data: &VRFrameData) -> Result<Option<RecognizedObject>, VRError> {
+    fn detect_hands(
+        &self,
+        _model: &RecognitionModel,
+        frame_data: &VRFrameData,
+    ) -> Result<Option<RecognizedObject>, VRError> {
         let frame_id = (frame_data.timestamp * 1000.0) as u64;
 
         if let Some(ref hand_tracking) = frame_data.hand_tracking_data {
             let left_hand = &hand_tracking.left_hand;
             let wrist_pos = left_hand.wrist_pose.position;
 
-            let tracking_confidence = left_hand.gesture_confidence
+            let tracking_confidence = left_hand
+                .gesture_confidence
                 .get("tracking")
                 .copied()
                 .unwrap_or(0.8);
 
             let mut properties = HashMap::new();
             properties.insert("hand".to_string(), "left".to_string());
-            properties.insert("tracking_confidence".to_string(), format!("{:.2}", tracking_confidence));
+            properties.insert(
+                "tracking_confidence".to_string(),
+                format!("{:.2}", tracking_confidence),
+            );
 
             return Ok(Some(RecognizedObject {
                 object_id: format!("hand_left_{}", frame_id),
@@ -2079,15 +2130,15 @@ impl ObjectRecognitionSystem {
         Ok(None)
     }
 
-    fn detect_faces(&self, _model: &RecognitionModel, frame_data: &VRFrameData) -> Result<Option<RecognizedObject>, VRError> {
+    fn detect_faces(
+        &self,
+        _model: &RecognitionModel,
+        frame_data: &VRFrameData,
+    ) -> Result<Option<RecognizedObject>, VRError> {
         let frame_id = (frame_data.timestamp * 1000.0) as u64;
         let head_pos = frame_data.head_pose.position;
         let forward_distance = 2.0;
-        let face_pos = [
-            head_pos[0],
-            head_pos[1],
-            head_pos[2] - forward_distance,
-        ];
+        let face_pos = [head_pos[0], head_pos[1], head_pos[2] - forward_distance];
 
         let mut properties = HashMap::new();
         properties.insert("type".to_string(), "simulated".to_string());
@@ -2301,7 +2352,11 @@ impl MixedRealityEngine {
         Ok(Arc::new(engine))
     }
 
-    pub async fn process_mixed_reality_frame(&self, session_id: Uuid, frame_data: &VRFrameData) -> Result<MixedRealityFrameData, VRError> {
+    pub async fn process_mixed_reality_frame(
+        &self,
+        session_id: Uuid,
+        frame_data: &VRFrameData,
+    ) -> Result<MixedRealityFrameData, VRError> {
         // Process camera feed for object recognition
         let recognized_objects = if self.config.object_recognition_enabled {
             self.object_recognition.process_frame(frame_data).await?
@@ -2318,14 +2373,20 @@ impl MixedRealityEngine {
 
         // Generate AR overlays
         let ar_overlays = if self.config.ar_overlay_enabled {
-            self.ar_overlay_system.generate_overlays(session_id, frame_data, &recognized_objects).await?
+            self.ar_overlay_system
+                .generate_overlays(session_id, frame_data, &recognized_objects)
+                .await?
         } else {
             Vec::new()
         };
 
         // Estimate lighting
         let lighting_info = if self.config.lighting_estimation_enabled {
-            Some(self.lighting_estimation.estimate_lighting(frame_data).await?)
+            Some(
+                self.lighting_estimation
+                    .estimate_lighting(frame_data)
+                    .await?,
+            )
         } else {
             None
         };
@@ -2409,9 +2470,9 @@ impl MixedRealityEngine {
         Ok(SpatialMappingSystem {
             config: SpatialMappingConfig {
                 enabled: true,
-                mesh_resolution: 0.1, // 10cm resolution
+                mesh_resolution: 0.1,       // 10cm resolution
                 observation_distance: 10.0, // 10 meter range
-                update_frequency: 30.0, // 30 FPS
+                update_frequency: 30.0,     // 30 FPS
                 plane_detection_enabled: true,
                 object_tracking_enabled: true,
                 semantic_labeling: true,
@@ -2694,7 +2755,10 @@ pub struct LightingEstimationSystem {
 }
 
 impl LightingEstimationSystem {
-    pub async fn estimate_lighting(&self, frame_data: &VRFrameData) -> Result<LightingData, VRError> {
+    pub async fn estimate_lighting(
+        &self,
+        frame_data: &VRFrameData,
+    ) -> Result<LightingData, VRError> {
         let head_pos = frame_data.head_pose.position;
 
         let sun_direction = [0.5, 0.8, 0.3];
@@ -2884,7 +2948,8 @@ pub struct SharedObject {
 
 impl CollaborationEngine {
     pub fn add_participant(&mut self, participant: Participant) {
-        self.participants.insert(participant.user_id.clone(), participant);
+        self.participants
+            .insert(participant.user_id.clone(), participant);
     }
 
     pub fn remove_participant(&mut self, user_id: &str) -> bool {

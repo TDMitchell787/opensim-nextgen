@@ -1,7 +1,10 @@
 use std::collections::HashMap;
 use uuid::Uuid;
 
-use super::{LSLValue, lsl_types::{LSLVector, LSLRotation}};
+use super::{
+    lsl_types::{LSLRotation, LSLVector},
+    LSLValue,
+};
 
 #[derive(Debug, Clone, PartialEq)]
 pub enum ExperienceError {
@@ -276,7 +279,9 @@ impl SLFunctions {
             Some(id) => id,
             None => return LSLValue::Key(Uuid::nil()),
         };
-        let total: usize = self.experience_kvp.iter()
+        let total: usize = self
+            .experience_kvp
+            .iter()
             .filter(|((id, _), _)| *id == xp_id)
             .map(|((_, k), v)| k.len() + v.len())
             .sum();
@@ -289,12 +294,10 @@ impl SLFunctions {
         }
         let _experience_id = match &args[0] {
             LSLValue::Key(k) => *k,
-            LSLValue::String(s) => {
-                match Uuid::parse_str(s) {
-                    Ok(u) => u,
-                    Err(_) => return LSLValue::List(vec![]),
-                }
-            }
+            LSLValue::String(s) => match Uuid::parse_str(s) {
+                Ok(u) => u,
+                Err(_) => return LSLValue::List(vec![]),
+            },
             _ => return LSLValue::List(vec![]),
         };
 
@@ -334,15 +337,42 @@ impl SLFunctions {
             while i + 1 < params.len() {
                 let param_id = match &params[i] {
                     LSLValue::Integer(n) => *n,
-                    _ => { i += 2; continue; }
+                    _ => {
+                        i += 2;
+                        continue;
+                    }
                 };
                 match param_id {
-                    0 => if let LSLValue::Float(v) = &params[i + 1] { character.length = *v as f32; },
-                    1 => if let LSLValue::Float(v) = &params[i + 1] { character.radius = *v as f32; },
-                    2 => if let LSLValue::Float(v) = &params[i + 1] { character.speed = *v as f32; },
-                    6 => if let LSLValue::Integer(v) = &params[i + 1] { character.character_type = *v; },
-                    7 => if let LSLValue::Float(v) = &params[i + 1] { character.max_accel = *v as f32; },
-                    8 => if let LSLValue::Float(v) = &params[i + 1] { character.max_decel = *v as f32; },
+                    0 => {
+                        if let LSLValue::Float(v) = &params[i + 1] {
+                            character.length = *v as f32;
+                        }
+                    }
+                    1 => {
+                        if let LSLValue::Float(v) = &params[i + 1] {
+                            character.radius = *v as f32;
+                        }
+                    }
+                    2 => {
+                        if let LSLValue::Float(v) = &params[i + 1] {
+                            character.speed = *v as f32;
+                        }
+                    }
+                    6 => {
+                        if let LSLValue::Integer(v) = &params[i + 1] {
+                            character.character_type = *v;
+                        }
+                    }
+                    7 => {
+                        if let LSLValue::Float(v) = &params[i + 1] {
+                            character.max_accel = *v as f32;
+                        }
+                    }
+                    8 => {
+                        if let LSLValue::Float(v) = &params[i + 1] {
+                            character.max_decel = *v as f32;
+                        }
+                    }
                     _ => {}
                 }
                 i += 2;
@@ -369,14 +399,37 @@ impl SLFunctions {
             while i + 1 < params.len() {
                 let param_id = match &params[i] {
                     LSLValue::Integer(n) => *n,
-                    _ => { i += 2; continue; }
+                    _ => {
+                        i += 2;
+                        continue;
+                    }
                 };
                 match param_id {
-                    0 => if let LSLValue::Float(v) = &params[i + 1] { character.length = *v as f32; },
-                    1 => if let LSLValue::Float(v) = &params[i + 1] { character.radius = *v as f32; },
-                    2 => if let LSLValue::Float(v) = &params[i + 1] { character.speed = *v as f32; },
-                    7 => if let LSLValue::Float(v) = &params[i + 1] { character.max_accel = *v as f32; },
-                    8 => if let LSLValue::Float(v) = &params[i + 1] { character.max_decel = *v as f32; },
+                    0 => {
+                        if let LSLValue::Float(v) = &params[i + 1] {
+                            character.length = *v as f32;
+                        }
+                    }
+                    1 => {
+                        if let LSLValue::Float(v) = &params[i + 1] {
+                            character.radius = *v as f32;
+                        }
+                    }
+                    2 => {
+                        if let LSLValue::Float(v) = &params[i + 1] {
+                            character.speed = *v as f32;
+                        }
+                    }
+                    7 => {
+                        if let LSLValue::Float(v) = &params[i + 1] {
+                            character.max_accel = *v as f32;
+                        }
+                    }
+                    8 => {
+                        if let LSLValue::Float(v) = &params[i + 1] {
+                            character.max_decel = *v as f32;
+                        }
+                    }
                     _ => {}
                 }
                 i += 2;
@@ -608,7 +661,8 @@ impl SLFunctions {
     }
 
     pub fn experience_key_count(&self, experience_id: Uuid) -> usize {
-        self.experience_kvp.iter()
+        self.experience_kvp
+            .iter()
             .filter(|((id, _), _)| *id == experience_id)
             .count()
     }
@@ -624,7 +678,10 @@ mod tests {
         let xp_id = Uuid::new_v4();
 
         let result = sl.ll_create_key_value(
-            &[LSLValue::String("test_key".to_string()), LSLValue::String("test_value".to_string())],
+            &[
+                LSLValue::String("test_key".to_string()),
+                LSLValue::String("test_value".to_string()),
+            ],
             Some(xp_id),
         );
         assert!(matches!(result, LSLValue::Key(k) if k != Uuid::nil()));
@@ -638,11 +695,17 @@ mod tests {
         let xp_id = Uuid::new_v4();
 
         sl.ll_create_key_value(
-            &[LSLValue::String("dup".to_string()), LSLValue::String("v1".to_string())],
+            &[
+                LSLValue::String("dup".to_string()),
+                LSLValue::String("v1".to_string()),
+            ],
             Some(xp_id),
         );
         let result = sl.ll_create_key_value(
-            &[LSLValue::String("dup".to_string()), LSLValue::String("v2".to_string())],
+            &[
+                LSLValue::String("dup".to_string()),
+                LSLValue::String("v2".to_string()),
+            ],
             Some(xp_id),
         );
         assert!(matches!(result, LSLValue::Key(k) if k == Uuid::nil()));
@@ -656,8 +719,10 @@ mod tests {
 
         sl.ll_create_character(
             &[LSLValue::List(vec![
-                LSLValue::Integer(CHARACTER_LENGTH), LSLValue::Float(2.0),
-                LSLValue::Integer(CHARACTER_RADIUS), LSLValue::Float(0.5),
+                LSLValue::Integer(CHARACTER_LENGTH),
+                LSLValue::Float(2.0),
+                LSLValue::Integer(CHARACTER_RADIUS),
+                LSLValue::Float(0.5),
             ])],
             obj_id,
         );
@@ -688,9 +753,8 @@ mod tests {
     #[test]
     fn test_get_closest_nav_point() {
         let sl = SLFunctions::new();
-        let result = sl.ll_get_closest_nav_point(&[
-            LSLValue::Vector(LSLVector::new(128.0, 128.0, 25.0)),
-        ]);
+        let result =
+            sl.ll_get_closest_nav_point(&[LSLValue::Vector(LSLVector::new(128.0, 128.0, 25.0))]);
         match result {
             LSLValue::List(l) => assert_eq!(l.len(), 1),
             _ => panic!("Expected list"),

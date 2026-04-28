@@ -17,94 +17,42 @@
 //! - `factory` - Service factory for mode-based instantiation
 //! - `avatar_service` - Avatar appearance service (local implementation)
 
-pub mod traits;
-pub mod local;
-pub mod remote;
-pub mod factory;
 pub mod avatar_service;
-pub mod robust;
 pub mod config_parser;
-pub mod region_registration;
+pub mod factory;
 pub mod hypergrid;
+pub mod local;
+pub mod region_registration;
+pub mod remote;
+pub mod robust;
+pub mod traits;
 
 pub use traits::{
-    AvatarServiceTrait,
-    GridServiceTrait,
-    UserAccountServiceTrait,
-    AuthenticationServiceTrait,
-    AssetServiceTrait,
-    InventoryServiceTrait,
-    PresenceServiceTrait,
-    GatekeeperServiceTrait,
-    UserAgentServiceTrait,
-    GridUserServiceTrait,
-    AgentPrefsServiceTrait,
-    HGFriendsServiceTrait,
-    AuthorizationServiceTrait,
-    FriendsServiceTrait,
-    LandServiceTrait,
-    OfflineIMServiceTrait,
-    ProfilesServiceTrait,
-    AvatarData,
-    RegionInfo,
-    UserAccount,
-    AuthInfo,
-    AssetBase,
-    AssetMetadata,
-    InventoryFolder,
-    InventoryItem,
-    InventoryCollection,
-    PresenceInfo,
-    GridUserInfo,
-    AgentPrefs,
-    ServiceMode,
-    ServiceConfig,
-    HGRegionInfo,
-    TravelingAgentData,
-    AgentCircuitData,
-    MuteListServiceTrait,
-    MuteData,
-    EstateServiceTrait,
-    EstateSettings,
-    EstateBan,
-    MapImageServiceTrait,
-    FriendInfo,
-    LandData,
-    OfflineIM,
-    UserProfileProperties,
-    UserProfilePick,
-    UserClassifiedAdd,
-    UserProfileNotes,
-    UserPreferences,
+    AgentCircuitData, AgentPrefs, AgentPrefsServiceTrait, AssetBase, AssetMetadata,
+    AssetServiceTrait, AuthInfo, AuthenticationServiceTrait, AuthorizationServiceTrait, AvatarData,
+    AvatarServiceTrait, EstateBan, EstateServiceTrait, EstateSettings, FriendInfo,
+    FriendsServiceTrait, GatekeeperServiceTrait, GridServiceTrait, GridUserInfo,
+    GridUserServiceTrait, HGFriendsServiceTrait, HGRegionInfo, InventoryCollection,
+    InventoryFolder, InventoryItem, InventoryServiceTrait, LandData, LandServiceTrait,
+    MapImageServiceTrait, MuteData, MuteListServiceTrait, OfflineIM, OfflineIMServiceTrait,
+    PresenceInfo, PresenceServiceTrait, ProfilesServiceTrait, RegionInfo, ServiceConfig,
+    ServiceMode, TravelingAgentData, UserAccount, UserAccountServiceTrait, UserAgentServiceTrait,
+    UserClassifiedAdd, UserPreferences, UserProfileNotes, UserProfilePick, UserProfileProperties,
 };
 
 pub use local::{
-    LocalGridService,
+    LocalAgentPrefsService, LocalAssetService, LocalAuthenticationService,
+    LocalAuthorizationService, LocalEstateService, LocalFriendsService, LocalGridService,
+    LocalGridUserService, LocalInventoryService, LocalLandService, LocalMapImageService,
+    LocalMuteListService, LocalOfflineIMService, LocalPresenceService, LocalProfilesService,
     LocalUserAccountService,
-    LocalAssetService,
-    LocalAuthenticationService,
-    LocalInventoryService,
-    LocalPresenceService,
-    LocalGridUserService,
-    LocalAgentPrefsService,
-    LocalMuteListService,
-    LocalEstateService,
-    LocalMapImageService,
-    LocalAuthorizationService,
-    LocalFriendsService,
-    LocalLandService,
-    LocalOfflineIMService,
-    LocalProfilesService,
 };
 
 pub use remote::{
-    RemoteGridService,
-    RemoteUserAccountService,
-    RemoteAssetService,
-    RemoteAvatarService,
+    RemoteAssetService, RemoteAvatarService, RemoteGridService, RemoteUserAccountService,
 };
 
-pub use factory::{ServiceFactory, ServiceContainer};
+pub use factory::{ServiceContainer, ServiceFactory};
 
 pub use avatar_service::AvatarService;
 

@@ -1,5 +1,5 @@
 //! Moderation System for OpenSim Next Social Features
-//! 
+//!
 //! Provides comprehensive moderation capabilities including content filtering,
 //! user reporting, automated moderation, and administrative actions.
 

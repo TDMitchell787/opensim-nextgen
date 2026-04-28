@@ -25,10 +25,7 @@ impl MovementController {
                         let dir_x = dx / dist;
                         let dir_y = dy / dist;
                         state.target_velocity = [dir_x * speed, dir_y * speed, 0.0];
-                        state.rotation = super::behaviors::face_position(
-                            state.position,
-                            *target,
-                        );
+                        state.rotation = super::behaviors::face_position(state.position, *target);
                     }
                 }
             }
@@ -41,10 +38,7 @@ impl MovementController {
             BehaviorAction::FacePosition(target) => {
                 let mut states = avatar_states.write();
                 if let Some(state) = states.get_mut(&npc_id) {
-                    state.rotation = super::behaviors::face_position(
-                        state.position,
-                        *target,
-                    );
+                    state.rotation = super::behaviors::face_position(state.position, *target);
                 }
             }
             BehaviorAction::Say(_) | BehaviorAction::Nothing => {}

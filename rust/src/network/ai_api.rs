@@ -1,5 +1,3 @@
-use std::sync::Arc;
-use std::collections::HashMap;
 use axum::{
     extract::{Path, Query, State},
     http::StatusCode,
@@ -9,29 +7,27 @@ use axum::{
 };
 use serde::{Deserialize, Serialize};
 use serde_json::{json, Value};
-use uuid::Uuid;
+use std::collections::HashMap;
+use std::sync::Arc;
 use tracing::{error, info, warn};
+use uuid::Uuid;
 
-use crate::ai::npc_dialogue::{
-    NPCDialogueEngine, DialogueContext, DialogueResponse, DialogueConfig,
-    AssetDescriptionGenerator, AssetDescriptionRequest, AssetDescriptionResponse,
-    TimeOfDay,
+use crate::ai::ml_integration::{
+    ActivityType, AnomalyAlert, AssetEmbeddingRequest, CFContentRecommendation, CFUserProfile,
+    CollaborativeRecommender, ContentItemType, ContentType, EmbeddingModel, EmbeddingPipeline,
+    EmbeddingService, EngagementMetrics, LLMConfig, MLIntegrationConfig, MLIntegrationManager,
+    ONNXPredictor, PredictorConfig, QualityAssessment, QualityService, QualityServiceConfig,
+    RecommendationReason, RecommenderConfig, RecommenderStats, RegionEmbeddingRequest,
+    RegionQualityReport, RegionQualityRequest, SocialRecommendation,
+    UploadQualityRequest as QualityUploadRequest, UserActivity, VectorStore, VectorStoreConfig,
 };
 use crate::ai::npc_behavior::NPCProfile;
-use crate::ai::ml_integration::{
-    MLIntegrationManager, LLMConfig, MLIntegrationConfig,
-    VectorStore, VectorStoreConfig, ContentType, EmbeddingPipeline,
-    AssetEmbeddingRequest, RegionEmbeddingRequest, EmbeddingService, EmbeddingModel,
-    QualityService, QualityServiceConfig, QualityAssessment,
-    UploadQualityRequest as QualityUploadRequest, RegionQualityRequest,
-    RegionQualityReport, AnomalyAlert, ONNXPredictor, PredictorConfig,
-    CollaborativeRecommender, RecommenderConfig,
-    CFContentRecommendation, SocialRecommendation, UserActivity, ActivityType,
-    CFUserProfile, EngagementMetrics, ContentItemType, RecommendationReason,
-    RecommenderStats,
+use crate::ai::npc_dialogue::{
+    AssetDescriptionGenerator, AssetDescriptionRequest, AssetDescriptionResponse, DialogueConfig,
+    DialogueContext, DialogueResponse, NPCDialogueEngine, TimeOfDay,
 };
-use chrono::Utc;
 use crate::database::DatabaseManager;
+use chrono::Utc;
 
 #[derive(Clone)]
 pub struct AiApiState {
@@ -114,7 +110,10 @@ pub fn create_ai_api_router(state: AiApiState) -> Router {
     Router::new()
         .route("/health", get(health_check))
         .route("/dialogue", post(generate_dialogue))
-        .route("/dialogue/clear/:npc_id/:speaker_id", post(clear_conversation))
+        .route(
+            "/dialogue/clear/:npc_id/:speaker_id",
+            post(clear_conversation),
+        )
         .route("/asset/describe", post(generate_asset_description))
         .route("/asset/describe/:asset_id", get(get_cached_description))
         .route("/search", post(semantic_search))
@@ -125,21 +124,31 @@ pub fn create_ai_api_router(state: AiApiState) -> Router {
         .route("/quality/assess", post(assess_upload_quality))
         .route("/quality/region", post(assess_region_quality))
         .route("/quality/alerts", get(get_quality_alerts))
-        .route("/quality/alerts/:alert_id/acknowledge", post(acknowledge_quality_alert))
+        .route(
+            "/quality/alerts/:alert_id/acknowledge",
+            post(acknowledge_quality_alert),
+        )
         .route("/recommend/trending", get(get_trending))
         .route("/recommend/stats", get(get_recommender_stats))
         .route("/recommend/activity", post(record_activity))
         .route("/recommend/profile", post(update_user_profile))
         .route("/recommend/:user_id", get(get_content_recommendations))
-        .route("/recommend/:user_id/social", get(get_social_recommendations))
-        .route("/recommend/:user_id/creators", get(get_creator_recommendations))
-        .route("/recommend/:user_id/engagement", get(get_engagement_metrics))
+        .route(
+            "/recommend/:user_id/social",
+            get(get_social_recommendations),
+        )
+        .route(
+            "/recommend/:user_id/creators",
+            get(get_creator_recommendations),
+        )
+        .route(
+            "/recommend/:user_id/engagement",
+            get(get_engagement_metrics),
+        )
         .with_state(state)
 }
 
-async fn health_check(
-    State(state): State<AiApiState>,
-) -> Json<AiApiResponse<HealthStatus>> {
+async fn health_check(State(state): State<AiApiState>) -> Json<AiApiResponse<HealthStatus>> {
     let llm_available = state.dialogue_engine.is_llm_available();
     let dialogue_ready = state.dialogue_engine.health_check().await;
 
@@ -178,14 +187,18 @@ async fn generate_dialogue(
     State(state): State<AiApiState>,
     Json(request): Json<DialogueRequest>,
 ) -> Result<Json<AiApiResponse<DialogueResponse>>, (StatusCode, Json<Value>)> {
-    info!("Generating dialogue for NPC {} from {}", request.npc_id, request.speaker_name);
+    info!(
+        "Generating dialogue for NPC {} from {}",
+        request.npc_id, request.speaker_name
+    );
 
-    let npc_profile = get_or_create_npc_profile(&state.db, request.npc_id).await
+    let npc_profile = get_or_create_npc_profile(&state.db, request.npc_id)
+        .await
         .map_err(|e| {
             error!("Failed to get NPC profile: {}", e);
             (
                 StatusCode::INTERNAL_SERVER_ERROR,
-                Json(json!({ "error": format!("Failed to get NPC profile: {}", e) }))
+                Json(json!({ "error": format!("Failed to get NPC profile: {}", e) })),
             )
         })?;
 
@@ -201,16 +214,23 @@ async fn generate_dialogue(
         current_quest: None,
     };
 
-    match state.dialogue_engine.generate_dialogue(&npc_profile, &context, &request.message).await {
+    match state
+        .dialogue_engine
+        .generate_dialogue(&npc_profile, &context, &request.message)
+        .await
+    {
         Ok(response) => {
             info!("Generated dialogue in {}ms", response.processing_time_ms);
-            Ok(Json(AiApiResponse::success(response, state.dialogue_engine.is_llm_available())))
+            Ok(Json(AiApiResponse::success(
+                response,
+                state.dialogue_engine.is_llm_available(),
+            )))
         }
         Err(e) => {
             error!("Dialogue generation failed: {}", e);
             Err((
                 StatusCode::INTERNAL_SERVER_ERROR,
-                Json(json!({ "error": format!("Dialogue generation failed: {}", e) }))
+                Json(json!({ "error": format!("Dialogue generation failed: {}", e) })),
             ))
         }
     }
@@ -220,10 +240,13 @@ async fn clear_conversation(
     State(state): State<AiApiState>,
     Path((npc_id, speaker_id)): Path<(Uuid, Uuid)>,
 ) -> Json<AiApiResponse<String>> {
-    state.dialogue_engine.clear_conversation(npc_id, speaker_id).await;
+    state
+        .dialogue_engine
+        .clear_conversation(npc_id, speaker_id)
+        .await;
     Json(AiApiResponse::success(
         "Conversation cleared".to_string(),
-        state.dialogue_engine.is_llm_available()
+        state.dialogue_engine.is_llm_available(),
     ))
 }
 
@@ -244,16 +267,23 @@ async fn generate_asset_description(
         script_count: request.script_count,
     };
 
-    match state.asset_generator.generate_description(&desc_request).await {
+    match state
+        .asset_generator
+        .generate_description(&desc_request)
+        .await
+    {
         Ok(response) => {
             info!("Generated description in {}ms", response.processing_time_ms);
-            Ok(Json(AiApiResponse::success(response, state.asset_generator.is_llm_available())))
+            Ok(Json(AiApiResponse::success(
+                response,
+                state.asset_generator.is_llm_available(),
+            )))
         }
         Err(e) => {
             error!("Description generation failed: {}", e);
             Err((
                 StatusCode::INTERNAL_SERVER_ERROR,
-                Json(json!({ "error": format!("Description generation failed: {}", e) }))
+                Json(json!({ "error": format!("Description generation failed: {}", e) })),
             ))
         }
     }
@@ -289,15 +319,20 @@ async fn semantic_search(
     info!("Semantic search: '{}'", request.query);
 
     if let Some(vector_store) = &state.vector_store {
-        let content_type = request.content_type
+        let content_type = request
+            .content_type
             .as_ref()
             .and_then(|ct| ContentType::from_str(ct));
 
         let limit = request.limit.unwrap_or(20);
 
-        match vector_store.search(&request.query, content_type, limit).await {
+        match vector_store
+            .search(&request.query, content_type, limit)
+            .await
+        {
             Ok(vs_results) => {
-                let results: Vec<SearchResult> = vs_results.into_iter()
+                let results: Vec<SearchResult> = vs_results
+                    .into_iter()
                     .map(|r| SearchResult {
                         id: r.id,
                         name: r.name,
@@ -307,14 +342,18 @@ async fn semantic_search(
                     })
                     .collect();
 
-                info!("Found {} results for query '{}'", results.len(), request.query);
+                info!(
+                    "Found {} results for query '{}'",
+                    results.len(),
+                    request.query
+                );
                 Ok(Json(AiApiResponse::success(results, true)))
             }
             Err(e) => {
                 error!("Semantic search failed: {}", e);
                 Err((
                     StatusCode::INTERNAL_SERVER_ERROR,
-                    Json(json!({ "error": format!("Search failed: {}", e) }))
+                    Json(json!({ "error": format!("Search failed: {}", e) })),
                 ))
             }
         }
@@ -343,7 +382,8 @@ async fn find_similar(
     if let Some(vector_store) = &state.vector_store {
         match vector_store.find_similar(id, 10).await {
             Ok(vs_results) => {
-                let results: Vec<SearchResult> = vs_results.into_iter()
+                let results: Vec<SearchResult> = vs_results
+                    .into_iter()
                     .map(|r| SearchResult {
                         id: r.id,
                         name: r.name,
@@ -359,7 +399,7 @@ async fn find_similar(
                 error!("Find similar failed: {}", e);
                 Err((
                     StatusCode::INTERNAL_SERVER_ERROR,
-                    Json(json!({ "error": format!("Find similar failed: {}", e) }))
+                    Json(json!({ "error": format!("Find similar failed: {}", e) })),
                 ))
             }
         }
@@ -391,7 +431,9 @@ async fn embed_assets_batch(
     info!("Embedding {} assets", request.assets.len());
 
     if let Some(pipeline) = &state.embedding_pipeline {
-        let assets: Vec<AssetEmbeddingRequest> = request.assets.into_iter()
+        let assets: Vec<AssetEmbeddingRequest> = request
+            .assets
+            .into_iter()
             .map(|a| {
                 let mut metadata = HashMap::new();
                 metadata.insert("asset_type".to_string(), a.asset_type.clone());
@@ -422,21 +464,21 @@ async fn embed_assets_batch(
                         error_count: result.error_count,
                         errors: result.errors,
                     },
-                    true
+                    true,
                 )))
             }
             Err(e) => {
                 error!("Asset embedding failed: {}", e);
                 Err((
                     StatusCode::INTERNAL_SERVER_ERROR,
-                    Json(json!({ "error": format!("Embedding failed: {}", e) }))
+                    Json(json!({ "error": format!("Embedding failed: {}", e) })),
                 ))
             }
         }
     } else {
         Err((
             StatusCode::SERVICE_UNAVAILABLE,
-            Json(json!({ "error": "Embedding pipeline not available" }))
+            Json(json!({ "error": "Embedding pipeline not available" })),
         ))
     }
 }
@@ -465,7 +507,9 @@ async fn embed_regions_batch(
     info!("Embedding {} regions", request.regions.len());
 
     if let Some(pipeline) = &state.embedding_pipeline {
-        let regions: Vec<RegionEmbeddingRequest> = request.regions.into_iter()
+        let regions: Vec<RegionEmbeddingRequest> = request
+            .regions
+            .into_iter()
             .map(|r| {
                 let mut metadata = HashMap::new();
                 metadata.insert("maturity_rating".to_string(), r.maturity_rating.clone());
@@ -496,21 +540,21 @@ async fn embed_regions_batch(
                         error_count: result.error_count,
                         errors: result.errors,
                     },
-                    true
+                    true,
                 )))
             }
             Err(e) => {
                 error!("Region embedding failed: {}", e);
                 Err((
                     StatusCode::INTERNAL_SERVER_ERROR,
-                    Json(json!({ "error": format!("Embedding failed: {}", e) }))
+                    Json(json!({ "error": format!("Embedding failed: {}", e) })),
                 ))
             }
         }
     } else {
         Err((
             StatusCode::SERVICE_UNAVAILABLE,
-            Json(json!({ "error": "Embedding pipeline not available" }))
+            Json(json!({ "error": "Embedding pipeline not available" })),
         ))
     }
 }
@@ -550,7 +594,7 @@ async fn get_embedding_stats(
                 average_embedding_dimension: 0,
                 memory_usage_mb: 0.0,
             },
-            false
+            false,
         ))
     }
 }
@@ -576,14 +620,14 @@ async fn assess_upload_quality(
                 error!("Quality assessment failed: {}", e);
                 Err((
                     StatusCode::INTERNAL_SERVER_ERROR,
-                    Json(json!({ "error": format!("Quality assessment failed: {}", e) }))
+                    Json(json!({ "error": format!("Quality assessment failed: {}", e) })),
                 ))
             }
         }
     } else {
         Err((
             StatusCode::SERVICE_UNAVAILABLE,
-            Json(json!({ "error": "Quality service not available" }))
+            Json(json!({ "error": "Quality service not available" })),
         ))
     }
 }
@@ -609,14 +653,14 @@ async fn assess_region_quality(
                 error!("Region quality assessment failed: {}", e);
                 Err((
                     StatusCode::INTERNAL_SERVER_ERROR,
-                    Json(json!({ "error": format!("Region assessment failed: {}", e) }))
+                    Json(json!({ "error": format!("Region assessment failed: {}", e) })),
                 ))
             }
         }
     } else {
         Err((
             StatusCode::SERVICE_UNAVAILABLE,
-            Json(json!({ "error": "Quality service not available" }))
+            Json(json!({ "error": "Quality service not available" })),
         ))
     }
 }
@@ -645,13 +689,13 @@ async fn acknowledge_quality_alert(
         } else {
             Err((
                 StatusCode::NOT_FOUND,
-                Json(json!({ "error": format!("Alert {} not found", alert_id) }))
+                Json(json!({ "error": format!("Alert {} not found", alert_id) })),
             ))
         }
     } else {
         Err((
             StatusCode::SERVICE_UNAVAILABLE,
-            Json(json!({ "error": "Quality service not available" }))
+            Json(json!({ "error": "Quality service not available" })),
         ))
     }
 }
@@ -693,19 +737,26 @@ async fn get_content_recommendations(
 
     let limit = query.limit.unwrap_or(20);
 
-    match state.recommender.get_content_recommendations(user_id, limit).await {
+    match state
+        .recommender
+        .get_content_recommendations(user_id, limit)
+        .await
+    {
         Ok(recs) => {
-            let responses: Vec<RecommendationResponse> = recs.into_iter()
-                .map(RecommendationResponse::from)
-                .collect();
-            info!("Returned {} content recommendations for user {}", responses.len(), user_id);
+            let responses: Vec<RecommendationResponse> =
+                recs.into_iter().map(RecommendationResponse::from).collect();
+            info!(
+                "Returned {} content recommendations for user {}",
+                responses.len(),
+                user_id
+            );
             Ok(Json(AiApiResponse::success(responses, true)))
         }
         Err(e) => {
             error!("Content recommendation failed: {}", e);
             Err((
                 StatusCode::INTERNAL_SERVER_ERROR,
-                Json(json!({ "error": format!("Recommendation failed: {}", e) }))
+                Json(json!({ "error": format!("Recommendation failed: {}", e) })),
             ))
         }
     }
@@ -720,16 +771,24 @@ async fn get_social_recommendations(
 
     let limit = query.limit.unwrap_or(10);
 
-    match state.recommender.get_social_recommendations(user_id, limit).await {
+    match state
+        .recommender
+        .get_social_recommendations(user_id, limit)
+        .await
+    {
         Ok(recs) => {
-            info!("Returned {} social recommendations for user {}", recs.len(), user_id);
+            info!(
+                "Returned {} social recommendations for user {}",
+                recs.len(),
+                user_id
+            );
             Ok(Json(AiApiResponse::success(recs, true)))
         }
         Err(e) => {
             error!("Social recommendation failed: {}", e);
             Err((
                 StatusCode::INTERNAL_SERVER_ERROR,
-                Json(json!({ "error": format!("Social recommendation failed: {}", e) }))
+                Json(json!({ "error": format!("Social recommendation failed: {}", e) })),
             ))
         }
     }
@@ -744,19 +803,26 @@ async fn get_creator_recommendations(
 
     let limit = query.limit.unwrap_or(10);
 
-    match state.recommender.get_creator_recommendations(user_id, limit).await {
+    match state
+        .recommender
+        .get_creator_recommendations(user_id, limit)
+        .await
+    {
         Ok(recs) => {
-            let responses: Vec<RecommendationResponse> = recs.into_iter()
-                .map(RecommendationResponse::from)
-                .collect();
-            info!("Returned {} creator recommendations for user {}", responses.len(), user_id);
+            let responses: Vec<RecommendationResponse> =
+                recs.into_iter().map(RecommendationResponse::from).collect();
+            info!(
+                "Returned {} creator recommendations for user {}",
+                responses.len(),
+                user_id
+            );
             Ok(Json(AiApiResponse::success(responses, true)))
         }
         Err(e) => {
             error!("Creator recommendation failed: {}", e);
             Err((
                 StatusCode::INTERNAL_SERVER_ERROR,
-                Json(json!({ "error": format!("Creator recommendation failed: {}", e) }))
+                Json(json!({ "error": format!("Creator recommendation failed: {}", e) })),
             ))
         }
     }
@@ -778,7 +844,8 @@ async fn get_trending(
 ) -> Json<AiApiResponse<Vec<RecommendationResponse>>> {
     let limit = query.limit.unwrap_or(20);
     let trending = state.recommender.get_trending_content(limit).await;
-    let responses: Vec<RecommendationResponse> = trending.into_iter()
+    let responses: Vec<RecommendationResponse> = trending
+        .into_iter()
         .map(RecommendationResponse::from)
         .collect();
     Json(AiApiResponse::success(responses, true))
@@ -806,7 +873,10 @@ async fn record_activity(
     State(state): State<AiApiState>,
     Json(request): Json<RecordActivityRequest>,
 ) -> Result<Json<AiApiResponse<bool>>, (StatusCode, Json<Value>)> {
-    info!("Recording activity for user {}: {} on {}", request.user_id, request.activity_type, request.target_id);
+    info!(
+        "Recording activity for user {}: {} on {}",
+        request.user_id, request.activity_type, request.target_id
+    );
 
     let activity_type = match request.activity_type.as_str() {
         "region_visit" => ActivityType::RegionVisit,
@@ -821,7 +891,7 @@ async fn record_activity(
         unknown => {
             return Err((
                 StatusCode::BAD_REQUEST,
-                Json(json!({ "error": format!("Unknown activity type: {}", unknown) }))
+                Json(json!({ "error": format!("Unknown activity type: {}", unknown) })),
             ));
         }
     };
@@ -885,7 +955,7 @@ async fn get_or_create_npc_profile(
     _db: &Arc<DatabaseManager>,
     npc_id: Uuid,
 ) -> Result<NPCProfile, String> {
-    use crate::ai::npc_behavior::{NPCPersonality, NPCRole, BehaviorState, Activity, Mood};
+    use crate::ai::npc_behavior::{Activity, BehaviorState, Mood, NPCPersonality, NPCRole};
     use chrono::Utc;
     use std::collections::HashMap;
 
@@ -936,11 +1006,10 @@ pub async fn initialize_ai_api(
 ) -> Result<AiApiState, String> {
     info!("Initializing AI API v2.0...");
 
-    let dialogue_engine = NPCDialogueEngine::new(
-        llm_config.clone(),
-        db.clone(),
-        DialogueConfig::default(),
-    ).await.map_err(|e| format!("Failed to create dialogue engine: {}", e))?;
+    let dialogue_engine =
+        NPCDialogueEngine::new(llm_config.clone(), db.clone(), DialogueConfig::default())
+            .await
+            .map_err(|e| format!("Failed to create dialogue engine: {}", e))?;
 
     let asset_generator = AssetDescriptionGenerator::new(llm_config)
         .await
@@ -1004,7 +1073,10 @@ pub async fn initialize_ai_api(
     let recommender = Arc::new(CollaborativeRecommender::new(RecommenderConfig::default()));
     info!("Collaborative recommender initialized");
 
-    info!("AI API initialized - LLM: {}, VectorStore: {}, Quality: {}, Recommender: ready", llm_status, vector_status, quality_status);
+    info!(
+        "AI API initialized - LLM: {}, VectorStore: {}, Quality: {}, Recommender: ready",
+        llm_status, vector_status, quality_status
+    );
 
     Ok(AiApiState {
         dialogue_engine,
@@ -1019,11 +1091,9 @@ pub async fn initialize_ai_api(
 }
 
 async fn initialize_vector_store() -> Result<(Arc<VectorStore>, EmbeddingPipeline), String> {
-    let embedding_service = EmbeddingService::new(
-        EmbeddingModel::AllMiniLML6V2,
-        true,
-        10000,
-    ).await.map_err(|e| format!("Failed to create embedding service: {}", e))?;
+    let embedding_service = EmbeddingService::new(EmbeddingModel::AllMiniLML6V2, true, 10000)
+        .await
+        .map_err(|e| format!("Failed to create embedding service: {}", e))?;
 
     let vector_config = VectorStoreConfig {
         max_entries: 100_000,
@@ -1037,11 +1107,7 @@ async fn initialize_vector_store() -> Result<(Arc<VectorStore>, EmbeddingPipelin
         .await
         .map_err(|e| format!("Failed to create vector store: {}", e))?;
 
-    let embedding_pipeline = EmbeddingPipeline::new(
-        vector_store.clone(),
-        embedding_service,
-        100,
-    );
+    let embedding_pipeline = EmbeddingPipeline::new(vector_store.clone(), embedding_service, 100);
 
     Ok((vector_store, embedding_pipeline))
 }

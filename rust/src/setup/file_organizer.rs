@@ -1,10 +1,12 @@
+use chrono::{DateTime, Utc};
+use serde::{Deserialize, Serialize};
 use std::collections::HashMap;
 use std::fs;
 use std::path::{Path, PathBuf};
-use serde::{Deserialize, Serialize};
-use chrono::{DateTime, Utc};
 
-use crate::setup::{SetupConfiguration, SetupConfig, ScenarioTemplate, ScenarioCategory, DifficultyLevel};
+use crate::setup::{
+    DifficultyLevel, ScenarioCategory, ScenarioTemplate, SetupConfig, SetupConfiguration,
+};
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct ArchiveEntry {
@@ -64,9 +66,13 @@ impl FileOrganizer {
         Ok(organizer)
     }
 
-    pub fn save_configuration(&mut self, config: &SetupConfiguration) -> Result<PathBuf, std::io::Error> {
+    pub fn save_configuration(
+        &mut self,
+        config: &SetupConfiguration,
+    ) -> Result<PathBuf, std::io::Error> {
         let safe_name = sanitize_filename(&config.name);
-        let config_path = self.base_path
+        let config_path = self
+            .base_path
             .join("saved-configs/by-name")
             .join(&safe_name);
 
@@ -92,7 +98,7 @@ impl FileOrganizer {
                 category: ScenarioCategory::from_preset(&config.preset),
                 difficulty: DifficultyLevel::from_preset(&config.preset),
                 features: vec![], // TODO: Extract from config
-                tags: vec![], // TODO: Generate from config
+                tags: vec![],     // TODO: Generate from config
                 version: "1.0.0".to_string(),
                 created_by: "Setup Wizard".to_string(),
             },
@@ -103,7 +109,7 @@ impl FileOrganizer {
         };
 
         self.archives.insert(safe_name, archive_entry);
-        
+
         // Create category symlink
         self.create_category_link(config)?;
 
@@ -112,7 +118,8 @@ impl FileOrganizer {
 
     pub fn load_configuration(&mut self, name: &str) -> Result<SetupConfiguration, std::io::Error> {
         let safe_name = sanitize_filename(name);
-        let config_path = self.base_path
+        let config_path = self
+            .base_path
             .join("saved-configs/by-name")
             .join(&safe_name)
             .join("metadata.json");
@@ -128,7 +135,10 @@ impl FileOrganizer {
         Ok(config)
     }
 
-    pub fn list_templates(&self, difficulty: Option<DifficultyLevel>) -> Result<Vec<ScenarioTemplate>, std::io::Error> {
+    pub fn list_templates(
+        &self,
+        difficulty: Option<DifficultyLevel>,
+    ) -> Result<Vec<ScenarioTemplate>, std::io::Error> {
         let mut templates = Vec::new();
 
         for difficulty_dir in ["beginner", "intermediate", "advanced"] {
@@ -169,8 +179,11 @@ impl FileOrganizer {
 
     pub fn delete_configuration(&mut self, name: &str) -> Result<(), std::io::Error> {
         let safe_name = sanitize_filename(name);
-        let config_path = self.base_path.join("saved-configs/by-name").join(&safe_name);
-        
+        let config_path = self
+            .base_path
+            .join("saved-configs/by-name")
+            .join(&safe_name);
+
         if config_path.exists() {
             fs::remove_dir_all(config_path)?;
             self.archives.remove(&safe_name);
@@ -179,17 +192,27 @@ impl FileOrganizer {
         Ok(())
     }
 
-    pub fn create_instance(&self, config_name: &str, instance_name: &str) -> Result<PathBuf, std::io::Error> {
+    pub fn create_instance(
+        &self,
+        config_name: &str,
+        instance_name: &str,
+    ) -> Result<PathBuf, std::io::Error> {
         let safe_config_name = sanitize_filename(config_name);
         let safe_instance_name = sanitize_filename(instance_name);
-        
-        let source_path = self.base_path.join("saved-configs/by-name").join(&safe_config_name);
-        let instance_path = self.base_path.join("active-instances").join(&safe_instance_name);
+
+        let source_path = self
+            .base_path
+            .join("saved-configs/by-name")
+            .join(&safe_config_name);
+        let instance_path = self
+            .base_path
+            .join("active-instances")
+            .join(&safe_instance_name);
 
         if !source_path.exists() {
             return Err(std::io::Error::new(
                 std::io::ErrorKind::NotFound,
-                "Configuration not found"
+                "Configuration not found",
             ));
         }
 
@@ -231,7 +254,7 @@ impl FileOrganizer {
 
                         self.archives.insert(
                             entry.file_name().to_string_lossy().to_string(),
-                            archive_entry
+                            archive_entry,
                         );
                     }
                 }
@@ -244,15 +267,20 @@ impl FileOrganizer {
     fn create_category_link(&self, config: &SetupConfiguration) -> Result<(), std::io::Error> {
         let category = match config.preset {
             crate::setup::SetupPreset::Standalone => "standalone",
-            crate::setup::SetupPreset::GridRegion | 
-            crate::setup::SetupPreset::GridRobust => "grids",
+            crate::setup::SetupPreset::GridRegion | crate::setup::SetupPreset::GridRobust => {
+                "grids"
+            }
             crate::setup::SetupPreset::Development => "development",
             _ => "grids",
         };
 
         let safe_name = sanitize_filename(&config.name);
-        let source_path = self.base_path.join("saved-configs/by-name").join(&safe_name);
-        let link_path = self.base_path
+        let source_path = self
+            .base_path
+            .join("saved-configs/by-name")
+            .join(&safe_name);
+        let link_path = self
+            .base_path
             .join("saved-configs/by-category")
             .join(category)
             .join(&safe_name);
@@ -260,7 +288,7 @@ impl FileOrganizer {
         // Create symlink (Unix) or directory junction (Windows)
         #[cfg(unix)]
         std::os::unix::fs::symlink(&source_path, &link_path)?;
-        
+
         #[cfg(windows)]
         std::os::windows::fs::symlink_dir(&source_path, &link_path)?;
 
@@ -272,20 +300,23 @@ impl FileOrganizer {
         // This would parse the template's metadata.json and create a ScenarioTemplate
         let metadata_content = fs::read_to_string(path)?;
         let metadata: serde_json::Value = serde_json::from_str(&metadata_content)?;
-        
+
         // Create a basic ScenarioTemplate from metadata
         Ok(ScenarioTemplate {
             name: metadata["name"].as_str().unwrap_or("Unknown").to_string(),
             description: metadata["description"].as_str().unwrap_or("").to_string(),
             category: ScenarioCategory::Standalone, // TODO: Parse from metadata
-            difficulty: DifficultyLevel::Beginner,   // TODO: Parse from metadata
+            difficulty: DifficultyLevel::Beginner,  // TODO: Parse from metadata
             config_template: SetupConfig::default(),
             documentation: String::new(),
             startup_script: String::new(),
         })
     }
 
-    fn load_configuration_from_path(&self, path: &Path) -> Result<SetupConfiguration, std::io::Error> {
+    fn load_configuration_from_path(
+        &self,
+        path: &Path,
+    ) -> Result<SetupConfiguration, std::io::Error> {
         let metadata_content = fs::read_to_string(path)?;
         let config: SetupConfiguration = serde_json::from_str(&metadata_content)?;
         Ok(config)
@@ -316,7 +347,13 @@ impl DifficultyLevel {
 
 fn sanitize_filename(name: &str) -> String {
     name.chars()
-        .map(|c| if c.is_alphanumeric() || c == '-' || c == '_' { c } else { '_' })
+        .map(|c| {
+            if c.is_alphanumeric() || c == '-' || c == '_' {
+                c
+            } else {
+                '_'
+            }
+        })
         .collect()
 }
 
@@ -326,7 +363,7 @@ fn copy_dir_recursive(src: &Path, dst: &Path) -> Result<(), std::io::Error> {
         let entry = entry?;
         let src_path = entry.path();
         let dst_path = dst.join(entry.file_name());
-        
+
         if src_path.is_dir() {
             copy_dir_recursive(&src_path, &dst_path)?;
         } else {
@@ -338,7 +375,7 @@ fn copy_dir_recursive(src: &Path, dst: &Path) -> Result<(), std::io::Error> {
 
 fn calculate_dir_size(path: &Path) -> Result<u64, std::io::Error> {
     let mut size = 0;
-    
+
     if path.is_file() {
         size += fs::metadata(path)?.len();
     } else if path.is_dir() {
@@ -347,6 +384,6 @@ fn calculate_dir_size(path: &Path) -> Result<u64, std::io::Error> {
             size += calculate_dir_size(&entry.path())?;
         }
     }
-    
+
     Ok(size)
 }

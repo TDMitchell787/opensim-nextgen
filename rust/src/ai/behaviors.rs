@@ -1,6 +1,6 @@
+use rand::Rng;
 use std::collections::HashSet;
 use uuid::Uuid;
-use rand::Rng;
 
 #[derive(Debug, Clone)]
 pub enum BehaviorAction {
@@ -155,7 +155,10 @@ pub fn tick_follow(
     let dist = (dx * dx + dy * dy).sqrt();
 
     if dist > follow_distance + arrival_threshold {
-        BehaviorAction::SetVelocityToward { target: target_pos, speed }
+        BehaviorAction::SetVelocityToward {
+            target: target_pos,
+            speed,
+        }
     } else if dist < follow_distance - arrival_threshold {
         BehaviorAction::Stop
     } else {

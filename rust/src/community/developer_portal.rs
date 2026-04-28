@@ -11,9 +11,9 @@ use super::{CommunityConfig, ComponentHealth};
 use anyhow::Result;
 use serde::{Deserialize, Serialize};
 use std::collections::HashMap;
+use std::sync::Arc;
 use std::time::{SystemTime, UNIX_EPOCH};
 use tokio::sync::RwLock;
-use std::sync::Arc;
 
 /// Developer portal main structure
 pub struct DeveloperPortal {
@@ -44,10 +44,10 @@ impl DeveloperPortal {
 
         // Initialize content sections
         self.initialize_portal_content().await?;
-        
+
         // Load existing resources
         self.load_portal_resources().await?;
-        
+
         // Setup analytics tracking
         self.analytics.write().await.initialize().await?;
 
@@ -256,18 +256,18 @@ impl DeveloperPortal {
     pub async fn health_check(&self) -> Result<ComponentHealth> {
         // Check if all components are responsive
         let start_time = SystemTime::now();
-        
+
         // Test content manager
         let _content_count = self.content_manager.read().await.get_section_count();
-        
+
         // Test resource manager
         let _resource_count = self.resource_manager.read().await.get_resource_count();
-        
+
         // Test analytics
         let _analytics_healthy = self.analytics.read().await.is_healthy();
-        
+
         let response_time = start_time.elapsed().unwrap().as_millis() as u64;
-        
+
         Ok(ComponentHealth {
             status: "healthy".to_string(),
             response_time_ms: response_time,
@@ -293,7 +293,8 @@ impl DeveloperPortal {
 
     /// Generate installation guide content
     fn generate_installation_guide(&self) -> String {
-        format!(r#"# OpenSim Installation Guide
+        format!(
+            r#"# OpenSim Installation Guide
 
 ## Quick Start
 
@@ -365,12 +366,14 @@ opensim health-check
 3. **Network issues**: Verify firewall settings
 
 For more help, visit our [troubleshooting guide](../knowledge-base/troubleshooting) or [ask the community](https://community.opensim.org/forums).
-"#)
+"#
+        )
     }
 
     /// Generate first steps guide
     fn generate_first_steps_guide(&self) -> String {
-        format!(r#"# Your First OpenSim Application
+        format!(
+            r#"# Your First OpenSim Application
 
 ## Overview
 
@@ -526,12 +529,14 @@ Browse our [example repository](https://github.com/opensim/examples) for complet
 - 💬 [Community Forums](https://community.opensim.org/forums)
 - 🐛 [Bug Reports](https://github.com/opensim/opensim-next/issues)
 - 📧 [Support Email](mailto:support@opensim.org)
-"#)
+"#
+        )
     }
 
     /// Generate API overview content
     fn generate_api_overview(&self) -> String {
-        format!(r#"# OpenSim API Overview
+        format!(
+            r#"# OpenSim API Overview
 
 ## Introduction
 
@@ -671,7 +676,8 @@ Try our [interactive API explorer](../tools/api-explorer) to test endpoints dire
 - 🔐 [Authentication Guide](./authentication)
 - 🚀 [Getting Started](../getting-started/first-steps)
 - 💬 [Developer Forums](https://community.opensim.org/forums)
-"#)
+"#
+        )
     }
 
     /// Generate authentication guide
@@ -681,14 +687,20 @@ Try our [interactive API explorer](../tools/api-explorer) to test endpoints dire
 
     /// Generate SDK page for specific language
     fn generate_sdk_page(&self, language: &str) -> String {
-        format!("# {} SDK\n\nComplete {} SDK documentation and examples...", 
-                language.to_uppercase(), language)
+        format!(
+            "# {} SDK\n\nComplete {} SDK documentation and examples...",
+            language.to_uppercase(),
+            language
+        )
     }
 
     /// Generate tutorial content
     fn generate_tutorial_content(&self, topic: &str) -> String {
-        format!("# {} Tutorial\n\nStep-by-step {} tutorial...", 
-                topic.replace('-', " ").to_uppercase(), topic)
+        format!(
+            "# {} Tutorial\n\nStep-by-step {} tutorial...",
+            topic.replace('-', " ").to_uppercase(),
+            topic
+        )
     }
 
     /// Generate API explorer content
@@ -778,7 +790,9 @@ impl PortalAnalytics {
     }
 
     pub fn get_popular_pages(&self) -> Vec<(String, u64)> {
-        let mut pages: Vec<_> = self.page_views.iter()
+        let mut pages: Vec<_> = self
+            .page_views
+            .iter()
             .map(|(k, v)| (k.clone(), *v))
             .collect();
         pages.sort_by(|a, b| b.1.cmp(&a.1));

@@ -1,9 +1,9 @@
 pub mod common;
-pub mod traits;
-pub mod vivox_api;
-pub mod vivox;
 pub mod freeswitch;
+pub mod traits;
+pub mod vivox;
+pub mod vivox_api;
 
-pub use traits::{VoiceHandler, IVoiceModule};
-pub use vivox::VivoxVoiceModule;
 pub use freeswitch::FreeSwitchVoiceModule;
+pub use traits::{IVoiceModule, VoiceHandler};
+pub use vivox::VivoxVoiceModule;

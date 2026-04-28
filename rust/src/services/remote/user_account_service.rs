@@ -13,7 +13,7 @@ use std::time::Duration;
 use tracing::{debug, info, warn};
 use uuid::Uuid;
 
-use crate::services::traits::{UserAccountServiceTrait, UserAccount};
+use crate::services::traits::{UserAccount, UserAccountServiceTrait};
 
 pub struct RemoteUserAccountService {
     client: Client,
@@ -35,7 +35,11 @@ impl RemoteUserAccountService {
         }
     }
 
-    async fn send_request(&self, method: &str, params: &HashMap<String, String>) -> Result<HashMap<String, String>> {
+    async fn send_request(
+        &self,
+        method: &str,
+        params: &HashMap<String, String>,
+    ) -> Result<HashMap<String, String>> {
         let url = format!("{}/accounts", self.server_uri);
 
         let mut form_data = params.clone();
@@ -43,7 +47,8 @@ impl RemoteUserAccountService {
 
         debug!("User account service request: {} to {}", method, url);
 
-        let response = self.client
+        let response = self
+            .client
             .post(&url)
             .form(&form_data)
             .send()
@@ -51,17 +56,23 @@ impl RemoteUserAccountService {
             .map_err(|e| anyhow!("User account service request failed: {}", e))?;
 
         if !response.status().is_success() {
-            return Err(anyhow!("User account service returned status: {}", response.status()));
+            return Err(anyhow!(
+                "User account service returned status: {}",
+                response.status()
+            ));
         }
 
-        let body = response.text().await
+        let body = response
+            .text()
+            .await
             .map_err(|e| anyhow!("Failed to read user account service response: {}", e))?;
 
         self.parse_response(&body)
     }
 
     fn parse_response(&self, body: &str) -> Result<HashMap<String, String>> {
-        if let Some(xml_result) = crate::services::robust::xml_response::try_parse_xml_to_flat(body) {
+        if let Some(xml_result) = crate::services::robust::xml_response::try_parse_xml_to_flat(body)
+        {
             return Ok(xml_result);
         }
 
@@ -76,39 +87,37 @@ impl RemoteUserAccountService {
     }
 
     fn params_to_user_account(&self, params: &HashMap<String, String>) -> Result<UserAccount> {
-        let service_urls = params.get("ServiceURLs")
+        let service_urls = params
+            .get("ServiceURLs")
             .map(|s| self.parse_service_urls(s))
             .unwrap_or_default();
 
         Ok(UserAccount {
-            principal_id: params.get("PrincipalID")
+            principal_id: params
+                .get("PrincipalID")
                 .and_then(|s| Uuid::parse_str(s).ok())
                 .unwrap_or_default(),
-            scope_id: params.get("ScopeID")
+            scope_id: params
+                .get("ScopeID")
                 .and_then(|s| Uuid::parse_str(s).ok())
                 .unwrap_or_default(),
-            first_name: params.get("FirstName")
-                .cloned()
-                .unwrap_or_default(),
-            last_name: params.get("LastName")
-                .cloned()
-                .unwrap_or_default(),
-            email: params.get("Email")
-                .cloned()
-                .unwrap_or_default(),
+            first_name: params.get("FirstName").cloned().unwrap_or_default(),
+            last_name: params.get("LastName").cloned().unwrap_or_default(),
+            email: params.get("Email").cloned().unwrap_or_default(),
             service_urls,
-            created: params.get("Created")
+            created: params
+                .get("Created")
                 .and_then(|s| s.parse().ok())
                 .unwrap_or(0),
-            user_level: params.get("UserLevel")
+            user_level: params
+                .get("UserLevel")
                 .and_then(|s| s.parse().ok())
                 .unwrap_or(0),
-            user_flags: params.get("UserFlags")
+            user_flags: params
+                .get("UserFlags")
                 .and_then(|s| s.parse().ok())
                 .unwrap_or(0),
-            user_title: params.get("UserTitle")
-                .cloned()
-                .unwrap_or_default(),
+            user_title: params.get("UserTitle").cloned().unwrap_or_default(),
         })
     }
 
@@ -119,7 +128,10 @@ impl RemoteUserAccountService {
         params.insert("FirstName".to_string(), account.first_name.clone());
         params.insert("LastName".to_string(), account.last_name.clone());
         params.insert("Email".to_string(), account.email.clone());
-        params.insert("ServiceURLs".to_string(), self.serialize_service_urls(&account.service_urls));
+        params.insert(
+            "ServiceURLs".to_string(),
+            self.serialize_service_urls(&account.service_urls),
+        );
         params.insert("Created".to_string(), account.created.to_string());
         params.insert("UserLevel".to_string(), account.user_level.to_string());
         params.insert("UserFlags".to_string(), account.user_flags.to_string());
@@ -177,7 +189,10 @@ impl RemoteUserAccountService {
 #[async_trait]
 impl UserAccountServiceTrait for RemoteUserAccountService {
     async fn get_user_account(&self, scope_id: Uuid, user_id: Uuid) -> Result<Option<UserAccount>> {
-        debug!("Remote: Getting user account by ID: {} (scope: {})", user_id, scope_id);
+        debug!(
+            "Remote: Getting user account by ID: {} (scope: {})",
+            user_id, scope_id
+        );
 
         let mut params = HashMap::new();
         params.insert("ScopeID".to_string(), scope_id.to_string());
@@ -185,7 +200,8 @@ impl UserAccountServiceTrait for RemoteUserAccountService {
 
         let response = self.send_request("getaccount", &params).await?;
 
-        let result = response.get("result")
+        let result = response
+            .get("result")
             .map(|s| s != "null" && s != "Failure")
             .unwrap_or(true);
 
@@ -196,8 +212,16 @@ impl UserAccountServiceTrait for RemoteUserAccountService {
         }
     }
 
-    async fn get_user_account_by_name(&self, scope_id: Uuid, first: &str, last: &str) -> Result<Option<UserAccount>> {
-        debug!("Remote: Getting user account by name: {} {} (scope: {})", first, last, scope_id);
+    async fn get_user_account_by_name(
+        &self,
+        scope_id: Uuid,
+        first: &str,
+        last: &str,
+    ) -> Result<Option<UserAccount>> {
+        debug!(
+            "Remote: Getting user account by name: {} {} (scope: {})",
+            first, last, scope_id
+        );
 
         let mut params = HashMap::new();
         params.insert("ScopeID".to_string(), scope_id.to_string());
@@ -206,7 +230,8 @@ impl UserAccountServiceTrait for RemoteUserAccountService {
 
         let response = self.send_request("getaccount", &params).await?;
 
-        let result = response.get("result")
+        let result = response
+            .get("result")
             .map(|s| s != "null" && s != "Failure")
             .unwrap_or(true);
 
@@ -217,8 +242,15 @@ impl UserAccountServiceTrait for RemoteUserAccountService {
         }
     }
 
-    async fn get_user_account_by_email(&self, scope_id: Uuid, email: &str) -> Result<Option<UserAccount>> {
-        debug!("Remote: Getting user account by email: {} (scope: {})", email, scope_id);
+    async fn get_user_account_by_email(
+        &self,
+        scope_id: Uuid,
+        email: &str,
+    ) -> Result<Option<UserAccount>> {
+        debug!(
+            "Remote: Getting user account by email: {} (scope: {})",
+            email, scope_id
+        );
 
         let mut params = HashMap::new();
         params.insert("ScopeID".to_string(), scope_id.to_string());
@@ -226,7 +258,8 @@ impl UserAccountServiceTrait for RemoteUserAccountService {
 
         let response = self.send_request("getaccount", &params).await?;
 
-        let result = response.get("result")
+        let result = response
+            .get("result")
             .map(|s| s != "null" && s != "Failure")
             .unwrap_or(true);
 
@@ -238,19 +271,29 @@ impl UserAccountServiceTrait for RemoteUserAccountService {
     }
 
     async fn store_user_account(&self, data: &UserAccount) -> Result<bool> {
-        info!("Remote: Storing user account: {} {} ({})", data.first_name, data.last_name, data.principal_id);
+        info!(
+            "Remote: Storing user account: {} {} ({})",
+            data.first_name, data.last_name, data.principal_id
+        );
 
         let params = self.user_account_to_params(data);
         let response = self.send_request("setaccount", &params).await?;
 
-        let result = response.get("result")
+        let result = response
+            .get("result")
             .map(|s| s == "true" || s == "True" || s == "TRUE")
             .unwrap_or(false);
 
         if result {
-            info!("Remote: Stored user account: {} {}", data.first_name, data.last_name);
+            info!(
+                "Remote: Stored user account: {} {}",
+                data.first_name, data.last_name
+            );
         } else {
-            let message = response.get("message").cloned().unwrap_or_else(|| "Unknown error".to_string());
+            let message = response
+                .get("message")
+                .cloned()
+                .unwrap_or_else(|| "Unknown error".to_string());
             warn!("Remote: Failed to store user account: {}", message);
         }
 
@@ -258,7 +301,10 @@ impl UserAccountServiceTrait for RemoteUserAccountService {
     }
 
     async fn get_user_accounts(&self, scope_id: Uuid, query: &str) -> Result<Vec<UserAccount>> {
-        debug!("Remote: Searching user accounts: {} (scope: {})", query, scope_id);
+        debug!(
+            "Remote: Searching user accounts: {} (scope: {})",
+            query, scope_id
+        );
 
         let mut params = HashMap::new();
         params.insert("ScopeID".to_string(), scope_id.to_string());
@@ -286,8 +332,14 @@ mod tests {
         let urls_str = "HomeURI*http://localhost:8002;GatekeeperURI*http://localhost:8002";
         let urls = service.parse_service_urls(urls_str);
 
-        assert_eq!(urls.get("HomeURI"), Some(&"http://localhost:8002".to_string()));
-        assert_eq!(urls.get("GatekeeperURI"), Some(&"http://localhost:8002".to_string()));
+        assert_eq!(
+            urls.get("HomeURI"),
+            Some(&"http://localhost:8002".to_string())
+        );
+        assert_eq!(
+            urls.get("GatekeeperURI"),
+            Some(&"http://localhost:8002".to_string())
+        );
     }
 
     #[test]

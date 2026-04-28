@@ -1,5 +1,5 @@
 //! Avatar Appearance Engine for OpenSim Next
-//! 
+//!
 //! Provides advanced avatar appearance management including wearables,
 //! textures, attachments, and visual parameters.
 
@@ -44,7 +44,7 @@ impl AppearanceEngine {
         engine.initialize_defaults();
         engine.initialize_visual_parameters();
         engine.initialize_attachment_limits();
-        
+
         engine
     }
 
@@ -101,7 +101,9 @@ impl AppearanceEngine {
         self.validate_single_wearable(&wearable)?;
 
         // Remove existing wearable of same type
-        appearance.wearables.retain(|w| w.wearable_type != wearable.wearable_type);
+        appearance
+            .wearables
+            .retain(|w| w.wearable_type != wearable.wearable_type);
 
         // Add new wearable
         appearance.wearables.push(wearable);
@@ -122,8 +124,10 @@ impl AppearanceEngine {
         info!("Removing wearable: {:?}", wearable_type);
 
         let initial_len = appearance.wearables.len();
-        appearance.wearables.retain(|w| w.wearable_type != wearable_type);
-        
+        appearance
+            .wearables
+            .retain(|w| w.wearable_type != wearable_type);
+
         let removed = appearance.wearables.len() < initial_len;
         if removed {
             info!("Wearable removed successfully");
@@ -140,7 +144,10 @@ impl AppearanceEngine {
         appearance: &mut AvatarAppearance,
         attachment: AvatarAttachment,
     ) -> AvatarResult<()> {
-        info!("Adding attachment to point: {:?}", attachment.attachment_point);
+        info!(
+            "Adding attachment to point: {:?}",
+            attachment.attachment_point
+        );
 
         // Validate attachment
         self.validate_single_attachment(&attachment)?;
@@ -152,7 +159,8 @@ impl AppearanceEngine {
             .filter(|a| a.attachment_point == attachment.attachment_point)
             .count();
 
-        let limit = self.attachment_point_limits
+        let limit = self
+            .attachment_point_limits
             .get(&attachment.attachment_point)
             .copied()
             .unwrap_or(1);
@@ -181,7 +189,7 @@ impl AppearanceEngine {
 
         let initial_len = appearance.attachments.len();
         appearance.attachments.retain(|a| a.item_id != item_id);
-        
+
         let removed = appearance.attachments.len() < initial_len;
         if removed {
             info!("Attachment removed successfully");
@@ -216,7 +224,11 @@ impl AppearanceEngine {
         }
 
         // Update or add parameter
-        if let Some(param) = appearance.visual_params.iter_mut().find(|p| p.param_id == param_id) {
+        if let Some(param) = appearance
+            .visual_params
+            .iter_mut()
+            .find(|p| p.param_id == param_id)
+        {
             param.value = value;
         } else {
             // Add new parameter
@@ -243,7 +255,10 @@ impl AppearanceEngine {
         appearance: &'a AvatarAppearance,
         wearable_type: WearableType,
     ) -> Option<&'a WearableItem> {
-        appearance.wearables.iter().find(|w| w.wearable_type == wearable_type)
+        appearance
+            .wearables
+            .iter()
+            .find(|w| w.wearable_type == wearable_type)
     }
 
     /// Get attachment by item ID
@@ -256,11 +271,7 @@ impl AppearanceEngine {
     }
 
     /// Get visual parameter value
-    pub fn get_visual_parameter_value(
-        &self,
-        appearance: &AvatarAppearance,
-        param_id: i32,
-    ) -> f32 {
+    pub fn get_visual_parameter_value(&self, appearance: &AvatarAppearance, param_id: i32) -> f32 {
         appearance
             .visual_params
             .iter()
@@ -297,7 +308,7 @@ impl AppearanceEngine {
     /// Generate appearance hash for change detection
     pub fn generate_appearance_hash(&self, appearance: &AvatarAppearance) -> String {
         use sha2::{Digest, Sha256};
-        
+
         let serialized = serde_json::to_string(appearance).unwrap_or_default();
         let mut hasher = Sha256::new();
         hasher.update(serialized.as_bytes());

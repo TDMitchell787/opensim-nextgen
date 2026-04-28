@@ -1,5 +1,8 @@
-use super::camera::{Ray, dot, sub, normalize, length, cross};
-use super::scene_capture::{CapturedPrim, PrimShape, TerrainData, world_to_local, local_normal_to_world, quat_rotate, quat_inverse};
+use super::camera::{cross, dot, length, normalize, sub, Ray};
+use super::scene_capture::{
+    local_normal_to_world, quat_inverse, quat_rotate, world_to_local, CapturedPrim, PrimShape,
+    TerrainData,
+};
 
 #[derive(Debug, Clone, Copy)]
 pub struct HitRecord {
@@ -33,13 +36,13 @@ impl AABB {
 
         let corners = [
             [-half[0], -half[1], -half[2]],
-            [ half[0], -half[1], -half[2]],
-            [-half[0],  half[1], -half[2]],
-            [ half[0],  half[1], -half[2]],
-            [-half[0], -half[1],  half[2]],
-            [ half[0], -half[1],  half[2]],
-            [-half[0],  half[1],  half[2]],
-            [ half[0],  half[1],  half[2]],
+            [half[0], -half[1], -half[2]],
+            [-half[0], half[1], -half[2]],
+            [half[0], half[1], -half[2]],
+            [-half[0], -half[1], half[2]],
+            [half[0], -half[1], half[2]],
+            [-half[0], half[1], half[2]],
+            [half[0], half[1], half[2]],
         ];
 
         let mut aabb = AABB::empty();
@@ -94,9 +97,21 @@ impl AABB {
 
     pub fn intersect_ray(&self, ray: &Ray) -> Option<f32> {
         let inv_dir = [
-            if ray.direction[0].abs() > 1e-8 { 1.0 / ray.direction[0] } else { 1e8_f32.copysign(ray.direction[0]) },
-            if ray.direction[1].abs() > 1e-8 { 1.0 / ray.direction[1] } else { 1e8_f32.copysign(ray.direction[1]) },
-            if ray.direction[2].abs() > 1e-8 { 1.0 / ray.direction[2] } else { 1e8_f32.copysign(ray.direction[2]) },
+            if ray.direction[0].abs() > 1e-8 {
+                1.0 / ray.direction[0]
+            } else {
+                1e8_f32.copysign(ray.direction[0])
+            },
+            if ray.direction[1].abs() > 1e-8 {
+                1.0 / ray.direction[1]
+            } else {
+                1e8_f32.copysign(ray.direction[1])
+            },
+            if ray.direction[2].abs() > 1e-8 {
+                1.0 / ray.direction[2]
+            } else {
+                1e8_f32.copysign(ray.direction[2])
+            },
         ];
 
         let mut tmin = f32::NEG_INFINITY;
@@ -155,7 +170,13 @@ impl BVHNode {
         let dx = centroid_bounds.max[0] - centroid_bounds.min[0];
         let dy = centroid_bounds.max[1] - centroid_bounds.min[1];
         let dz = centroid_bounds.max[2] - centroid_bounds.min[2];
-        let axis = if dx >= dy && dx >= dz { 0 } else if dy >= dz { 1 } else { 2 };
+        let axis = if dx >= dy && dx >= dz {
+            0
+        } else if dy >= dz {
+            1
+        } else {
+            2
+        };
 
         let n = indices.len();
         if n <= 8 {
@@ -188,7 +209,9 @@ impl BVHNode {
         let bucket_size = (n + NUM_BUCKETS - 1) / NUM_BUCKETS;
         for i in 1..NUM_BUCKETS {
             let split = (i * bucket_size).min(n - 1).max(1);
-            if split == 0 || split >= n { continue; }
+            if split == 0 || split >= n {
+                continue;
+            }
 
             let mut left_bounds = AABB::empty();
             for &idx in &indices[..split] {
@@ -223,7 +246,10 @@ impl BVHNode {
 
     pub fn intersect(&self, ray: &Ray, prims: &[CapturedPrim], max_t: f32) -> Option<HitRecord> {
         match self {
-            BVHNode::Leaf { prim_indices, bounds } => {
+            BVHNode::Leaf {
+                prim_indices,
+                bounds,
+            } => {
                 if bounds.intersect_ray(ray).map_or(true, |t| t > max_t) {
                     return None;
                 }
@@ -239,7 +265,11 @@ impl BVHNode {
                 }
                 closest
             }
-            BVHNode::Internal { left, right, bounds } => {
+            BVHNode::Internal {
+                left,
+                right,
+                bounds,
+            } => {
                 if bounds.intersect_ray(ray).map_or(true, |t| t > max_t) {
                     return None;
                 }
@@ -254,7 +284,11 @@ impl BVHNode {
                     }
                 };
 
-                let (first, second) = if left_t <= right_t { (left, right) } else { (right, left) };
+                let (first, second) = if left_t <= right_t {
+                    (left, right)
+                } else {
+                    (right, left)
+                };
 
                 let mut best_t = max_t;
                 let mut closest = first.intersect(ray, prims, best_t);
@@ -308,9 +342,21 @@ fn intersect_box(ray: &Ray, prim: &CapturedPrim, max_t: f32) -> Option<HitRecord
     ];
 
     let inv_dir = [
-        if local_dir[0].abs() > 1e-8 { 1.0 / local_dir[0] } else { 1e8_f32.copysign(local_dir[0]) },
-        if local_dir[1].abs() > 1e-8 { 1.0 / local_dir[1] } else { 1e8_f32.copysign(local_dir[1]) },
-        if local_dir[2].abs() > 1e-8 { 1.0 / local_dir[2] } else { 1e8_f32.copysign(local_dir[2]) },
+        if local_dir[0].abs() > 1e-8 {
+            1.0 / local_dir[0]
+        } else {
+            1e8_f32.copysign(local_dir[0])
+        },
+        if local_dir[1].abs() > 1e-8 {
+            1.0 / local_dir[1]
+        } else {
+            1e8_f32.copysign(local_dir[1])
+        },
+        if local_dir[2].abs() > 1e-8 {
+            1.0 / local_dir[2]
+        } else {
+            1e8_f32.copysign(local_dir[2])
+        },
     ];
 
     let mut tmin = f32::NEG_INFINITY;
@@ -321,7 +367,11 @@ fn intersect_box(ray: &Ray, prim: &CapturedPrim, max_t: f32) -> Option<HitRecord
     for i in 0..3 {
         let t1 = (-half[i] - local_origin[i]) * inv_dir[i];
         let t2 = (half[i] - local_origin[i]) * inv_dir[i];
-        let (ta, tb, sign) = if t1 < t2 { (t1, t2, -1.0) } else { (t2, t1, 1.0) };
+        let (ta, tb, sign) = if t1 < t2 {
+            (t1, t2, -1.0)
+        } else {
+            (t2, t1, 1.0)
+        };
 
         if ta > tmin {
             tmin = ta;
@@ -399,7 +449,9 @@ fn intersect_cylinder(ray: &Ray, prim: &CapturedPrim, max_t: f32) -> Option<HitR
     let half_h = prim.scale[2] * 0.5;
 
     let a = (local_dir[0] / rx).powi(2) + (local_dir[1] / ry).powi(2);
-    let b = 2.0 * ((local_origin[0] * local_dir[0]) / (rx * rx) + (local_origin[1] * local_dir[1]) / (ry * ry));
+    let b = 2.0
+        * ((local_origin[0] * local_dir[0]) / (rx * rx)
+            + (local_origin[1] * local_dir[1]) / (ry * ry));
     let c = (local_origin[0] / rx).powi(2) + (local_origin[1] / ry).powi(2) - 1.0;
 
     let discriminant = b * b - 4.0 * a * c;
@@ -514,9 +566,7 @@ fn solve_quartic_numerical(a4: f32, a3: f32, a2: f32, a1: f32, a0: f32, max_t: f
     let steps = 64;
     let step = max_t / steps as f32;
 
-    let eval = |t: f32| -> f32 {
-        a4 * t * t * t * t + a3 * t * t * t + a2 * t * t + a1 * t + a0
-    };
+    let eval = |t: f32| -> f32 { a4 * t * t * t * t + a3 * t * t * t + a2 * t * t + a1 * t + a0 };
 
     let mut prev_val = eval(0.001);
     for i in 1..=steps {
@@ -535,7 +585,9 @@ fn solve_quartic_numerical(a4: f32, a3: f32, a2: f32, a1: f32, a0: f32, max_t: f
                 }
             }
             roots.push((lo + hi) * 0.5);
-            if roots.len() >= 4 { break; }
+            if roots.len() >= 4 {
+                break;
+            }
         }
         prev_val = val;
     }
@@ -603,7 +655,13 @@ fn intersect_prism(ray: &Ray, prim: &CapturedPrim, max_t: f32) -> Option<HitReco
     })
 }
 
-fn ray_triangle(origin: [f32; 3], dir: [f32; 3], v0: [f32; 3], v1: [f32; 3], v2: [f32; 3]) -> Option<f32> {
+fn ray_triangle(
+    origin: [f32; 3],
+    dir: [f32; 3],
+    v0: [f32; 3],
+    v1: [f32; 3],
+    v2: [f32; 3],
+) -> Option<f32> {
     let edge1 = sub(v1, v0);
     let edge2 = sub(v2, v0);
     let h = cross(dir, edge2);
@@ -627,7 +685,11 @@ fn ray_triangle(origin: [f32; 3], dir: [f32; 3], v0: [f32; 3], v1: [f32; 3], v2:
     }
 
     let t = f * dot(edge2, q);
-    if t > 0.001 { Some(t) } else { None }
+    if t > 0.001 {
+        Some(t)
+    } else {
+        None
+    }
 }
 
 pub fn intersect_terrain(ray: &Ray, terrain: &TerrainData, max_t: f32) -> Option<HitRecord> {
@@ -640,12 +702,15 @@ pub fn intersect_terrain(ray: &Ray, terrain: &TerrainData, max_t: f32) -> Option
 
     for _ in 0..max_steps {
         t += step;
-        if t > max_t { break; }
+        if t > max_t {
+            break;
+        }
 
         let pos = ray.at(t);
         let h = terrain.height_at(pos[0], pos[1]);
 
-        if pos[0] < terrain.region_origin[0] || pos[1] < terrain.region_origin[1]
+        if pos[0] < terrain.region_origin[0]
+            || pos[1] < terrain.region_origin[1]
             || pos[0] >= terrain.region_origin[0] + terrain.side as f32
             || pos[1] >= terrain.region_origin[1] + terrain.side as f32
         {
@@ -690,8 +755,8 @@ pub fn intersect_terrain(ray: &Ray, terrain: &TerrainData, max_t: f32) -> Option
 
 #[cfg(test)]
 mod tests {
-    use super::*;
     use super::super::scene_capture::PrimShape;
+    use super::*;
 
     fn make_test_prim(shape: PrimShape, position: [f32; 3], scale: [f32; 3]) -> CapturedPrim {
         CapturedPrim {
@@ -716,7 +781,10 @@ mod tests {
     #[test]
     fn test_ray_box_hit() {
         let prim = make_test_prim(PrimShape::Box, [5.0, 0.0, 0.0], [2.0, 2.0, 2.0]);
-        let ray = Ray { origin: [0.0, 0.0, 0.0], direction: [1.0, 0.0, 0.0] };
+        let ray = Ray {
+            origin: [0.0, 0.0, 0.0],
+            direction: [1.0, 0.0, 0.0],
+        };
         let hit = intersect_box(&ray, &prim, 100.0);
         assert!(hit.is_some(), "Ray should hit box");
         let h = hit.unwrap();
@@ -726,14 +794,20 @@ mod tests {
     #[test]
     fn test_ray_box_miss() {
         let prim = make_test_prim(PrimShape::Box, [5.0, 0.0, 0.0], [2.0, 2.0, 2.0]);
-        let ray = Ray { origin: [0.0, 0.0, 0.0], direction: [0.0, 1.0, 0.0] };
+        let ray = Ray {
+            origin: [0.0, 0.0, 0.0],
+            direction: [0.0, 1.0, 0.0],
+        };
         assert!(intersect_box(&ray, &prim, 100.0).is_none());
     }
 
     #[test]
     fn test_ray_sphere_hit() {
         let prim = make_test_prim(PrimShape::Sphere, [5.0, 0.0, 0.0], [2.0, 2.0, 2.0]);
-        let ray = Ray { origin: [0.0, 0.0, 0.0], direction: [1.0, 0.0, 0.0] };
+        let ray = Ray {
+            origin: [0.0, 0.0, 0.0],
+            direction: [1.0, 0.0, 0.0],
+        };
         let hit = intersect_sphere(&ray, &prim, 100.0);
         assert!(hit.is_some());
         let h = hit.unwrap();
@@ -743,7 +817,10 @@ mod tests {
     #[test]
     fn test_ray_cylinder_hit() {
         let prim = make_test_prim(PrimShape::Cylinder, [5.0, 0.0, 0.0], [2.0, 2.0, 2.0]);
-        let ray = Ray { origin: [0.0, 0.0, 0.0], direction: [1.0, 0.0, 0.0] };
+        let ray = Ray {
+            origin: [0.0, 0.0, 0.0],
+            direction: [1.0, 0.0, 0.0],
+        };
         let hit = intersect_cylinder(&ray, &prim, 100.0);
         assert!(hit.is_some(), "Ray should hit cylinder");
     }
@@ -751,7 +828,10 @@ mod tests {
     #[test]
     fn test_ray_prism_hit() {
         let prim = make_test_prim(PrimShape::Prism, [5.0, 0.0, 0.0], [2.0, 2.0, 2.0]);
-        let ray = Ray { origin: [0.0, 0.0, 0.0], direction: [1.0, 0.0, 0.0] };
+        let ray = Ray {
+            origin: [0.0, 0.0, 0.0],
+            direction: [1.0, 0.0, 0.0],
+        };
         let hit = intersect_prism(&ray, &prim, 100.0);
         assert!(hit.is_some(), "Ray should hit prism");
     }
@@ -774,7 +854,10 @@ mod tests {
         let mut indices: Vec<usize> = (0..prims.len()).collect();
         let bvh = BVHNode::build(&prims, &mut indices);
 
-        let ray = Ray { origin: [0.0, 0.0, 0.0], direction: [1.0, 0.0, 0.0] };
+        let ray = Ray {
+            origin: [0.0, 0.0, 0.0],
+            direction: [1.0, 0.0, 0.0],
+        };
         let hit = bvh.intersect(&ray, &prims, 100.0);
         assert!(hit.is_some(), "Should hit first box");
         assert!((hit.unwrap().t - 4.0).abs() < 0.2);
@@ -782,7 +865,7 @@ mod tests {
 
     #[test]
     fn test_terrain_intersection() {
-        let hm: Vec<f32> = (0..256*256).map(|_| 21.0).collect();
+        let hm: Vec<f32> = (0..256 * 256).map(|_| 21.0).collect();
         let terrain = TerrainData {
             heightmap: hm,
             side: 256,
@@ -795,7 +878,11 @@ mod tests {
         let hit = intersect_terrain(&ray, &terrain, 100.0);
         assert!(hit.is_some(), "Should hit flat terrain");
         let h = hit.unwrap();
-        assert!((h.position[2] - 21.0).abs() < 1.0, "Hit z should be ~21, got {}", h.position[2]);
+        assert!(
+            (h.position[2] - 21.0).abs() < 1.0,
+            "Hit z should be ~21, got {}",
+            h.position[2]
+        );
         assert!(h.is_terrain);
     }
 

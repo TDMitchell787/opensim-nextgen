@@ -1,19 +1,20 @@
 use axum::extract::State;
+use axum::http::{header, StatusCode};
 use axum::response::IntoResponse;
-use axum::http::{StatusCode, header};
 use std::collections::HashMap;
 use tracing::{debug, warn};
 use uuid::Uuid;
 
-use super::RobustState;
 use super::xml_response::*;
+use super::RobustState;
 
-pub async fn handle_auth(
-    State(state): State<RobustState>,
-    body: String,
-) -> impl IntoResponse {
+pub async fn handle_auth(State(state): State<RobustState>, body: String) -> impl IntoResponse {
     let params = parse_form_body(&body);
-    let method = params.get("METHOD").or_else(|| params.get("method")).cloned().unwrap_or_default();
+    let method = params
+        .get("METHOD")
+        .or_else(|| params.get("method"))
+        .cloned()
+        .unwrap_or_default();
 
     debug!("Auth handler: METHOD={}", method);
 
@@ -29,18 +30,30 @@ pub async fn handle_auth(
         }
     };
 
-    (StatusCode::OK, [(header::CONTENT_TYPE, "text/xml; charset=utf-8")], xml)
+    (
+        StatusCode::OK,
+        [(header::CONTENT_TYPE, "text/xml; charset=utf-8")],
+        xml,
+    )
 }
 
 async fn handle_authenticate(state: &RobustState, params: &HashMap<String, String>) -> String {
-    let principal_id = params.get("PRINCIPALID")
+    let principal_id = params
+        .get("PRINCIPALID")
         .or_else(|| params.get("PrincipalID"))
         .and_then(|s| Uuid::parse_str(s).ok())
         .unwrap_or(Uuid::nil());
     let password = params.get("PASSWORD").cloned().unwrap_or_default();
-    let lifetime: i32 = params.get("LIFETIME").and_then(|s| s.parse().ok()).unwrap_or(30);
+    let lifetime: i32 = params
+        .get("LIFETIME")
+        .and_then(|s| s.parse().ok())
+        .unwrap_or(30);
 
-    match state.auth_service.authenticate(principal_id, &password, lifetime).await {
+    match state
+        .auth_service
+        .authenticate(principal_id, &password, lifetime)
+        .await
+    {
         Ok(Some(token)) => {
             let mut data = HashMap::new();
             data.insert("Result".to_string(), "Success".to_string());
@@ -53,14 +66,22 @@ async fn handle_authenticate(state: &RobustState, params: &HashMap<String, Strin
 }
 
 async fn handle_verify(state: &RobustState, params: &HashMap<String, String>) -> String {
-    let principal_id = params.get("PRINCIPALID")
+    let principal_id = params
+        .get("PRINCIPALID")
         .or_else(|| params.get("PrincipalID"))
         .and_then(|s| Uuid::parse_str(s).ok())
         .unwrap_or(Uuid::nil());
     let token = params.get("TOKEN").cloned().unwrap_or_default();
-    let lifetime: i32 = params.get("LIFETIME").and_then(|s| s.parse().ok()).unwrap_or(30);
+    let lifetime: i32 = params
+        .get("LIFETIME")
+        .and_then(|s| s.parse().ok())
+        .unwrap_or(30);
 
-    match state.auth_service.verify(principal_id, &token, lifetime).await {
+    match state
+        .auth_service
+        .verify(principal_id, &token, lifetime)
+        .await
+    {
         Ok(true) => success_result(),
         Ok(false) => failure_result("Token invalid or expired"),
         Err(e) => failure_result(&format!("{}", e)),
@@ -68,7 +89,8 @@ async fn handle_verify(state: &RobustState, params: &HashMap<String, String>) ->
 }
 
 async fn handle_release(state: &RobustState, params: &HashMap<String, String>) -> String {
-    let principal_id = params.get("PRINCIPALID")
+    let principal_id = params
+        .get("PRINCIPALID")
         .or_else(|| params.get("PrincipalID"))
         .and_then(|s| Uuid::parse_str(s).ok())
         .unwrap_or(Uuid::nil());
@@ -82,13 +104,18 @@ async fn handle_release(state: &RobustState, params: &HashMap<String, String>) -
 }
 
 async fn handle_set_password(state: &RobustState, params: &HashMap<String, String>) -> String {
-    let principal_id = params.get("PRINCIPALID")
+    let principal_id = params
+        .get("PRINCIPALID")
         .or_else(|| params.get("PrincipalID"))
         .and_then(|s| Uuid::parse_str(s).ok())
         .unwrap_or(Uuid::nil());
     let password = params.get("PASSWORD").cloned().unwrap_or_default();
 
-    match state.auth_service.set_password(principal_id, &password).await {
+    match state
+        .auth_service
+        .set_password(principal_id, &password)
+        .await
+    {
         Ok(true) => success_result(),
         Ok(false) => failure_result("Failed to set password"),
         Err(e) => failure_result(&format!("{}", e)),
@@ -96,7 +123,8 @@ async fn handle_set_password(state: &RobustState, params: &HashMap<String, Strin
 }
 
 async fn handle_get_auth_info(state: &RobustState, params: &HashMap<String, String>) -> String {
-    let principal_id = params.get("PRINCIPALID")
+    let principal_id = params
+        .get("PRINCIPALID")
         .or_else(|| params.get("PrincipalID"))
         .and_then(|s| Uuid::parse_str(s).ok())
         .unwrap_or(Uuid::nil());

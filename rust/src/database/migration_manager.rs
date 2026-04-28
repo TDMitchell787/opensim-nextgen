@@ -2,7 +2,7 @@
 // Supports both SQLite and PostgreSQL with OpenSim master compatibility
 
 use anyhow::{anyhow, Result};
-use tracing::{info, debug, warn, error};
+use tracing::{debug, error, info, warn};
 
 pub enum DatabaseType {
     SQLite,
@@ -96,7 +96,7 @@ impl MigrationManager {
         ]
     }
 
-    /// Get MySQL migrations 
+    /// Get MySQL migrations
     pub fn get_mysql_migrations(&self) -> Vec<&'static str> {
         vec![
             include_str!("../../migrations/mysql/001_initial_schema.sql"),
@@ -132,7 +132,9 @@ impl MigrationManager {
 
     /// Detect database type from connection string
     pub fn detect_database_type(connection_string: &str) -> DatabaseType {
-        if connection_string.starts_with("postgresql://") || connection_string.starts_with("postgres://") {
+        if connection_string.starts_with("postgresql://")
+            || connection_string.starts_with("postgres://")
+        {
             DatabaseType::PostgreSQL
         } else if connection_string.starts_with("mysql://") {
             DatabaseType::MySQL
@@ -160,7 +162,9 @@ impl MigrationManager {
             "index already exists",
         ];
 
-        skip_patterns.iter().any(|pattern| error.to_lowercase().contains(pattern))
+        skip_patterns
+            .iter()
+            .any(|pattern| error.to_lowercase().contains(pattern))
     }
 
     /// Detect MariaDB vs MySQL at runtime
@@ -182,9 +186,17 @@ impl MigrationManager {
                     };
                     if let Some(raw) = tokens.get(name_idx) {
                         let clean = raw
-                            .trim_matches(|c| c == '(' || c == '"' || c == '`' || c == '\'' || c == ';')
+                            .trim_matches(|c| {
+                                c == '(' || c == '"' || c == '`' || c == '\'' || c == ';'
+                            })
                             .to_lowercase();
-                        if !clean.is_empty() && clean.chars().next().map(|c| c.is_alphabetic()).unwrap_or(false) {
+                        if !clean.is_empty()
+                            && clean
+                                .chars()
+                                .next()
+                                .map(|c| c.is_alphabetic())
+                                .unwrap_or(false)
+                        {
                             if !tables.contains(&clean) {
                                 tables.push(clean);
                             }
@@ -198,26 +210,60 @@ impl MigrationManager {
 
     pub fn required_opensim_tables() -> Vec<&'static str> {
         vec![
-            "useraccounts", "auth", "tokens",
-            "avatars", "friends", "griduser", "presence",
+            "useraccounts",
+            "auth",
+            "tokens",
+            "avatars",
+            "friends",
+            "griduser",
+            "presence",
             "assets",
-            "inventoryfolders", "inventoryitems",
+            "inventoryfolders",
+            "inventoryitems",
             "regions",
-            "prims", "primshapes", "primitems",
-            "land", "landaccesslist",
-            "regionsettings", "regionwindlight", "regionenvironment", "bakedterrain",
-            "estate_settings", "estate_map", "estate_groups", "estate_managers",
-            "estate_users", "estateban",
-            "userprofile", "userpicks", "userclassifieds", "usernotes", "usersettings",
-            "agentprefs", "mutelist",
-            "os_groups_groups", "os_groups_roles", "os_groups_membership",
-            "os_groups_rolemembership", "os_groups_principals",
-            "os_groups_invites", "os_groups_notices",
-            "xassetsdata", "xassetsmeta",
-            "im_offline", "hg_traveling_data", "logs",
-            "currency_balances", "currency_definitions", "economy_transactions",
-            "marketplace_categories", "marketplace_listings",
-            "purchase_orders", "escrow_accounts", "fraud_alerts", "gloebit_tokens",
+            "prims",
+            "primshapes",
+            "primitems",
+            "land",
+            "landaccesslist",
+            "regionsettings",
+            "regionwindlight",
+            "regionenvironment",
+            "bakedterrain",
+            "estate_settings",
+            "estate_map",
+            "estate_groups",
+            "estate_managers",
+            "estate_users",
+            "estateban",
+            "userprofile",
+            "userpicks",
+            "userclassifieds",
+            "usernotes",
+            "usersettings",
+            "agentprefs",
+            "mutelist",
+            "os_groups_groups",
+            "os_groups_roles",
+            "os_groups_membership",
+            "os_groups_rolemembership",
+            "os_groups_principals",
+            "os_groups_invites",
+            "os_groups_notices",
+            "xassetsdata",
+            "xassetsmeta",
+            "im_offline",
+            "hg_traveling_data",
+            "logs",
+            "currency_balances",
+            "currency_definitions",
+            "economy_transactions",
+            "marketplace_categories",
+            "marketplace_listings",
+            "purchase_orders",
+            "escrow_accounts",
+            "fraud_alerts",
+            "gloebit_tokens",
             "fsassets",
         ]
     }
@@ -264,11 +310,15 @@ impl MigrationManager {
                 warnings.push(format!("MySQL MISSING required table: {}", table));
             }
             if !Self::has_table_or_alias(&sqlite_tables, &t, &aliases) {
-                warnings.push(format!("SQLite MISSING required table: {} (checked aliases too)", table));
+                warnings.push(format!(
+                    "SQLite MISSING required table: {} (checked aliases too)",
+                    table
+                ));
             }
         }
 
-        let all_tables: std::collections::HashSet<String> = pg_tables.iter()
+        let all_tables: std::collections::HashSet<String> = pg_tables
+            .iter()
             .chain(mysql_tables.iter())
             .cloned()
             .collect();
@@ -277,9 +327,15 @@ impl MigrationManager {
             let in_pg = pg_tables.contains(table);
             let in_mysql = mysql_tables.contains(table);
             if in_pg && !in_mysql {
-                warnings.push(format!("Table '{}' in PostgreSQL but MISSING from MySQL", table));
+                warnings.push(format!(
+                    "Table '{}' in PostgreSQL but MISSING from MySQL",
+                    table
+                ));
             } else if !in_pg && in_mysql {
-                warnings.push(format!("Table '{}' in MySQL but MISSING from PostgreSQL", table));
+                warnings.push(format!(
+                    "Table '{}' in MySQL but MISSING from PostgreSQL",
+                    table
+                ));
             }
         }
 
@@ -291,7 +347,10 @@ impl MigrationManager {
         if warnings.is_empty() {
             info!("Migration consistency check: all backends have matching table coverage");
         } else {
-            warn!("Migration consistency check found {} issue(s):", warnings.len());
+            warn!(
+                "Migration consistency check found {} issue(s):",
+                warnings.len()
+            );
             for w in &warnings {
                 warn!("  - {}", w);
             }
@@ -307,21 +366,30 @@ mod tests {
     fn test_extract_table_names_basic() {
         let sql = &["CREATE TABLE IF NOT EXISTS users (id INT);"];
         let tables = MigrationManager::extract_table_names(sql);
-        assert!(tables.contains(&"users".to_string()), "Should extract 'users' from CREATE TABLE IF NOT EXISTS");
+        assert!(
+            tables.contains(&"users".to_string()),
+            "Should extract 'users' from CREATE TABLE IF NOT EXISTS"
+        );
     }
 
     #[test]
     fn test_extract_table_names_quoted() {
         let sql = &["CREATE TABLE \"UserAccounts\" (id INT);"];
         let tables = MigrationManager::extract_table_names(sql);
-        assert!(tables.contains(&"useraccounts".to_string()), "Should extract lowercase table name from quoted CREATE TABLE");
+        assert!(
+            tables.contains(&"useraccounts".to_string()),
+            "Should extract lowercase table name from quoted CREATE TABLE"
+        );
     }
 
     #[test]
     fn test_extract_table_names_backtick() {
         let sql = &["CREATE TABLE IF NOT EXISTS `inventoryitems` (id INT);"];
         let tables = MigrationManager::extract_table_names(sql);
-        assert!(tables.contains(&"inventoryitems".to_string()), "Should extract table name from backtick-quoted CREATE TABLE");
+        assert!(
+            tables.contains(&"inventoryitems".to_string()),
+            "Should extract table name from backtick-quoted CREATE TABLE"
+        );
     }
 
     #[test]
@@ -331,7 +399,11 @@ mod tests {
             "CREATE TABLE IF NOT EXISTS foo (id INT);",
         ];
         let tables = MigrationManager::extract_table_names(sql);
-        assert_eq!(tables.iter().filter(|t| *t == "foo").count(), 1, "Should not have duplicate table names");
+        assert_eq!(
+            tables.iter().filter(|t| *t == "foo").count(),
+            1,
+            "Should not have duplicate table names"
+        );
     }
 
     #[test]
@@ -339,8 +411,14 @@ mod tests {
         let mgr = MigrationManager::new(DatabaseType::PostgreSQL);
         let tables = MigrationManager::extract_table_names(&mgr.get_postgres_migrations());
         assert!(!tables.is_empty(), "PostgreSQL should produce tables");
-        assert!(tables.contains(&"prims".to_string()), "PostgreSQL should have prims table");
-        assert!(tables.contains(&"inventoryitems".to_string()), "PostgreSQL should have inventoryitems table");
+        assert!(
+            tables.contains(&"prims".to_string()),
+            "PostgreSQL should have prims table"
+        );
+        assert!(
+            tables.contains(&"inventoryitems".to_string()),
+            "PostgreSQL should have inventoryitems table"
+        );
     }
 
     #[test]
@@ -348,8 +426,14 @@ mod tests {
         let mgr = MigrationManager::new(DatabaseType::MySQL);
         let tables = MigrationManager::extract_table_names(&mgr.get_mysql_migrations());
         assert!(!tables.is_empty(), "MySQL should produce tables");
-        assert!(tables.contains(&"prims".to_string()), "MySQL should have prims table");
-        assert!(tables.contains(&"primitems".to_string()), "MySQL should have primitems table");
+        assert!(
+            tables.contains(&"prims".to_string()),
+            "MySQL should have prims table"
+        );
+        assert!(
+            tables.contains(&"primitems".to_string()),
+            "MySQL should have primitems table"
+        );
     }
 
     #[test]
@@ -375,14 +459,28 @@ mod tests {
     #[test]
     fn test_pg_mysql_parity() {
         let core_tables = vec![
-            "inventoryfolders", "inventoryitems",
-            "prims", "primshapes", "primitems",
-            "land", "landaccesslist",
-            "regionsettings", "regionwindlight", "regionenvironment", "bakedterrain",
-            "estate_settings", "estate_map", "estate_groups", "estate_managers",
-            "estate_users", "estateban",
-            "xassetsdata", "xassetsmeta",
-            "im_offline", "hg_traveling_data", "logs",
+            "inventoryfolders",
+            "inventoryitems",
+            "prims",
+            "primshapes",
+            "primitems",
+            "land",
+            "landaccesslist",
+            "regionsettings",
+            "regionwindlight",
+            "regionenvironment",
+            "bakedterrain",
+            "estate_settings",
+            "estate_map",
+            "estate_groups",
+            "estate_managers",
+            "estate_users",
+            "estateban",
+            "xassetsdata",
+            "xassetsmeta",
+            "im_offline",
+            "hg_traveling_data",
+            "logs",
         ];
 
         let pg_mgr = MigrationManager::new(DatabaseType::PostgreSQL);
@@ -406,21 +504,38 @@ mod tests {
             for f in &failures {
                 eprintln!("CORE TABLE MISSING: {}", f);
             }
-            panic!("{} core table(s) missing from production backends — see output above", failures.len());
+            panic!(
+                "{} core table(s) missing from production backends — see output above",
+                failures.len()
+            );
         }
     }
 
     #[test]
     fn test_all_backends_have_core_tables_with_aliases() {
         let core_tables = vec![
-            "inventoryfolders", "inventoryitems",
-            "prims", "primshapes", "primitems",
-            "land", "landaccesslist",
-            "regionsettings", "regionwindlight", "regionenvironment", "bakedterrain",
-            "estate_settings", "estate_map", "estate_groups", "estate_managers",
-            "estate_users", "estateban",
-            "xassetsdata", "xassetsmeta",
-            "im_offline", "hg_traveling_data", "logs",
+            "inventoryfolders",
+            "inventoryitems",
+            "prims",
+            "primshapes",
+            "primitems",
+            "land",
+            "landaccesslist",
+            "regionsettings",
+            "regionwindlight",
+            "regionenvironment",
+            "bakedterrain",
+            "estate_settings",
+            "estate_map",
+            "estate_groups",
+            "estate_managers",
+            "estate_users",
+            "estateban",
+            "xassetsdata",
+            "xassetsmeta",
+            "im_offline",
+            "hg_traveling_data",
+            "logs",
         ];
 
         let pg_mgr = MigrationManager::new(DatabaseType::PostgreSQL);
@@ -429,7 +544,8 @@ mod tests {
 
         let pg_tables = MigrationManager::extract_table_names(&pg_mgr.get_postgres_migrations());
         let mysql_tables = MigrationManager::extract_table_names(&mysql_mgr.get_mysql_migrations());
-        let sqlite_tables = MigrationManager::extract_table_names(&sqlite_mgr.get_sqlite_migrations());
+        let sqlite_tables =
+            MigrationManager::extract_table_names(&sqlite_mgr.get_sqlite_migrations());
         let aliases = MigrationManager::sqlite_table_aliases();
 
         let mut failures = Vec::new();
@@ -450,7 +566,10 @@ mod tests {
             for f in &failures {
                 eprintln!("CORE TABLE MISSING: {}", f);
             }
-            panic!("{} core table(s) missing across backends — see output above", failures.len());
+            panic!(
+                "{} core table(s) missing across backends — see output above",
+                failures.len()
+            );
         }
     }
 }

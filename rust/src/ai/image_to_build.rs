@@ -1,5 +1,5 @@
-use std::sync::Arc;
 use serde::{Deserialize, Serialize};
+use std::sync::Arc;
 use tracing::info;
 use uuid::Uuid;
 
@@ -39,7 +39,9 @@ pub struct Opening {
     pub wall_index: usize,
 }
 
-fn default_sill() -> f32 { 0.0 }
+fn default_sill() -> f32 {
+    0.0
+}
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct Room {
@@ -150,20 +152,35 @@ pub async fn analyze_floorplan(
     image_data: &[u8],
     media_type: &str,
 ) -> Result<FloorPlanData, AIError> {
-    info!("[IMAGE_TO_BUILD] Analyzing floor plan image ({} bytes, {})", image_data.len(), media_type);
+    info!(
+        "[IMAGE_TO_BUILD] Analyzing floor plan image ({} bytes, {})",
+        image_data.len(),
+        media_type
+    );
 
-    let response = llm.chat_with_image(
-        FLOORPLAN_VISION_PROMPT,
-        "Analyze this floor plan and extract all walls, doors, windows, and rooms as JSON.",
-        image_data,
-        media_type,
-    ).await?;
+    let response = llm
+        .chat_with_image(
+            FLOORPLAN_VISION_PROMPT,
+            "Analyze this floor plan and extract all walls, doors, windows, and rooms as JSON.",
+            image_data,
+            media_type,
+        )
+        .await?;
 
     let json_text = extract_json(&response.text);
-    info!("[IMAGE_TO_BUILD] Vision response ({}): {}", response.tokens_used, &json_text[..json_text.len().min(500)]);
+    info!(
+        "[IMAGE_TO_BUILD] Vision response ({}): {}",
+        response.tokens_used,
+        &json_text[..json_text.len().min(500)]
+    );
 
-    serde_json::from_str::<FloorPlanData>(&json_text)
-        .map_err(|e| AIError::InferenceFailed(format!("Failed to parse floor plan JSON: {} — raw: {}", e, &json_text[..json_text.len().min(300)])))
+    serde_json::from_str::<FloorPlanData>(&json_text).map_err(|e| {
+        AIError::InferenceFailed(format!(
+            "Failed to parse floor plan JSON: {} — raw: {}",
+            e,
+            &json_text[..json_text.len().min(300)]
+        ))
+    })
 }
 
 pub async fn analyze_elevation(
@@ -171,7 +188,11 @@ pub async fn analyze_elevation(
     image_data: &[u8],
     media_type: &str,
 ) -> Result<ElevationData, AIError> {
-    info!("[IMAGE_TO_BUILD] Analyzing elevation image ({} bytes, {})", image_data.len(), media_type);
+    info!(
+        "[IMAGE_TO_BUILD] Analyzing elevation image ({} bytes, {})",
+        image_data.len(),
+        media_type
+    );
 
     let response = llm.chat_with_image(
         ELEVATION_VISION_PROMPT,
@@ -181,10 +202,19 @@ pub async fn analyze_elevation(
     ).await?;
 
     let json_text = extract_json(&response.text);
-    info!("[IMAGE_TO_BUILD] Elevation response ({}): {}", response.tokens_used, &json_text[..json_text.len().min(500)]);
+    info!(
+        "[IMAGE_TO_BUILD] Elevation response ({}): {}",
+        response.tokens_used,
+        &json_text[..json_text.len().min(500)]
+    );
 
-    serde_json::from_str::<ElevationData>(&json_text)
-        .map_err(|e| AIError::InferenceFailed(format!("Failed to parse elevation JSON: {} — raw: {}", e, &json_text[..json_text.len().min(300)])))
+    serde_json::from_str::<ElevationData>(&json_text).map_err(|e| {
+        AIError::InferenceFailed(format!(
+            "Failed to parse elevation JSON: {} — raw: {}",
+            e,
+            &json_text[..json_text.len().min(300)]
+        ))
+    })
 }
 
 fn extract_json(text: &str) -> String {
@@ -221,11 +251,7 @@ pub fn floorplan_to_actions(plan: &FloorPlanData, config: &BuildConfig) -> Vec<N
     let oz = config.origin[2];
 
     let floor_action = NPCAction::RezBox {
-        position: [
-            config.origin[0],
-            config.origin[1],
-            oz,
-        ],
+        position: [config.origin[0], config.origin[1], oz],
         scale: [
             plan.overall_width * scale,
             plan.overall_depth * scale,
@@ -253,13 +279,16 @@ pub fn floorplan_to_actions(plan: &FloorPlanData, config: &BuildConfig) -> Vec<N
             continue;
         }
 
-        let openings_in_wall: Vec<&Opening> = plan.doors.iter()
+        let openings_in_wall: Vec<&Opening> = plan
+            .doors
+            .iter()
             .chain(plan.windows.iter())
             .filter(|o| o.wall_index == i)
             .collect();
 
         if openings_in_wall.is_empty() {
-            let (wall_scale, rot) = wall_dimensions(length, wall.thickness * scale, config.wall_height, dx, dy);
+            let (wall_scale, rot) =
+                wall_dimensions(length, wall.thickness * scale, config.wall_height, dx, dy);
             actions.push(NPCAction::RezBox {
                 position: [cx, cy, cz],
                 scale: wall_scale,
@@ -272,18 +301,28 @@ pub fn floorplan_to_actions(plan: &FloorPlanData, config: &BuildConfig) -> Vec<N
                 });
             }
         } else {
-            let mut sorted_openings: Vec<(&Opening, bool)> = plan.doors.iter()
+            let mut sorted_openings: Vec<(&Opening, bool)> = plan
+                .doors
+                .iter()
                 .filter(|o| o.wall_index == i)
                 .map(|o| (o, true))
-                .chain(plan.windows.iter().filter(|o| o.wall_index == i).map(|o| (o, false)))
+                .chain(
+                    plan.windows
+                        .iter()
+                        .filter(|o| o.wall_index == i)
+                        .map(|o| (o, false)),
+                )
                 .collect();
             sorted_openings.sort_by(|a, b| {
                 let a_pos = project_onto_wall(a.0.center_x, a.0.center_y, wall, scale, ox, oy);
                 let b_pos = project_onto_wall(b.0.center_x, b.0.center_y, wall, scale, ox, oy);
-                a_pos.partial_cmp(&b_pos).unwrap_or(std::cmp::Ordering::Equal)
+                a_pos
+                    .partial_cmp(&b_pos)
+                    .unwrap_or(std::cmp::Ordering::Equal)
             });
 
-            let segments = split_wall_around_openings(wall, &sorted_openings, config, scale, ox, oy, oz, i);
+            let segments =
+                split_wall_around_openings(wall, &sorted_openings, config, scale, ox, oy, oz, i);
             actions.extend(segments);
         }
     }
@@ -291,9 +330,16 @@ pub fn floorplan_to_actions(plan: &FloorPlanData, config: &BuildConfig) -> Vec<N
     actions
 }
 
-fn wall_dimensions(length: f32, thickness: f32, height: f32, dx: f32, dy: f32) -> ([f32; 3], [f32; 4]) {
+fn wall_dimensions(
+    length: f32,
+    thickness: f32,
+    height: f32,
+    dx: f32,
+    dy: f32,
+) -> ([f32; 3], [f32; 4]) {
     let angle = dy.atan2(dx);
-    let is_ns = angle.abs() > std::f32::consts::FRAC_PI_4 && angle.abs() < 3.0 * std::f32::consts::FRAC_PI_4;
+    let is_ns = angle.abs() > std::f32::consts::FRAC_PI_4
+        && angle.abs() < 3.0 * std::f32::consts::FRAC_PI_4;
 
     if is_ns {
         ([thickness, length, height], [0.0, 0.0, 0.0, 1.0])
@@ -308,7 +354,9 @@ fn project_onto_wall(px: f32, py: f32, wall: &WallSegment, scale: f32, ox: f32, 
     let dx = (wall.end_x - wall.start_x) * scale;
     let dy = (wall.end_y - wall.start_y) * scale;
     let len = (dx * dx + dy * dy).sqrt();
-    if len < 0.01 { return 0.0; }
+    if len < 0.01 {
+        return 0.0;
+    }
     let px_w = px * scale + ox - wx;
     let py_w = py * scale + oy - wy;
     (px_w * dx + py_w * dy) / len
@@ -332,7 +380,9 @@ fn split_wall_around_openings(
     let dx = ex - sx;
     let dy = ey - sy;
     let wall_len = (dx * dx + dy * dy).sqrt();
-    if wall_len < 0.1 { return actions; }
+    if wall_len < 0.1 {
+        return actions;
+    }
 
     let dir_x = dx / wall_len;
     let dir_y = dy / wall_len;
@@ -383,7 +433,8 @@ fn split_wall_around_openings(
                 let seg_cx = sx + dir_x * op_center;
                 let seg_cy = sy + dir_y * op_center;
                 *seg_count += 1;
-                let (wall_scale, _) = wall_dimensions(opening.width * scale, thick, above_h, dx, dy);
+                let (wall_scale, _) =
+                    wall_dimensions(opening.width * scale, thick, above_h, dx, dy);
                 actions.push(NPCAction::RezBox {
                     position: [seg_cx, seg_cy, cz_above],
                     scale: wall_scale,
@@ -398,7 +449,8 @@ fn split_wall_around_openings(
                 let seg_cx = sx + dir_x * op_center;
                 let seg_cy = sy + dir_y * op_center;
                 *seg_count += 1;
-                let (wall_scale, _) = wall_dimensions(opening.width * scale, thick, above_h, dx, dy);
+                let (wall_scale, _) =
+                    wall_dimensions(opening.width * scale, thick, above_h, dx, dy);
                 actions.push(NPCAction::RezBox {
                     position: [seg_cx, seg_cy, cz_above],
                     scale: wall_scale,
@@ -427,7 +479,11 @@ fn split_wall_around_openings(
     actions
 }
 
-pub fn elevation_to_actions(elevation: &ElevationData, plan: Option<&FloorPlanData>, config: &BuildConfig) -> Vec<NPCAction> {
+pub fn elevation_to_actions(
+    elevation: &ElevationData,
+    plan: Option<&FloorPlanData>,
+    config: &BuildConfig,
+) -> Vec<NPCAction> {
     let mut actions = Vec::new();
 
     let width = if let Some(p) = plan {
@@ -461,7 +517,11 @@ pub fn elevation_to_actions(elevation: &ElevationData, plan: Option<&FloorPlanDa
             };
             let roof_base = oz + elevation.total_height - elevation.roof_height;
             actions.push(NPCAction::RezPrism {
-                position: [config.origin[0], config.origin[1], roof_base + elevation.roof_height / 2.0],
+                position: [
+                    config.origin[0],
+                    config.origin[1],
+                    roof_base + elevation.roof_height / 2.0,
+                ],
                 scale: [width + 0.4, depth + 0.4, elevation.roof_height],
                 name: "Roof".to_string(),
             });
@@ -487,12 +547,19 @@ pub fn elevation_to_actions(elevation: &ElevationData, plan: Option<&FloorPlanDa
 
 pub fn detect_media_type(path: &str) -> &'static str {
     let lower = path.to_lowercase();
-    if lower.ends_with(".png") { "image/png" }
-    else if lower.ends_with(".jpg") || lower.ends_with(".jpeg") { "image/jpeg" }
-    else if lower.ends_with(".gif") { "image/gif" }
-    else if lower.ends_with(".webp") { "image/webp" }
-    else if lower.ends_with(".bmp") { "image/bmp" }
-    else { "image/png" }
+    if lower.ends_with(".png") {
+        "image/png"
+    } else if lower.ends_with(".jpg") || lower.ends_with(".jpeg") {
+        "image/jpeg"
+    } else if lower.ends_with(".gif") {
+        "image/gif"
+    } else if lower.ends_with(".webp") {
+        "image/webp"
+    } else if lower.ends_with(".bmp") {
+        "image/bmp"
+    } else {
+        "image/png"
+    }
 }
 
 #[cfg(test)]
@@ -535,14 +602,48 @@ mod tests {
     fn test_floorplan_to_actions_simple_room() {
         let plan = FloorPlanData {
             walls: vec![
-                WallSegment { start_x: 0.0, start_y: 0.0, end_x: 5.0, end_y: 0.0, thickness: 0.3, height: 3.0 },
-                WallSegment { start_x: 5.0, start_y: 0.0, end_x: 5.0, end_y: 4.0, thickness: 0.3, height: 3.0 },
-                WallSegment { start_x: 5.0, start_y: 4.0, end_x: 0.0, end_y: 4.0, thickness: 0.3, height: 3.0 },
-                WallSegment { start_x: 0.0, start_y: 4.0, end_x: 0.0, end_y: 0.0, thickness: 0.3, height: 3.0 },
+                WallSegment {
+                    start_x: 0.0,
+                    start_y: 0.0,
+                    end_x: 5.0,
+                    end_y: 0.0,
+                    thickness: 0.3,
+                    height: 3.0,
+                },
+                WallSegment {
+                    start_x: 5.0,
+                    start_y: 0.0,
+                    end_x: 5.0,
+                    end_y: 4.0,
+                    thickness: 0.3,
+                    height: 3.0,
+                },
+                WallSegment {
+                    start_x: 5.0,
+                    start_y: 4.0,
+                    end_x: 0.0,
+                    end_y: 4.0,
+                    thickness: 0.3,
+                    height: 3.0,
+                },
+                WallSegment {
+                    start_x: 0.0,
+                    start_y: 4.0,
+                    end_x: 0.0,
+                    end_y: 0.0,
+                    thickness: 0.3,
+                    height: 3.0,
+                },
             ],
             doors: vec![],
             windows: vec![],
-            rooms: vec![Room { name: "Room".to_string(), min_x: 0.0, min_y: 0.0, max_x: 5.0, max_y: 4.0 }],
+            rooms: vec![Room {
+                name: "Room".to_string(),
+                min_x: 0.0,
+                min_y: 0.0,
+                max_x: 5.0,
+                max_y: 4.0,
+            }],
             overall_width: 5.0,
             overall_depth: 4.0,
             scale_meters_per_unit: 1.0,
@@ -552,7 +653,10 @@ mod tests {
         assert!(!actions.is_empty());
         assert!(actions.len() >= 5);
 
-        let rez_count = actions.iter().filter(|a| matches!(a, NPCAction::RezBox { .. })).count();
+        let rez_count = actions
+            .iter()
+            .filter(|a| matches!(a, NPCAction::RezBox { .. }))
+            .count();
         assert!(rez_count >= 5);
     }
 

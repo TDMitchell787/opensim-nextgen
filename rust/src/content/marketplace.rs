@@ -3,14 +3,14 @@
 //! Provides marketplace functionality for content buying, selling, and management
 //! with ownership verification and automated delivery systems.
 
+use super::{ContentError, ContentMetadata, ContentPermissions, ContentPrice, ContentResult};
+use chrono::{DateTime, Duration, Utc};
+use serde::{Deserialize, Serialize};
 use std::collections::HashMap;
 use std::sync::Arc;
 use tokio::sync::RwLock;
+use tracing::{debug, error, info, warn};
 use uuid::Uuid;
-use serde::{Deserialize, Serialize};
-use chrono::{DateTime, Utc, Duration};
-use tracing::{debug, info, warn, error};
-use super::{ContentResult, ContentError, ContentMetadata, ContentPrice, ContentPermissions};
 
 /// Marketplace listing
 #[derive(Debug, Clone, Serialize, Deserialize)]
@@ -319,7 +319,7 @@ impl MarketplaceManager {
             config,
         }
     }
-    
+
     /// Create a marketplace listing
     pub async fn create_listing(
         &mut self,
@@ -329,7 +329,7 @@ impl MarketplaceManager {
         listing_details: ListingDetails,
     ) -> ContentResult<Uuid> {
         let listing_id = Uuid::new_v4();
-        
+
         let listing = MarketplaceListing {
             listing_id,
             content_id: content_metadata.content_id,
@@ -353,13 +353,17 @@ impl MarketplaceManager {
             demo_available: listing_details.demo_available,
             auto_delivery: listing_details.auto_delivery,
         };
-        
+
         self.listings.write().await.insert(listing_id, listing);
-        
-        tracing::info!("Marketplace listing created: {} by seller {}", listing_id, seller_id);
+
+        tracing::info!(
+            "Marketplace listing created: {} by seller {}",
+            listing_id,
+            seller_id
+        );
         Ok(listing_id)
     }
-    
+
     /// Purchase content from marketplace
     pub async fn purchase_content(
         &mut self,
@@ -367,19 +371,22 @@ impl MarketplaceManager {
         buyer_id: Uuid,
         payment_method: PaymentMethod,
     ) -> ContentResult<Uuid> {
-        let listing = self.listings.read().await
+        let listing = self
+            .listings
+            .read()
+            .await
             .get(&listing_id)
             .cloned()
             .ok_or(ContentError::ContentNotFound { id: listing_id })?;
-        
+
         if listing.listing_status != ListingStatus::Active {
             return Err(ContentError::MarketplaceError {
                 reason: "Listing is not active".to_string(),
             });
         }
-        
+
         let transaction_id = Uuid::new_v4();
-        
+
         let transaction = MarketplaceTransaction {
             transaction_id,
             listing_id,
@@ -395,16 +402,23 @@ impl MarketplaceManager {
             delivery_status: DeliveryStatus::Pending,
             refund_eligible: true,
         };
-        
-        self.transactions.write().await.insert(transaction_id, transaction);
-        
+
+        self.transactions
+            .write()
+            .await
+            .insert(transaction_id, transaction);
+
         // Process payment (stub implementation)
         self.process_payment(transaction_id).await?;
-        
-        tracing::info!("Content purchase initiated: {} by buyer {}", listing_id, buyer_id);
+
+        tracing::info!(
+            "Content purchase initiated: {} by buyer {}",
+            listing_id,
+            buyer_id
+        );
         Ok(transaction_id)
     }
-    
+
     /// Search marketplace listings
     pub async fn search_listings(
         &self,
@@ -426,23 +440,23 @@ impl MarketplaceManager {
             })
             .cloned()
             .collect();
-        
+
         // Sort results
         self.sort_listings(&mut results, &filter.sort_by, &filter.sort_order);
-        
+
         // Paginate
         let start_idx = (page * page_size) as usize;
         let end_idx = ((page + 1) * page_size) as usize;
-        
+
         if start_idx < results.len() {
             results = results[start_idx..end_idx.min(results.len())].to_vec();
         } else {
             results = Vec::new();
         }
-        
+
         Ok(results)
     }
-    
+
     /// Add review for a listing
     pub async fn add_review(
         &mut self,
@@ -457,10 +471,10 @@ impl MarketplaceManager {
                 reason: "Rating must be between 1 and 5".to_string(),
             });
         }
-        
+
         // Verify purchase (simplified)
         let has_purchased = self.verify_purchase(listing_id, reviewer_id).await?;
-        
+
         let review_id = Uuid::new_v4();
         let review = MarketplaceReview {
             review_id,
@@ -474,62 +488,71 @@ impl MarketplaceManager {
             helpful_votes: 0,
             reported: false,
         };
-        
+
         // Add review
-        self.reviews.write().await
+        self.reviews
+            .write()
+            .await
             .entry(listing_id)
             .or_default()
             .push(review);
-        
+
         // Update listing rating
         self.update_listing_rating(listing_id).await?;
-        
-        tracing::info!("Review added for listing {} by reviewer {}", listing_id, reviewer_id);
+
+        tracing::info!(
+            "Review added for listing {} by reviewer {}",
+            listing_id,
+            reviewer_id
+        );
         Ok(review_id)
     }
-    
+
     /// Get marketplace analytics
     pub async fn get_analytics(&self) -> ContentResult<MarketplaceAnalytics> {
         let listings = self.listings.read().await;
         let transactions = self.transactions.read().await;
-        
+
         let total_listings = listings.len() as u32;
-        let active_listings = listings.values()
+        let active_listings = listings
+            .values()
             .filter(|l| l.listing_status == ListingStatus::Active)
             .count() as u32;
-        
-        let total_sales = transactions.values()
+
+        let total_sales = transactions
+            .values()
             .filter(|t| t.transaction_status == TransactionStatus::Completed)
             .count() as u64;
-        
-        let total_revenue = transactions.values()
+
+        let total_revenue = transactions
+            .values()
             .filter(|t| t.transaction_status == TransactionStatus::Completed)
             .map(|t| t.amount)
             .sum();
-        
+
         // Calculate category stats
         let mut category_stats = HashMap::new();
         for listing in listings.values() {
-            let entry = category_stats.entry(listing.category.clone()).or_insert(CategoryStats {
-                category: listing.category.clone(),
-                listing_count: 0,
-                sales_count: listing.sales_count,
-                average_price: 0.0,
-                average_rating: 0.0,
-            });
+            let entry = category_stats
+                .entry(listing.category.clone())
+                .or_insert(CategoryStats {
+                    category: listing.category.clone(),
+                    listing_count: 0,
+                    sales_count: listing.sales_count,
+                    average_price: 0.0,
+                    average_rating: 0.0,
+                });
             entry.listing_count += 1;
         }
-        
-        let top_categories: Vec<CategoryStats> = category_stats.into_values()
-            .take(10)
-            .collect();
-        
+
+        let top_categories: Vec<CategoryStats> = category_stats.into_values().take(10).collect();
+
         // Calculate seller stats (simplified)
         let top_sellers = Vec::new(); // Would implement seller ranking
-        
+
         // Sales by period (simplified)
         let sales_by_period = HashMap::new(); // Would implement time-based aggregation
-        
+
         Ok(MarketplaceAnalytics {
             total_listings,
             active_listings,
@@ -541,15 +564,17 @@ impl MarketplaceManager {
             sales_by_period,
         })
     }
-    
+
     /// Get seller profile
     pub async fn get_seller_profile(&self, seller_id: Uuid) -> ContentResult<SellerProfile> {
-        self.seller_profiles.read().await
+        self.seller_profiles
+            .read()
+            .await
             .get(&seller_id)
             .cloned()
             .ok_or(ContentError::ContentNotFound { id: seller_id })
     }
-    
+
     /// Update seller profile
     pub async fn update_seller_profile(
         &mut self,
@@ -570,80 +595,99 @@ impl MarketplaceManager {
         }
         Ok(())
     }
-    
+
     // Private helper methods
-    
-    fn matches_marketplace_filter(&self, listing: &MarketplaceListing, filter: &MarketplaceSearchFilter) -> bool {
+
+    fn matches_marketplace_filter(
+        &self,
+        listing: &MarketplaceListing,
+        filter: &MarketplaceSearchFilter,
+    ) -> bool {
         if let Some(categories) = &filter.categories {
             if !categories.contains(&listing.category) {
                 return false;
             }
         }
-        
+
         if let Some(price_min) = filter.price_min {
             if listing.price.amount < price_min {
                 return false;
             }
         }
-        
+
         if let Some(price_max) = filter.price_max {
             if listing.price.amount > price_max {
                 return false;
             }
         }
-        
+
         if let Some(rating_min) = filter.rating_min {
             if listing.rating < rating_min {
                 return false;
             }
         }
-        
+
         if let Some(featured_only) = filter.featured_only {
             if featured_only && !listing.featured {
                 return false;
             }
         }
-        
+
         if let Some(demo_available) = filter.demo_available {
             if demo_available && !listing.demo_available {
                 return false;
             }
         }
-        
+
         true
     }
-    
+
     fn matches_query(&self, listing: &MarketplaceListing, query: &Option<String>) -> bool {
         if let Some(q) = query {
             let q_lower = q.to_lowercase();
-            listing.title.to_lowercase().contains(&q_lower) ||
-            listing.description.to_lowercase().contains(&q_lower) ||
-            listing.tags.iter().any(|tag| tag.to_lowercase().contains(&q_lower))
+            listing.title.to_lowercase().contains(&q_lower)
+                || listing.description.to_lowercase().contains(&q_lower)
+                || listing
+                    .tags
+                    .iter()
+                    .any(|tag| tag.to_lowercase().contains(&q_lower))
         } else {
             true
         }
     }
-    
-    fn sort_listings(&self, listings: &mut Vec<MarketplaceListing>, sort_by: &SortBy, sort_order: &SortOrder) {
+
+    fn sort_listings(
+        &self,
+        listings: &mut Vec<MarketplaceListing>,
+        sort_by: &SortBy,
+        sort_order: &SortOrder,
+    ) {
         match sort_by {
             SortBy::Price => {
                 listings.sort_by(|a, b| {
-                    let cmp = a.price.amount.partial_cmp(&b.price.amount).unwrap_or(std::cmp::Ordering::Equal);
+                    let cmp = a
+                        .price
+                        .amount
+                        .partial_cmp(&b.price.amount)
+                        .unwrap_or(std::cmp::Ordering::Equal);
                     match sort_order {
                         SortOrder::Ascending => cmp,
                         SortOrder::Descending => cmp.reverse(),
                     }
                 });
-            },
+            }
             SortBy::Rating => {
                 listings.sort_by(|a, b| {
-                    let cmp = a.rating.partial_cmp(&b.rating).unwrap_or(std::cmp::Ordering::Equal);
+                    let cmp = a
+                        .rating
+                        .partial_cmp(&b.rating)
+                        .unwrap_or(std::cmp::Ordering::Equal);
                     match sort_order {
                         SortOrder::Ascending => cmp,
                         SortOrder::Descending => cmp.reverse(),
                     }
                 });
-            },
+            }
             SortBy::Sales => {
                 listings.sort_by(|a, b| {
                     let cmp = a.sales_count.cmp(&b.sales_count);
@@ -652,7 +696,7 @@ impl MarketplaceManager {
                         SortOrder::Descending => cmp.reverse(),
                     }
                 });
-            },
+            }
             SortBy::Date => {
                 listings.sort_by(|a, b| {
                     let cmp = a.created_at.cmp(&b.created_at);
@@ -661,14 +705,14 @@ impl MarketplaceManager {
                         SortOrder::Descending => cmp.reverse(),
                     }
                 });
-            },
+            }
             _ => {
                 // Default sorting by relevance (created date descending)
                 listings.sort_by(|a, b| b.created_at.cmp(&a.created_at));
             }
         }
     }
-    
+
     async fn process_payment(&mut self, transaction_id: Uuid) -> ContentResult<()> {
         let transaction_data = {
             let transactions = self.transactions.read().await;
@@ -678,14 +722,18 @@ impl MarketplaceManager {
         let transaction = match transaction_data {
             Some(t) => t,
             None => {
-                error!("Transaction {} not found for payment processing", transaction_id);
+                error!(
+                    "Transaction {} not found for payment processing",
+                    transaction_id
+                );
                 return Err(ContentError::NotFound { id: transaction_id });
             }
         };
 
         let seller_commission_rate = {
             let profiles = self.seller_profiles.read().await;
-            profiles.get(&transaction.seller_id)
+            profiles
+                .get(&transaction.seller_id)
                 .map(|p| p.commission_rate)
                 .unwrap_or(self.config.commission_rate)
         };
@@ -699,7 +747,10 @@ impl MarketplaceManager {
             if let Some(t) = transactions.get_mut(&transaction_id) {
                 t.transaction_status = TransactionStatus::Failed;
             }
-            warn!("Payment validation failed for transaction {}", transaction_id);
+            warn!(
+                "Payment validation failed for transaction {}",
+                transaction_id
+            );
             return Err(ContentError::MarketplaceError {
                 reason: "Payment validation failed".to_string(),
             });
@@ -726,38 +777,50 @@ impl MarketplaceManager {
 
             {
                 let mut balances = self.seller_balances.write().await;
-                let balance = balances.entry(transaction.seller_id).or_insert_with(|| SellerBalance {
-                    seller_id: transaction.seller_id,
-                    available_balance: 0.0,
-                    pending_balance: 0.0,
-                    total_earned: 0.0,
-                    total_paid_out: 0.0,
-                    currency: transaction.currency.clone(),
-                    last_updated: Utc::now(),
-                });
+                let balance =
+                    balances
+                        .entry(transaction.seller_id)
+                        .or_insert_with(|| SellerBalance {
+                            seller_id: transaction.seller_id,
+                            available_balance: 0.0,
+                            pending_balance: 0.0,
+                            total_earned: 0.0,
+                            total_paid_out: 0.0,
+                            currency: transaction.currency.clone(),
+                            last_updated: Utc::now(),
+                        });
                 balance.pending_balance += seller_amount;
                 balance.last_updated = Utc::now();
             }
 
-            info!("Payment {} held in escrow until {}", transaction_id, release_date);
+            info!(
+                "Payment {} held in escrow until {}",
+                transaction_id, release_date
+            );
         } else {
             {
                 let mut balances = self.seller_balances.write().await;
-                let balance = balances.entry(transaction.seller_id).or_insert_with(|| SellerBalance {
-                    seller_id: transaction.seller_id,
-                    available_balance: 0.0,
-                    pending_balance: 0.0,
-                    total_earned: 0.0,
-                    total_paid_out: 0.0,
-                    currency: transaction.currency.clone(),
-                    last_updated: Utc::now(),
-                });
+                let balance =
+                    balances
+                        .entry(transaction.seller_id)
+                        .or_insert_with(|| SellerBalance {
+                            seller_id: transaction.seller_id,
+                            available_balance: 0.0,
+                            pending_balance: 0.0,
+                            total_earned: 0.0,
+                            total_paid_out: 0.0,
+                            currency: transaction.currency.clone(),
+                            last_updated: Utc::now(),
+                        });
                 balance.available_balance += seller_amount;
                 balance.total_earned += seller_amount;
                 balance.last_updated = Utc::now();
             }
 
-            info!("Payment {} directly credited to seller {}", transaction_id, transaction.seller_id);
+            info!(
+                "Payment {} directly credited to seller {}",
+                transaction_id, transaction.seller_id
+            );
         }
 
         {
@@ -769,7 +832,8 @@ impl MarketplaceManager {
             }
         }
 
-        self.update_listing_sales_count(transaction.listing_id).await?;
+        self.update_listing_sales_count(transaction.listing_id)
+            .await?;
 
         info!(
             "Payment processed: transaction={}, amount={}, commission={}, seller_receives={}",
@@ -816,7 +880,11 @@ impl MarketplaceManager {
         }
     }
 
-    pub async fn process_refund(&mut self, transaction_id: Uuid, reason: &str) -> ContentResult<()> {
+    pub async fn process_refund(
+        &mut self,
+        transaction_id: Uuid,
+        reason: &str,
+    ) -> ContentResult<()> {
         let transaction_data = {
             let transactions = self.transactions.read().await;
             transactions.get(&transaction_id).cloned()
@@ -843,7 +911,8 @@ impl MarketplaceManager {
 
         let commission_rate = {
             let profiles = self.seller_profiles.read().await;
-            profiles.get(&transaction.seller_id)
+            profiles
+                .get(&transaction.seller_id)
                 .map(|p| p.commission_rate)
                 .unwrap_or(self.config.commission_rate)
         };
@@ -886,7 +955,10 @@ impl MarketplaceManager {
             }
         }
 
-        info!("Refund processed for transaction {}: {}", transaction_id, reason);
+        info!(
+            "Refund processed for transaction {}: {}",
+            transaction_id, reason
+        );
         Ok(())
     }
 
@@ -927,7 +999,10 @@ impl MarketplaceManager {
             }
         }
 
-        info!("Escrow {} released: {} {} to seller {}", escrow_id, escrow.amount, escrow.currency, escrow.seller_id);
+        info!(
+            "Escrow {} released: {} {} to seller {}",
+            escrow_id, escrow.amount, escrow.currency, escrow.seller_id
+        );
         Ok(())
     }
 
@@ -937,10 +1012,11 @@ impl MarketplaceManager {
 
         let escrow_ids: Vec<Uuid> = {
             let escrow_entries = self.escrow_entries.read().await;
-            escrow_entries.iter()
+            escrow_entries
+                .iter()
                 .filter(|(_, e)| {
-                    e.status == EscrowStatus::Held &&
-                    e.release_at.map(|r| r <= now).unwrap_or(false)
+                    e.status == EscrowStatus::Held
+                        && e.release_at.map(|r| r <= now).unwrap_or(false)
                 })
                 .map(|(id, _)| *id)
                 .collect()
@@ -959,7 +1035,12 @@ impl MarketplaceManager {
         Ok(released_count)
     }
 
-    pub async fn request_payout(&mut self, seller_id: Uuid, amount: f64, payment_method: PaymentMethod) -> ContentResult<Uuid> {
+    pub async fn request_payout(
+        &mut self,
+        seller_id: Uuid,
+        amount: f64,
+        payment_method: PaymentMethod,
+    ) -> ContentResult<Uuid> {
         let balance = {
             let balances = self.seller_balances.read().await;
             balances.get(&seller_id).cloned()
@@ -976,7 +1057,10 @@ impl MarketplaceManager {
 
         if amount > seller_balance.available_balance {
             return Err(ContentError::MarketplaceError {
-                reason: format!("Insufficient balance. Available: {}", seller_balance.available_balance),
+                reason: format!(
+                    "Insufficient balance. Available: {}",
+                    seller_balance.available_balance
+                ),
             });
         }
 
@@ -1010,7 +1094,10 @@ impl MarketplaceManager {
 
         self.payout_requests.write().await.insert(payout_id, payout);
 
-        info!("Payout request created: {} for {} {}", payout_id, amount, seller_balance.currency);
+        info!(
+            "Payout request created: {} for {} {}",
+            payout_id, amount, seller_balance.currency
+        );
         Ok(payout_id)
     }
 
@@ -1040,7 +1127,11 @@ impl MarketplaceManager {
             }
         }
 
-        let reference = format!("PAYOUT-{}-{}", payout.seller_id.to_string()[..8].to_uppercase(), Utc::now().format("%Y%m%d"));
+        let reference = format!(
+            "PAYOUT-{}-{}",
+            payout.seller_id.to_string()[..8].to_uppercase(),
+            Utc::now().format("%Y%m%d")
+        );
 
         {
             let mut payouts = self.payout_requests.write().await;
@@ -1059,64 +1150,79 @@ impl MarketplaceManager {
             }
         }
 
-        info!("Payout {} processed: {} {} to seller {}, ref: {}",
-            payout_id, payout.amount, payout.currency, payout.seller_id, reference);
+        info!(
+            "Payout {} processed: {} {} to seller {}, ref: {}",
+            payout_id, payout.amount, payout.currency, payout.seller_id, reference
+        );
         Ok(())
     }
 
     pub async fn get_seller_balance(&self, seller_id: Uuid) -> ContentResult<SellerBalance> {
         let balances = self.seller_balances.read().await;
-        balances.get(&seller_id)
+        balances
+            .get(&seller_id)
             .cloned()
             .ok_or(ContentError::NotFound { id: seller_id })
     }
 
-    pub async fn get_seller_transactions(&self, seller_id: Uuid) -> ContentResult<Vec<MarketplaceTransaction>> {
+    pub async fn get_seller_transactions(
+        &self,
+        seller_id: Uuid,
+    ) -> ContentResult<Vec<MarketplaceTransaction>> {
         let transactions = self.transactions.read().await;
-        let seller_txns: Vec<MarketplaceTransaction> = transactions.values()
+        let seller_txns: Vec<MarketplaceTransaction> = transactions
+            .values()
             .filter(|t| t.seller_id == seller_id)
             .cloned()
             .collect();
         Ok(seller_txns)
     }
 
-    pub async fn get_buyer_transactions(&self, buyer_id: Uuid) -> ContentResult<Vec<MarketplaceTransaction>> {
+    pub async fn get_buyer_transactions(
+        &self,
+        buyer_id: Uuid,
+    ) -> ContentResult<Vec<MarketplaceTransaction>> {
         let transactions = self.transactions.read().await;
-        let buyer_txns: Vec<MarketplaceTransaction> = transactions.values()
+        let buyer_txns: Vec<MarketplaceTransaction> = transactions
+            .values()
             .filter(|t| t.buyer_id == buyer_id)
             .cloned()
             .collect();
         Ok(buyer_txns)
     }
 
-    pub async fn get_pending_payouts(&self, seller_id: Option<Uuid>) -> ContentResult<Vec<PayoutRequest>> {
+    pub async fn get_pending_payouts(
+        &self,
+        seller_id: Option<Uuid>,
+    ) -> ContentResult<Vec<PayoutRequest>> {
         let payouts = self.payout_requests.read().await;
-        let pending: Vec<PayoutRequest> = payouts.values()
+        let pending: Vec<PayoutRequest> = payouts
+            .values()
             .filter(|p| {
-                p.status == PayoutStatus::Pending &&
-                seller_id.map(|sid| p.seller_id == sid).unwrap_or(true)
+                p.status == PayoutStatus::Pending
+                    && seller_id.map(|sid| p.seller_id == sid).unwrap_or(true)
             })
             .cloned()
             .collect();
         Ok(pending)
     }
-    
+
     async fn verify_purchase(&self, listing_id: Uuid, buyer_id: Uuid) -> ContentResult<bool> {
         let transactions = self.transactions.read().await;
-        Ok(transactions.values().any(|t| 
-            t.listing_id == listing_id && 
-            t.buyer_id == buyer_id && 
-            t.transaction_status == TransactionStatus::Completed
-        ))
+        Ok(transactions.values().any(|t| {
+            t.listing_id == listing_id
+                && t.buyer_id == buyer_id
+                && t.transaction_status == TransactionStatus::Completed
+        }))
     }
-    
+
     async fn update_listing_rating(&mut self, listing_id: Uuid) -> ContentResult<()> {
         let reviews = self.reviews.read().await;
         if let Some(listing_reviews) = reviews.get(&listing_id) {
             if !listing_reviews.is_empty() {
                 let total_rating: u32 = listing_reviews.iter().map(|r| r.rating as u32).sum();
                 let average_rating = total_rating as f32 / listing_reviews.len() as f32;
-                
+
                 let mut listings = self.listings.write().await;
                 if let Some(listing) = listings.get_mut(&listing_id) {
                     listing.rating = average_rating;
@@ -1126,7 +1232,7 @@ impl MarketplaceManager {
         }
         Ok(())
     }
-    
+
     async fn update_listing_sales_count(&mut self, listing_id: Uuid) -> ContentResult<()> {
         let mut listings = self.listings.write().await;
         if let Some(listing) = listings.get_mut(&listing_id) {

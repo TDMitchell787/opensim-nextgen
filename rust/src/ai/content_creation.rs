@@ -10,7 +10,6 @@ use uuid::Uuid;
 
 use super::content_validator::{ContentValidator, ValidationConfig, ValidationResult};
 
-
 #[derive(Debug, Clone)]
 pub struct ContentCreationEngine {
     /// EADS-style learning system for pattern recognition
@@ -255,16 +254,16 @@ impl ContentCreationEngine {
     /// Analyze OAR files to learn building patterns
     pub async fn analyze_oar_file(&mut self, oar_path: &Path) -> Result<ContentPattern> {
         tracing::info!("Analyzing OAR file: {}", oar_path.display());
-        
+
         // Extract and analyze OAR contents
         let oar_data = self.extract_oar_data(oar_path).await?;
-        
+
         // Pattern recognition using EADS methodology
         let pattern = self.learning_system.recognize_patterns(&oar_data)?;
-        
+
         // Update learning system with new patterns
         self.learning_system.update_patterns(pattern.clone())?;
-        
+
         // Update analytics
         {
             let mut analytics = self.analytics.write().await;
@@ -281,39 +280,59 @@ impl ContentCreationEngine {
         tracing::info!("Generating content from prompt: '{}'", prompt);
 
         // Parse and understand the prompt
-        let parsed_prompt = self.generation_pipeline.nlp_processor.parse_prompt(prompt)?;
+        let parsed_prompt = self
+            .generation_pipeline
+            .nlp_processor
+            .parse_prompt(prompt)?;
 
         // Determine generation strategy based on complexity
         let strategy = self.determine_generation_strategy(&parsed_prompt)?;
 
         // Generate content using appropriate algorithms
         let content = match strategy {
-            GenerationStrategy::Primitive => self.generate_primitive_content(&parsed_prompt).await?,
-            GenerationStrategy::Architectural => self.generate_architectural_content(&parsed_prompt).await?,
-            GenerationStrategy::Interactive => self.generate_interactive_content(&parsed_prompt).await?,
-            GenerationStrategy::Environment => self.generate_environment_content(&parsed_prompt).await?,
+            GenerationStrategy::Primitive => {
+                self.generate_primitive_content(&parsed_prompt).await?
+            }
+            GenerationStrategy::Architectural => {
+                self.generate_architectural_content(&parsed_prompt).await?
+            }
+            GenerationStrategy::Interactive => {
+                self.generate_interactive_content(&parsed_prompt).await?
+            }
+            GenerationStrategy::Environment => {
+                self.generate_environment_content(&parsed_prompt).await?
+            }
         };
 
         // Validate quality using EADS principles
-        let validated_content = self.generation_pipeline.quality_validator.validate(&content)?;
+        let validated_content = self
+            .generation_pipeline
+            .quality_validator
+            .validate(&content)?;
 
         // Validate against OpenSim technical constraints
         let tech_validation = self.validate_generated_content(&validated_content)?;
         if !tech_validation.is_valid {
-            let error_msgs: Vec<_> = tech_validation.errors.iter()
+            let error_msgs: Vec<_> = tech_validation
+                .errors
+                .iter()
                 .map(|e| e.message.clone())
                 .collect();
             tracing::warn!("Generated content has validation errors: {:?}", error_msgs);
         }
 
         // Update learning system with generation results
-        self.learning_system.update_with_generation_result(&validated_content)?;
+        self.learning_system
+            .update_with_generation_result(&validated_content)?;
 
         tracing::info!("Successfully generated content from prompt");
         Ok(validated_content)
     }
 
-    pub fn validate_generated_content(&self, content: &GeneratedContent) -> Result<ValidationResult> {
+    pub fn validate_generated_content(
+        &self,
+        content: &GeneratedContent,
+    ) -> Result<ValidationResult> {
         use super::content_validator::{ValidatableContent, ValidatableObject};
 
         let mut validatable = ValidatableContent::new();
@@ -330,19 +349,25 @@ impl ContentCreationEngine {
     }
 
     /// Launch AI assistant avatar in-world
-    pub async fn launch_assistant_avatar(&self, region_id: Uuid, launch_word: &str) -> Result<AvatarInstance> {
+    pub async fn launch_assistant_avatar(
+        &self,
+        region_id: Uuid,
+        launch_word: &str,
+    ) -> Result<AvatarInstance> {
         if launch_word.to_lowercase() != "shazam" {
-            return Err(anyhow::anyhow!("Invalid launch word. Use 'Shazam' to summon the AI assistant."));
+            return Err(anyhow::anyhow!(
+                "Invalid launch word. Use 'Shazam' to summon the AI assistant."
+            ));
         }
-        
+
         tracing::info!("Launching AI assistant avatar in region: {}", region_id);
-        
+
         // Create avatar instance with mystical appearance
         let avatar = self.assistant_avatar.create_instance(region_id).await?;
-        
+
         // Initialize in-world interaction system
         self.assistant_avatar.interaction_system.initialize()?;
-        
+
         tracing::info!("AI assistant avatar successfully launched");
         Ok(avatar)
     }
@@ -352,42 +377,60 @@ impl ContentCreationEngine {
         &self,
         script_request: &ScriptRequest,
     ) -> Result<MultiEngineScripts> {
-        tracing::info!("Generating multi-engine scripts for: {}", script_request.name);
-        
+        tracing::info!(
+            "Generating multi-engine scripts for: {}",
+            script_request.name
+        );
+
         let scripts = MultiEngineScripts {
-            native: self.scripting_system.native_engine.generate_script(script_request).await?,
-            xengine: self.scripting_system.xengine.generate_script(script_request).await?,
-            yengine: self.scripting_system.yengine.generate_script(script_request).await?,
+            native: self
+                .scripting_system
+                .native_engine
+                .generate_script(script_request)
+                .await?,
+            xengine: self
+                .scripting_system
+                .xengine
+                .generate_script(script_request)
+                .await?,
+            yengine: self
+                .scripting_system
+                .yengine
+                .generate_script(script_request)
+                .await?,
             metadata: ScriptMetadata {
                 creator_attribution: script_request.attribution.clone(),
                 generation_timestamp: chrono::Utc::now(),
                 requirements: script_request.requirements.clone(),
             },
         };
-        
+
         tracing::info!("Successfully generated multi-engine scripts");
         Ok(scripts)
     }
 
     /// Create full simulator buildout plan
-    pub async fn create_simulator_buildout(&mut self, buildout_request: &BuildoutRequest) -> Result<SimulatorBuildout> {
+    pub async fn create_simulator_buildout(
+        &mut self,
+        buildout_request: &BuildoutRequest,
+    ) -> Result<SimulatorBuildout> {
         tracing::info!("Creating simulator buildout: {}", buildout_request.name);
-        
+
         // Generate master plan
         let master_plan = self.generate_master_plan(buildout_request).await?;
-        
+
         // Create infrastructure (roads, utilities)
         let infrastructure = self.generate_infrastructure(&master_plan).await?;
-        
+
         // Generate landscape and terrain
         let landscape = self.generate_landscape(&master_plan).await?;
-        
+
         // Create buildings and structures
         let structures = self.generate_structures(&master_plan).await?;
-        
+
         // Add decorative elements (trees, plants, flowers)
         let decorations = self.generate_decorations(&master_plan).await?;
-        
+
         let buildout = SimulatorBuildout {
             id: Uuid::new_v4(),
             name: buildout_request.name.clone(),
@@ -403,7 +446,7 @@ impl ContentCreationEngine {
                 complexity_score: self.calculate_complexity_score(&buildout_request),
             },
         };
-        
+
         tracing::info!("Successfully created simulator buildout");
         Ok(buildout)
     }
@@ -417,7 +460,10 @@ impl ContentCreationEngine {
         Ok(OARData::default())
     }
 
-    fn determine_generation_strategy(&self, _parsed_prompt: &ParsedPrompt) -> Result<GenerationStrategy> {
+    fn determine_generation_strategy(
+        &self,
+        _parsed_prompt: &ParsedPrompt,
+    ) -> Result<GenerationStrategy> {
         Ok(GenerationStrategy::default())
     }
 
@@ -437,7 +483,10 @@ impl ContentCreationEngine {
         })
     }
 
-    async fn generate_architectural_content(&self, _prompt: &ParsedPrompt) -> Result<GeneratedContent> {
+    async fn generate_architectural_content(
+        &self,
+        _prompt: &ParsedPrompt,
+    ) -> Result<GeneratedContent> {
         Ok(GeneratedContent {
             id: Uuid::new_v4(),
             name: "Generated Architecture".to_string(),
@@ -453,7 +502,10 @@ impl ContentCreationEngine {
         })
     }
 
-    async fn generate_interactive_content(&self, _prompt: &ParsedPrompt) -> Result<GeneratedContent> {
+    async fn generate_interactive_content(
+        &self,
+        _prompt: &ParsedPrompt,
+    ) -> Result<GeneratedContent> {
         Ok(GeneratedContent {
             id: Uuid::new_v4(),
             name: "Generated Interactive".to_string(),
@@ -469,7 +521,10 @@ impl ContentCreationEngine {
         })
     }
 
-    async fn generate_environment_content(&self, _prompt: &ParsedPrompt) -> Result<GeneratedContent> {
+    async fn generate_environment_content(
+        &self,
+        _prompt: &ParsedPrompt,
+    ) -> Result<GeneratedContent> {
         Ok(GeneratedContent {
             id: Uuid::new_v4(),
             name: "Generated Environment".to_string(),
@@ -653,11 +708,23 @@ pub enum GenerationStrategy {
     Environment,
 }
 #[derive(Debug, Clone, Serialize, Deserialize)]
-pub struct ScriptRequest { pub name: String, pub attribution: CreatorAttribution, pub requirements: ContentRequirements }
+pub struct ScriptRequest {
+    pub name: String,
+    pub attribution: CreatorAttribution,
+    pub requirements: ContentRequirements,
+}
 #[derive(Debug, Clone, Serialize, Deserialize)]
-pub struct ScriptMetadata { pub creator_attribution: CreatorAttribution, pub generation_timestamp: chrono::DateTime<chrono::Utc>, pub requirements: ContentRequirements }
+pub struct ScriptMetadata {
+    pub creator_attribution: CreatorAttribution,
+    pub generation_timestamp: chrono::DateTime<chrono::Utc>,
+    pub requirements: ContentRequirements,
+}
 #[derive(Debug, Clone, Serialize, Deserialize)]
-pub struct BuildoutRequest { pub name: String, pub creator: String, pub theme: String }
+pub struct BuildoutRequest {
+    pub name: String,
+    pub creator: String,
+    pub theme: String,
+}
 #[derive(Debug, Clone, Default, Serialize, Deserialize)]
 pub struct MasterPlan;
 #[derive(Debug, Clone, Default, Serialize, Deserialize)]
@@ -669,7 +736,12 @@ pub struct Structure;
 #[derive(Debug, Clone, Default, Serialize, Deserialize)]
 pub struct Decoration;
 #[derive(Debug, Clone, Serialize, Deserialize)]
-pub struct BuildoutMetadata { pub created_at: chrono::DateTime<chrono::Utc>, pub creator: String, pub theme: String, pub complexity_score: f64 }
+pub struct BuildoutMetadata {
+    pub created_at: chrono::DateTime<chrono::Utc>,
+    pub creator: String,
+    pub theme: String,
+    pub complexity_score: f64,
+}
 
 // Implementation stubs for main systems
 impl EADSLearningSystem {

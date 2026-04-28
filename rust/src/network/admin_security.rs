@@ -1,5 +1,5 @@
 //! Enhanced security for OpenSim Next Admin API
-//! 
+//!
 //! Provides comprehensive security features including rate limiting,
 //! IP restrictions, audit logging, and advanced authentication.
 
@@ -45,7 +45,7 @@ impl Default for SecurityConfig {
             rate_limit_window: Duration::from_secs(60),
             max_failed_attempts: 5,
             ban_duration: Duration::from_secs(300), // 5 minutes
-            allowed_ips: Vec::new(), // Empty = allow all
+            allowed_ips: Vec::new(),                // Empty = allow all
             blocked_ips: Vec::new(),
             enable_audit_logging: true,
             require_https: false, // Disabled for development
@@ -72,7 +72,7 @@ impl RateLimitTracker {
             last_activity: Instant::now(),
         }
     }
-    
+
     /// Check if IP is currently banned
     fn is_banned(&self) -> bool {
         if let Some(banned_until) = self.banned_until {
@@ -81,15 +81,16 @@ impl RateLimitTracker {
             false
         }
     }
-    
+
     /// Add a request and check rate limit
     fn add_request(&mut self, window: Duration, limit: u32) -> bool {
         let now = Instant::now();
         self.last_activity = now;
-        
+
         // Remove old requests outside the window
-        self.requests.retain(|&request_time| now.duration_since(request_time) < window);
-        
+        self.requests
+            .retain(|&request_time| now.duration_since(request_time) < window);
+
         // Check rate limit
         if self.requests.len() >= limit as usize {
             false
@@ -98,18 +99,18 @@ impl RateLimitTracker {
             true
         }
     }
-    
+
     /// Record failed attempt
     fn record_failure(&mut self, max_attempts: u32, ban_duration: Duration) {
         self.failed_attempts += 1;
         self.last_activity = Instant::now();
-        
+
         if self.failed_attempts >= max_attempts {
             self.banned_until = Some(Instant::now() + ban_duration);
             warn!("IP banned due to {} failed attempts", self.failed_attempts);
         }
     }
-    
+
     /// Reset failed attempts on successful authentication
     fn reset_failures(&mut self) {
         self.failed_attempts = 0;
@@ -148,21 +149,25 @@ impl AdminSecurityManager {
             audit_log: Arc::new(RwLock::new(Vec::new())),
         }
     }
-    
+
     /// Check if request is allowed (rate limiting, IP restrictions, etc.)
-    pub async fn check_request_allowed(&self, ip: IpAddr, headers: &HeaderMap) -> Result<(), SecurityError> {
+    pub async fn check_request_allowed(
+        &self,
+        ip: IpAddr,
+        headers: &HeaderMap,
+    ) -> Result<(), SecurityError> {
         // Check if IP is explicitly blocked
         if self.config.blocked_ips.contains(&ip) {
             warn!("Blocked IP attempted access: {}", ip);
             return Err(SecurityError::IpBlocked);
         }
-        
+
         // Check if IP is in allowed list (if configured)
         if !self.config.allowed_ips.is_empty() && !self.config.allowed_ips.contains(&ip) {
             warn!("Unauthorized IP attempted access: {}", ip);
             return Err(SecurityError::IpNotAllowed);
         }
-        
+
         // Check HTTPS requirement
         if self.config.require_https {
             if let Some(scheme) = headers.get("x-forwarded-proto") {
@@ -174,48 +179,55 @@ impl AdminSecurityManager {
                 warn!("HTTPS required but no x-forwarded-proto header found");
             }
         }
-        
+
         // Check rate limiting and bans
         let mut limiters = self.rate_limiters.write().await;
         let tracker = limiters.entry(ip).or_insert_with(RateLimitTracker::new);
-        
+
         // Check if IP is currently banned
         if tracker.is_banned() {
             return Err(SecurityError::IpBanned);
         }
-        
+
         // Check rate limit
-        if !tracker.add_request(self.config.rate_limit_window, self.config.rate_limit_per_minute) {
+        if !tracker.add_request(
+            self.config.rate_limit_window,
+            self.config.rate_limit_per_minute,
+        ) {
             warn!("Rate limit exceeded for IP: {}", ip);
             return Err(SecurityError::RateLimitExceeded);
         }
-        
+
         Ok(())
     }
-    
+
     /// Authenticate API key
-    pub async fn authenticate_api_key(&self, api_key: &str, ip: IpAddr) -> Result<(), SecurityError> {
+    pub async fn authenticate_api_key(
+        &self,
+        api_key: &str,
+        ip: IpAddr,
+    ) -> Result<(), SecurityError> {
         let expected_key = std::env::var("OPENSIM_API_KEY")
             .unwrap_or_else(|_| "default-key-change-me".to_string());
-        
+
         if api_key != expected_key {
             // Record failed attempt
             let mut limiters = self.rate_limiters.write().await;
             let tracker = limiters.entry(ip).or_insert_with(RateLimitTracker::new);
             tracker.record_failure(self.config.max_failed_attempts, self.config.ban_duration);
-            
+
             return Err(SecurityError::InvalidApiKey);
         }
-        
+
         // Clear failed attempts on successful authentication
         let mut limiters = self.rate_limiters.write().await;
         if let Some(tracker) = limiters.get_mut(&ip) {
             tracker.reset_failures();
         }
-        
+
         Ok(())
     }
-    
+
     /// Log admin operation for audit trail
     pub async fn log_operation(
         &self,
@@ -230,7 +242,7 @@ impl AdminSecurityManager {
         if !self.config.enable_audit_logging {
             return;
         }
-        
+
         let entry = AuditLogEntry {
             id: Uuid::new_v4(),
             timestamp: Utc::now(),
@@ -243,61 +255,69 @@ impl AdminSecurityManager {
             request_data,
             session_id: None, // TODO: Implement session tracking
         };
-        
+
         // Log to tracing for immediate visibility
         if success {
-            info!("Admin operation: {} from {} - SUCCESS", entry.operation, entry.ip_address);
+            info!(
+                "Admin operation: {} from {} - SUCCESS",
+                entry.operation, entry.ip_address
+            );
         } else {
-            warn!("Admin operation: {} from {} - FAILED: {}", 
-                  entry.operation, entry.ip_address, 
-                  entry.error_message.as_deref().unwrap_or("Unknown error"));
+            warn!(
+                "Admin operation: {} from {} - FAILED: {}",
+                entry.operation,
+                entry.ip_address,
+                entry.error_message.as_deref().unwrap_or("Unknown error")
+            );
         }
-        
+
         // Store in audit log
         let mut log = self.audit_log.write().await;
         log.push(entry);
-        
+
         // Keep only last 10,000 entries to prevent memory bloat
         if log.len() > 10_000 {
             log.drain(0..1_000); // Remove oldest 1,000 entries
         }
     }
-    
+
     /// Get recent audit log entries
     pub async fn get_audit_log(&self, limit: Option<usize>) -> Vec<AuditLogEntry> {
         let log = self.audit_log.read().await;
         let limit = limit.unwrap_or(100).min(1000); // Max 1000 entries
-        
+
         log.iter()
             .rev() // Most recent first
             .take(limit)
             .cloned()
             .collect()
     }
-    
+
     /// Get security statistics
     pub async fn get_security_stats(&self) -> SecurityStats {
         let limiters = self.rate_limiters.read().await;
         let log = self.audit_log.read().await;
-        
+
         let total_ips = limiters.len();
         let banned_ips = limiters.values().filter(|t| t.is_banned()).count();
         let total_requests = limiters.values().map(|t| t.requests.len()).sum::<usize>();
-        
-        let recent_operations = log.iter()
+
+        let recent_operations = log
+            .iter()
             .filter(|entry| {
                 let now = Utc::now();
                 now.signed_duration_since(entry.timestamp).num_hours() < 24
             })
             .count();
-        
-        let failed_operations = log.iter()
+
+        let failed_operations = log
+            .iter()
             .filter(|entry| {
                 let now = Utc::now();
                 !entry.success && now.signed_duration_since(entry.timestamp).num_hours() < 24
             })
             .count();
-        
+
         SecurityStats {
             total_ips_tracked: total_ips,
             currently_banned_ips: banned_ips,
@@ -309,18 +329,21 @@ impl AdminSecurityManager {
             max_failed_attempts: self.config.max_failed_attempts,
         }
     }
-    
+
     /// Clean up old rate limit data
     pub async fn cleanup_old_data(&self) {
         let mut limiters = self.rate_limiters.write().await;
         let now = Instant::now();
-        
+
         // Remove entries older than 1 hour
         limiters.retain(|_, tracker| {
             now.duration_since(tracker.last_activity) < Duration::from_secs(3600)
         });
-        
-        info!("Cleaned up rate limit data, {} IPs remaining", limiters.len());
+
+        info!(
+            "Cleaned up rate limit data, {} IPs remaining",
+            limiters.len()
+        );
     }
 }
 
@@ -379,7 +402,7 @@ pub fn extract_ip_from_headers(headers: &HeaderMap) -> Option<IpAddr> {
             }
         }
     }
-    
+
     // Check X-Real-IP header
     if let Some(real_ip) = headers.get("x-real-ip") {
         if let Ok(ip_str) = real_ip.to_str() {
@@ -388,7 +411,7 @@ pub fn extract_ip_from_headers(headers: &HeaderMap) -> Option<IpAddr> {
             }
         }
     }
-    
+
     None
 }
 
@@ -396,7 +419,7 @@ pub fn extract_ip_from_headers(headers: &HeaderMap) -> Option<IpAddr> {
 mod tests {
     use super::*;
     use std::net::Ipv4Addr;
-    
+
     #[tokio::test]
     async fn test_rate_limiting() {
         let config = SecurityConfig {
@@ -404,19 +427,19 @@ mod tests {
             rate_limit_window: Duration::from_secs(60),
             ..Default::default()
         };
-        
+
         let security = AdminSecurityManager::new(config);
         let ip = IpAddr::V4(Ipv4Addr::new(127, 0, 0, 1));
         let headers = HeaderMap::new();
-        
+
         // First two requests should succeed
         assert!(security.check_request_allowed(ip, &headers).await.is_ok());
         assert!(security.check_request_allowed(ip, &headers).await.is_ok());
-        
+
         // Third request should fail (rate limit exceeded)
         assert!(security.check_request_allowed(ip, &headers).await.is_err());
     }
-    
+
     #[tokio::test]
     async fn test_ip_blocking() {
         let blocked_ip = IpAddr::V4(Ipv4Addr::new(192, 168, 1, 100));
@@ -424,60 +447,76 @@ mod tests {
             blocked_ips: vec![blocked_ip],
             ..Default::default()
         };
-        
+
         let security = AdminSecurityManager::new(config);
         let headers = HeaderMap::new();
-        
+
         // Blocked IP should be rejected
-        assert!(security.check_request_allowed(blocked_ip, &headers).await.is_err());
-        
+        assert!(security
+            .check_request_allowed(blocked_ip, &headers)
+            .await
+            .is_err());
+
         // Other IP should be allowed
         let allowed_ip = IpAddr::V4(Ipv4Addr::new(127, 0, 0, 1));
-        assert!(security.check_request_allowed(allowed_ip, &headers).await.is_ok());
+        assert!(security
+            .check_request_allowed(allowed_ip, &headers)
+            .await
+            .is_ok());
     }
-    
+
     #[tokio::test]
     async fn test_api_key_authentication() {
         let config = SecurityConfig::default();
         let security = AdminSecurityManager::new(config);
         let ip = IpAddr::V4(Ipv4Addr::new(127, 0, 0, 1));
-        
+
         // Set expected API key
         std::env::set_var("OPENSIM_API_KEY", "test-key-123");
-        
+
         // Valid API key should succeed
-        assert!(security.authenticate_api_key("test-key-123", ip).await.is_ok());
-        
+        assert!(security
+            .authenticate_api_key("test-key-123", ip)
+            .await
+            .is_ok());
+
         // Invalid API key should fail
-        assert!(security.authenticate_api_key("wrong-key", ip).await.is_err());
+        assert!(security
+            .authenticate_api_key("wrong-key", ip)
+            .await
+            .is_err());
     }
-    
+
     #[tokio::test]
     async fn test_audit_logging() {
         let config = SecurityConfig::default();
         let security = AdminSecurityManager::new(config);
-        
+
         // Log some operations
-        security.log_operation(
-            "127.0.0.1".to_string(),
-            Some("test-agent".to_string()),
-            "create_user".to_string(),
-            Some("test user".to_string()),
-            true,
-            None,
-            None,
-        ).await;
-        
-        security.log_operation(
-            "127.0.0.1".to_string(),
-            Some("test-agent".to_string()),
-            "delete_user".to_string(),
-            Some("test user".to_string()),
-            false,
-            Some("User not found".to_string()),
-            None,
-        ).await;
-        
+        security
+            .log_operation(
+                "127.0.0.1".to_string(),
+                Some("test-agent".to_string()),
+                "create_user".to_string(),
+                Some("test user".to_string()),
+                true,
+                None,
+                None,
+            )
+            .await;
+
+        security
+            .log_operation(
+                "127.0.0.1".to_string(),
+                Some("test-agent".to_string()),
+                "delete_user".to_string(),
+                Some("test user".to_string()),
+                false,
+                Some("User not found".to_string()),
+                None,
+            )
+            .await;
+
         // Check audit log
         let log = security.get_audit_log(Some(10)).await;
         assert_eq!(log.len(), 2);

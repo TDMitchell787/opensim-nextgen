@@ -11,9 +11,9 @@ use super::{CommunityConfig, ComponentHealth};
 use anyhow::Result;
 use serde::{Deserialize, Serialize};
 use std::collections::HashMap;
+use std::sync::Arc;
 use std::time::{SystemTime, UNIX_EPOCH};
 use tokio::sync::RwLock;
-use std::sync::Arc;
 
 /// Forum system main structure
 pub struct ForumSystem {
@@ -53,13 +53,13 @@ impl ForumSystem {
 
         // Create default categories
         self.create_default_categories().await?;
-        
+
         // Initialize moderation system
         self.moderator.write().await.initialize().await?;
-        
+
         // Initialize search engine
         self.search_engine.write().await.initialize().await?;
-        
+
         // Initialize notifications
         self.notification_system.write().await.initialize().await?;
 
@@ -71,99 +71,116 @@ impl ForumSystem {
     async fn create_default_categories(&self) -> Result<()> {
         let mut categories = self.categories.write().await;
 
-        categories.insert("general".to_string(), ForumCategory {
-            id: "general".to_string(),
-            name: "General Discussion".to_string(),
-            description: "General OpenSim discussion and community chat".to_string(),
-            icon: "💬".to_string(),
-            color: "#3b82f6".to_string(),
-            sort_order: 1,
-            topic_count: 0,
-            post_count: 0,
-            last_post: None,
-            moderators: vec!["admin".to_string()],
-            created_at: get_current_timestamp(),
-            rules: vec![
-                "Be respectful to all community members".to_string(),
-                "No spam or off-topic posts".to_string(),
-                "Use search before posting duplicate questions".to_string(),
-            ],
-        });
+        categories.insert(
+            "general".to_string(),
+            ForumCategory {
+                id: "general".to_string(),
+                name: "General Discussion".to_string(),
+                description: "General OpenSim discussion and community chat".to_string(),
+                icon: "💬".to_string(),
+                color: "#3b82f6".to_string(),
+                sort_order: 1,
+                topic_count: 0,
+                post_count: 0,
+                last_post: None,
+                moderators: vec!["admin".to_string()],
+                created_at: get_current_timestamp(),
+                rules: vec![
+                    "Be respectful to all community members".to_string(),
+                    "No spam or off-topic posts".to_string(),
+                    "Use search before posting duplicate questions".to_string(),
+                ],
+            },
+        );
 
-        categories.insert("development".to_string(), ForumCategory {
-            id: "development".to_string(),
-            name: "Development & Programming".to_string(),
-            description: "Technical discussions, code examples, and development help".to_string(),
-            icon: "⚡".to_string(),
-            color: "#10b981".to_string(),
-            sort_order: 2,
-            topic_count: 0,
-            post_count: 0,
-            last_post: None,
-            moderators: vec!["admin".to_string(), "dev-team".to_string()],
-            created_at: get_current_timestamp(),
-            rules: vec![
-                "Include code examples when asking for help".to_string(),
-                "Use code blocks for better readability".to_string(),
-                "Search existing topics before posting".to_string(),
-            ],
-        });
+        categories.insert(
+            "development".to_string(),
+            ForumCategory {
+                id: "development".to_string(),
+                name: "Development & Programming".to_string(),
+                description: "Technical discussions, code examples, and development help"
+                    .to_string(),
+                icon: "⚡".to_string(),
+                color: "#10b981".to_string(),
+                sort_order: 2,
+                topic_count: 0,
+                post_count: 0,
+                last_post: None,
+                moderators: vec!["admin".to_string(), "dev-team".to_string()],
+                created_at: get_current_timestamp(),
+                rules: vec![
+                    "Include code examples when asking for help".to_string(),
+                    "Use code blocks for better readability".to_string(),
+                    "Search existing topics before posting".to_string(),
+                ],
+            },
+        );
 
-        categories.insert("showcase".to_string(), ForumCategory {
-            id: "showcase".to_string(),
-            name: "Project Showcase".to_string(),
-            description: "Show off your OpenSim creations and projects".to_string(),
-            icon: "🎨".to_string(),
-            color: "#8b5cf6".to_string(),
-            sort_order: 3,
-            topic_count: 0,
-            post_count: 0,
-            last_post: None,
-            moderators: vec!["admin".to_string()],
-            created_at: get_current_timestamp(),
-            rules: vec![
-                "Include screenshots or videos when possible".to_string(),
-                "Provide project details and links".to_string(),
-                "Be constructive with feedback".to_string(),
-            ],
-        });
+        categories.insert(
+            "showcase".to_string(),
+            ForumCategory {
+                id: "showcase".to_string(),
+                name: "Project Showcase".to_string(),
+                description: "Show off your OpenSim creations and projects".to_string(),
+                icon: "🎨".to_string(),
+                color: "#8b5cf6".to_string(),
+                sort_order: 3,
+                topic_count: 0,
+                post_count: 0,
+                last_post: None,
+                moderators: vec!["admin".to_string()],
+                created_at: get_current_timestamp(),
+                rules: vec![
+                    "Include screenshots or videos when possible".to_string(),
+                    "Provide project details and links".to_string(),
+                    "Be constructive with feedback".to_string(),
+                ],
+            },
+        );
 
-        categories.insert("support".to_string(), ForumCategory {
-            id: "support".to_string(),
-            name: "Help & Support".to_string(),
-            description: "Get help with installation, configuration, and troubleshooting".to_string(),
-            icon: "🆘".to_string(),
-            color: "#f59e0b".to_string(),
-            sort_order: 4,
-            topic_count: 0,
-            post_count: 0,
-            last_post: None,
-            moderators: vec!["admin".to_string(), "support-team".to_string()],
-            created_at: get_current_timestamp(),
-            rules: vec![
-                "Include system information and error messages".to_string(),
-                "Follow up on solved issues".to_string(),
-                "Mark solved topics as resolved".to_string(),
-            ],
-        });
+        categories.insert(
+            "support".to_string(),
+            ForumCategory {
+                id: "support".to_string(),
+                name: "Help & Support".to_string(),
+                description: "Get help with installation, configuration, and troubleshooting"
+                    .to_string(),
+                icon: "🆘".to_string(),
+                color: "#f59e0b".to_string(),
+                sort_order: 4,
+                topic_count: 0,
+                post_count: 0,
+                last_post: None,
+                moderators: vec!["admin".to_string(), "support-team".to_string()],
+                created_at: get_current_timestamp(),
+                rules: vec![
+                    "Include system information and error messages".to_string(),
+                    "Follow up on solved issues".to_string(),
+                    "Mark solved topics as resolved".to_string(),
+                ],
+            },
+        );
 
-        categories.insert("announcements".to_string(), ForumCategory {
-            id: "announcements".to_string(),
-            name: "Announcements".to_string(),
-            description: "Official announcements and updates from the OpenSim team".to_string(),
-            icon: "📢".to_string(),
-            color: "#ef4444".to_string(),
-            sort_order: 0,
-            topic_count: 0,
-            post_count: 0,
-            last_post: None,
-            moderators: vec!["admin".to_string(), "dev-team".to_string()],
-            created_at: get_current_timestamp(),
-            rules: vec![
-                "Read-only for most users".to_string(),
-                "Official announcements only".to_string(),
-            ],
-        });
+        categories.insert(
+            "announcements".to_string(),
+            ForumCategory {
+                id: "announcements".to_string(),
+                name: "Announcements".to_string(),
+                description: "Official announcements and updates from the OpenSim team".to_string(),
+                icon: "📢".to_string(),
+                color: "#ef4444".to_string(),
+                sort_order: 0,
+                topic_count: 0,
+                post_count: 0,
+                last_post: None,
+                moderators: vec!["admin".to_string(), "dev-team".to_string()],
+                created_at: get_current_timestamp(),
+                rules: vec![
+                    "Read-only for most users".to_string(),
+                    "Official announcements only".to_string(),
+                ],
+            },
+        );
 
         Ok(())
     }
@@ -191,7 +208,10 @@ impl ForumSystem {
         };
 
         // Add the topic
-        self.topics.write().await.insert(topic_id.clone(), topic.clone());
+        self.topics
+            .write()
+            .await
+            .insert(topic_id.clone(), topic.clone());
 
         // Create the first post
         let first_post = ForumPost {
@@ -208,10 +228,18 @@ impl ForumSystem {
             reply_to: None,
         };
 
-        self.posts.write().await.insert(first_post.id.clone(), first_post);
+        self.posts
+            .write()
+            .await
+            .insert(first_post.id.clone(), first_post);
 
         // Update category statistics
-        if let Some(category) = self.categories.write().await.get_mut(&topic_data.category_id) {
+        if let Some(category) = self
+            .categories
+            .write()
+            .await
+            .get_mut(&topic_data.category_id)
+        {
             category.topic_count += 1;
             category.post_count += 1;
             category.last_post = Some(LastPostInfo {
@@ -222,7 +250,11 @@ impl ForumSystem {
         }
 
         // Send notifications
-        self.notification_system.write().await.notify_new_topic(&topic).await?;
+        self.notification_system
+            .write()
+            .await
+            .notify_new_topic(&topic)
+            .await?;
 
         Ok(topic)
     }
@@ -245,7 +277,10 @@ impl ForumSystem {
         };
 
         // Add the post
-        self.posts.write().await.insert(post_id.clone(), post.clone());
+        self.posts
+            .write()
+            .await
+            .insert(post_id.clone(), post.clone());
 
         // Update topic statistics
         if let Some(topic) = self.topics.write().await.get_mut(&reply_data.topic_id) {
@@ -266,7 +301,11 @@ impl ForumSystem {
         }
 
         // Send notifications
-        self.notification_system.write().await.notify_new_reply(&post).await?;
+        self.notification_system
+            .write()
+            .await
+            .notify_new_reply(&post)
+            .await?;
 
         Ok(post)
     }
@@ -283,7 +322,8 @@ impl ForumSystem {
 
         // Calculate posts today
         let today_start = get_today_start_timestamp();
-        let posts_today = posts.values()
+        let posts_today = posts
+            .values()
             .filter(|p| p.created_at >= today_start)
             .count() as u64;
 
@@ -292,7 +332,7 @@ impl ForumSystem {
             total_posts,
             total_categories,
             posts_today,
-            active_topics_24h: 0, // TODO: Implement
+            active_topics_24h: 0,                        // TODO: Implement
             most_active_category: "general".to_string(), // TODO: Calculate
         })
     }
@@ -300,14 +340,14 @@ impl ForumSystem {
     /// Get forum health status
     pub async fn health_check(&self) -> Result<ComponentHealth> {
         let start_time = SystemTime::now();
-        
+
         // Test all components
         let _categories_count = self.categories.read().await.len();
         let _topics_count = self.topics.read().await.len();
         let _posts_count = self.posts.read().await.len();
-        
+
         let response_time = start_time.elapsed().unwrap().as_millis() as u64;
-        
+
         Ok(ComponentHealth {
             status: "healthy".to_string(),
             response_time_ms: response_time,
@@ -553,7 +593,7 @@ fn get_today_start_timestamp() -> u64 {
         .duration_since(UNIX_EPOCH)
         .unwrap()
         .as_secs();
-    
+
     // Get start of today (midnight UTC)
     now - (now % 86400)
 }

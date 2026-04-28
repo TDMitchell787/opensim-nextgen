@@ -1,7 +1,7 @@
 use std::collections::HashMap;
 use std::sync::Arc;
-use uuid::Uuid;
 use tracing::info;
+use uuid::Uuid;
 
 use crate::udp::server::SceneObject;
 
@@ -57,10 +57,26 @@ impl TerrainData {
         let fx = lx - ix as f32;
         let fy = ly - iy as f32;
 
-        let h00 = self.heightmap.get(iy * self.side + ix).copied().unwrap_or(0.0);
-        let h10 = self.heightmap.get(iy * self.side + ix + 1).copied().unwrap_or(0.0);
-        let h01 = self.heightmap.get((iy + 1) * self.side + ix).copied().unwrap_or(0.0);
-        let h11 = self.heightmap.get((iy + 1) * self.side + ix + 1).copied().unwrap_or(0.0);
+        let h00 = self
+            .heightmap
+            .get(iy * self.side + ix)
+            .copied()
+            .unwrap_or(0.0);
+        let h10 = self
+            .heightmap
+            .get(iy * self.side + ix + 1)
+            .copied()
+            .unwrap_or(0.0);
+        let h01 = self
+            .heightmap
+            .get((iy + 1) * self.side + ix)
+            .copied()
+            .unwrap_or(0.0);
+        let h11 = self
+            .heightmap
+            .get((iy + 1) * self.side + ix + 1)
+            .copied()
+            .unwrap_or(0.0);
 
         let h0 = h00 + (h10 - h00) * fx;
         let h1 = h01 + (h11 - h01) * fx;
@@ -105,10 +121,12 @@ pub fn capture_scene(
 ) -> SceneGeometry {
     let prims: Vec<CapturedPrim> = {
         let objects = scene_objects.read();
-        objects.values()
+        objects
+            .values()
             .filter(|obj| obj.pcode == 9 && obj.attachment_point == 0)
             .map(|obj| {
-                let (color, fullbright, glow, alpha, shininess) = extract_te_properties(&obj.texture_entry);
+                let (color, fullbright, glow, alpha, shininess) =
+                    extract_te_properties(&obj.texture_entry);
                 let shape = classify_shape(obj.profile_curve, obj.path_curve);
 
                 CapturedPrim {
@@ -141,8 +159,11 @@ pub fn capture_scene(
         }
     });
 
-    info!("[LUXOR] Captured scene: {} prims, terrain={}",
-        prims.len(), terrain.is_some());
+    info!(
+        "[LUXOR] Captured scene: {} prims, terrain={}",
+        prims.len(),
+        terrain.is_some()
+    );
 
     SceneGeometry {
         prims,
@@ -180,16 +201,25 @@ fn extract_te_properties(te: &[u8]) -> ([f32; 4], bool, f32, f32, u8) {
     let mut pos = 16;
 
     while pos < te.len() {
-        if te[pos] == 0 { pos += 1; break; }
+        if te[pos] == 0 {
+            pos += 1;
+            break;
+        }
         let mut _face_bits: u64 = 0;
         loop {
-            if pos >= te.len() { return (color, fullbright, glow, color[3], shininess); }
+            if pos >= te.len() {
+                return (color, fullbright, glow, color[3], shininess);
+            }
             let b = te[pos];
             _face_bits = (_face_bits << 7) | (b as u64 & 0x7F);
             pos += 1;
-            if b & 0x80 == 0 { break; }
+            if b & 0x80 == 0 {
+                break;
+            }
         }
-        if pos + 16 > te.len() { break; }
+        if pos + 16 > te.len() {
+            break;
+        }
         pos += 16;
     }
 
@@ -206,16 +236,25 @@ fn extract_te_properties(te: &[u8]) -> ([f32; 4], bool, f32, f32, u8) {
     }
 
     while pos < te.len() {
-        if te[pos] == 0 { pos += 1; break; }
+        if te[pos] == 0 {
+            pos += 1;
+            break;
+        }
         let mut _face_bits: u64 = 0;
         loop {
-            if pos >= te.len() { return (color, fullbright, glow, color[3], shininess); }
+            if pos >= te.len() {
+                return (color, fullbright, glow, color[3], shininess);
+            }
             let b = te[pos];
             _face_bits = (_face_bits << 7) | (b as u64 & 0x7F);
             pos += 1;
-            if b & 0x80 == 0 { break; }
+            if b & 0x80 == 0 {
+                break;
+            }
         }
-        if pos + 4 > te.len() { break; }
+        if pos + 4 > te.len() {
+            break;
+        }
         pos += 4;
     }
 
@@ -227,30 +266,48 @@ fn extract_te_properties(te: &[u8]) -> ([f32; 4], bool, f32, f32, u8) {
     }
 
     while pos < te.len() {
-        if te[pos] == 0 { pos += 1; break; }
+        if te[pos] == 0 {
+            pos += 1;
+            break;
+        }
         let mut _face_bits: u64 = 0;
         loop {
-            if pos >= te.len() { return (color, fullbright, glow, color[3], shininess); }
+            if pos >= te.len() {
+                return (color, fullbright, glow, color[3], shininess);
+            }
             let b = te[pos];
             _face_bits = (_face_bits << 7) | (b as u64 & 0x7F);
             pos += 1;
-            if b & 0x80 == 0 { break; }
+            if b & 0x80 == 0 {
+                break;
+            }
         }
-        if pos + 2 > te.len() { break; }
+        if pos + 2 > te.len() {
+            break;
+        }
         pos += 2;
     }
 
     while pos < te.len() {
-        if te[pos] == 0 { pos += 1; break; }
+        if te[pos] == 0 {
+            pos += 1;
+            break;
+        }
         let mut _face_bits: u64 = 0;
         loop {
-            if pos >= te.len() { return (color, fullbright, glow, color[3], shininess); }
+            if pos >= te.len() {
+                return (color, fullbright, glow, color[3], shininess);
+            }
             let b = te[pos];
             _face_bits = (_face_bits << 7) | (b as u64 & 0x7F);
             pos += 1;
-            if b & 0x80 == 0 { break; }
+            if b & 0x80 == 0 {
+                break;
+            }
         }
-        if pos + 2 > te.len() { break; }
+        if pos + 2 > te.len() {
+            break;
+        }
         pos += 2;
     }
 
@@ -262,16 +319,25 @@ fn extract_te_properties(te: &[u8]) -> ([f32; 4], bool, f32, f32, u8) {
     }
 
     while pos < te.len() {
-        if te[pos] == 0 { pos += 1; break; }
+        if te[pos] == 0 {
+            pos += 1;
+            break;
+        }
         let mut _face_bits: u64 = 0;
         loop {
-            if pos >= te.len() { return (color, fullbright, glow, color[3], shininess); }
+            if pos >= te.len() {
+                return (color, fullbright, glow, color[3], shininess);
+            }
             let b = te[pos];
             _face_bits = (_face_bits << 7) | (b as u64 & 0x7F);
             pos += 1;
-            if b & 0x80 == 0 { break; }
+            if b & 0x80 == 0 {
+                break;
+            }
         }
-        if pos + 1 > te.len() { break; }
+        if pos + 1 > te.len() {
+            break;
+        }
         pos += 1;
     }
 
@@ -284,7 +350,10 @@ fn extract_te_properties(te: &[u8]) -> ([f32; 4], bool, f32, f32, u8) {
 }
 
 pub fn quat_rotate(q: [f32; 4], v: [f32; 3]) -> [f32; 3] {
-    let qx = q[0]; let qy = q[1]; let qz = q[2]; let qw = q[3];
+    let qx = q[0];
+    let qy = q[1];
+    let qz = q[2];
+    let qw = q[3];
 
     let ix = qw * v[0] + qy * v[2] - qz * v[1];
     let iy = qw * v[1] + qz * v[0] - qx * v[2];
@@ -303,7 +372,12 @@ pub fn quat_inverse(q: [f32; 4]) -> [f32; 4] {
     if len_sq < 1e-10 {
         return [0.0, 0.0, 0.0, 1.0];
     }
-    [-q[0] / len_sq, -q[1] / len_sq, -q[2] / len_sq, q[3] / len_sq]
+    [
+        -q[0] / len_sq,
+        -q[1] / len_sq,
+        -q[2] / len_sq,
+        q[3] / len_sq,
+    ]
 }
 
 pub fn world_to_local(point: [f32; 3], prim: &CapturedPrim) -> [f32; 3] {
@@ -382,13 +456,17 @@ mod tests {
 
     #[test]
     fn test_terrain_normal() {
-        let hm: Vec<f32> = (0..256*256).map(|_| 21.0).collect();
+        let hm: Vec<f32> = (0..256 * 256).map(|_| 21.0).collect();
         let terrain = TerrainData {
             heightmap: hm,
             side: 256,
             region_origin: [0.0, 0.0, 0.0],
         };
         let n = terrain.normal_at(128.0, 128.0);
-        assert!((n[2] - 1.0).abs() < 0.01, "Flat terrain normal should point up: {:?}", n);
+        assert!(
+            (n[2] - 1.0).abs() < 0.01,
+            "Flat terrain normal should point up: {:?}",
+            n
+        );
     }
 }

@@ -1,14 +1,14 @@
 //! Region crossing protocols for seamless avatar movement between regions
 
-use std::{collections::HashMap, sync::Arc};
 use anyhow::{anyhow, Result};
-use tracing::{info, warn, error};
-use uuid::Uuid;
+use std::{collections::HashMap, sync::Arc};
 use tokio::sync::RwLock;
+use tracing::{error, info, warn};
+use uuid::Uuid;
 
 use crate::{
-    network::{session::Session, llsd::LLSDValue},
-    region::{RegionManager, RegionId},
+    network::{llsd::LLSDValue, session::Session},
+    region::{RegionId, RegionManager},
     state::StateManager,
 };
 
@@ -51,10 +51,7 @@ pub struct RegionCrossingManager {
 
 impl RegionCrossingManager {
     /// Create a new region crossing manager
-    pub fn new(
-        region_manager: Arc<RegionManager>,
-        state_manager: Arc<StateManager>,
-    ) -> Self {
+    pub fn new(region_manager: Arc<RegionManager>, state_manager: Arc<StateManager>) -> Self {
         Self {
             active_crossings: RwLock::new(HashMap::new()),
             region_manager,
@@ -81,8 +78,16 @@ impl RegionCrossingManager {
         );
 
         // Validate destination region exists
-        if self.region_manager.get_region(destination_region).await.is_none() {
-            return Err(anyhow!("Destination region {:?} not found", destination_region));
+        if self
+            .region_manager
+            .get_region(destination_region)
+            .await
+            .is_none()
+        {
+            return Err(anyhow!(
+                "Destination region {:?} not found",
+                destination_region
+            ));
         }
 
         // Create crossing record
@@ -100,12 +105,19 @@ impl RegionCrossingManager {
         };
 
         // Store crossing in active crossings
-        self.active_crossings.write().await.insert(crossing_id.clone(), crossing.clone());
+        self.active_crossings
+            .write()
+            .await
+            .insert(crossing_id.clone(), crossing.clone());
 
         // Notify destination region about incoming avatar
         if let Err(e) = self.notify_destination_region(&crossing).await {
             error!("Failed to notify destination region: {}", e);
-            self.fail_crossing(&crossing_id, format!("Failed to contact destination region: {}", e)).await?;
+            self.fail_crossing(
+                &crossing_id,
+                format!("Failed to contact destination region: {}", e),
+            )
+            .await?;
             return Err(e);
         }
 
@@ -119,12 +131,12 @@ impl RegionCrossingManager {
         session: Arc<RwLock<Session>>,
     ) -> Result<()> {
         let mut crossings = self.active_crossings.write().await;
-        
+
         if let Some(mut crossing) = crossings.remove(crossing_id) {
             info!("Completing region crossing {}", crossing_id);
-            
+
             crossing.state = CrossingState::Completed;
-            
+
             // Update session with new region
             {
                 let mut session_guard = session.write().await;
@@ -141,7 +153,7 @@ impl RegionCrossingManager {
                 "Region crossing {} completed for agent {}",
                 crossing_id, crossing.agent_id
             );
-            
+
             Ok(())
         } else {
             Err(anyhow!("Crossing {} not found", crossing_id))
@@ -151,14 +163,14 @@ impl RegionCrossingManager {
     /// Fail a region crossing
     pub async fn fail_crossing(&self, crossing_id: &str, reason: String) -> Result<()> {
         let mut crossings = self.active_crossings.write().await;
-        
+
         if let Some(crossing) = crossings.get_mut(crossing_id) {
             warn!("Failing region crossing {}: {}", crossing_id, reason);
             crossing.state = CrossingState::Failed(reason);
-            
+
             // Keep the crossing record for a short time for debugging
             // In a production system, you might want to clean this up after some time
-            
+
             Ok(())
         } else {
             Err(anyhow!("Crossing {} not found", crossing_id))
@@ -180,7 +192,10 @@ impl RegionCrossingManager {
         let session_id = session_guard.session_id.clone();
         drop(session_guard);
 
-        info!("Handling region crossing request for session {}", session_id);
+        info!(
+            "Handling region crossing request for session {}",
+            session_id
+        );
 
         // Parse crossing request
         let map = match request_data {
@@ -204,13 +219,18 @@ impl RegionCrossingManager {
         };
 
         // Initiate the crossing
-        let crossing_id = self.initiate_crossing(session, destination_region, destination_position).await?;
+        let crossing_id = self
+            .initiate_crossing(session, destination_region, destination_position)
+            .await?;
 
         // Return response
         let mut response = HashMap::new();
         response.insert("success".to_string(), LLSDValue::Boolean(true));
         response.insert("crossing_id".to_string(), LLSDValue::String(crossing_id));
-        response.insert("message".to_string(), LLSDValue::String("Region crossing initiated".to_string()));
+        response.insert(
+            "message".to_string(),
+            LLSDValue::String("Region crossing initiated".to_string()),
+        );
 
         Ok(LLSDValue::Map(response))
     }
@@ -224,7 +244,8 @@ impl RegionCrossingManager {
 
         // In a distributed system, this would send a message to the destination region server
         // For now, we'll just validate that the destination region exists
-        let _destination_region = self.region_manager
+        let _destination_region = self
+            .region_manager
             .get_region(crossing.destination_region)
             .await
             .ok_or_else(|| anyhow!("Destination region not found"))?;
@@ -273,12 +294,15 @@ impl RegionCrossingManager {
 
         crossings.retain(|_, crossing| {
             let age = current_time.saturating_sub(crossing.initiated_at);
-            
+
             // Keep ongoing crossings
-            if matches!(crossing.state, CrossingState::Initiating | CrossingState::Transferring) {
+            if matches!(
+                crossing.state,
+                CrossingState::Initiating | CrossingState::Transferring
+            ) {
                 return true;
             }
-            
+
             // Remove old completed or failed crossings
             age < max_age_seconds
         });
@@ -315,7 +339,7 @@ mod tests {
     use crate::{
         ffi::physics::PhysicsBridge,
         network::session::SessionManager,
-        region::{RegionConfig, terrain::TerrainConfig},
+        region::{terrain::TerrainConfig, RegionConfig},
     };
     use std::time::Duration;
 
@@ -325,11 +349,11 @@ mod tests {
         let physics_bridge = Arc::new(PhysicsBridge::new()?);
         let state_manager = Arc::new(StateManager::new()?);
         let region_manager = Arc::new(RegionManager::new(physics_bridge, state_manager.clone()));
-        
+
         // Create test regions
         let source_region = RegionId(1);
         let dest_region = RegionId(2);
-        
+
         let config = RegionConfig {
             name: "Test Region".to_string(),
             size: (256, 256),
@@ -338,32 +362,35 @@ mod tests {
             physics: crate::ffi::physics::PhysicsConfig::default(),
             max_entities: 1000,
         };
-        
-        region_manager.create_region(source_region, config.clone()).await?;
+
+        region_manager
+            .create_region(source_region, config.clone())
+            .await?;
         region_manager.create_region(dest_region, config).await?;
-        
+
         // Create crossing manager
         let crossing_manager = RegionCrossingManager::new(region_manager, state_manager);
-        
+
         // Create test session
         let session_manager = Arc::new(SessionManager::new(Duration::from_secs(300)));
         let agent_id = Uuid::new_v4();
-        let session = session_manager.create_session_with_agent(agent_id, "127.0.0.1:12345".parse().unwrap());
-        
+        let session =
+            session_manager.create_session_with_agent(agent_id, "127.0.0.1:12345".parse().unwrap());
+
         // Test crossing initiation
         let crossing_id = crossing_manager
             .initiate_crossing(session, dest_region, (128.0, 128.0, 21.0))
             .await?;
-        
+
         // Verify crossing was created
         let crossing = crossing_manager.get_crossing_status(&crossing_id).await;
         assert!(crossing.is_some());
-        
+
         let crossing = crossing.unwrap();
         assert_eq!(crossing.agent_id, agent_id);
         assert_eq!(crossing.source_region, source_region);
         assert_eq!(crossing.destination_region, dest_region);
-        
+
         Ok(())
     }
 }

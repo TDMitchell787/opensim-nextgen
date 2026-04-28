@@ -2,10 +2,10 @@
 //!
 //! Manages access policies, rules, and enforcement for zero trust networking.
 
-use std::collections::HashMap;
-use serde::{Deserialize, Serialize};
-use anyhow::{Result, anyhow};
 use super::config::ZitiConfig;
+use anyhow::{anyhow, Result};
+use serde::{Deserialize, Serialize};
+use std::collections::HashMap;
 
 /// Policy engine for zero trust access control
 pub struct ZitiPolicyEngine {

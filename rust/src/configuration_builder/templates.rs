@@ -21,7 +21,9 @@ impl BuiltInTemplates {
     }
 
     pub fn get_by_type(template_type: SimulatorType) -> Option<SimulatorTemplate> {
-        Self::get_all().into_iter().find(|t| t.template_type == template_type)
+        Self::get_all()
+            .into_iter()
+            .find(|t| t.template_type == template_type)
     }
 
     pub fn get_by_id(id: &str) -> Option<SimulatorTemplate> {
@@ -32,7 +34,9 @@ impl BuiltInTemplates {
         SimulatorTemplate {
             id: "mainland".to_string(),
             name: "Mainland".to_string(),
-            description: "Standard land region with moderate capacity, suitable for mixed-use development".to_string(),
+            description:
+                "Standard land region with moderate capacity, suitable for mixed-use development"
+                    .to_string(),
             category: "builtin".to_string(),
             template_type: SimulatorType::Mainland,
             opensim_ini: OpenSimIniConfig {
@@ -91,7 +95,9 @@ impl BuiltInTemplates {
         SimulatorTemplate {
             id: "island".to_string(),
             name: "Island".to_string(),
-            description: "Isolated standalone region surrounded by water, perfect for private estates".to_string(),
+            description:
+                "Isolated standalone region surrounded by water, perfect for private estates"
+                    .to_string(),
             category: "builtin".to_string(),
             template_type: SimulatorType::Island,
             opensim_ini: OpenSimIniConfig {
@@ -150,7 +156,8 @@ impl BuiltInTemplates {
         SimulatorTemplate {
             id: "marina".to_string(),
             name: "Marina".to_string(),
-            description: "Water-focused region with boat physics and dock infrastructure".to_string(),
+            description: "Water-focused region with boat physics and dock infrastructure"
+                .to_string(),
             category: "builtin".to_string(),
             template_type: SimulatorType::Marina,
             opensim_ini: OpenSimIniConfig {
@@ -209,7 +216,9 @@ impl BuiltInTemplates {
         SimulatorTemplate {
             id: "sandbox".to_string(),
             name: "Sandbox".to_string(),
-            description: "Testing and building area with high prim limits and relaxed OSSL settings".to_string(),
+            description:
+                "Testing and building area with high prim limits and relaxed OSSL settings"
+                    .to_string(),
             category: "builtin".to_string(),
             template_type: SimulatorType::Sandbox,
             opensim_ini: OpenSimIniConfig {
@@ -268,7 +277,8 @@ impl BuiltInTemplates {
         SimulatorTemplate {
             id: "welcome".to_string(),
             name: "Welcome Area".to_string(),
-            description: "New user landing zone optimized for low lag and high capacity".to_string(),
+            description: "New user landing zone optimized for low lag and high capacity"
+                .to_string(),
             category: "builtin".to_string(),
             template_type: SimulatorType::Welcome,
             opensim_ini: OpenSimIniConfig {
@@ -327,7 +337,8 @@ impl BuiltInTemplates {
         SimulatorTemplate {
             id: "event".to_string(),
             name: "Event Venue".to_string(),
-            description: "High-capacity region for events with voice and streaming enabled".to_string(),
+            description: "High-capacity region for events with voice and streaming enabled"
+                .to_string(),
             category: "builtin".to_string(),
             template_type: SimulatorType::Event,
             opensim_ini: OpenSimIniConfig {
@@ -338,7 +349,8 @@ impl BuiltInTemplates {
                 external_host_name: "localhost".to_string(),
                 internal_ip: "0.0.0.0".to_string(),
                 database_provider: DatabaseProvider::Postgresql,
-                connection_string: "Host=localhost;Database=opensim;Username=opensim;Password=password".to_string(),
+                connection_string:
+                    "Host=localhost;Database=opensim;Username=opensim;Password=password".to_string(),
                 physics_engine: PhysicsEngine::UbOde,
                 enable_voice: true,
                 enable_search: true,
@@ -375,7 +387,9 @@ impl BuiltInTemplates {
                 recommended_cpu_cores: 8,
                 network_bandwidth_mbps: 500,
                 disk_space_gb: 30,
-                notes: Some("Enterprise-grade event configuration for large gatherings".to_string()),
+                notes: Some(
+                    "Enterprise-grade event configuration for large gatherings".to_string(),
+                ),
             },
             container_config: None,
             thumbnail_data: None,
@@ -386,7 +400,8 @@ impl BuiltInTemplates {
         SimulatorTemplate {
             id: "shopping".to_string(),
             name: "Shopping District".to_string(),
-            description: "Commercial region with economy features and vendor script support".to_string(),
+            description: "Commercial region with economy features and vendor script support"
+                .to_string(),
             category: "builtin".to_string(),
             template_type: SimulatorType::Shopping,
             opensim_ini: OpenSimIniConfig {
@@ -445,7 +460,8 @@ impl BuiltInTemplates {
         SimulatorTemplate {
             id: "roleplay".to_string(),
             name: "Roleplay".to_string(),
-            description: "RP-focused region with combat scripts, NPC support, and custom time".to_string(),
+            description: "RP-focused region with combat scripts, NPC support, and custom time"
+                .to_string(),
             category: "builtin".to_string(),
             template_type: SimulatorType::Roleplay,
             opensim_ini: OpenSimIniConfig {
@@ -504,7 +520,8 @@ impl BuiltInTemplates {
         SimulatorTemplate {
             id: "residential".to_string(),
             name: "Residential".to_string(),
-            description: "Private living spaces with strict permissions and low agent limits".to_string(),
+            description: "Private living spaces with strict permissions and low agent limits"
+                .to_string(),
             category: "builtin".to_string(),
             template_type: SimulatorType::Residential,
             opensim_ini: OpenSimIniConfig {
@@ -622,7 +639,8 @@ impl BuiltInTemplates {
         SimulatorTemplate {
             id: "custom_terrain".to_string(),
             name: "Custom Terrain".to_string(),
-            description: "Region with custom heightmap support and configurable water level".to_string(),
+            description: "Region with custom heightmap support and configurable water level"
+                .to_string(),
             category: "builtin".to_string(),
             template_type: SimulatorType::CustomTerrain,
             opensim_ini: OpenSimIniConfig {
@@ -670,7 +688,9 @@ impl BuiltInTemplates {
                 recommended_cpu_cores: 2,
                 network_bandwidth_mbps: 50,
                 disk_space_gb: 10,
-                notes: Some("Supports custom heightmap imports and terrain configuration".to_string()),
+                notes: Some(
+                    "Supports custom heightmap imports and terrain configuration".to_string(),
+                ),
             },
             container_config: None,
             thumbnail_data: None,

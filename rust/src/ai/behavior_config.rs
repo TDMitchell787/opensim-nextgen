@@ -1,5 +1,5 @@
-use std::collections::HashMap;
 use serde::Deserialize;
+use std::collections::HashMap;
 use uuid::Uuid;
 
 #[derive(Debug, Clone, Deserialize)]
@@ -34,16 +34,36 @@ pub struct NpcBehaviorConfig {
     pub proximity_sleep_radius: f32,
 }
 
-fn default_behavior() -> String { "idle".to_string() }
-fn default_wander_radius() -> f32 { 10.0 }
-fn default_wander_pause() -> [f32; 2] { [15.0, 30.0] }
-fn default_patrol_pause() -> f32 { 5.0 }
-fn default_true() -> bool { true }
-fn default_greet_radius() -> f32 { 15.0 }
-fn default_walk_speed() -> String { "walk".to_string() }
-fn default_arrival_threshold() -> f32 { 0.5 }
-fn default_follow_distance() -> f32 { 3.0 }
-fn default_proximity_sleep_radius() -> f32 { 50.0 }
+fn default_behavior() -> String {
+    "idle".to_string()
+}
+fn default_wander_radius() -> f32 {
+    10.0
+}
+fn default_wander_pause() -> [f32; 2] {
+    [15.0, 30.0]
+}
+fn default_patrol_pause() -> f32 {
+    5.0
+}
+fn default_true() -> bool {
+    true
+}
+fn default_greet_radius() -> f32 {
+    15.0
+}
+fn default_walk_speed() -> String {
+    "walk".to_string()
+}
+fn default_arrival_threshold() -> f32 {
+    0.5
+}
+fn default_follow_distance() -> f32 {
+    3.0
+}
+fn default_proximity_sleep_radius() -> f32 {
+    50.0
+}
 
 impl NpcBehaviorConfig {
     pub fn speed_value(&self) -> f32 {
@@ -59,24 +79,33 @@ struct NpcConfigFile {
     npc: HashMap<String, NpcBehaviorConfig>,
 }
 
-pub fn load_npc_configs(roster: &[crate::ai::npc_avatar::NPCAvatar]) -> HashMap<Uuid, NpcBehaviorConfig> {
+pub fn load_npc_configs(
+    roster: &[crate::ai::npc_avatar::NPCAvatar],
+) -> HashMap<Uuid, NpcBehaviorConfig> {
     let config_path = std::path::Path::new("rust/npc_behaviors.toml");
     let file_configs: HashMap<String, NpcBehaviorConfig> = if config_path.exists() {
         match std::fs::read_to_string(config_path) {
-            Ok(contents) => {
-                match toml::from_str::<NpcConfigFile>(&contents) {
-                    Ok(cfg) => {
-                        tracing::info!("[BEHAVIOR] Loaded {} NPC configs from npc_behaviors.toml", cfg.npc.len());
-                        cfg.npc
-                    }
-                    Err(e) => {
-                        tracing::warn!("[BEHAVIOR] Failed to parse npc_behaviors.toml: {} - using defaults", e);
-                        HashMap::new()
-                    }
+            Ok(contents) => match toml::from_str::<NpcConfigFile>(&contents) {
+                Ok(cfg) => {
+                    tracing::info!(
+                        "[BEHAVIOR] Loaded {} NPC configs from npc_behaviors.toml",
+                        cfg.npc.len()
+                    );
+                    cfg.npc
                 }
-            }
+                Err(e) => {
+                    tracing::warn!(
+                        "[BEHAVIOR] Failed to parse npc_behaviors.toml: {} - using defaults",
+                        e
+                    );
+                    HashMap::new()
+                }
+            },
             Err(e) => {
-                tracing::warn!("[BEHAVIOR] Failed to read npc_behaviors.toml: {} - using defaults", e);
+                tracing::warn!(
+                    "[BEHAVIOR] Failed to read npc_behaviors.toml: {} - using defaults",
+                    e
+                );
                 HashMap::new()
             }
         }
@@ -87,8 +116,13 @@ pub fn load_npc_configs(roster: &[crate::ai::npc_avatar::NPCAvatar]) -> HashMap<
 
     let mut result = HashMap::new();
     for npc in roster {
-        let key = format!("{}_{}", npc.first_name.to_lowercase(), npc.last_name.to_lowercase());
-        let config = file_configs.get(&key)
+        let key = format!(
+            "{}_{}",
+            npc.first_name.to_lowercase(),
+            npc.last_name.to_lowercase()
+        );
+        let config = file_configs
+            .get(&key)
             .cloned()
             .unwrap_or_else(|| default_for_role(&npc.role));
         result.insert(npc.agent_id, config);

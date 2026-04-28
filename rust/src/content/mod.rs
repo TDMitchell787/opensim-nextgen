@@ -10,27 +10,27 @@
 //! - Content marketplace integration with ownership verification
 //! - Real-time content analytics and performance tracking
 
+pub mod analytics;
 pub mod creation;
 pub mod distribution;
-pub mod security;
-pub mod marketplace;
-pub mod validation;
-pub mod versioning;
-pub mod analytics;
 pub mod import;
 pub mod manager;
+pub mod marketplace;
+pub mod security;
+pub mod validation;
+pub mod versioning;
 
+use chrono::{DateTime, Utc};
+use serde::{Deserialize, Serialize};
 use std::collections::HashMap;
 use std::path::PathBuf;
 use std::sync::Arc;
 use tokio::sync::RwLock;
 use uuid::Uuid;
-use serde::{Deserialize, Serialize};
-use chrono::{DateTime, Utc};
 /// EADS fix: Custom serde serialization for semver::Version
 mod version_serde {
-    use serde::{Deserialize, Deserializer, Serialize, Serializer};
     use semver::Version;
+    use serde::{Deserialize, Deserializer, Serialize, Serializer};
 
     pub fn serialize<S>(version: &Version, serializer: S) -> Result<S::Ok, S::Error>
     where
@@ -338,7 +338,6 @@ pub enum ContentError {
 
     #[error("Serialization error: {0}")]
     SerializationError(#[from] serde_json::Error),
-
 }
 
 impl Default for ContentPermissions {
@@ -398,13 +397,13 @@ impl ContentType {
             ContentType::Custom(_) => vec!["*"],
         }
     }
-    
+
     /// Check if a file extension is supported by this content type
     pub fn supports_extension(&self, extension: &str) -> bool {
         let ext = extension.to_lowercase();
         self.file_extensions().iter().any(|&e| e == ext || e == "*")
     }
-    
+
     /// Get the MIME type for this content type
     pub fn mime_type(&self) -> &'static str {
         match self {
@@ -428,14 +427,14 @@ impl ContentQuality {
     /// Get the compression ratio for this quality level
     pub fn compression_ratio(&self) -> f32 {
         match self {
-            ContentQuality::Ultra => 0.0,   // No compression
-            ContentQuality::High => 0.1,    // 10% compression
-            ContentQuality::Medium => 0.3,  // 30% compression
-            ContentQuality::Low => 0.6,     // 60% compression
+            ContentQuality::Ultra => 0.0,  // No compression
+            ContentQuality::High => 0.1,   // 10% compression
+            ContentQuality::Medium => 0.3, // 30% compression
+            ContentQuality::Low => 0.6,    // 60% compression
             ContentQuality::Custom { compression, .. } => *compression,
         }
     }
-    
+
     /// Get the resolution scale for this quality level
     pub fn resolution_scale(&self) -> f32 {
         match self {
@@ -443,18 +442,22 @@ impl ContentQuality {
             ContentQuality::High => 1.0,    // Full resolution
             ContentQuality::Medium => 0.75, // 75% resolution
             ContentQuality::Low => 0.5,     // 50% resolution
-            ContentQuality::Custom { resolution_scale, .. } => *resolution_scale,
+            ContentQuality::Custom {
+                resolution_scale, ..
+            } => *resolution_scale,
         }
     }
-    
+
     /// Get the polygon reduction ratio for 3D models
     pub fn polygon_reduction(&self) -> f32 {
         match self {
-            ContentQuality::Ultra => 0.0,   // No reduction
-            ContentQuality::High => 0.05,   // 5% reduction
-            ContentQuality::Medium => 0.2,  // 20% reduction
-            ContentQuality::Low => 0.5,     // 50% reduction
-            ContentQuality::Custom { polygon_reduction, .. } => *polygon_reduction,
+            ContentQuality::Ultra => 0.0,  // No reduction
+            ContentQuality::High => 0.05,  // 5% reduction
+            ContentQuality::Medium => 0.2, // 20% reduction
+            ContentQuality::Low => 0.5,    // 50% reduction
+            ContentQuality::Custom {
+                polygon_reduction, ..
+            } => *polygon_reduction,
         }
     }
 }

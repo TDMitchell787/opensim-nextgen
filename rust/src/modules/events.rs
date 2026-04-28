@@ -191,19 +191,11 @@ impl EventBus {
         }
     }
 
-    pub fn subscribe(
-        &self,
-        event_type: SceneEvent,
-        handler: Arc<dyn EventHandler>,
-        priority: i32,
-    ) {
+    pub fn subscribe(&self, event_type: SceneEvent, handler: Arc<dyn EventHandler>, priority: i32) {
         let disc = event_discriminant(&event_type);
         let mut subs = self.subscribers.write();
         let list = subs.entry(disc).or_insert_with(Vec::new);
-        list.push(Subscription {
-            handler,
-            priority,
-        });
+        list.push(Subscription { handler, priority });
         list.sort_by(|a, b| b.priority.cmp(&a.priority));
     }
 

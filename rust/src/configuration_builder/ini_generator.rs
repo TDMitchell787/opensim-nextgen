@@ -12,21 +12,41 @@ impl IniGenerator {
 
         output.push_str("[Startup]\n");
         output.push_str(&format!("    gridname = \"{}\"\n", config.grid_name));
-        output.push_str(&format!("    welcome_message = \"{}\"\n", config.welcome_message));
-        output.push_str(&format!("    AllowAnonymousLogin = {}\n", config.allow_anonymous_login));
-        output.push_str(&format!("    physics = {}\n", config.physics_engine.to_ini_string()));
+        output.push_str(&format!(
+            "    welcome_message = \"{}\"\n",
+            config.welcome_message
+        ));
+        output.push_str(&format!(
+            "    AllowAnonymousLogin = {}\n",
+            config.allow_anonymous_login
+        ));
+        output.push_str(&format!(
+            "    physics = {}\n",
+            config.physics_engine.to_ini_string()
+        ));
         output.push('\n');
 
         output.push_str("[Network]\n");
         output.push_str(&format!("    http_listener_port = {}\n", config.http_port));
-        output.push_str(&format!("    ExternalHostNameForLSL = {}\n", config.external_host_name));
-        output.push_str(&format!("    http_listener_address = {}\n", config.internal_ip));
+        output.push_str(&format!(
+            "    ExternalHostNameForLSL = {}\n",
+            config.external_host_name
+        ));
+        output.push_str(&format!(
+            "    http_listener_address = {}\n",
+            config.internal_ip
+        ));
         output.push('\n');
 
         output.push_str("[DatabaseService]\n");
-        output.push_str(&format!("    StorageProvider = \"OpenSim.Data.{}.dll\"\n",
-            config.database_provider.to_ini_string()));
-        output.push_str(&format!("    ConnectionString = \"{}\"\n", config.connection_string));
+        output.push_str(&format!(
+            "    StorageProvider = \"OpenSim.Data.{}.dll\"\n",
+            config.database_provider.to_ini_string()
+        ));
+        output.push_str(&format!(
+            "    ConnectionString = \"{}\"\n",
+            config.connection_string
+        ));
         output.push('\n');
 
         if config.enable_voice {
@@ -68,7 +88,10 @@ impl IniGenerator {
 
         output.push_str(&format!("[{}]\n", config.region_name));
         output.push_str(&format!("    RegionUUID = {}\n", config.region_uuid));
-        output.push_str(&format!("    Location = {},{}\n", config.location_x, config.location_y));
+        output.push_str(&format!(
+            "    Location = {},{}\n",
+            config.location_x, config.location_y
+        ));
         output.push_str(&format!("    SizeX = {}\n", config.size_x));
         output.push_str(&format!("    SizeY = {}\n", config.size_y));
         output.push_str(&format!("    InternalPort = {}\n", config.internal_port));
@@ -91,8 +114,10 @@ impl IniGenerator {
         output.push_str("; OSSL Security Configuration\n\n");
 
         output.push_str("[OSSL]\n");
-        output.push_str(&format!("    OSFunctionThreatLevel = {}\n",
-            config.default_threat_level.to_ini_string()));
+        output.push_str(&format!(
+            "    OSFunctionThreatLevel = {}\n",
+            config.default_threat_level.to_ini_string()
+        ));
         output.push('\n');
 
         output.push_str("    ; Feature Enables\n");
@@ -102,17 +127,38 @@ impl IniGenerator {
         output.push_str(&format!("    Allow_osNpcSay = {}\n", config.enable_npc));
         output.push('\n');
 
-        output.push_str(&format!("    Allow_osTeleportAgent = {}\n", config.enable_teleport));
-        output.push_str(&format!("    Allow_osTeleportOwner = {}\n", config.enable_teleport));
+        output.push_str(&format!(
+            "    Allow_osTeleportAgent = {}\n",
+            config.enable_teleport
+        ));
+        output.push_str(&format!(
+            "    Allow_osTeleportOwner = {}\n",
+            config.enable_teleport
+        ));
         output.push('\n');
 
-        output.push_str(&format!("    Allow_osSetDynamicTextureURL = {}\n", config.enable_dynamic_textures));
-        output.push_str(&format!("    Allow_osSetDynamicTextureURLBlend = {}\n", config.enable_dynamic_textures));
-        output.push_str(&format!("    Allow_osSetDynamicTextureURLBlendFace = {}\n", config.enable_dynamic_textures));
+        output.push_str(&format!(
+            "    Allow_osSetDynamicTextureURL = {}\n",
+            config.enable_dynamic_textures
+        ));
+        output.push_str(&format!(
+            "    Allow_osSetDynamicTextureURLBlend = {}\n",
+            config.enable_dynamic_textures
+        ));
+        output.push_str(&format!(
+            "    Allow_osSetDynamicTextureURLBlendFace = {}\n",
+            config.enable_dynamic_textures
+        ));
         output.push('\n');
 
-        output.push_str(&format!("    Allow_JsonStore = {}\n", config.enable_json_store));
-        output.push_str(&format!("    Allow_osGetGridCustom = {}\n", config.enable_json_store));
+        output.push_str(&format!(
+            "    Allow_JsonStore = {}\n",
+            config.enable_json_store
+        ));
+        output.push_str(&format!(
+            "    Allow_osGetGridCustom = {}\n",
+            config.enable_json_store
+        ));
         output.push('\n');
 
         if !config.allowed_functions.is_empty() {
@@ -158,11 +204,15 @@ impl IniGenerator {
         output.push('\n');
 
         output.push_str("[InventoryService]\n");
-        output.push_str("    LocalServiceModule = \"OpenSim.Services.InventoryService.dll:InventoryService\"\n");
+        output.push_str(
+            "    LocalServiceModule = \"OpenSim.Services.InventoryService.dll:InventoryService\"\n",
+        );
         output.push('\n');
 
         output.push_str("[AssetService]\n");
-        output.push_str("    LocalServiceModule = \"OpenSim.Services.AssetService.dll:AssetService\"\n");
+        output.push_str(
+            "    LocalServiceModule = \"OpenSim.Services.AssetService.dll:AssetService\"\n",
+        );
         output.push('\n');
 
         output.push_str("[UserAccountService]\n");
@@ -170,11 +220,15 @@ impl IniGenerator {
         output.push('\n');
 
         output.push_str("[PresenceService]\n");
-        output.push_str("    LocalServiceModule = \"OpenSim.Services.PresenceService.dll:PresenceService\"\n");
+        output.push_str(
+            "    LocalServiceModule = \"OpenSim.Services.PresenceService.dll:PresenceService\"\n",
+        );
         output.push('\n');
 
         output.push_str("[AvatarService]\n");
-        output.push_str("    LocalServiceModule = \"OpenSim.Services.AvatarService.dll:AvatarService\"\n");
+        output.push_str(
+            "    LocalServiceModule = \"OpenSim.Services.AvatarService.dll:AvatarService\"\n",
+        );
         output.push('\n');
 
         output.push_str("[AuthenticationService]\n");
@@ -204,11 +258,17 @@ impl IniGenerator {
         output.push('\n');
 
         output.push_str("[AssetService]\n");
-        output.push_str(&format!("    AssetServerURI = \"{}\"\n", grid_services.asset_server_uri));
+        output.push_str(&format!(
+            "    AssetServerURI = \"{}\"\n",
+            grid_services.asset_server_uri
+        ));
         output.push('\n');
 
         output.push_str("[InventoryService]\n");
-        output.push_str(&format!("    InventoryServerURI = \"{}\"\n", grid_services.inventory_server_uri));
+        output.push_str(&format!(
+            "    InventoryServerURI = \"{}\"\n",
+            grid_services.inventory_server_uri
+        ));
         output.push('\n');
 
         output.push_str("[GridService]\n");
@@ -216,19 +276,31 @@ impl IniGenerator {
         output.push('\n');
 
         output.push_str("[UserAccountService]\n");
-        output.push_str(&format!("    UserAccountServerURI = \"{}\"\n", grid_services.user_account_server_uri));
+        output.push_str(&format!(
+            "    UserAccountServerURI = \"{}\"\n",
+            grid_services.user_account_server_uri
+        ));
         output.push('\n');
 
         output.push_str("[AuthenticationService]\n");
-        output.push_str(&format!("    AuthenticationServerURI = \"{}\"\n", grid_services.authentication_server_uri));
+        output.push_str(&format!(
+            "    AuthenticationServerURI = \"{}\"\n",
+            grid_services.authentication_server_uri
+        ));
         output.push('\n');
 
         output.push_str("[PresenceService]\n");
-        output.push_str(&format!("    PresenceServerURI = \"{}\"\n", grid_services.presence_server_uri));
+        output.push_str(&format!(
+            "    PresenceServerURI = \"{}\"\n",
+            grid_services.presence_server_uri
+        ));
         output.push('\n');
 
         output.push_str("[AvatarService]\n");
-        output.push_str(&format!("    AvatarServerURI = \"{}\"\n", grid_services.avatar_server_uri));
+        output.push_str(&format!(
+            "    AvatarServerURI = \"{}\"\n",
+            grid_services.avatar_server_uri
+        ));
         output.push('\n');
 
         output
@@ -238,8 +310,10 @@ impl IniGenerator {
         let mut result = HashMap::new();
 
         for (filename, content) in includes {
-            let formatted = format!("; {} - Generated by OpenSim Next Configuration Builder\n\n{}",
-                filename, content);
+            let formatted = format!(
+                "; {} - Generated by OpenSim Next Configuration Builder\n\n{}",
+                filename, content
+            );
             result.insert(filename.clone(), formatted);
         }
 
@@ -250,7 +324,9 @@ impl IniGenerator {
         config: &SavedConfiguration,
         instance_name: &str,
     ) -> String {
-        let container_config = config.container_config.as_ref()
+        let container_config = config
+            .container_config
+            .as_ref()
             .map(|c| c.clone())
             .unwrap_or_default();
 
@@ -271,26 +347,41 @@ impl IniGenerator {
         output.push_str("    deploy:\n");
         output.push_str("      resources:\n");
         output.push_str("        limits:\n");
-        output.push_str(&format!("          memory: {}M\n", container_config.memory_limit_mb));
-        output.push_str(&format!("          cpus: '{}'\n", container_config.cpu_limit));
+        output.push_str(&format!(
+            "          memory: {}M\n",
+            container_config.memory_limit_mb
+        ));
+        output.push_str(&format!(
+            "          cpus: '{}'\n",
+            container_config.cpu_limit
+        ));
 
         if !container_config.ports.is_empty() {
             output.push_str("    ports:\n");
             for port in &container_config.ports {
-                output.push_str(&format!("      - \"{}:{}/{}\"\n",
-                    port.host_port, port.container_port, port.protocol));
+                output.push_str(&format!(
+                    "      - \"{}:{}/{}\"\n",
+                    port.host_port, port.container_port, port.protocol
+                ));
             }
         } else {
             output.push_str("    ports:\n");
-            output.push_str(&format!("      - \"{}:{}/tcp\"\n",
-                config.opensim_ini.http_port, config.opensim_ini.http_port));
-            output.push_str(&format!("      - \"{}:{}/udp\"\n",
-                config.region_ini.internal_port, config.region_ini.internal_port));
+            output.push_str(&format!(
+                "      - \"{}:{}/tcp\"\n",
+                config.opensim_ini.http_port, config.opensim_ini.http_port
+            ));
+            output.push_str(&format!(
+                "      - \"{}:{}/udp\"\n",
+                config.region_ini.internal_port, config.region_ini.internal_port
+            ));
         }
 
         output.push_str("    volumes:\n");
         output.push_str(&format!("      - ./config/{}:/app/bin:ro\n", instance_name));
-        output.push_str(&format!("      - opensim-{}-data:/app/data\n", instance_name));
+        output.push_str(&format!(
+            "      - opensim-{}-data:/app/data\n",
+            instance_name
+        ));
 
         if !container_config.volumes.is_empty() {
             for volume in &container_config.volumes {
@@ -324,7 +415,9 @@ impl IniGenerator {
         config: &SavedConfiguration,
         instance_name: &str,
     ) -> String {
-        let namespace = config.container_config.as_ref()
+        let namespace = config
+            .container_config
+            .as_ref()
             .and_then(|c| c.namespace.clone())
             .unwrap_or_else(|| "opensim".to_string());
 
@@ -363,11 +456,10 @@ impl IniGenerator {
         output
     }
 
-    pub fn generate_helm_values(
-        config: &SavedConfiguration,
-        instance_name: &str,
-    ) -> String {
-        let container_config = config.container_config.as_ref()
+    pub fn generate_helm_values(config: &SavedConfiguration, instance_name: &str) -> String {
+        let container_config = config
+            .container_config
+            .as_ref()
             .map(|c| c.clone())
             .unwrap_or_default();
 
@@ -384,7 +476,10 @@ impl IniGenerator {
         output.push_str("image:\n");
         if let Some(image) = &container_config.docker_image {
             let parts: Vec<&str> = image.split(':').collect();
-            output.push_str(&format!("  repository: {}\n", parts.get(0).unwrap_or(&"opensim-next")));
+            output.push_str(&format!(
+                "  repository: {}\n",
+                parts.get(0).unwrap_or(&"opensim-next")
+            ));
             output.push_str(&format!("  tag: {}\n\n", parts.get(1).unwrap_or(&"latest")));
         } else {
             output.push_str("  repository: opensim-next\n");
@@ -393,22 +488,40 @@ impl IniGenerator {
 
         output.push_str("resources:\n");
         output.push_str("  limits:\n");
-        output.push_str(&format!("    memory: {}Mi\n", container_config.memory_limit_mb));
+        output.push_str(&format!(
+            "    memory: {}Mi\n",
+            container_config.memory_limit_mb
+        ));
         output.push_str(&format!("    cpu: {}\n", container_config.cpu_limit));
         output.push_str("  requests:\n");
-        output.push_str(&format!("    memory: {}Mi\n", container_config.memory_limit_mb / 2));
-        output.push_str(&format!("    cpu: {}\n\n", container_config.cpu_limit / 2.0));
+        output.push_str(&format!(
+            "    memory: {}Mi\n",
+            container_config.memory_limit_mb / 2
+        ));
+        output.push_str(&format!(
+            "    cpu: {}\n\n",
+            container_config.cpu_limit / 2.0
+        ));
 
         output.push_str("service:\n");
         output.push_str("  type: LoadBalancer\n");
         output.push_str(&format!("  httpPort: {}\n", config.opensim_ini.http_port));
-        output.push_str(&format!("  udpPort: {}\n\n", config.region_ini.internal_port));
+        output.push_str(&format!(
+            "  udpPort: {}\n\n",
+            config.region_ini.internal_port
+        ));
 
         if container_config.enable_hpa {
             output.push_str("autoscaling:\n");
             output.push_str("  enabled: true\n");
-            output.push_str(&format!("  minReplicas: {}\n", container_config.min_replicas));
-            output.push_str(&format!("  maxReplicas: {}\n", container_config.max_replicas));
+            output.push_str(&format!(
+                "  minReplicas: {}\n",
+                container_config.min_replicas
+            ));
+            output.push_str(&format!(
+                "  maxReplicas: {}\n",
+                container_config.max_replicas
+            ));
             output.push_str("  targetCPUUtilizationPercentage: 80\n\n");
         }
 

@@ -1,7 +1,7 @@
-use std::collections::HashMap;
 use anyhow::{anyhow, Result};
 use quick_xml::events::{BytesEnd, BytesStart, BytesText, Event};
 use quick_xml::{Reader, Writer};
+use std::collections::HashMap;
 use std::io::Cursor;
 
 #[derive(Debug, Clone)]
@@ -30,14 +30,20 @@ impl XmlValue {
 pub fn build_xml_response(data: &HashMap<String, XmlValue>) -> String {
     let mut writer = Writer::new_with_indent(Cursor::new(Vec::new()), b' ', 2);
 
-    writer.write_event(Event::Decl(quick_xml::events::BytesDecl::new("1.0", None, None))).ok();
+    writer
+        .write_event(Event::Decl(quick_xml::events::BytesDecl::new(
+            "1.0", None, None,
+        )))
+        .ok();
 
     let root = BytesStart::new("ServerResponse");
     writer.write_event(Event::Start(root)).ok();
 
     write_xml_data(&mut writer, data);
 
-    writer.write_event(Event::End(BytesEnd::new("ServerResponse"))).ok();
+    writer
+        .write_event(Event::End(BytesEnd::new("ServerResponse")))
+        .ok();
 
     let result = writer.into_inner().into_inner();
     String::from_utf8(result).unwrap_or_default()
@@ -51,14 +57,18 @@ fn write_xml_data(writer: &mut Writer<Cursor<Vec<u8>>>, data: &HashMap<String, X
                 let elem = BytesStart::new(safe_key.as_str());
                 writer.write_event(Event::Start(elem)).ok();
                 writer.write_event(Event::Text(BytesText::new(s))).ok();
-                writer.write_event(Event::End(BytesEnd::new(safe_key.as_str()))).ok();
+                writer
+                    .write_event(Event::End(BytesEnd::new(safe_key.as_str())))
+                    .ok();
             }
             XmlValue::Dict(dict) => {
                 let mut elem = BytesStart::new(safe_key.as_str());
                 elem.push_attribute(("type", "List"));
                 writer.write_event(Event::Start(elem)).ok();
                 write_xml_data(writer, dict);
-                writer.write_event(Event::End(BytesEnd::new(safe_key.as_str()))).ok();
+                writer
+                    .write_event(Event::End(BytesEnd::new(safe_key.as_str())))
+                    .ok();
             }
             XmlValue::List(items) => {
                 for (i, item) in items.iter().enumerate() {
@@ -68,12 +78,16 @@ fn write_xml_data(writer: &mut Writer<Cursor<Vec<u8>>>, data: &HashMap<String, X
                         elem.push_attribute(("type", "List"));
                         writer.write_event(Event::Start(elem)).ok();
                         write_xml_data(writer, dict);
-                        writer.write_event(Event::End(BytesEnd::new(item_key.as_str()))).ok();
+                        writer
+                            .write_event(Event::End(BytesEnd::new(item_key.as_str())))
+                            .ok();
                     } else if let XmlValue::Str(s) = item {
                         let elem = BytesStart::new(item_key.as_str());
                         writer.write_event(Event::Start(elem)).ok();
                         writer.write_event(Event::Text(BytesText::new(s))).ok();
-                        writer.write_event(Event::End(BytesEnd::new(item_key.as_str()))).ok();
+                        writer
+                            .write_event(Event::End(BytesEnd::new(item_key.as_str())))
+                            .ok();
                     }
                 }
             }
@@ -108,7 +122,10 @@ pub fn parse_xml_response(xml: &str) -> Result<HashMap<String, XmlValue>> {
     scan_xml_response(&mut reader, "ServerResponse")
 }
 
-fn scan_xml_response(reader: &mut Reader<&[u8]>, end_tag: &str) -> Result<HashMap<String, XmlValue>> {
+fn scan_xml_response(
+    reader: &mut Reader<&[u8]>,
+    end_tag: &str,
+) -> Result<HashMap<String, XmlValue>> {
     let mut result = HashMap::new();
     let mut buf = Vec::new();
 
@@ -119,8 +136,7 @@ fn scan_xml_response(reader: &mut Reader<&[u8]>, end_tag: &str) -> Result<HashMa
                 let decoded_name = decode_xml_name(&name);
 
                 let is_list = e.attributes().filter_map(|a| a.ok()).any(|a| {
-                    a.key.as_ref() == b"type"
-                        && String::from_utf8_lossy(&a.value) == "List"
+                    a.key.as_ref() == b"type" && String::from_utf8_lossy(&a.value) == "List"
                 });
 
                 if is_list {
@@ -193,7 +209,10 @@ pub fn null_result() -> String {
 
 pub fn bool_result(val: bool) -> String {
     let mut data = HashMap::new();
-    data.insert("result".to_string(), XmlValue::Str(if val { "true" } else { "false" }.to_string()));
+    data.insert(
+        "result".to_string(),
+        XmlValue::Str(if val { "true" } else { "false" }.to_string()),
+    );
     build_xml_response(&data)
 }
 
@@ -245,7 +264,11 @@ pub fn try_parse_xml_to_flat(body: &str) -> Option<HashMap<String, String>> {
 fn flatten_xml_values(data: &HashMap<String, XmlValue>, prefix: &str) -> HashMap<String, String> {
     let mut result = HashMap::new();
     for (key, value) in data {
-        let full_key = if prefix.is_empty() { key.clone() } else { format!("{}_{}", prefix, key) };
+        let full_key = if prefix.is_empty() {
+            key.clone()
+        } else {
+            format!("{}_{}", prefix, key)
+        };
         match value {
             XmlValue::Str(s) => {
                 result.insert(full_key, s.clone());
@@ -253,7 +276,9 @@ fn flatten_xml_values(data: &HashMap<String, XmlValue>, prefix: &str) -> HashMap
             XmlValue::Dict(d) => {
                 for (dk, dv) in d {
                     match dv {
-                        XmlValue::Str(s) => { result.insert(dk.clone(), s.clone()); }
+                        XmlValue::Str(s) => {
+                            result.insert(dk.clone(), s.clone());
+                        }
                         XmlValue::Dict(dd) => {
                             let nested = flatten_xml_values(dd, dk);
                             result.extend(nested);
@@ -282,8 +307,12 @@ pub fn parse_form_body(body: &str) -> HashMap<String, String> {
     let mut result = HashMap::new();
     for pair in body.split('&') {
         if let Some((key, value)) = pair.split_once('=') {
-            let key = urlencoding::decode(&key.replace('+', " ")).unwrap_or_default().to_string();
-            let value = urlencoding::decode(&value.replace('+', " ")).unwrap_or_default().to_string();
+            let key = urlencoding::decode(&key.replace('+', " "))
+                .unwrap_or_default()
+                .to_string();
+            let value = urlencoding::decode(&value.replace('+', " "))
+                .unwrap_or_default()
+                .to_string();
             result.insert(key, value);
         }
     }
@@ -317,7 +346,10 @@ mod tests {
     #[test]
     fn test_single_result() {
         let mut fields = HashMap::new();
-        fields.insert("uuid".to_string(), "00000000-0000-0000-0000-000000000001".to_string());
+        fields.insert(
+            "uuid".to_string(),
+            "00000000-0000-0000-0000-000000000001".to_string(),
+        );
         fields.insert("regionName".to_string(), "Test".to_string());
         let xml = single_result(fields);
         assert!(xml.contains("type=\"List\""));
@@ -337,7 +369,8 @@ mod tests {
 
     #[test]
     fn test_parse_xml_response_simple() {
-        let xml = r#"<?xml version="1.0"?><ServerResponse><Result>Success</Result></ServerResponse>"#;
+        let xml =
+            r#"<?xml version="1.0"?><ServerResponse><Result>Success</Result></ServerResponse>"#;
         let result = parse_xml_response(xml).unwrap();
         assert_eq!(result.get("Result").unwrap().as_str(), Some("Success"));
     }

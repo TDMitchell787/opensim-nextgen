@@ -1,5 +1,5 @@
 //! Virtual Marketplace for OpenSim Next
-//! 
+//!
 //! Provides comprehensive marketplace functionality including item listings,
 //! purchase processing, escrow services, and automated delivery.
 
@@ -9,7 +9,7 @@ use anyhow::Result;
 use std::collections::HashMap;
 use std::sync::Arc;
 use tokio::sync::RwLock;
-use tracing::{debug, info, warn, error};
+use tracing::{debug, error, info, warn};
 use uuid::Uuid;
 
 /// Virtual marketplace management system
@@ -72,7 +72,11 @@ pub struct DeliveryService {
 /// Trait for delivery method handlers
 #[async_trait::async_trait]
 trait DeliveryHandler {
-    async fn deliver_item(&self, order: &PurchaseOrder, item: &MarketplaceItem) -> Result<DeliveryResult>;
+    async fn deliver_item(
+        &self,
+        order: &PurchaseOrder,
+        item: &MarketplaceItem,
+    ) -> Result<DeliveryResult>;
     async fn verify_delivery(&self, order: &PurchaseOrder) -> Result<bool>;
 }
 
@@ -189,14 +193,18 @@ impl MarketplaceManager {
         item: MarketplaceItem,
         listing_data: CreateListingRequest,
     ) -> EconomyResult<MarketplaceListing> {
-        info!("Creating marketplace listing for seller {} item {}", seller_id, item.item_id);
+        info!(
+            "Creating marketplace listing for seller {} item {}",
+            seller_id, item.item_id
+        );
 
         // Validate listing
         self.validate_listing_request(&listing_data).await?;
 
         // Check listing fee
         if self.config.listing_fee > 0 {
-            self.charge_listing_fee(seller_id, &listing_data.currency_code).await?;
+            self.charge_listing_fee(seller_id, &listing_data.currency_code)
+                .await?;
         }
 
         let listing = MarketplaceListing {
@@ -232,7 +240,10 @@ impl MarketplaceManager {
             active.insert(listing.listing_id, listing.clone());
         }
 
-        info!("Marketplace listing created successfully: {}", listing.listing_id);
+        info!(
+            "Marketplace listing created successfully: {}",
+            listing.listing_id
+        );
         Ok(listing)
     }
 
@@ -244,7 +255,10 @@ impl MarketplaceManager {
         quantity: u32,
         payment_method: PaymentMethod,
     ) -> EconomyResult<PurchaseOrder> {
-        info!("Processing purchase: buyer {} listing {} quantity {}", buyer_id, listing_id, quantity);
+        info!(
+            "Processing purchase: buyer {} listing {} quantity {}",
+            buyer_id, listing_id, quantity
+        );
 
         // Get listing
         let listing = self.get_listing(listing_id).await?;
@@ -309,7 +323,10 @@ impl MarketplaceManager {
     }
 
     /// Search marketplace listings
-    pub async fn search_listings(&self, criteria: MarketplaceSearchCriteria) -> EconomyResult<Vec<MarketplaceListing>> {
+    pub async fn search_listings(
+        &self,
+        criteria: MarketplaceSearchCriteria,
+    ) -> EconomyResult<Vec<MarketplaceListing>> {
         debug!("Searching marketplace with criteria: {:?}", criteria);
 
         // Implementation would query database with filters
@@ -487,7 +504,10 @@ impl MarketplaceManager {
     }
 
     /// Get seller's listings
-    pub async fn get_seller_listings(&self, seller_id: Uuid) -> EconomyResult<Vec<MarketplaceListing>> {
+    pub async fn get_seller_listings(
+        &self,
+        seller_id: Uuid,
+    ) -> EconomyResult<Vec<MarketplaceListing>> {
         debug!("Getting listings for seller {}", seller_id);
 
         // Implementation would query database
@@ -499,7 +519,11 @@ impl MarketplaceManager {
             .cloned()
             .collect();
 
-        debug!("Found {} listings for seller {}", seller_listings.len(), seller_id);
+        debug!(
+            "Found {} listings for seller {}",
+            seller_listings.len(),
+            seller_id
+        );
         Ok(seller_listings)
     }
 
@@ -562,7 +586,12 @@ impl MarketplaceManager {
         Ok(())
     }
 
-    async fn validate_purchase(&self, listing: &MarketplaceListing, buyer_id: Uuid, quantity: u32) -> EconomyResult<()> {
+    async fn validate_purchase(
+        &self,
+        listing: &MarketplaceListing,
+        buyer_id: Uuid,
+        quantity: u32,
+    ) -> EconomyResult<()> {
         if listing.seller_id == buyer_id {
             return Err(EconomyError::TransactionFailed {
                 reason: "Cannot purchase your own item".to_string(),
@@ -613,7 +642,10 @@ impl MarketplaceManager {
             idempotency_key: Some(format!("marketplace-{}", order.order_id)),
         };
 
-        let _result = self.transaction_processor.process_transaction(transfer_request).await?;
+        let _result = self
+            .transaction_processor
+            .process_transaction(transfer_request)
+            .await?;
         Ok(())
     }
 
@@ -653,7 +685,11 @@ impl MarketplaceManager {
         })
     }
 
-    async fn update_listing_quantities(&self, _listing_id: Uuid, _quantity: u32) -> EconomyResult<()> {
+    async fn update_listing_quantities(
+        &self,
+        _listing_id: Uuid,
+        _quantity: u32,
+    ) -> EconomyResult<()> {
         Ok(())
     }
 
@@ -723,22 +759,24 @@ impl MarketplaceManager {
 
         let mut categories: Vec<CategoryMetrics> = category_stats
             .into_iter()
-            .map(|(category_id, (transaction_count, total_volume, sellers))| {
-                let average_price = if transaction_count > 0 {
-                    total_volume as f64 / transaction_count as f64
-                } else {
-                    0.0
-                };
-                let top_sellers: Vec<Uuid> = sellers.into_iter().take(5).collect();
-                CategoryMetrics {
-                    category_id,
-                    category_name: format!("Category-{}", &category_id.to_string()[..8]),
-                    transaction_count,
-                    total_volume,
-                    average_price,
-                    top_sellers,
-                }
-            })
+            .map(
+                |(category_id, (transaction_count, total_volume, sellers))| {
+                    let average_price = if transaction_count > 0 {
+                        total_volume as f64 / transaction_count as f64
+                    } else {
+                        0.0
+                    };
+                    let top_sellers: Vec<Uuid> = sellers.into_iter().take(5).collect();
+                    CategoryMetrics {
+                        category_id,
+                        category_name: format!("Category-{}", &category_id.to_string()[..8]),
+                        transaction_count,
+                        total_volume,
+                        average_price,
+                        top_sellers,
+                    }
+                },
+            )
             .collect();
 
         categories.sort_by(|a, b| b.total_volume.cmp(&a.total_volume));
@@ -749,7 +787,10 @@ impl MarketplaceManager {
 }
 
 impl EscrowService {
-    fn new(database: Arc<DatabaseManager>, currency_system: Arc<super::currency::CurrencySystem>) -> Self {
+    fn new(
+        database: Arc<DatabaseManager>,
+        currency_system: Arc<super::currency::CurrencySystem>,
+    ) -> Self {
         Self {
             database,
             currency_system,
@@ -761,11 +802,9 @@ impl EscrowService {
         info!("Creating escrow for order {}", order.order_id);
 
         // Reserve funds from buyer
-        self.currency_system.reserve_currency(
-            order.buyer_id,
-            &order.currency_code,
-            order.total_price,
-        ).await?;
+        self.currency_system
+            .reserve_currency(order.buyer_id, &order.currency_code, order.total_price)
+            .await?;
 
         // Create escrow account
         let escrow = EscrowAccount {

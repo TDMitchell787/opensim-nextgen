@@ -1,17 +1,17 @@
-pub mod building;
-pub mod scripting;
-pub mod landscaping;
-pub mod vehicles;
-pub mod media;
-pub mod clothing;
-pub mod navigation;
-pub mod estate;
-pub mod economy;
-pub mod social;
 pub mod animation;
+pub mod building;
+pub mod clothing;
+pub mod economy;
+pub mod estate;
 pub mod inventory;
+pub mod landscaping;
+pub mod media;
+pub mod navigation;
 pub mod npc_management;
+pub mod scripting;
+pub mod social;
 pub mod tutorial;
+pub mod vehicles;
 
 use super::skill_engine::SkillRegistry;
 

@@ -1,5 +1,5 @@
-use uuid::Uuid;
 use tracing::info;
+use uuid::Uuid;
 
 pub struct BadgeCommunicator {
     pub badge_texture_uuid: Uuid,
@@ -47,7 +47,10 @@ impl BadgeCommunicator {
         .execute(pool)
         .await?;
 
-        info!("[BADGE] Imported badge texture {} from {}", asset_id, image_path);
+        info!(
+            "[BADGE] Imported badge texture {} from {}",
+            asset_id, image_path
+        );
         Ok(asset_id)
     }
 

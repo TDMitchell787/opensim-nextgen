@@ -17,11 +17,11 @@ use uuid::Uuid;
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 #[repr(i32)]
 pub enum PacketStatus {
-    Ok = 0,           // More packets coming
-    Done = 1,         // Final packet
-    Skip = 2,         // Skip this packet
-    Abort = 3,        // Transfer aborted
-    Error = 4,        // Error occurred
+    Ok = 0,    // More packets coming
+    Done = 1,  // Final packet
+    Skip = 2,  // Skip this packet
+    Abort = 3, // Transfer aborted
+    Error = 4, // Error occurred
 }
 
 #[derive(Debug, Clone)]

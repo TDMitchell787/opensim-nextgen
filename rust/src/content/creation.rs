@@ -3,17 +3,17 @@
 //! Provides advanced content creation capabilities including 3D model import,
 //! texture optimization, validation, and automatic quality level generation.
 
+use super::{
+    ContentError, ContentMetadata, ContentPermissions, ContentQuality, ContentRating,
+    ContentResult, ContentType, ContentValidationResult, DistributionStrategy,
+};
+use chrono::{DateTime, Utc};
+use serde::{Deserialize, Serialize};
 use std::collections::HashMap;
 use std::path::{Path, PathBuf};
 use std::sync::Arc;
 use tokio::sync::RwLock;
 use uuid::Uuid;
-use serde::{Deserialize, Serialize};
-use chrono::{DateTime, Utc};
-use super::{
-    ContentType, ContentQuality, ContentMetadata, ContentPermissions, ContentRating,
-    ContentValidationResult, ContentResult, ContentError, DistributionStrategy,
-};
 
 /// Content creation configuration
 #[derive(Debug, Clone, Serialize, Deserialize)]
@@ -178,7 +178,7 @@ impl ContentCreationManager {
         // Ensure directories exist
         std::fs::create_dir_all(&config.upload_directory)?;
         std::fs::create_dir_all(&config.temp_directory)?;
-        
+
         Ok(Self {
             config,
             creation_jobs: Arc::new(RwLock::new(HashMap::new())),
@@ -187,7 +187,7 @@ impl ContentCreationManager {
             max_workers: 4, // Default to 4 workers
         })
     }
-    
+
     /// Start content creation job
     pub async fn create_content(
         &mut self,
@@ -199,8 +199,9 @@ impl ContentCreationManager {
         options: ContentCreationOptions,
     ) -> ContentResult<Uuid> {
         // Validate input file
-        self.validate_input_file(&source_file, &content_type).await?;
-        
+        self.validate_input_file(&source_file, &content_type)
+            .await?;
+
         let job_id = Uuid::new_v4();
         let job = ContentCreationJob {
             job_id,
@@ -219,40 +220,44 @@ impl ContentCreationManager {
             error_message: None,
             result_content_id: None,
         };
-        
+
         // Store job
         self.creation_jobs.write().await.insert(job_id, job);
-        
+
         // Add to processing queue
         self.processing_queue.write().await.push(job_id);
-        
+
         // Start processing if workers available
         self.try_start_worker().await?;
-        
+
         tracing::info!("Content creation job started: {}", job_id);
         Ok(job_id)
     }
-    
+
     /// Get content creation job status
     pub async fn get_job_status(&self, job_id: Uuid) -> ContentResult<ContentCreationJob> {
-        self.creation_jobs.read().await
+        self.creation_jobs
+            .read()
+            .await
             .get(&job_id)
             .cloned()
             .ok_or(ContentError::ContentNotFound { id: job_id })
     }
-    
+
     /// Cancel content creation job
     pub async fn cancel_job(&mut self, job_id: Uuid) -> ContentResult<()> {
         let mut jobs = self.creation_jobs.write().await;
         if let Some(job) = jobs.get_mut(&job_id) {
-            if job.status == CreationJobStatus::Queued || job.status == CreationJobStatus::Processing {
+            if job.status == CreationJobStatus::Queued
+                || job.status == CreationJobStatus::Processing
+            {
                 job.status = CreationJobStatus::Cancelled;
                 tracing::info!("Content creation job cancelled: {}", job_id);
             }
         }
         Ok(())
     }
-    
+
     /// Process 3D model content
     pub async fn process_3d_model(
         &self,
@@ -261,30 +266,28 @@ impl ContentCreationManager {
         generate_lods: bool,
     ) -> ContentResult<Model3DProcessingResult> {
         let start_time = std::time::Instant::now();
-        
+
         // Load 3D model (stub implementation)
         let model_data = self.load_3d_model(file_path).await?;
-        
+
         // Count original polygons
         let original_polygons = model_data.polygon_count;
-        
+
         // Optimize based on quality settings
-        let optimized_polygons = self.optimize_polygon_count(
-            original_polygons,
-            target_quality.polygon_reduction()
-        );
-        
+        let optimized_polygons =
+            self.optimize_polygon_count(original_polygons, target_quality.polygon_reduction());
+
         // Generate LODs if requested
         let mut generated_lods = Vec::new();
         if generate_lods {
             generated_lods = self.generate_lods(&model_data, file_path).await?;
         }
-        
+
         // Calculate bounding box
         let bounding_box = self.calculate_bounding_box(&model_data);
-        
+
         let processing_time = start_time.elapsed().as_millis() as u32;
-        
+
         let result = Model3DProcessingResult {
             original_polygons,
             optimized_polygons,
@@ -296,13 +299,17 @@ impl ContentCreationManager {
             bounding_box,
             processing_time_ms: processing_time,
         };
-        
-        tracing::info!("3D model processed: {} polygons -> {} polygons ({:.1}% reduction)",
-                      original_polygons, optimized_polygons, result.polygon_reduction * 100.0);
-        
+
+        tracing::info!(
+            "3D model processed: {} polygons -> {} polygons ({:.1}% reduction)",
+            original_polygons,
+            optimized_polygons,
+            result.polygon_reduction * 100.0
+        );
+
         Ok(result)
     }
-    
+
     /// Process texture content
     pub async fn process_texture(
         &self,
@@ -311,30 +318,30 @@ impl ContentCreationManager {
         generate_mipmaps: bool,
     ) -> ContentResult<TextureProcessingResult> {
         let start_time = std::time::Instant::now();
-        
+
         // Load texture data (stub implementation)
         let texture_data = self.load_texture(file_path).await?;
-        
+
         // Calculate optimized resolution
         let scale = target_quality.resolution_scale();
         let optimized_resolution = (
             (texture_data.width as f32 * scale) as u32,
             (texture_data.height as f32 * scale) as u32,
         );
-        
+
         // Optimize texture
         let compression_ratio = target_quality.compression_ratio();
         let quality_score = self.calculate_texture_quality(&texture_data, compression_ratio);
-        
+
         // Generate mipmaps if requested
         let mipmap_levels = if generate_mipmaps {
             self.calculate_mipmap_levels(optimized_resolution.0, optimized_resolution.1)
         } else {
             1
         };
-        
+
         let processing_time = start_time.elapsed().as_millis() as u32;
-        
+
         let result = TextureProcessingResult {
             original_resolution: (texture_data.width, texture_data.height),
             optimized_resolution,
@@ -345,15 +352,19 @@ impl ContentCreationManager {
             mipmap_levels,
             processing_time_ms: processing_time,
         };
-        
-        tracing::info!("Texture processed: {}x{} -> {}x{} ({:.1}% compression)",
-                      result.original_resolution.0, result.original_resolution.1,
-                      result.optimized_resolution.0, result.optimized_resolution.1,
-                      compression_ratio * 100.0);
-        
+
+        tracing::info!(
+            "Texture processed: {}x{} -> {}x{} ({:.1}% compression)",
+            result.original_resolution.0,
+            result.original_resolution.1,
+            result.optimized_resolution.0,
+            result.optimized_resolution.1,
+            compression_ratio * 100.0
+        );
+
         Ok(result)
     }
-    
+
     /// Process audio content
     pub async fn process_audio(
         &self,
@@ -361,16 +372,16 @@ impl ContentCreationManager {
         target_quality: &ContentQuality,
     ) -> ContentResult<AudioProcessingResult> {
         let start_time = std::time::Instant::now();
-        
+
         // Load audio data (stub implementation)
         let audio_data = self.load_audio(file_path).await?;
-        
+
         // Calculate compression settings
         let compression_ratio = target_quality.compression_ratio();
         let quality_score = self.calculate_audio_quality(&audio_data, compression_ratio);
-        
+
         let processing_time = start_time.elapsed().as_millis() as u32;
-        
+
         let result = AudioProcessingResult {
             duration_seconds: audio_data.duration_seconds,
             sample_rate: audio_data.sample_rate,
@@ -382,13 +393,16 @@ impl ContentCreationManager {
             quality_score,
             processing_time_ms: processing_time,
         };
-        
-        tracing::info!("Audio processed: {:.1}s duration, {:.1}% compression",
-                      result.duration_seconds, compression_ratio * 100.0);
-        
+
+        tracing::info!(
+            "Audio processed: {:.1}s duration, {:.1}% compression",
+            result.duration_seconds,
+            compression_ratio * 100.0
+        );
+
         Ok(result)
     }
-    
+
     /// Validate content against rules
     pub async fn validate_content(
         &self,
@@ -399,28 +413,34 @@ impl ContentCreationManager {
         let mut errors = Vec::new();
         let mut warnings = Vec::new();
         let mut recommendations = Vec::new();
-        
+
         // File size validation
         let file_size = tokio::fs::metadata(file_path).await?.len();
         if file_size > self.config.max_file_size {
-            errors.push(format!("File size {} exceeds maximum allowed size {}", 
-                               file_size, self.config.max_file_size));
+            errors.push(format!(
+                "File size {} exceeds maximum allowed size {}",
+                file_size, self.config.max_file_size
+            ));
         }
-        
+
         // Content-specific validation
         match content_type {
             ContentType::Model3D => {
-                self.validate_3d_model(file_path, &mut errors, &mut warnings, &mut recommendations).await?;
-            },
+                self.validate_3d_model(file_path, &mut errors, &mut warnings, &mut recommendations)
+                    .await?;
+            }
             ContentType::Texture => {
-                self.validate_texture(file_path, &mut errors, &mut warnings, &mut recommendations).await?;
-            },
+                self.validate_texture(file_path, &mut errors, &mut warnings, &mut recommendations)
+                    .await?;
+            }
             ContentType::Audio => {
-                self.validate_audio(file_path, &mut errors, &mut warnings, &mut recommendations).await?;
-            },
+                self.validate_audio(file_path, &mut errors, &mut warnings, &mut recommendations)
+                    .await?;
+            }
             ContentType::Script => {
-                self.validate_script(file_path, &mut errors, &mut warnings, &mut recommendations).await?;
-            },
+                self.validate_script(file_path, &mut errors, &mut warnings, &mut recommendations)
+                    .await?;
+            }
             _ => {
                 // Basic validation for other types
                 if !file_path.exists() {
@@ -428,17 +448,26 @@ impl ContentCreationManager {
                 }
             }
         }
-        
+
         // Security validation
         if self.config.validation_rules.security_scanning {
-            self.security_scan(file_path, &mut errors, &mut warnings).await?;
+            self.security_scan(file_path, &mut errors, &mut warnings)
+                .await?;
         }
-        
+
         // Calculate scores
-        let performance_score = self.calculate_performance_score(content_type, file_path).await?;
-        let security_score = if errors.iter().any(|e| e.contains("security")) { 0.0 } else { 100.0 };
-        let quality_score = self.calculate_quality_score(content_type, file_path).await?;
-        
+        let performance_score = self
+            .calculate_performance_score(content_type, file_path)
+            .await?;
+        let security_score = if errors.iter().any(|e| e.contains("security")) {
+            0.0
+        } else {
+            100.0
+        };
+        let quality_score = self
+            .calculate_quality_score(content_type, file_path)
+            .await?;
+
         let result = ContentValidationResult {
             is_valid: errors.is_empty(),
             errors,
@@ -448,20 +477,26 @@ impl ContentCreationManager {
             quality_score,
             recommendations,
         };
-        
+
         tracing::info!("Content validation completed: valid={}, performance={:.1}, security={:.1}, quality={:.1}",
                       result.is_valid, result.performance_score, result.security_score, result.quality_score);
-        
+
         Ok(result)
     }
-    
+
     // Private helper methods (stub implementations)
-    
-    async fn validate_input_file(&self, file_path: &Path, content_type: &ContentType) -> ContentResult<()> {
+
+    async fn validate_input_file(
+        &self,
+        file_path: &Path,
+        content_type: &ContentType,
+    ) -> ContentResult<()> {
         if !file_path.exists() {
-            return Err(ContentError::ImportFailed { reason: "File does not exist".to_string() });
+            return Err(ContentError::ImportFailed {
+                reason: "File does not exist".to_string(),
+            });
         }
-        
+
         // Check file extension
         if let Some(extension) = file_path.extension() {
             let ext = extension.to_string_lossy().to_lowercase();
@@ -469,10 +504,10 @@ impl ContentCreationManager {
                 return Err(ContentError::InvalidFormat { format: ext });
             }
         }
-        
+
         Ok(())
     }
-    
+
     async fn try_start_worker(&self) -> ContentResult<()> {
         let active_workers = *self.workers_active.read().await;
         if active_workers < self.max_workers {
@@ -480,15 +515,20 @@ impl ContentCreationManager {
             if queue_len > 0 {
                 // Start worker (stub implementation)
                 *self.workers_active.write().await += 1;
-                tracing::info!("Started content processing worker ({}/{})", active_workers + 1, self.max_workers);
+                tracing::info!(
+                    "Started content processing worker ({}/{})",
+                    active_workers + 1,
+                    self.max_workers
+                );
             }
         }
         Ok(())
     }
-    
+
     async fn load_3d_model(&self, file_path: &Path) -> ContentResult<Model3DData> {
         let data = tokio::fs::read(file_path).await?;
-        let extension = file_path.extension()
+        let extension = file_path
+            .extension()
             .map(|e| e.to_string_lossy().to_lowercase())
             .unwrap_or_default();
 
@@ -524,7 +564,10 @@ impl ContentCreationManager {
                 materials_seen.insert(current_material.clone());
             } else if line.starts_with("mtllib ") {
                 material_count += 1;
-            } else if line.starts_with("map_Kd ") || line.starts_with("map_Ka ") || line.starts_with("map_Ks ") {
+            } else if line.starts_with("map_Kd ")
+                || line.starts_with("map_Ka ")
+                || line.starts_with("map_Ks ")
+            {
                 texture_count += 1;
             }
         }
@@ -569,11 +612,15 @@ impl ContentCreationManager {
     fn parse_gltf_model(&self, data: &[u8], extension: &str) -> ContentResult<Model3DData> {
         if extension == "glb" {
             if data.len() < 12 || &data[0..4] != b"glTF" {
-                return Err(ContentError::ValidationError { reason: "Invalid GLB header".to_string() });
+                return Err(ContentError::ValidationError {
+                    reason: "Invalid GLB header".to_string(),
+                });
             }
             let json_length = u32::from_le_bytes([data[12], data[13], data[14], data[15]]) as usize;
             if data.len() < 20 + json_length {
-                return Err(ContentError::ValidationError { reason: "Truncated GLB file".to_string() });
+                return Err(ContentError::ValidationError {
+                    reason: "Truncated GLB file".to_string(),
+                });
             }
             let json_data = &data[20..20 + json_length];
             self.parse_gltf_json(json_data)
@@ -587,7 +634,10 @@ impl ContentCreationManager {
 
         let mesh_count = content.matches("\"primitives\"").count() as u32;
         let material_count = content.matches("\"pbrMetallicRoughness\"").count() as u32;
-        let texture_count = content.matches("\"textures\"").count().max(content.matches("\"images\"").count()) as u32;
+        let texture_count = content
+            .matches("\"textures\"")
+            .count()
+            .max(content.matches("\"images\"").count()) as u32;
         let animation_count = content.matches("\"animations\"").count() as u32;
 
         let polygon_estimate = mesh_count * 1000;
@@ -632,12 +682,14 @@ impl ContentCreationManager {
             })
         }
     }
-    
+
     async fn load_texture(&self, file_path: &Path) -> ContentResult<TextureData> {
         let data = tokio::fs::read(file_path).await?;
 
         if data.len() < 8 {
-            return Err(ContentError::ValidationError { reason: "File too small to be a valid image".to_string() });
+            return Err(ContentError::ValidationError {
+                reason: "File too small to be a valid image".to_string(),
+            });
         }
 
         if data.len() >= 8 && &data[0..8] == b"\x89PNG\r\n\x1a\n" {
@@ -655,10 +707,19 @@ impl ContentCreationManager {
         if data.len() >= 6 && (&data[0..6] == b"GIF87a" || &data[0..6] == b"GIF89a") {
             let width = u16::from_le_bytes([data[6], data[7]]) as u32;
             let height = u16::from_le_bytes([data[8], data[9]]) as u32;
-            return Ok(TextureData { width, height, format: "GIF".to_string(), channels: 4, bit_depth: 8, has_alpha: true });
+            return Ok(TextureData {
+                width,
+                height,
+                format: "GIF".to_string(),
+                channels: 4,
+                bit_depth: 8,
+                has_alpha: true,
+            });
         }
 
-        if data.len() >= 4 && (data[0] == 0x00 && data[1] == 0x00 && data[2] == 0x00 && data[3] == 0x0C) {
+        if data.len() >= 4
+            && (data[0] == 0x00 && data[1] == 0x00 && data[2] == 0x00 && data[3] == 0x0C)
+        {
             return self.parse_jp2_header(&data);
         }
 
@@ -670,7 +731,8 @@ impl ContentCreationManager {
             if width > 0 && width <= 16384 && height > 0 && height <= 16384 && bit_depth <= 32 {
                 let has_alpha = image_type == 2 || image_type == 10;
                 return Ok(TextureData {
-                    width, height,
+                    width,
+                    height,
                     format: "TGA".to_string(),
                     channels: if has_alpha { 4 } else { 3 },
                     bit_depth,
@@ -679,12 +741,16 @@ impl ContentCreationManager {
             }
         }
 
-        Err(ContentError::InvalidFormat { format: "unknown".to_string() })
+        Err(ContentError::InvalidFormat {
+            format: "unknown".to_string(),
+        })
     }
 
     fn parse_png_header(&self, data: &[u8]) -> ContentResult<TextureData> {
         if data.len() < 24 {
-            return Err(ContentError::ValidationError { reason: "Truncated PNG header".to_string() });
+            return Err(ContentError::ValidationError {
+                reason: "Truncated PNG header".to_string(),
+            });
         }
 
         let width = u32::from_be_bytes([data[16], data[17], data[18], data[19]]);
@@ -701,7 +767,14 @@ impl ContentCreationManager {
             _ => (4, true),
         };
 
-        Ok(TextureData { width, height, format: "PNG".to_string(), channels, bit_depth, has_alpha })
+        Ok(TextureData {
+            width,
+            height,
+            format: "PNG".to_string(),
+            channels,
+            bit_depth,
+            has_alpha,
+        })
     }
 
     fn parse_jpeg_header(&self, data: &[u8]) -> ContentResult<TextureData> {
@@ -714,14 +787,19 @@ impl ContentCreationManager {
 
             let marker = data[i + 1];
 
-            if (marker >= 0xC0 && marker <= 0xCF) && marker != 0xC4 && marker != 0xC8 && marker != 0xCC {
+            if (marker >= 0xC0 && marker <= 0xCF)
+                && marker != 0xC4
+                && marker != 0xC8
+                && marker != 0xCC
+            {
                 let bit_depth = data[i + 4];
                 let height = u16::from_be_bytes([data[i + 5], data[i + 6]]) as u32;
                 let width = u16::from_be_bytes([data[i + 7], data[i + 8]]) as u32;
                 let channels = data[i + 9];
 
                 return Ok(TextureData {
-                    width, height,
+                    width,
+                    height,
                     format: "JPEG".to_string(),
                     channels,
                     bit_depth,
@@ -737,12 +815,21 @@ impl ContentCreationManager {
             }
         }
 
-        Ok(TextureData { width: 0, height: 0, format: "JPEG".to_string(), channels: 3, bit_depth: 8, has_alpha: false })
+        Ok(TextureData {
+            width: 0,
+            height: 0,
+            format: "JPEG".to_string(),
+            channels: 3,
+            bit_depth: 8,
+            has_alpha: false,
+        })
     }
 
     fn parse_webp_header(&self, data: &[u8]) -> ContentResult<TextureData> {
         if data.len() < 30 {
-            return Err(ContentError::ValidationError { reason: "Truncated WebP header".to_string() });
+            return Err(ContentError::ValidationError {
+                reason: "Truncated WebP header".to_string(),
+            });
         }
 
         let chunk_type = &data[12..16];
@@ -750,7 +837,14 @@ impl ContentCreationManager {
         if chunk_type == b"VP8 " && data.len() >= 30 {
             let width = (u16::from_le_bytes([data[26], data[27]]) & 0x3FFF) as u32;
             let height = (u16::from_le_bytes([data[28], data[29]]) & 0x3FFF) as u32;
-            return Ok(TextureData { width, height, format: "WEBP".to_string(), channels: 3, bit_depth: 8, has_alpha: false });
+            return Ok(TextureData {
+                width,
+                height,
+                format: "WEBP".to_string(),
+                channels: 3,
+                bit_depth: 8,
+                has_alpha: false,
+            });
         }
 
         if chunk_type == b"VP8L" && data.len() >= 25 {
@@ -761,38 +855,73 @@ impl ContentCreationManager {
             let width = ((b0 | (b1 << 8)) & 0x3FFF) + 1;
             let height = (((b1 >> 6) | (b2 << 2) | (b3 << 10)) & 0x3FFF) + 1;
             let has_alpha = (b3 & 0x10) != 0;
-            return Ok(TextureData { width, height, format: "WEBP".to_string(), channels: if has_alpha { 4 } else { 3 }, bit_depth: 8, has_alpha });
+            return Ok(TextureData {
+                width,
+                height,
+                format: "WEBP".to_string(),
+                channels: if has_alpha { 4 } else { 3 },
+                bit_depth: 8,
+                has_alpha,
+            });
         }
 
-        Ok(TextureData { width: 0, height: 0, format: "WEBP".to_string(), channels: 4, bit_depth: 8, has_alpha: true })
+        Ok(TextureData {
+            width: 0,
+            height: 0,
+            format: "WEBP".to_string(),
+            channels: 4,
+            bit_depth: 8,
+            has_alpha: true,
+        })
     }
 
     fn parse_jp2_header(&self, data: &[u8]) -> ContentResult<TextureData> {
         let mut i = 0;
         while i + 8 < data.len() {
-            let box_size = u32::from_be_bytes([data[i], data[i+1], data[i+2], data[i+3]]) as usize;
-            let box_type = &data[i+4..i+8];
+            let box_size =
+                u32::from_be_bytes([data[i], data[i + 1], data[i + 2], data[i + 3]]) as usize;
+            let box_type = &data[i + 4..i + 8];
 
             if box_type == b"ihdr" && i + 22 <= data.len() {
-                let height = u32::from_be_bytes([data[i+8], data[i+9], data[i+10], data[i+11]]);
-                let width = u32::from_be_bytes([data[i+12], data[i+13], data[i+14], data[i+15]]);
-                let channels = u16::from_be_bytes([data[i+16], data[i+17]]) as u8;
-                let bit_depth = data[i+18] + 1;
-                return Ok(TextureData { width, height, format: "JP2".to_string(), channels, bit_depth, has_alpha: channels > 3 });
+                let height =
+                    u32::from_be_bytes([data[i + 8], data[i + 9], data[i + 10], data[i + 11]]);
+                let width =
+                    u32::from_be_bytes([data[i + 12], data[i + 13], data[i + 14], data[i + 15]]);
+                let channels = u16::from_be_bytes([data[i + 16], data[i + 17]]) as u8;
+                let bit_depth = data[i + 18] + 1;
+                return Ok(TextureData {
+                    width,
+                    height,
+                    format: "JP2".to_string(),
+                    channels,
+                    bit_depth,
+                    has_alpha: channels > 3,
+                });
             }
 
-            if box_size == 0 { break; }
+            if box_size == 0 {
+                break;
+            }
             i += box_size;
         }
 
-        Ok(TextureData { width: 0, height: 0, format: "JP2".to_string(), channels: 3, bit_depth: 8, has_alpha: false })
+        Ok(TextureData {
+            width: 0,
+            height: 0,
+            format: "JP2".to_string(),
+            channels: 3,
+            bit_depth: 8,
+            has_alpha: false,
+        })
     }
-    
+
     async fn load_audio(&self, file_path: &Path) -> ContentResult<AudioData> {
         let data = tokio::fs::read(file_path).await?;
 
         if data.len() < 12 {
-            return Err(ContentError::ValidationError { reason: "File too small to be valid audio".to_string() });
+            return Err(ContentError::ValidationError {
+                reason: "File too small to be valid audio".to_string(),
+            });
         }
 
         if &data[0..4] == b"RIFF" && &data[8..12] == b"WAVE" {
@@ -815,7 +944,9 @@ impl ContentCreationManager {
             return self.parse_aiff_header(&data);
         }
 
-        Err(ContentError::InvalidFormat { format: "unknown audio".to_string() })
+        Err(ContentError::InvalidFormat {
+            format: "unknown audio".to_string(),
+        })
     }
 
     fn parse_wav_header(&self, data: &[u8]) -> ContentResult<AudioData> {
@@ -826,20 +957,24 @@ impl ContentCreationManager {
         let mut data_size = 0u32;
 
         while i + 8 < data.len() {
-            let chunk_id = &data[i..i+4];
-            let chunk_size = u32::from_le_bytes([data[i+4], data[i+5], data[i+6], data[i+7]]);
+            let chunk_id = &data[i..i + 4];
+            let chunk_size =
+                u32::from_le_bytes([data[i + 4], data[i + 5], data[i + 6], data[i + 7]]);
 
             if chunk_id == b"fmt " && i + 24 <= data.len() {
-                channels = u16::from_le_bytes([data[i+10], data[i+11]]) as u8;
-                sample_rate = u32::from_le_bytes([data[i+12], data[i+13], data[i+14], data[i+15]]);
-                bit_depth = u16::from_le_bytes([data[i+22], data[i+23]]);
+                channels = u16::from_le_bytes([data[i + 10], data[i + 11]]) as u8;
+                sample_rate =
+                    u32::from_le_bytes([data[i + 12], data[i + 13], data[i + 14], data[i + 15]]);
+                bit_depth = u16::from_le_bytes([data[i + 22], data[i + 23]]);
             } else if chunk_id == b"data" {
                 data_size = chunk_size;
                 break;
             }
 
             i += 8 + chunk_size as usize;
-            if chunk_size % 2 == 1 { i += 1; }
+            if chunk_size % 2 == 1 {
+                i += 1;
+            }
         }
 
         let bytes_per_sample = (bit_depth / 8) as u32 * channels as u32;
@@ -849,24 +984,44 @@ impl ContentCreationManager {
             0.0
         };
 
-        Ok(AudioData { duration_seconds, sample_rate, bit_depth, channels, format: "WAV".to_string() })
+        Ok(AudioData {
+            duration_seconds,
+            sample_rate,
+            bit_depth,
+            channels,
+            format: "WAV".to_string(),
+        })
     }
 
     fn parse_ogg_header(&self, data: &[u8]) -> ContentResult<AudioData> {
         if data.len() < 58 {
-            return Ok(AudioData { duration_seconds: 0.0, sample_rate: 44100, bit_depth: 16, channels: 2, format: "OGG".to_string() });
+            return Ok(AudioData {
+                duration_seconds: 0.0,
+                sample_rate: 44100,
+                bit_depth: 16,
+                channels: 2,
+                format: "OGG".to_string(),
+            });
         }
 
         let page_segments = data[26] as usize;
         let segment_table_end = 27 + page_segments;
 
         if data.len() < segment_table_end + 30 {
-            return Ok(AudioData { duration_seconds: 0.0, sample_rate: 44100, bit_depth: 16, channels: 2, format: "OGG".to_string() });
+            return Ok(AudioData {
+                duration_seconds: 0.0,
+                sample_rate: 44100,
+                bit_depth: 16,
+                channels: 2,
+                format: "OGG".to_string(),
+            });
         }
 
         let vorbis_header_start = segment_table_end;
 
-        if data.len() > vorbis_header_start + 11 && &data[vorbis_header_start+1..vorbis_header_start+7] == b"vorbis" {
+        if data.len() > vorbis_header_start + 11
+            && &data[vorbis_header_start + 1..vorbis_header_start + 7] == b"vorbis"
+        {
             let channels = data[vorbis_header_start + 11];
             let sample_rate = u32::from_le_bytes([
                 data[vorbis_header_start + 12],
@@ -887,15 +1042,25 @@ impl ContentCreationManager {
         }
 
         let estimated_duration = (data.len() as f32) / 16000.0;
-        Ok(AudioData { duration_seconds: estimated_duration, sample_rate: 44100, bit_depth: 16, channels: 2, format: "OGG".to_string() })
+        Ok(AudioData {
+            duration_seconds: estimated_duration,
+            sample_rate: 44100,
+            bit_depth: 16,
+            channels: 2,
+            format: "OGG".to_string(),
+        })
     }
 
     fn parse_flac_header(&self, data: &[u8]) -> ContentResult<AudioData> {
         if data.len() < 42 {
-            return Err(ContentError::ValidationError { reason: "Truncated FLAC header".to_string() });
+            return Err(ContentError::ValidationError {
+                reason: "Truncated FLAC header".to_string(),
+            });
         }
 
-        let sample_rate = (((data[18] as u32) << 12) | ((data[19] as u32) << 4) | ((data[20] as u32) >> 4)) & 0xFFFFF;
+        let sample_rate =
+            (((data[18] as u32) << 12) | ((data[19] as u32) << 4) | ((data[20] as u32) >> 4))
+                & 0xFFFFF;
         let channels = (((data[20] >> 1) & 0x07) + 1) as u8;
         let bit_depth = ((((data[20] & 0x01) << 4) | ((data[21] >> 4) & 0x0F)) + 1) as u16;
 
@@ -911,7 +1076,13 @@ impl ContentCreationManager {
             0.0
         };
 
-        Ok(AudioData { duration_seconds, sample_rate, bit_depth, channels, format: "FLAC".to_string() })
+        Ok(AudioData {
+            duration_seconds,
+            sample_rate,
+            bit_depth,
+            channels,
+            format: "FLAC".to_string(),
+        })
     }
 
     fn parse_mp3_header(&self, data: &[u8]) -> ContentResult<AudioData> {
@@ -934,9 +1105,15 @@ impl ContentCreationManager {
                 let channel_mode = (data[offset + 3] >> 6) & 0x03;
 
                 let sample_rate = match (version_bits, sample_rate_index) {
-                    (3, 0) => 44100, (3, 1) => 48000, (3, 2) => 32000,
-                    (2, 0) => 22050, (2, 1) => 24000, (2, 2) => 16000,
-                    (0, 0) => 11025, (0, 1) => 12000, (0, 2) => 8000,
+                    (3, 0) => 44100,
+                    (3, 1) => 48000,
+                    (3, 2) => 32000,
+                    (2, 0) => 22050,
+                    (2, 1) => 24000,
+                    (2, 2) => 16000,
+                    (0, 0) => 11025,
+                    (0, 1) => 12000,
+                    (0, 2) => 8000,
                     _ => 44100,
                 };
 
@@ -956,7 +1133,13 @@ impl ContentCreationManager {
         }
 
         let estimated_duration = data.len() as f32 / 16000.0;
-        Ok(AudioData { duration_seconds: estimated_duration, sample_rate: 44100, bit_depth: 16, channels: 2, format: "MP3".to_string() })
+        Ok(AudioData {
+            duration_seconds: estimated_duration,
+            sample_rate: 44100,
+            bit_depth: 16,
+            channels: 2,
+            format: "MP3".to_string(),
+        })
     }
 
     fn parse_aiff_header(&self, data: &[u8]) -> ContentResult<AudioData> {
@@ -967,24 +1150,30 @@ impl ContentCreationManager {
         let mut num_frames = 0u32;
 
         while i + 8 < data.len() {
-            let chunk_id = &data[i..i+4];
-            let chunk_size = u32::from_be_bytes([data[i+4], data[i+5], data[i+6], data[i+7]]);
+            let chunk_id = &data[i..i + 4];
+            let chunk_size =
+                u32::from_be_bytes([data[i + 4], data[i + 5], data[i + 6], data[i + 7]]);
 
             if chunk_id == b"COMM" && i + 26 <= data.len() {
-                channels = u16::from_be_bytes([data[i+8], data[i+9]]) as u8;
-                num_frames = u32::from_be_bytes([data[i+10], data[i+11], data[i+12], data[i+13]]);
-                bit_depth = u16::from_be_bytes([data[i+14], data[i+15]]);
+                channels = u16::from_be_bytes([data[i + 8], data[i + 9]]) as u8;
+                num_frames =
+                    u32::from_be_bytes([data[i + 10], data[i + 11], data[i + 12], data[i + 13]]);
+                bit_depth = u16::from_be_bytes([data[i + 14], data[i + 15]]);
 
-                let exp = u16::from_be_bytes([data[i+16], data[i+17]]);
-                let mantissa = u32::from_be_bytes([data[i+18], data[i+19], data[i+20], data[i+21]]);
+                let exp = u16::from_be_bytes([data[i + 16], data[i + 17]]);
+                let mantissa =
+                    u32::from_be_bytes([data[i + 18], data[i + 19], data[i + 20], data[i + 21]]);
                 let sign = if exp & 0x8000 != 0 { -1.0 } else { 1.0 };
                 let exp_val = (exp & 0x7FFF) as i32 - 16383;
-                sample_rate = (sign * (mantissa as f64 / (1u64 << 31) as f64) * 2f64.powi(exp_val)) as u32;
+                sample_rate =
+                    (sign * (mantissa as f64 / (1u64 << 31) as f64) * 2f64.powi(exp_val)) as u32;
                 break;
             }
 
             i += 8 + chunk_size as usize;
-            if chunk_size % 2 == 1 { i += 1; }
+            if chunk_size % 2 == 1 {
+                i += 1;
+            }
         }
 
         let duration_seconds = if sample_rate > 0 {
@@ -993,16 +1182,29 @@ impl ContentCreationManager {
             0.0
         };
 
-        Ok(AudioData { duration_seconds, sample_rate, bit_depth, channels, format: "AIFF".to_string() })
+        Ok(AudioData {
+            duration_seconds,
+            sample_rate,
+            bit_depth,
+            channels,
+            format: "AIFF".to_string(),
+        })
     }
-    
+
     fn optimize_polygon_count(&self, original: u32, reduction: f32) -> u32 {
         ((original as f32) * (1.0 - reduction)) as u32
     }
-    
-    async fn generate_lods(&self, model_data: &Model3DData, file_path: &Path) -> ContentResult<Vec<LevelOfDetail>> {
+
+    async fn generate_lods(
+        &self,
+        model_data: &Model3DData,
+        file_path: &Path,
+    ) -> ContentResult<Vec<LevelOfDetail>> {
         let base_polygon_count = model_data.polygon_count;
-        let base_file_size = tokio::fs::metadata(file_path).await.map(|m| m.len()).unwrap_or(0);
+        let base_file_size = tokio::fs::metadata(file_path)
+            .await
+            .map(|m| m.len())
+            .unwrap_or(0);
 
         let lod_configs = [
             (1, 0.50, 10.0),
@@ -1011,10 +1213,12 @@ impl ContentCreationManager {
             (4, 0.05, 100.0),
         ];
 
-        let stem = file_path.file_stem()
+        let stem = file_path
+            .file_stem()
             .map(|s| s.to_string_lossy().to_string())
             .unwrap_or_else(|| "model".to_string());
-        let ext = file_path.extension()
+        let ext = file_path
+            .extension()
             .map(|s| s.to_string_lossy().to_string())
             .unwrap_or_else(|| "obj".to_string());
         let parent = file_path.parent().unwrap_or(Path::new("."));
@@ -1042,7 +1246,11 @@ impl ContentCreationManager {
             });
         }
 
-        tracing::debug!("Generated {} LOD levels for model with {} base polygons", lods.len(), base_polygon_count);
+        tracing::debug!(
+            "Generated {} LOD levels for model with {} base polygons",
+            lods.len(),
+            base_polygon_count
+        );
 
         Ok(lods)
     }
@@ -1076,9 +1284,16 @@ impl ContentCreationManager {
             max_z = max_z.max(vertex.2);
         }
 
-        BoundingBox3D { min_x, min_y, min_z, max_x, max_y, max_z }
+        BoundingBox3D {
+            min_x,
+            min_y,
+            min_z,
+            max_x,
+            max_y,
+            max_z,
+        }
     }
-    
+
     fn calculate_texture_quality(&self, texture_data: &TextureData, compression: f32) -> f32 {
         let mut score = 100.0f32;
 
@@ -1116,11 +1331,14 @@ impl ContentCreationManager {
             0.0
         };
 
-        let is_power_of_two = texture_data.width.is_power_of_two() && texture_data.height.is_power_of_two();
+        let is_power_of_two =
+            texture_data.width.is_power_of_two() && texture_data.height.is_power_of_two();
         let pot_bonus = if is_power_of_two { 5.0 } else { 0.0 };
 
         score = (resolution_score * 0.35 + format_score * 0.25 + bit_depth_score * 0.15 + 25.0)
-            + alpha_bonus + pot_bonus - compression_penalty;
+            + alpha_bonus
+            + pot_bonus
+            - compression_penalty;
 
         score.clamp(0.0, 100.0)
     }
@@ -1159,15 +1377,16 @@ impl ContentCreationManager {
             _ => 80.0,
         };
 
-        let duration_score = if audio_data.duration_seconds > 0.0 && audio_data.duration_seconds <= 60.0 {
-            100.0
-        } else if audio_data.duration_seconds <= 180.0 {
-            90.0
-        } else if audio_data.duration_seconds <= 300.0 {
-            80.0
-        } else {
-            70.0
-        };
+        let duration_score =
+            if audio_data.duration_seconds > 0.0 && audio_data.duration_seconds <= 60.0 {
+                100.0
+            } else if audio_data.duration_seconds <= 180.0 {
+                90.0
+            } else if audio_data.duration_seconds <= 300.0 {
+                80.0
+            } else {
+                70.0
+            };
 
         let compression_penalty = if compression > 0.8 {
             15.0
@@ -1177,12 +1396,16 @@ impl ContentCreationManager {
             0.0
         };
 
-        score = (sample_rate_score * 0.30 + bit_depth_score * 0.20 + format_score * 0.25 +
-                 channel_score * 0.10 + duration_score * 0.15) - compression_penalty;
+        score = (sample_rate_score * 0.30
+            + bit_depth_score * 0.20
+            + format_score * 0.25
+            + channel_score * 0.10
+            + duration_score * 0.15)
+            - compression_penalty;
 
         score.clamp(0.0, 100.0)
     }
-    
+
     fn select_optimal_format(&self, _original: &str, quality: &ContentQuality) -> String {
         match quality {
             ContentQuality::Ultra | ContentQuality::High => "PNG".to_string(),
@@ -1191,7 +1414,7 @@ impl ContentCreationManager {
             ContentQuality::Custom { .. } => "WEBP".to_string(),
         }
     }
-    
+
     fn select_optimal_audio_format(&self, _original: &str, quality: &ContentQuality) -> String {
         match quality {
             ContentQuality::Ultra | ContentQuality::High => "FLAC".to_string(),
@@ -1200,45 +1423,69 @@ impl ContentCreationManager {
             ContentQuality::Custom { .. } => "OGG".to_string(),
         }
     }
-    
+
     fn calculate_mipmap_levels(&self, width: u32, height: u32) -> u8 {
         let max_dimension = width.max(height);
         (max_dimension as f32).log2().floor() as u8 + 1
     }
-    
-    async fn validate_3d_model(&self, file_path: &Path, errors: &mut Vec<String>, warnings: &mut Vec<String>, recommendations: &mut Vec<String>) -> ContentResult<()> {
+
+    async fn validate_3d_model(
+        &self,
+        file_path: &Path,
+        errors: &mut Vec<String>,
+        warnings: &mut Vec<String>,
+        recommendations: &mut Vec<String>,
+    ) -> ContentResult<()> {
         let data = tokio::fs::read(file_path).await?;
         if data.is_empty() {
             errors.push("3D model file is empty".to_string());
             return Ok(());
         }
 
-        let extension = file_path.extension()
+        let extension = file_path
+            .extension()
             .map(|e| e.to_string_lossy().to_lowercase())
             .unwrap_or_default();
 
         let format_valid = match extension.as_str() {
-            "obj" => data.len() > 10 && (data.starts_with(b"#") || data.starts_with(b"v ") || data.starts_with(b"mtllib")),
-            "fbx" => data.len() >= 23 && (&data[0..20] == b"Kaydara FBX Binary  " || data.starts_with(b"; FBX")),
+            "obj" => {
+                data.len() > 10
+                    && (data.starts_with(b"#")
+                        || data.starts_with(b"v ")
+                        || data.starts_with(b"mtllib"))
+            }
+            "fbx" => {
+                data.len() >= 23
+                    && (&data[0..20] == b"Kaydara FBX Binary  " || data.starts_with(b"; FBX"))
+            }
             "gltf" | "glb" => {
                 if extension == "glb" {
                     data.len() >= 4 && &data[0..4] == b"glTF"
                 } else {
-                    data.len() > 1 && (data[0] == b'{' || String::from_utf8_lossy(&data[..100.min(data.len())]).contains("\"asset\""))
+                    data.len() > 1
+                        && (data[0] == b'{'
+                            || String::from_utf8_lossy(&data[..100.min(data.len())])
+                                .contains("\"asset\""))
                 }
-            },
+            }
             "dae" => String::from_utf8_lossy(&data[..500.min(data.len())]).contains("COLLADA"),
             "stl" => data.len() > 5 && (data.starts_with(b"solid") || data.len() > 84),
             _ => false,
         };
 
         if !format_valid {
-            errors.push(format!("Invalid or unrecognized 3D model format: {}", extension));
+            errors.push(format!(
+                "Invalid or unrecognized 3D model format: {}",
+                extension
+            ));
         }
 
         let file_size = data.len() as u64;
         if file_size > 50 * 1024 * 1024 {
-            warnings.push(format!("Large 3D model file ({:.1} MB) may cause performance issues", file_size as f64 / 1024.0 / 1024.0));
+            warnings.push(format!(
+                "Large 3D model file ({:.1} MB) may cause performance issues",
+                file_size as f64 / 1024.0 / 1024.0
+            ));
         }
 
         if file_size > self.config.max_file_size {
@@ -1246,14 +1493,21 @@ impl ContentCreationManager {
         }
 
         if extension == "obj" || extension == "fbx" {
-            recommendations.push("Consider converting to glTF/GLB for better web compatibility".to_string());
+            recommendations
+                .push("Consider converting to glTF/GLB for better web compatibility".to_string());
         }
 
         recommendations.push("Consider reducing polygon count for better performance".to_string());
         Ok(())
     }
 
-    async fn validate_texture(&self, file_path: &Path, errors: &mut Vec<String>, warnings: &mut Vec<String>, recommendations: &mut Vec<String>) -> ContentResult<()> {
+    async fn validate_texture(
+        &self,
+        file_path: &Path,
+        errors: &mut Vec<String>,
+        warnings: &mut Vec<String>,
+        recommendations: &mut Vec<String>,
+    ) -> ContentResult<()> {
         let data = tokio::fs::read(file_path).await?;
         if data.is_empty() {
             errors.push("Texture file is empty".to_string());
@@ -1261,8 +1515,16 @@ impl ContentCreationManager {
         }
 
         let (format, dimensions) = if data.len() >= 8 && &data[0..8] == b"\x89PNG\r\n\x1a\n" {
-            let width = if data.len() >= 24 { u32::from_be_bytes([data[16], data[17], data[18], data[19]]) } else { 0 };
-            let height = if data.len() >= 24 { u32::from_be_bytes([data[20], data[21], data[22], data[23]]) } else { 0 };
+            let width = if data.len() >= 24 {
+                u32::from_be_bytes([data[16], data[17], data[18], data[19]])
+            } else {
+                0
+            };
+            let height = if data.len() >= 24 {
+                u32::from_be_bytes([data[20], data[21], data[22], data[23]])
+            } else {
+                0
+            };
             ("PNG", (width, height))
         } else if data.len() >= 2 && data[0] == 0xFF && data[1] == 0xD8 {
             let mut width = 0u32;
@@ -1296,28 +1558,45 @@ impl ContentCreationManager {
 
         let (max_width, max_height) = self.config.validation_rules.max_texture_resolution;
         if dimensions.0 > max_width || dimensions.1 > max_height {
-            errors.push(format!("Texture resolution {}x{} exceeds maximum {}x{}", dimensions.0, dimensions.1, max_width, max_height));
+            errors.push(format!(
+                "Texture resolution {}x{} exceeds maximum {}x{}",
+                dimensions.0, dimensions.1, max_width, max_height
+            ));
         } else if dimensions.0 > 2048 || dimensions.1 > 2048 {
-            warnings.push(format!("Large texture resolution {}x{} may impact performance", dimensions.0, dimensions.1));
+            warnings.push(format!(
+                "Large texture resolution {}x{} may impact performance",
+                dimensions.0, dimensions.1
+            ));
         }
 
         let file_size = data.len() as u64;
         if file_size > 10 * 1024 * 1024 {
-            warnings.push(format!("Large texture file ({:.1} MB)", file_size as f64 / 1024.0 / 1024.0));
+            warnings.push(format!(
+                "Large texture file ({:.1} MB)",
+                file_size as f64 / 1024.0 / 1024.0
+            ));
         }
 
         if format == "PNG" || format == "TGA_OR_UNKNOWN" {
-            recommendations.push("Consider using JPEG2000 (J2K) for better SL/OS compatibility".to_string());
+            recommendations
+                .push("Consider using JPEG2000 (J2K) for better SL/OS compatibility".to_string());
         }
 
         if format != "WEBP" {
-            recommendations.push("Use WEBP format for better compression in web contexts".to_string());
+            recommendations
+                .push("Use WEBP format for better compression in web contexts".to_string());
         }
 
         Ok(())
     }
 
-    async fn validate_audio(&self, file_path: &Path, errors: &mut Vec<String>, warnings: &mut Vec<String>, recommendations: &mut Vec<String>) -> ContentResult<()> {
+    async fn validate_audio(
+        &self,
+        file_path: &Path,
+        errors: &mut Vec<String>,
+        warnings: &mut Vec<String>,
+        recommendations: &mut Vec<String>,
+    ) -> ContentResult<()> {
         let data = tokio::fs::read(file_path).await?;
         if data.is_empty() {
             errors.push("Audio file is empty".to_string());
@@ -1330,7 +1609,9 @@ impl ContentCreationManager {
             "WAV"
         } else if data.len() >= 4 && &data[0..4] == b"fLaC" {
             "FLAC"
-        } else if data.len() >= 3 && (&data[0..3] == b"ID3" || (data[0] == 0xFF && (data[1] & 0xE0) == 0xE0)) {
+        } else if data.len() >= 3
+            && (&data[0..3] == b"ID3" || (data[0] == 0xFF && (data[1] & 0xE0) == 0xE0))
+        {
             "MP3"
         } else if data.len() >= 4 && &data[0..4] == b"FORM" {
             "AIFF"
@@ -1349,27 +1630,48 @@ impl ContentCreationManager {
 
         let max_duration = self.config.validation_rules.max_audio_duration as f64;
         if estimated_duration > max_duration {
-            errors.push(format!("Audio duration (~{:.0}s) may exceed maximum allowed ({:.0}s)", estimated_duration, max_duration));
+            errors.push(format!(
+                "Audio duration (~{:.0}s) may exceed maximum allowed ({:.0}s)",
+                estimated_duration, max_duration
+            ));
         }
 
         if file_size > 10 * 1024 * 1024 {
-            warnings.push(format!("Large audio file ({:.1} MB)", file_size as f64 / 1024.0 / 1024.0));
+            warnings.push(format!(
+                "Large audio file ({:.1} MB)",
+                file_size as f64 / 1024.0 / 1024.0
+            ));
         }
 
         if format != "OGG" {
-            recommendations.push("Consider using OGG format for better streaming in virtual worlds".to_string());
+            recommendations.push(
+                "Consider using OGG format for better streaming in virtual worlds".to_string(),
+            );
         }
 
         if format == "WAV" {
-            recommendations.push("WAV files are uncompressed - consider converting to OGG for smaller file size".to_string());
+            recommendations.push(
+                "WAV files are uncompressed - consider converting to OGG for smaller file size"
+                    .to_string(),
+            );
         }
 
         Ok(())
     }
 
-    async fn validate_script(&self, file_path: &Path, errors: &mut Vec<String>, warnings: &mut Vec<String>, recommendations: &mut Vec<String>) -> ContentResult<()> {
-        let content = tokio::fs::read_to_string(file_path).await
-            .map_err(|e| ContentError::ImportFailed { reason: format!("Cannot read script: {}", e) })?;
+    async fn validate_script(
+        &self,
+        file_path: &Path,
+        errors: &mut Vec<String>,
+        warnings: &mut Vec<String>,
+        recommendations: &mut Vec<String>,
+    ) -> ContentResult<()> {
+        let content =
+            tokio::fs::read_to_string(file_path)
+                .await
+                .map_err(|e| ContentError::ImportFailed {
+                    reason: format!("Cannot read script: {}", e),
+                })?;
 
         if content.is_empty() {
             errors.push("Script file is empty".to_string());
@@ -1377,9 +1679,12 @@ impl ContentCreationManager {
         }
 
         let has_default_state = content.contains("default") && content.contains("state_entry");
-        let has_lsl_functions = content.contains("llSay") || content.contains("llListen") ||
-                               content.contains("llGetOwner") || content.contains("llSetText") ||
-                               content.contains("llDie") || content.contains("llRequestPermissions");
+        let has_lsl_functions = content.contains("llSay")
+            || content.contains("llListen")
+            || content.contains("llGetOwner")
+            || content.contains("llSetText")
+            || content.contains("llDie")
+            || content.contains("llRequestPermissions");
 
         if !has_default_state && has_lsl_functions {
             warnings.push("Script uses LSL functions but may be missing default state".to_string());
@@ -1389,32 +1694,55 @@ impl ContentCreationManager {
             warnings.push("Script content could not be validated as LSL".to_string());
         }
 
-        let dangerous_functions = ["llEmail", "llHTTPRequest", "llLoadURL", "llMapDestination",
-                                   "llTeleportAgent", "llGiveInventory", "llGiveMoney", "llInstantMessage"];
+        let dangerous_functions = [
+            "llEmail",
+            "llHTTPRequest",
+            "llLoadURL",
+            "llMapDestination",
+            "llTeleportAgent",
+            "llGiveInventory",
+            "llGiveMoney",
+            "llInstantMessage",
+        ];
         for func in &dangerous_functions {
             if content.contains(func) {
-                warnings.push(format!("Script uses potentially sensitive function: {}", func));
+                warnings.push(format!(
+                    "Script uses potentially sensitive function: {}",
+                    func
+                ));
             }
         }
 
         if content.len() > 64 * 1024 {
-            warnings.push(format!("Large script ({} bytes) may impact compilation time", content.len()));
+            warnings.push(format!(
+                "Large script ({} bytes) may impact compilation time",
+                content.len()
+            ));
         }
 
         if has_default_state && has_lsl_functions {
             recommendations.push("Script appears to be well-formed LSL".to_string());
         }
 
-        let infinite_loop_pattern = content.contains("while(TRUE)") || content.contains("while(1)") ||
-                                    content.contains("for(;;)");
+        let infinite_loop_pattern = content.contains("while(TRUE)")
+            || content.contains("while(1)")
+            || content.contains("for(;;)");
         if infinite_loop_pattern {
-            warnings.push("Script may contain infinite loop patterns - ensure proper exit conditions".to_string());
+            warnings.push(
+                "Script may contain infinite loop patterns - ensure proper exit conditions"
+                    .to_string(),
+            );
         }
 
         Ok(())
     }
 
-    async fn security_scan(&self, file_path: &Path, errors: &mut Vec<String>, warnings: &mut Vec<String>) -> ContentResult<()> {
+    async fn security_scan(
+        &self,
+        file_path: &Path,
+        errors: &mut Vec<String>,
+        warnings: &mut Vec<String>,
+    ) -> ContentResult<()> {
         let data = tokio::fs::read(file_path).await?;
 
         let executable_signatures: &[&[u8]] = &[
@@ -1428,24 +1756,46 @@ impl ContentCreationManager {
 
         for sig in executable_signatures {
             if data.len() >= sig.len() && &data[..sig.len()] == *sig {
-                errors.push("File appears to be an executable - not allowed for content upload".to_string());
+                errors.push(
+                    "File appears to be an executable - not allowed for content upload".to_string(),
+                );
                 return Ok(());
             }
         }
 
-        if file_path.extension().map(|e| e.to_string_lossy().to_lowercase()).as_deref() == Some("lsl") ||
-           file_path.extension().map(|e| e.to_string_lossy().to_lowercase()).as_deref() == Some("txt") {
+        if file_path
+            .extension()
+            .map(|e| e.to_string_lossy().to_lowercase())
+            .as_deref()
+            == Some("lsl")
+            || file_path
+                .extension()
+                .map(|e| e.to_string_lossy().to_lowercase())
+                .as_deref()
+                == Some("txt")
+        {
             let content = String::from_utf8_lossy(&data);
 
             let suspicious_patterns = [
-                "eval(", "exec(", "system(", "shell_exec(",
-                "<script>", "javascript:", "data:text/html",
-                "../", "..\\", "/etc/passwd", "cmd.exe",
+                "eval(",
+                "exec(",
+                "system(",
+                "shell_exec(",
+                "<script>",
+                "javascript:",
+                "data:text/html",
+                "../",
+                "..\\",
+                "/etc/passwd",
+                "cmd.exe",
             ];
 
             for pattern in &suspicious_patterns {
                 if content.to_lowercase().contains(&pattern.to_lowercase()) {
-                    warnings.push(format!("Potentially suspicious pattern detected: {}", pattern));
+                    warnings.push(format!(
+                        "Potentially suspicious pattern detected: {}",
+                        pattern
+                    ));
                 }
             }
         }
@@ -1458,7 +1808,11 @@ impl ContentCreationManager {
         Ok(())
     }
 
-    async fn calculate_performance_score(&self, content_type: &ContentType, file_path: &Path) -> ContentResult<f32> {
+    async fn calculate_performance_score(
+        &self,
+        content_type: &ContentType,
+        file_path: &Path,
+    ) -> ContentResult<f32> {
         let metadata = tokio::fs::metadata(file_path).await?;
         let file_size = metadata.len();
 
@@ -1482,7 +1836,8 @@ impl ContentCreationManager {
             (50.0 - ((size_ratio - 5.0) * 5.0)).max(10.0)
         };
 
-        let extension = file_path.extension()
+        let extension = file_path
+            .extension()
             .map(|e| e.to_string_lossy().to_lowercase())
             .unwrap_or_default();
 
@@ -1493,17 +1848,24 @@ impl ContentCreationManager {
             _ => 0.0,
         };
 
-        let final_score = ((size_score * weight + format_bonus) as f32).min(100.0).max(0.0);
+        let final_score = ((size_score * weight + format_bonus) as f32)
+            .min(100.0)
+            .max(0.0);
         Ok(final_score)
     }
 
-    async fn calculate_quality_score(&self, content_type: &ContentType, file_path: &Path) -> ContentResult<f32> {
+    async fn calculate_quality_score(
+        &self,
+        content_type: &ContentType,
+        file_path: &Path,
+    ) -> ContentResult<f32> {
         let metadata = tokio::fs::metadata(file_path).await?;
         let file_size = metadata.len();
 
         let base_score = 70.0f32;
 
-        let extension = file_path.extension()
+        let extension = file_path
+            .extension()
             .map(|e| e.to_string_lossy().to_lowercase())
             .unwrap_or_default();
 
@@ -1523,16 +1885,24 @@ impl ContentCreationManager {
 
         let size_quality = if file_size > 0 {
             let kb = file_size as f64 / 1024.0;
-            if kb < 10.0 { 5.0 }
-            else if kb < 100.0 { 10.0 }
-            else if kb < 1024.0 { 15.0 }
-            else if kb < 10240.0 { 10.0 }
-            else { 5.0 }
+            if kb < 10.0 {
+                5.0
+            } else if kb < 100.0 {
+                10.0
+            } else if kb < 1024.0 {
+                15.0
+            } else if kb < 10240.0 {
+                10.0
+            } else {
+                5.0
+            }
         } else {
             0.0
         };
 
-        let final_score = (base_score + format_quality + size_quality).min(100.0).max(0.0);
+        let final_score = (base_score + format_quality + size_quality)
+            .min(100.0)
+            .max(0.0);
         Ok(final_score)
     }
 }
@@ -1582,10 +1952,19 @@ struct AudioData {
 impl Default for ContentCreationConfig {
     fn default() -> Self {
         let mut allowed_formats = HashMap::new();
-        allowed_formats.insert(ContentType::Model3D, vec!["obj".to_string(), "fbx".to_string(), "gltf".to_string()]);
-        allowed_formats.insert(ContentType::Texture, vec!["png".to_string(), "jpg".to_string(), "jpeg".to_string()]);
-        allowed_formats.insert(ContentType::Audio, vec!["wav".to_string(), "mp3".to_string(), "ogg".to_string()]);
-        
+        allowed_formats.insert(
+            ContentType::Model3D,
+            vec!["obj".to_string(), "fbx".to_string(), "gltf".to_string()],
+        );
+        allowed_formats.insert(
+            ContentType::Texture,
+            vec!["png".to_string(), "jpg".to_string(), "jpeg".to_string()],
+        );
+        allowed_formats.insert(
+            ContentType::Audio,
+            vec!["wav".to_string(), "mp3".to_string(), "ogg".to_string()],
+        );
+
         Self {
             max_file_size: 100 * 1024 * 1024, // 100 MB
             supported_types: vec![

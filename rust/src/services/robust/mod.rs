@@ -1,50 +1,49 @@
-pub mod xml_response;
-pub mod xmlrpc;
-pub mod grid_handler;
-pub mod user_account_handler;
-pub mod auth_handler;
-pub mod asset_handler;
-pub mod inventory_handler;
-pub mod presence_handler;
-pub mod avatar_handler;
-pub mod gatekeeper_handler;
-pub mod uas_handler;
-pub mod helo_handler;
-pub mod hgfriends_handler;
-pub mod hg_inventory_handler;
-pub mod griduser_handler;
 pub mod agentprefs_handler;
-pub mod bakes_handler;
-pub mod mutelist_handler;
-pub mod estate_handler;
-pub mod map_handler;
+pub mod asset_handler;
+pub mod auth_handler;
 pub mod authorization_handler;
-pub mod friends_handler;
-pub mod land_handler;
-pub mod offlineim_handler;
-pub mod neighbour_handler;
-pub mod profiles_handler;
+pub mod avatar_handler;
+pub mod bakes_handler;
+pub mod estate_handler;
 pub mod freeswitch_handler;
+pub mod friends_handler;
+pub mod gatekeeper_handler;
+pub mod grid_handler;
 pub mod grid_info_handler;
+pub mod griduser_handler;
+pub mod helo_handler;
+pub mod hg_inventory_handler;
+pub mod hgfriends_handler;
+pub mod inventory_handler;
+pub mod land_handler;
+pub mod map_handler;
+pub mod mutelist_handler;
+pub mod neighbour_handler;
+pub mod offlineim_handler;
+pub mod presence_handler;
+pub mod profiles_handler;
 pub mod router;
 pub mod server;
+pub mod uas_handler;
+pub mod user_account_handler;
+pub mod xml_response;
+pub mod xmlrpc;
 
-pub use router::{create_robust_router, create_uas_router, create_gatekeeper_router};
+pub use router::{create_gatekeeper_router, create_robust_router, create_uas_router};
 pub use server::start_robust_server;
 
-use std::sync::Arc;
-use crate::services::traits::{
-    GridServiceTrait, UserAccountServiceTrait, AuthenticationServiceTrait,
-    AssetServiceTrait, InventoryServiceTrait, PresenceServiceTrait, AvatarServiceTrait,
-    GatekeeperServiceTrait, UserAgentServiceTrait,
-    GridUserServiceTrait, AgentPrefsServiceTrait, HGFriendsServiceTrait,
-    MuteListServiceTrait, EstateServiceTrait, MapImageServiceTrait,
-    AuthorizationServiceTrait, FriendsServiceTrait, LandServiceTrait,
-    OfflineIMServiceTrait, ProfilesServiceTrait,
-};
-use crate::login_session::CircuitCodeRegistry;
-use crate::session::SessionManager;
 use crate::caps::CapsManager;
+use crate::login_session::CircuitCodeRegistry;
+use crate::services::traits::{
+    AgentPrefsServiceTrait, AssetServiceTrait, AuthenticationServiceTrait,
+    AuthorizationServiceTrait, AvatarServiceTrait, EstateServiceTrait, FriendsServiceTrait,
+    GatekeeperServiceTrait, GridServiceTrait, GridUserServiceTrait, HGFriendsServiceTrait,
+    InventoryServiceTrait, LandServiceTrait, MapImageServiceTrait, MuteListServiceTrait,
+    OfflineIMServiceTrait, PresenceServiceTrait, ProfilesServiceTrait, UserAccountServiceTrait,
+    UserAgentServiceTrait,
+};
+use crate::session::SessionManager;
+use std::sync::Arc;
 
 #[derive(Clone)]
 pub struct RobustState {

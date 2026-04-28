@@ -9,26 +9,28 @@ use axum::{
     routing::{get, post},
     Router,
 };
-use tower_http::cors::{CorsLayer, Any};
 use serde::{Deserialize, Serialize};
 use sqlx::PgPool;
 use std::collections::HashMap;
 use std::path::PathBuf;
 use std::sync::Arc;
+use tower_http::cors::{Any, CorsLayer};
 use tracing::{debug, error, info, warn};
 use uuid::Uuid;
 
-use super::iar::{IarReader, IarWriter, IarLoadOptions, IarSaveOptions};
-use super::oar::{OarReader, OarWriter, OarLoadOptions, OarSaveOptions};
-use super::job_manager::{ArchiveJobManager, JobType, JobResult, JobStatus};
+use super::iar::{IarLoadOptions, IarReader, IarSaveOptions, IarWriter};
+use super::job_manager::{ArchiveJobManager, JobResult, JobStatus, JobType};
+use super::oar::{OarLoadOptions, OarReader, OarSaveOptions, OarWriter};
 
 #[derive(Clone)]
 pub struct ArchiveApiState {
     pub db_pool: PgPool,
     pub job_manager: Arc<ArchiveJobManager>,
-    pub scene_objects: Option<Arc<parking_lot::RwLock<HashMap<u32, crate::udp::server::SceneObject>>>>,
+    pub scene_objects:
+        Option<Arc<parking_lot::RwLock<HashMap<u32, crate::udp::server::SceneObject>>>>,
     pub udp_socket: Option<Arc<tokio::net::UdpSocket>>,
-    pub avatar_states: Option<Arc<parking_lot::RwLock<HashMap<Uuid, crate::udp::server::AvatarMovementState>>>>,
+    pub avatar_states:
+        Option<Arc<parking_lot::RwLock<HashMap<Uuid, crate::udp::server::AvatarMovementState>>>>,
     pub next_prim_local_id: Option<Arc<std::sync::atomic::AtomicU32>>,
     pub reliability_manager: Option<Arc<crate::udp::reliability::ReliabilityManager>>,
 }
@@ -46,7 +48,10 @@ impl ArchiveApiState {
         }
     }
 
-    pub fn with_scene_objects(mut self, scene_objects: Arc<parking_lot::RwLock<HashMap<u32, crate::udp::server::SceneObject>>>) -> Self {
+    pub fn with_scene_objects(
+        mut self,
+        scene_objects: Arc<parking_lot::RwLock<HashMap<u32, crate::udp::server::SceneObject>>>,
+    ) -> Self {
         self.scene_objects = Some(scene_objects);
         self
     }
@@ -56,7 +61,10 @@ impl ArchiveApiState {
         self
     }
 
-    pub fn with_avatar_states(mut self, states: Arc<parking_lot::RwLock<HashMap<Uuid, crate::udp::server::AvatarMovementState>>>) -> Self {
+    pub fn with_avatar_states(
+        mut self,
+        states: Arc<parking_lot::RwLock<HashMap<Uuid, crate::udp::server::AvatarMovementState>>>,
+    ) -> Self {
         self.avatar_states = Some(states);
         self
     }
@@ -66,7 +74,10 @@ impl ArchiveApiState {
         self
     }
 
-    pub fn with_reliability_manager(mut self, manager: Arc<crate::udp::reliability::ReliabilityManager>) -> Self {
+    pub fn with_reliability_manager(
+        mut self,
+        manager: Arc<crate::udp::reliability::ReliabilityManager>,
+    ) -> Self {
         self.reliability_manager = Some(manager);
         self
     }
@@ -142,14 +153,17 @@ pub fn create_archive_api_router() -> Router<ArchiveApiState> {
         .route("/admin/archives/oar/files", get(list_oar_files_endpoint))
         .route("/admin/archives/jobs", get(list_jobs_endpoint))
         .route("/admin/archives/jobs/:job_id", get(get_job_status_endpoint))
-        .route("/admin/archives/jobs/:job_id/cancel", post(cancel_job_endpoint))
+        .route(
+            "/admin/archives/jobs/:job_id/cancel",
+            post(cancel_job_endpoint),
+        )
         .route("/admin/archives/health", get(archive_health_endpoint))
         .route("/admin/archives/region/clear", post(clear_region_endpoint))
         .layer(
             CorsLayer::new()
                 .allow_origin(Any)
                 .allow_methods(Any)
-                .allow_headers(Any)
+                .allow_headers(Any),
         )
 }
 
@@ -157,53 +171,95 @@ async fn load_iar_endpoint(
     State(state): State<ArchiveApiState>,
     Json(request): Json<LoadIarRequest>,
 ) -> impl IntoResponse {
-    info!("Archive API: Loading IAR from {} for user {} {}",
-        request.file_path, request.user_firstname, request.user_lastname);
+    info!(
+        "Archive API: Loading IAR from {} for user {} {}",
+        request.file_path, request.user_firstname, request.user_lastname
+    );
 
     if request.file_path.trim().is_empty() {
-        return (StatusCode::BAD_REQUEST, Json(ArchiveApiResponse {
-            success: false, message: "File path cannot be empty".to_string(),
-            job_id: None, data: None,
-        }));
+        return (
+            StatusCode::BAD_REQUEST,
+            Json(ArchiveApiResponse {
+                success: false,
+                message: "File path cannot be empty".to_string(),
+                job_id: None,
+                data: None,
+            }),
+        );
     }
 
     if request.user_firstname.trim().is_empty() || request.user_lastname.trim().is_empty() {
-        return (StatusCode::BAD_REQUEST, Json(ArchiveApiResponse {
-            success: false, message: "User first and last name are required".to_string(),
-            job_id: None, data: None,
-        }));
+        return (
+            StatusCode::BAD_REQUEST,
+            Json(ArchiveApiResponse {
+                success: false,
+                message: "User first and last name are required".to_string(),
+                job_id: None,
+                data: None,
+            }),
+        );
     }
 
     if !std::path::Path::new(&request.file_path).exists() {
-        return (StatusCode::NOT_FOUND, Json(ArchiveApiResponse {
-            success: false, message: format!("File not found: {}", request.file_path),
-            job_id: None, data: None,
-        }));
+        return (
+            StatusCode::NOT_FOUND,
+            Json(ArchiveApiResponse {
+                success: false,
+                message: format!("File not found: {}", request.file_path),
+                job_id: None,
+                data: None,
+            }),
+        );
     }
 
-    let user_id = match get_user_id(&state.db_pool, &request.user_firstname, &request.user_lastname).await {
+    let user_id = match get_user_id(
+        &state.db_pool,
+        &request.user_firstname,
+        &request.user_lastname,
+    )
+    .await
+    {
         Ok(Some(id)) => id,
         Ok(None) => {
             if request.create_user_if_missing.unwrap_or(false) {
-                let new_id = request.user_id.as_ref()
+                let new_id = request
+                    .user_id
+                    .as_ref()
                     .and_then(|s| Uuid::parse_str(s).ok())
                     .unwrap_or_else(Uuid::new_v4);
-                let email = request.user_email.as_deref().unwrap_or("imported@archive.local");
+                let email = request
+                    .user_email
+                    .as_deref()
+                    .unwrap_or("imported@archive.local");
                 let password = request.user_password.as_deref().unwrap_or("changeme");
                 match create_user_with_id(
-                    &state.db_pool, new_id,
-                    &request.user_firstname, &request.user_lastname,
-                    email, password,
-                ).await {
+                    &state.db_pool,
+                    new_id,
+                    &request.user_firstname,
+                    &request.user_lastname,
+                    email,
+                    password,
+                )
+                .await
+                {
                     Ok(()) => {
-                        info!("Auto-created user {} {} ({}) for IAR import",
-                            request.user_firstname, request.user_lastname, new_id);
+                        info!(
+                            "Auto-created user {} {} ({}) for IAR import",
+                            request.user_firstname, request.user_lastname, new_id
+                        );
                         new_id
                     }
-                    Err(e) => return (StatusCode::INTERNAL_SERVER_ERROR, Json(ArchiveApiResponse {
-                        success: false, message: format!("Failed to create user: {}", e),
-                        job_id: None, data: None,
-                    })),
+                    Err(e) => {
+                        return (
+                            StatusCode::INTERNAL_SERVER_ERROR,
+                            Json(ArchiveApiResponse {
+                                success: false,
+                                message: format!("Failed to create user: {}", e),
+                                job_id: None,
+                                data: None,
+                            }),
+                        )
+                    }
                 }
             } else {
                 return (StatusCode::NOT_FOUND, Json(ArchiveApiResponse {
@@ -212,10 +268,17 @@ async fn load_iar_endpoint(
                 }));
             }
         }
-        Err(e) => return (StatusCode::INTERNAL_SERVER_ERROR, Json(ArchiveApiResponse {
-            success: false, message: format!("Database error: {}", e),
-            job_id: None, data: None,
-        })),
+        Err(e) => {
+            return (
+                StatusCode::INTERNAL_SERVER_ERROR,
+                Json(ArchiveApiResponse {
+                    success: false,
+                    message: format!("Database error: {}", e),
+                    job_id: None,
+                    data: None,
+                }),
+            )
+        }
     };
 
     let job_type = JobType::IarLoad {
@@ -234,7 +297,9 @@ async fn load_iar_endpoint(
 
     tokio::spawn(async move {
         job_manager.start_job(&job_id).await;
-        job_manager.update_progress(&job_id, 0.1, Some("Loading IAR...".to_string())).await;
+        job_manager
+            .update_progress(&job_id, 0.1, Some("Loading IAR...".to_string()))
+            .await;
 
         let reader = IarReader::new(db_pool);
         let options = IarLoadOptions {
@@ -246,55 +311,102 @@ async fn load_iar_endpoint(
 
         match reader.load(&file_path, options).await {
             Ok(result) => {
-                job_manager.complete_job(&job_id, JobResult::IarLoad {
-                    assets_loaded: result.stats.assets_loaded,
-                    folders_created: result.stats.folders_created,
-                    items_created: result.stats.items_created,
-                }).await;
+                job_manager
+                    .complete_job(
+                        &job_id,
+                        JobResult::IarLoad {
+                            assets_loaded: result.stats.assets_loaded,
+                            folders_created: result.stats.folders_created,
+                            items_created: result.stats.items_created,
+                        },
+                    )
+                    .await;
             }
             Err(e) => {
-                job_manager.fail_job(&job_id, format!("IAR load failed: {}", e)).await;
+                job_manager
+                    .fail_job(&job_id, format!("IAR load failed: {}", e))
+                    .await;
             }
         }
     });
 
-    (StatusCode::ACCEPTED, Json(ArchiveApiResponse {
-        success: true, message: "IAR load job started".to_string(),
-        job_id: Some(job_id.to_string()), data: None,
-    }))
+    (
+        StatusCode::ACCEPTED,
+        Json(ArchiveApiResponse {
+            success: true,
+            message: "IAR load job started".to_string(),
+            job_id: Some(job_id.to_string()),
+            data: None,
+        }),
+    )
 }
 
 async fn save_iar_endpoint(
     State(state): State<ArchiveApiState>,
     Json(request): Json<SaveIarRequest>,
 ) -> impl IntoResponse {
-    info!("Archive API: Saving IAR to {} for user {} {}",
-        request.output_path, request.user_firstname, request.user_lastname);
+    info!(
+        "Archive API: Saving IAR to {} for user {} {}",
+        request.output_path, request.user_firstname, request.user_lastname
+    );
 
     if request.output_path.trim().is_empty() {
-        return (StatusCode::BAD_REQUEST, Json(ArchiveApiResponse {
-            success: false, message: "Output path cannot be empty".to_string(),
-            job_id: None, data: None,
-        }));
+        return (
+            StatusCode::BAD_REQUEST,
+            Json(ArchiveApiResponse {
+                success: false,
+                message: "Output path cannot be empty".to_string(),
+                job_id: None,
+                data: None,
+            }),
+        );
     }
 
     if request.user_firstname.trim().is_empty() || request.user_lastname.trim().is_empty() {
-        return (StatusCode::BAD_REQUEST, Json(ArchiveApiResponse {
-            success: false, message: "User first and last name are required".to_string(),
-            job_id: None, data: None,
-        }));
+        return (
+            StatusCode::BAD_REQUEST,
+            Json(ArchiveApiResponse {
+                success: false,
+                message: "User first and last name are required".to_string(),
+                job_id: None,
+                data: None,
+            }),
+        );
     }
 
-    let user_id = match get_user_id(&state.db_pool, &request.user_firstname, &request.user_lastname).await {
+    let user_id = match get_user_id(
+        &state.db_pool,
+        &request.user_firstname,
+        &request.user_lastname,
+    )
+    .await
+    {
         Ok(Some(id)) => id,
-        Ok(None) => return (StatusCode::NOT_FOUND, Json(ArchiveApiResponse {
-            success: false, message: format!("User not found: {} {}", request.user_firstname, request.user_lastname),
-            job_id: None, data: None,
-        })),
-        Err(e) => return (StatusCode::INTERNAL_SERVER_ERROR, Json(ArchiveApiResponse {
-            success: false, message: format!("Database error: {}", e),
-            job_id: None, data: None,
-        })),
+        Ok(None) => {
+            return (
+                StatusCode::NOT_FOUND,
+                Json(ArchiveApiResponse {
+                    success: false,
+                    message: format!(
+                        "User not found: {} {}",
+                        request.user_firstname, request.user_lastname
+                    ),
+                    job_id: None,
+                    data: None,
+                }),
+            )
+        }
+        Err(e) => {
+            return (
+                StatusCode::INTERNAL_SERVER_ERROR,
+                Json(ArchiveApiResponse {
+                    success: false,
+                    message: format!("Database error: {}", e),
+                    job_id: None,
+                    data: None,
+                }),
+            )
+        }
     };
 
     let include_assets = request.include_assets.unwrap_or(true);
@@ -313,88 +425,156 @@ async fn save_iar_endpoint(
 
     tokio::spawn(async move {
         job_manager.start_job(&job_id).await;
-        job_manager.update_progress(&job_id, 0.1, Some("Saving IAR...".to_string())).await;
+        job_manager
+            .update_progress(&job_id, 0.1, Some("Saving IAR...".to_string()))
+            .await;
 
         let writer = IarWriter::new(db_pool);
-        let options = IarSaveOptions { user_id, folder_id: None, include_assets };
+        let options = IarSaveOptions {
+            user_id,
+            folder_id: None,
+            include_assets,
+        };
 
         match writer.save(&output_path, options).await {
             Ok(result) => {
-                job_manager.complete_job(&job_id, JobResult::IarSave {
-                    assets_saved: result.stats.assets_saved,
-                    folders_saved: result.stats.folders_saved,
-                    items_saved: result.stats.items_saved,
-                    download_path: result.output_path,
-                }).await;
+                job_manager
+                    .complete_job(
+                        &job_id,
+                        JobResult::IarSave {
+                            assets_saved: result.stats.assets_saved,
+                            folders_saved: result.stats.folders_saved,
+                            items_saved: result.stats.items_saved,
+                            download_path: result.output_path,
+                        },
+                    )
+                    .await;
             }
             Err(e) => {
-                job_manager.fail_job(&job_id, format!("IAR save failed: {}", e)).await;
+                job_manager
+                    .fail_job(&job_id, format!("IAR save failed: {}", e))
+                    .await;
             }
         }
     });
 
-    (StatusCode::ACCEPTED, Json(ArchiveApiResponse {
-        success: true, message: "IAR save job started".to_string(),
-        job_id: Some(job_id.to_string()), data: None,
-    }))
+    (
+        StatusCode::ACCEPTED,
+        Json(ArchiveApiResponse {
+            success: true,
+            message: "IAR save job started".to_string(),
+            job_id: Some(job_id.to_string()),
+            data: None,
+        }),
+    )
 }
 
 async fn load_oar_endpoint(
     State(state): State<ArchiveApiState>,
     Json(request): Json<LoadOarRequest>,
 ) -> impl IntoResponse {
-    info!("Archive API: Loading OAR from {} for region {}", request.file_path, request.region_name);
+    info!(
+        "Archive API: Loading OAR from {} for region {}",
+        request.file_path, request.region_name
+    );
 
     if request.file_path.trim().is_empty() {
-        return (StatusCode::BAD_REQUEST, Json(ArchiveApiResponse {
-            success: false, message: "File path cannot be empty".to_string(),
-            job_id: None, data: None,
-        }));
+        return (
+            StatusCode::BAD_REQUEST,
+            Json(ArchiveApiResponse {
+                success: false,
+                message: "File path cannot be empty".to_string(),
+                job_id: None,
+                data: None,
+            }),
+        );
     }
 
     if request.region_name.trim().is_empty() {
-        return (StatusCode::BAD_REQUEST, Json(ArchiveApiResponse {
-            success: false, message: "Region name is required".to_string(),
-            job_id: None, data: None,
-        }));
+        return (
+            StatusCode::BAD_REQUEST,
+            Json(ArchiveApiResponse {
+                success: false,
+                message: "Region name is required".to_string(),
+                job_id: None,
+                data: None,
+            }),
+        );
     }
 
     if !std::path::Path::new(&request.file_path).exists() {
-        return (StatusCode::NOT_FOUND, Json(ArchiveApiResponse {
-            success: false, message: format!("File not found: {}", request.file_path),
-            job_id: None, data: None,
-        }));
+        return (
+            StatusCode::NOT_FOUND,
+            Json(ArchiveApiResponse {
+                success: false,
+                message: format!("File not found: {}", request.file_path),
+                job_id: None,
+                data: None,
+            }),
+        );
     }
 
     let region_id = match get_region_id(&state.db_pool, &request.region_name).await {
         Ok(Some(id)) => id,
-        Ok(None) => return (StatusCode::NOT_FOUND, Json(ArchiveApiResponse {
-            success: false, message: format!("Region not found: {}", request.region_name),
-            job_id: None, data: None,
-        })),
-        Err(e) => return (StatusCode::INTERNAL_SERVER_ERROR, Json(ArchiveApiResponse {
-            success: false, message: format!("Database error: {}", e),
-            job_id: None, data: None,
-        })),
+        Ok(None) => {
+            return (
+                StatusCode::NOT_FOUND,
+                Json(ArchiveApiResponse {
+                    success: false,
+                    message: format!("Region not found: {}", request.region_name),
+                    job_id: None,
+                    data: None,
+                }),
+            )
+        }
+        Err(e) => {
+            return (
+                StatusCode::INTERNAL_SERVER_ERROR,
+                Json(ArchiveApiResponse {
+                    success: false,
+                    message: format!("Database error: {}", e),
+                    job_id: None,
+                    data: None,
+                }),
+            )
+        }
     };
 
-    let default_user_id = if let (Some(firstname), Some(lastname)) =
-        (&request.default_user_firstname, &request.default_user_lastname)
-    {
+    let default_user_id = if let (Some(firstname), Some(lastname)) = (
+        &request.default_user_firstname,
+        &request.default_user_lastname,
+    ) {
         if !firstname.trim().is_empty() && !lastname.trim().is_empty() {
             match get_user_id(&state.db_pool, firstname, lastname).await {
                 Ok(Some(id)) => {
-                    info!("OAR import: Will reassign unowned objects to {} {} ({})", firstname, lastname, id);
+                    info!(
+                        "OAR import: Will reassign unowned objects to {} {} ({})",
+                        firstname, lastname, id
+                    );
                     Some(id)
                 }
-                Ok(None) => return (StatusCode::NOT_FOUND, Json(ArchiveApiResponse {
-                    success: false, message: format!("Default user not found: {} {}", firstname, lastname),
-                    job_id: None, data: None,
-                })),
-                Err(e) => return (StatusCode::INTERNAL_SERVER_ERROR, Json(ArchiveApiResponse {
-                    success: false, message: format!("Database error looking up default user: {}", e),
-                    job_id: None, data: None,
-                })),
+                Ok(None) => {
+                    return (
+                        StatusCode::NOT_FOUND,
+                        Json(ArchiveApiResponse {
+                            success: false,
+                            message: format!("Default user not found: {} {}", firstname, lastname),
+                            job_id: None,
+                            data: None,
+                        }),
+                    )
+                }
+                Err(e) => {
+                    return (
+                        StatusCode::INTERNAL_SERVER_ERROR,
+                        Json(ArchiveApiResponse {
+                            success: false,
+                            message: format!("Database error looking up default user: {}", e),
+                            job_id: None,
+                            data: None,
+                        }),
+                    )
+                }
             }
         } else {
             None
@@ -437,44 +617,79 @@ async fn load_oar_endpoint(
 
     tokio::spawn(async move {
         job_manager.start_job(&job_id).await;
-        job_manager.update_progress(&job_id, 0.1, Some("Loading OAR...".to_string())).await;
+        job_manager
+            .update_progress(&job_id, 0.1, Some("Loading OAR...".to_string()))
+            .await;
 
         let reader = OarReader::new(db_pool);
         let options = OarLoadOptions {
-            region_id, merge, load_terrain: true, load_objects: true, load_parcels: true,
-            displacement, rotation_degrees: rotation, force_terrain, force_parcels,
+            region_id,
+            merge,
+            load_terrain: true,
+            load_objects: true,
+            load_parcels: true,
+            displacement,
+            rotation_degrees: rotation,
+            force_terrain,
+            force_parcels,
             default_user_id: spawn_default_user_id,
         };
 
         match reader.load(&file_path, options).await {
             Ok(result) => {
                 let objects_created = result.stats.objects_created;
-                job_manager.complete_job(&job_id, JobResult::OarLoad {
-                    assets_loaded: result.stats.assets_loaded,
-                    objects_created,
-                    parcels_loaded: result.stats.parcels_loaded,
-                    terrain_loaded: result.stats.terrain_loaded,
-                }).await;
+                job_manager
+                    .complete_job(
+                        &job_id,
+                        JobResult::OarLoad {
+                            assets_loaded: result.stats.assets_loaded,
+                            objects_created,
+                            parcels_loaded: result.stats.parcels_loaded,
+                            terrain_loaded: result.stats.terrain_loaded,
+                        },
+                    )
+                    .await;
 
-                if let (Some(scene_objs), Some(_socket), Some(_avatars), Some(prim_counter), Some(_rel_mgr)) =
-                    (scene_objects, udp_socket, avatar_states, next_prim_local_id, reliability_manager)
-                {
+                if let (
+                    Some(scene_objs),
+                    Some(_socket),
+                    Some(_avatars),
+                    Some(prim_counter),
+                    Some(_rel_mgr),
+                ) = (
+                    scene_objects,
+                    udp_socket,
+                    avatar_states,
+                    next_prim_local_id,
+                    reliability_manager,
+                ) {
                     populate_scene_objects_from_db(
-                        &live_db_pool, region_id, scene_objs, prim_counter,
-                    ).await;
+                        &live_db_pool,
+                        region_id,
+                        scene_objs,
+                        prim_counter,
+                    )
+                    .await;
                     info!("[OAR] Scene objects updated in memory. Relog to see objects in-world.");
                 }
             }
             Err(e) => {
-                job_manager.fail_job(&job_id, format!("OAR load failed: {}", e)).await;
+                job_manager
+                    .fail_job(&job_id, format!("OAR load failed: {}", e))
+                    .await;
             }
         }
     });
 
-    (StatusCode::ACCEPTED, Json(ArchiveApiResponse {
-        success: true, message: "OAR load job started".to_string(),
-        job_id: Some(job_id.to_string()), data: None,
-    }))
+    (
+        StatusCode::ACCEPTED,
+        Json(ArchiveApiResponse {
+            success: true,
+            message: "OAR load job started".to_string(),
+            job_id: Some(job_id.to_string()),
+            data: None,
+        }),
+    )
 }
 
 async fn list_oar_files_endpoint() -> impl IntoResponse {
@@ -498,46 +713,81 @@ async fn list_oar_files_endpoint() -> impl IntoResponse {
             }
         }
     }
-    files.sort_by(|a, b| a["name"].as_str().unwrap_or("").cmp(b["name"].as_str().unwrap_or("")));
+    files.sort_by(|a, b| {
+        a["name"]
+            .as_str()
+            .unwrap_or("")
+            .cmp(b["name"].as_str().unwrap_or(""))
+    });
 
-    (StatusCode::OK, Json(ArchiveApiResponse {
-        success: true,
-        message: format!("Found {} OAR files in {}", files.len(), oar_dir),
-        job_id: None,
-        data: Some(serde_json::json!({ "files": files, "oar_directory": oar_dir })),
-    }))
+    (
+        StatusCode::OK,
+        Json(ArchiveApiResponse {
+            success: true,
+            message: format!("Found {} OAR files in {}", files.len(), oar_dir),
+            job_id: None,
+            data: Some(serde_json::json!({ "files": files, "oar_directory": oar_dir })),
+        }),
+    )
 }
 
 async fn save_oar_endpoint(
     State(state): State<ArchiveApiState>,
     Json(request): Json<SaveOarRequest>,
 ) -> impl IntoResponse {
-    info!("Archive API: Saving OAR to {} for region {}", request.output_path, request.region_name);
+    info!(
+        "Archive API: Saving OAR to {} for region {}",
+        request.output_path, request.region_name
+    );
 
     if request.output_path.trim().is_empty() {
-        return (StatusCode::BAD_REQUEST, Json(ArchiveApiResponse {
-            success: false, message: "Output path cannot be empty".to_string(),
-            job_id: None, data: None,
-        }));
+        return (
+            StatusCode::BAD_REQUEST,
+            Json(ArchiveApiResponse {
+                success: false,
+                message: "Output path cannot be empty".to_string(),
+                job_id: None,
+                data: None,
+            }),
+        );
     }
 
     if request.region_name.trim().is_empty() {
-        return (StatusCode::BAD_REQUEST, Json(ArchiveApiResponse {
-            success: false, message: "Region name is required".to_string(),
-            job_id: None, data: None,
-        }));
+        return (
+            StatusCode::BAD_REQUEST,
+            Json(ArchiveApiResponse {
+                success: false,
+                message: "Region name is required".to_string(),
+                job_id: None,
+                data: None,
+            }),
+        );
     }
 
     let region_id = match get_region_id(&state.db_pool, &request.region_name).await {
         Ok(Some(id)) => id,
-        Ok(None) => return (StatusCode::NOT_FOUND, Json(ArchiveApiResponse {
-            success: false, message: format!("Region not found: {}", request.region_name),
-            job_id: None, data: None,
-        })),
-        Err(e) => return (StatusCode::INTERNAL_SERVER_ERROR, Json(ArchiveApiResponse {
-            success: false, message: format!("Database error: {}", e),
-            job_id: None, data: None,
-        })),
+        Ok(None) => {
+            return (
+                StatusCode::NOT_FOUND,
+                Json(ArchiveApiResponse {
+                    success: false,
+                    message: format!("Region not found: {}", request.region_name),
+                    job_id: None,
+                    data: None,
+                }),
+            )
+        }
+        Err(e) => {
+            return (
+                StatusCode::INTERNAL_SERVER_ERROR,
+                Json(ArchiveApiResponse {
+                    success: false,
+                    message: format!("Database error: {}", e),
+                    job_id: None,
+                    data: None,
+                }),
+            )
+        }
     };
 
     let include_assets = request.include_assets.unwrap_or(true);
@@ -548,7 +798,10 @@ async fn save_oar_endpoint(
     let job_type = JobType::OarSave {
         region_id,
         output_path: PathBuf::from(&request.output_path),
-        include_assets, include_terrain, include_objects, include_parcels,
+        include_assets,
+        include_terrain,
+        include_objects,
+        include_parcels,
     };
 
     let job_id = state.job_manager.create_job(job_type).await;
@@ -559,34 +812,52 @@ async fn save_oar_endpoint(
 
     tokio::spawn(async move {
         job_manager.start_job(&job_id).await;
-        job_manager.update_progress(&job_id, 0.1, Some("Saving OAR...".to_string())).await;
+        job_manager
+            .update_progress(&job_id, 0.1, Some("Saving OAR...".to_string()))
+            .await;
 
         let writer = OarWriter::new(db_pool);
         let options = OarSaveOptions {
-            region_id, include_assets, include_terrain, include_objects, include_parcels,
+            region_id,
+            include_assets,
+            include_terrain,
+            include_objects,
+            include_parcels,
             object_uuids: None,
         };
 
         match writer.save(&output_path, options).await {
             Ok(result) => {
-                job_manager.complete_job(&job_id, JobResult::OarSave {
-                    assets_saved: result.stats.assets_saved,
-                    objects_saved: result.stats.objects_saved,
-                    parcels_saved: result.stats.parcels_saved,
-                    terrain_saved: result.stats.terrain_saved,
-                    download_path: result.output_path,
-                }).await;
+                job_manager
+                    .complete_job(
+                        &job_id,
+                        JobResult::OarSave {
+                            assets_saved: result.stats.assets_saved,
+                            objects_saved: result.stats.objects_saved,
+                            parcels_saved: result.stats.parcels_saved,
+                            terrain_saved: result.stats.terrain_saved,
+                            download_path: result.output_path,
+                        },
+                    )
+                    .await;
             }
             Err(e) => {
-                job_manager.fail_job(&job_id, format!("OAR save failed: {}", e)).await;
+                job_manager
+                    .fail_job(&job_id, format!("OAR save failed: {}", e))
+                    .await;
             }
         }
     });
 
-    (StatusCode::ACCEPTED, Json(ArchiveApiResponse {
-        success: true, message: "OAR save job started".to_string(),
-        job_id: Some(job_id.to_string()), data: None,
-    }))
+    (
+        StatusCode::ACCEPTED,
+        Json(ArchiveApiResponse {
+            success: true,
+            message: "OAR save job started".to_string(),
+            job_id: Some(job_id.to_string()),
+            data: None,
+        }),
+    )
 }
 
 async fn list_jobs_endpoint(
@@ -596,23 +867,31 @@ async fn list_jobs_endpoint(
     debug!("Archive API: Listing jobs");
 
     let jobs = state.job_manager.get_active_jobs().await;
-    let job_data: Vec<_> = jobs.iter()
+    let job_data: Vec<_> = jobs
+        .iter()
         .take(query.limit.unwrap_or(50) as usize)
-        .map(|job| serde_json::json!({
-            "id": job.id.to_string(),
-            "type": format!("{:?}", job.job_type),
-            "status": format!("{:?}", job.status),
-            "progress": job.progress,
-            "message": job.progress_message,
-            "created_at": job.created_at.to_rfc3339(),
-            "completed_at": job.completed_at.map(|t| t.to_rfc3339()),
-        }))
+        .map(|job| {
+            serde_json::json!({
+                "id": job.id.to_string(),
+                "type": format!("{:?}", job.job_type),
+                "status": format!("{:?}", job.status),
+                "progress": job.progress,
+                "message": job.progress_message,
+                "created_at": job.created_at.to_rfc3339(),
+                "completed_at": job.completed_at.map(|t| t.to_rfc3339()),
+            })
+        })
         .collect();
 
-    (StatusCode::OK, Json(ArchiveApiResponse {
-        success: true, message: format!("Found {} jobs", job_data.len()),
-        job_id: None, data: Some(serde_json::json!({ "jobs": job_data })),
-    }))
+    (
+        StatusCode::OK,
+        Json(ArchiveApiResponse {
+            success: true,
+            message: format!("Found {} jobs", job_data.len()),
+            job_id: None,
+            data: Some(serde_json::json!({ "jobs": job_data })),
+        }),
+    )
 }
 
 async fn get_job_status_endpoint(
@@ -623,31 +902,47 @@ async fn get_job_status_endpoint(
 
     let job_uuid = match Uuid::parse_str(&job_id) {
         Ok(id) => id,
-        Err(_) => return (StatusCode::BAD_REQUEST, Json(ArchiveApiResponse {
-            success: false, message: "Invalid job ID format".to_string(),
-            job_id: None, data: None,
-        })),
+        Err(_) => {
+            return (
+                StatusCode::BAD_REQUEST,
+                Json(ArchiveApiResponse {
+                    success: false,
+                    message: "Invalid job ID format".to_string(),
+                    job_id: None,
+                    data: None,
+                }),
+            )
+        }
     };
 
     match state.job_manager.get_job(&job_uuid).await {
-        Some(job) => (StatusCode::OK, Json(ArchiveApiResponse {
-            success: true, message: job.progress_message.clone().unwrap_or_default(),
-            job_id: Some(job_id),
-            data: Some(serde_json::json!({
-                "type": format!("{:?}", job.job_type),
-                "status": format!("{:?}", job.status),
-                "progress": job.progress,
-                "created_at": job.created_at.to_rfc3339(),
-                "started_at": job.started_at.map(|t| t.to_rfc3339()),
-                "completed_at": job.completed_at.map(|t| t.to_rfc3339()),
-                "result": job.result,
-                "error": job.error,
-            })),
-        })),
-        None => (StatusCode::NOT_FOUND, Json(ArchiveApiResponse {
-            success: false, message: "Job not found".to_string(),
-            job_id: None, data: None,
-        })),
+        Some(job) => (
+            StatusCode::OK,
+            Json(ArchiveApiResponse {
+                success: true,
+                message: job.progress_message.clone().unwrap_or_default(),
+                job_id: Some(job_id),
+                data: Some(serde_json::json!({
+                    "type": format!("{:?}", job.job_type),
+                    "status": format!("{:?}", job.status),
+                    "progress": job.progress,
+                    "created_at": job.created_at.to_rfc3339(),
+                    "started_at": job.started_at.map(|t| t.to_rfc3339()),
+                    "completed_at": job.completed_at.map(|t| t.to_rfc3339()),
+                    "result": job.result,
+                    "error": job.error,
+                })),
+            }),
+        ),
+        None => (
+            StatusCode::NOT_FOUND,
+            Json(ArchiveApiResponse {
+                success: false,
+                message: "Job not found".to_string(),
+                job_id: None,
+                data: None,
+            }),
+        ),
     }
 }
 
@@ -659,22 +954,39 @@ async fn cancel_job_endpoint(
 
     let job_uuid = match Uuid::parse_str(&job_id) {
         Ok(id) => id,
-        Err(_) => return (StatusCode::BAD_REQUEST, Json(ArchiveApiResponse {
-            success: false, message: "Invalid job ID format".to_string(),
-            job_id: None, data: None,
-        })),
+        Err(_) => {
+            return (
+                StatusCode::BAD_REQUEST,
+                Json(ArchiveApiResponse {
+                    success: false,
+                    message: "Invalid job ID format".to_string(),
+                    job_id: None,
+                    data: None,
+                }),
+            )
+        }
     };
 
     if state.job_manager.cancel_job(&job_uuid).await {
-        (StatusCode::OK, Json(ArchiveApiResponse {
-            success: true, message: "Job cancelled".to_string(),
-            job_id: Some(job_id), data: None,
-        }))
+        (
+            StatusCode::OK,
+            Json(ArchiveApiResponse {
+                success: true,
+                message: "Job cancelled".to_string(),
+                job_id: Some(job_id),
+                data: None,
+            }),
+        )
     } else {
-        (StatusCode::NOT_FOUND, Json(ArchiveApiResponse {
-            success: false, message: "Job not found or cannot be cancelled".to_string(),
-            job_id: None, data: None,
-        }))
+        (
+            StatusCode::NOT_FOUND,
+            Json(ArchiveApiResponse {
+                success: false,
+                message: "Job not found or cannot be cancelled".to_string(),
+                job_id: None,
+                data: None,
+            }),
+        )
     }
 }
 
@@ -696,41 +1008,69 @@ async fn archive_health_endpoint() -> impl IntoResponse {
     }))
 }
 
-async fn clear_region_endpoint(
-    State(state): State<ArchiveApiState>,
-) -> impl IntoResponse {
+async fn clear_region_endpoint(State(state): State<ArchiveApiState>) -> impl IntoResponse {
     info!("Archive API: Clearing region (DB + in-memory scene objects)");
 
     let mut cleared_tables = Vec::new();
 
     match sqlx::query("DELETE FROM primshapes WHERE uuid IN (SELECT uuid FROM prims)")
-        .execute(&state.db_pool).await {
-        Ok(r) => { cleared_tables.push(format!("primshapes: {} rows", r.rows_affected())); }
-        Err(e) => { warn!("Failed to clear primshapes: {}", e); }
+        .execute(&state.db_pool)
+        .await
+    {
+        Ok(r) => {
+            cleared_tables.push(format!("primshapes: {} rows", r.rows_affected()));
+        }
+        Err(e) => {
+            warn!("Failed to clear primshapes: {}", e);
+        }
     }
 
     match sqlx::query("DELETE FROM prims")
-        .execute(&state.db_pool).await {
-        Ok(r) => { cleared_tables.push(format!("prims: {} rows", r.rows_affected())); }
-        Err(e) => { warn!("Failed to clear prims: {}", e); }
+        .execute(&state.db_pool)
+        .await
+    {
+        Ok(r) => {
+            cleared_tables.push(format!("prims: {} rows", r.rows_affected()));
+        }
+        Err(e) => {
+            warn!("Failed to clear prims: {}", e);
+        }
     }
 
     match sqlx::query("DELETE FROM land")
-        .execute(&state.db_pool).await {
-        Ok(r) => { cleared_tables.push(format!("land: {} rows", r.rows_affected())); }
-        Err(e) => { warn!("Failed to clear land: {}", e); }
+        .execute(&state.db_pool)
+        .await
+    {
+        Ok(r) => {
+            cleared_tables.push(format!("land: {} rows", r.rows_affected()));
+        }
+        Err(e) => {
+            warn!("Failed to clear land: {}", e);
+        }
     }
 
     match sqlx::query("DELETE FROM landaccesslist")
-        .execute(&state.db_pool).await {
-        Ok(r) => { cleared_tables.push(format!("landaccesslist: {} rows", r.rows_affected())); }
-        Err(e) => { warn!("Failed to clear landaccesslist: {}", e); }
+        .execute(&state.db_pool)
+        .await
+    {
+        Ok(r) => {
+            cleared_tables.push(format!("landaccesslist: {} rows", r.rows_affected()));
+        }
+        Err(e) => {
+            warn!("Failed to clear landaccesslist: {}", e);
+        }
     }
 
     match sqlx::query("DELETE FROM bakedterrain")
-        .execute(&state.db_pool).await {
-        Ok(r) => { cleared_tables.push(format!("bakedterrain: {} rows", r.rows_affected())); }
-        Err(e) => { warn!("Failed to clear bakedterrain: {}", e); }
+        .execute(&state.db_pool)
+        .await
+    {
+        Ok(r) => {
+            cleared_tables.push(format!("bakedterrain: {} rows", r.rows_affected()));
+        }
+        Err(e) => {
+            warn!("Failed to clear bakedterrain: {}", e);
+        }
     }
 
     let (scene_count, killed_ids) = if let Some(ref scene_objects) = state.scene_objects {
@@ -747,10 +1087,13 @@ async fn clear_region_endpoint(
 
     let mut viewers_notified = 0;
     if !killed_ids.is_empty() {
-        if let (Some(ref socket), Some(ref avatar_states)) = (&state.udp_socket, &state.avatar_states) {
+        if let (Some(ref socket), Some(ref avatar_states)) =
+            (&state.udp_socket, &state.avatar_states)
+        {
             let viewer_addrs: Vec<std::net::SocketAddr> = {
                 let states = avatar_states.read();
-                states.values()
+                states
+                    .values()
                     .filter(|s| !s.is_npc)
                     .map(|s| s.client_addr)
                     .collect()
@@ -774,20 +1117,31 @@ async fn clear_region_endpoint(
                 }
                 viewers_notified += 1;
             }
-            info!("Sent KillObject for {} objects to {} viewers", killed_ids.len(), viewers_notified);
+            info!(
+                "Sent KillObject for {} objects to {} viewers",
+                killed_ids.len(),
+                viewers_notified
+            );
         }
     }
 
-    let message = format!("Region cleared. DB: [{}]. In-memory: {} objects removed. {} viewers notified.",
-        cleared_tables.join(", "), scene_count, viewers_notified);
+    let message = format!(
+        "Region cleared. DB: [{}]. In-memory: {} objects removed. {} viewers notified.",
+        cleared_tables.join(", "),
+        scene_count,
+        viewers_notified
+    );
     info!("{}", message);
 
-    (StatusCode::OK, Json(ArchiveApiResponse {
-        success: true,
-        message,
-        job_id: None,
-        data: None,
-    }))
+    (
+        StatusCode::OK,
+        Json(ArchiveApiResponse {
+            success: true,
+            message,
+            job_id: None,
+            data: None,
+        }),
+    )
 }
 
 const OBJECT_UPDATE_MSG_ID: u8 = 0x0C;
@@ -800,8 +1154,8 @@ async fn populate_scene_objects_from_db(
     scene_objects: Arc<parking_lot::RwLock<HashMap<u32, crate::udp::server::SceneObject>>>,
     next_prim_local_id: Arc<std::sync::atomic::AtomicU32>,
 ) {
-    use sqlx::Row;
     use crate::udp::server::SceneObject;
+    use sqlx::Row;
 
     let rows = match sqlx::query(
         r#"SELECT
@@ -867,9 +1221,17 @@ async fn populate_scene_objects_from_db(
         let local_id = next_prim_local_id.fetch_add(1, std::sync::atomic::Ordering::Relaxed);
 
         let position = if is_root {
-            [row.get::<f32, _>("grouppositionx"), row.get::<f32, _>("grouppositiony"), row.get::<f32, _>("grouppositionz")]
+            [
+                row.get::<f32, _>("grouppositionx"),
+                row.get::<f32, _>("grouppositiony"),
+                row.get::<f32, _>("grouppositionz"),
+            ]
         } else {
-            [row.get::<f32, _>("positionx"), row.get::<f32, _>("positiony"), row.get::<f32, _>("positionz")]
+            [
+                row.get::<f32, _>("positionx"),
+                row.get::<f32, _>("positiony"),
+                row.get::<f32, _>("positionz"),
+            ]
         };
 
         let parent_id = if is_root {
@@ -878,7 +1240,10 @@ async fn populate_scene_objects_from_db(
             }
             0u32
         } else {
-            group_root_local_ids.get(&scene_group_id).copied().unwrap_or(0)
+            group_root_local_ids
+                .get(&scene_group_id)
+                .copied()
+                .unwrap_or(0)
         };
 
         let obj = SceneObject {
@@ -888,7 +1253,12 @@ async fn populate_scene_objects_from_db(
             creator_id: owner_id,
             group_id,
             position,
-            rotation: [row.get("rotationx"), row.get("rotationy"), row.get("rotationz"), row.get("rotationw")],
+            rotation: [
+                row.get("rotationx"),
+                row.get("rotationy"),
+                row.get("rotationz"),
+                row.get("rotationw"),
+            ],
             scale: [row.get("scalex"), row.get("scaley"), row.get("scalez")],
             name: row.get("name"),
             description: row.get("description"),
@@ -986,19 +1356,27 @@ async fn populate_scene_objects_from_db(
             collision_filter_id: Uuid::nil(),
             collision_filter_accept: true,
             item_id: Uuid::nil(),
-            sale_type: 0, sale_price: 0,
+            sale_type: 0,
+            sale_price: 0,
         };
 
         scene.insert(local_id, obj);
         loaded += 1;
     }
 
-    info!("[OAR] Populated {} prims into in-memory scene (relog to see in viewer)", loaded);
+    info!(
+        "[OAR] Populated {} prims into in-memory scene (relog to see in viewer)",
+        loaded
+    );
 }
 
-async fn get_user_id(pool: &PgPool, firstname: &str, lastname: &str) -> Result<Option<Uuid>, sqlx::Error> {
+async fn get_user_id(
+    pool: &PgPool,
+    firstname: &str,
+    lastname: &str,
+) -> Result<Option<Uuid>, sqlx::Error> {
     let row: Option<(Uuid,)> = sqlx::query_as(
-        "SELECT principalid FROM useraccounts WHERE firstname = $1 AND lastname = $2"
+        "SELECT principalid FROM useraccounts WHERE firstname = $1 AND lastname = $2",
     )
     .bind(firstname)
     .bind(lastname)
@@ -1009,12 +1387,10 @@ async fn get_user_id(pool: &PgPool, firstname: &str, lastname: &str) -> Result<O
 }
 
 async fn get_region_id(pool: &PgPool, region_name: &str) -> Result<Option<Uuid>, sqlx::Error> {
-    let row: Option<(Uuid,)> = sqlx::query_as(
-        "SELECT id FROM regions WHERE region_name = $1"
-    )
-    .bind(region_name)
-    .fetch_optional(pool)
-    .await?;
+    let row: Option<(Uuid,)> = sqlx::query_as("SELECT id FROM regions WHERE region_name = $1")
+        .bind(region_name)
+        .fetch_optional(pool)
+        .await?;
 
     Ok(row.map(|(id,)| id))
 }
@@ -1028,7 +1404,9 @@ async fn create_user_with_id(
     password: &str,
 ) -> Result<(), anyhow::Error> {
     let created_timestamp = chrono::Utc::now().timestamp() as i32;
-    let salt: String = (0..32).map(|_| format!("{:x}", rand::random::<u8>() % 16)).collect();
+    let salt: String = (0..32)
+        .map(|_| format!("{:x}", rand::random::<u8>() % 16))
+        .collect();
     let password_md5 = format!("{:x}", md5::compute(password.as_bytes()));
     let salted = format!("{}:{}", password_md5, salt);
     let password_hash = format!("{:x}", md5::compute(salted.as_bytes()));
@@ -1060,6 +1438,9 @@ async fn create_user_with_id(
 
     crate::database::default_inventory::create_default_user_inventory(pool, user_id).await?;
 
-    info!("Created user {} {} with ID {} for archive import", firstname, lastname, user_id);
+    info!(
+        "Created user {} {} with ID {} for archive import",
+        firstname, lastname, user_id
+    );
     Ok(())
 }

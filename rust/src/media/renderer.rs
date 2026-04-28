@@ -1,5 +1,5 @@
+use anyhow::{anyhow, Result};
 use std::path::Path;
-use anyhow::{Result, anyhow};
 use tracing::{info, warn};
 
 pub async fn run_blender(blender_path: &str, script_path: &Path) -> Result<()> {
@@ -12,7 +12,8 @@ pub async fn run_blender(blender_path: &str, script_path: &Path) -> Result<()> {
     let output = tokio::process::Command::new(blender_path)
         .args([
             "--background",
-            "--python", script_path.to_str().unwrap_or("render.py"),
+            "--python",
+            script_path.to_str().unwrap_or("render.py"),
         ])
         .stdout(std::process::Stdio::piped())
         .stderr(std::process::Stdio::piped())
@@ -31,8 +32,11 @@ pub async fn run_blender(blender_path: &str, script_path: &Path) -> Result<()> {
     if !output.status.success() {
         let exit_code = output.status.code().unwrap_or(-1);
         warn!("[MEDIA] Blender stderr: {}", stderr);
-        return Err(anyhow!("Blender exited with code {}: {}", exit_code,
-            stderr.lines().last().unwrap_or("unknown error")));
+        return Err(anyhow!(
+            "Blender exited with code {}: {}",
+            exit_code,
+            stderr.lines().last().unwrap_or("unknown error")
+        ));
     }
 
     info!("[MEDIA] Blender render complete");
@@ -52,7 +56,8 @@ pub async fn run_blender_with_blend(
         .args([
             "--background",
             blend_file.to_str().unwrap_or("scene.blend"),
-            "--python", script_path.to_str().unwrap_or("render.py"),
+            "--python",
+            script_path.to_str().unwrap_or("render.py"),
         ])
         .stdout(std::process::Stdio::piped())
         .stderr(std::process::Stdio::piped())
@@ -61,8 +66,10 @@ pub async fn run_blender_with_blend(
 
     if !output.status.success() {
         let stderr = String::from_utf8_lossy(&output.stderr);
-        return Err(anyhow!("Blender exited with error: {}",
-            stderr.lines().last().unwrap_or("unknown")));
+        return Err(anyhow!(
+            "Blender exited with error: {}",
+            stderr.lines().last().unwrap_or("unknown")
+        ));
     }
 
     Ok(())

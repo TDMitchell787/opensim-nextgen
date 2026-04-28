@@ -1,13 +1,13 @@
-use crate::database::DatabaseManager;
+use super::ml_integration::{LLMConfig, LLMResponse, LocalLLMClient};
+use super::npc_behavior::{BehaviorState, Mood, NPCPersonality, NPCProfile, NPCRole};
 use super::AIError;
-use super::npc_behavior::{NPCProfile, NPCPersonality, NPCRole, BehaviorState, Mood};
-use super::ml_integration::{LocalLLMClient, LLMConfig, LLMResponse};
-use std::sync::Arc;
-use std::collections::HashMap;
-use tokio::sync::RwLock;
-use serde::{Deserialize, Serialize};
-use uuid::Uuid;
+use crate::database::DatabaseManager;
 use chrono::{DateTime, Utc};
+use serde::{Deserialize, Serialize};
+use std::collections::HashMap;
+use std::sync::Arc;
+use tokio::sync::RwLock;
+use uuid::Uuid;
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct DialogueContext {
@@ -209,29 +209,41 @@ impl Default for FallbackResponses {
     fn default() -> Self {
         let mut role_specific = HashMap::new();
 
-        role_specific.insert("Merchant".to_string(), vec![
-            "Looking to buy or sell? I've got quality goods!".to_string(),
-            "My prices are fair, I assure you.".to_string(),
-            "Step right up! See what I have to offer.".to_string(),
-        ]);
+        role_specific.insert(
+            "Merchant".to_string(),
+            vec![
+                "Looking to buy or sell? I've got quality goods!".to_string(),
+                "My prices are fair, I assure you.".to_string(),
+                "Step right up! See what I have to offer.".to_string(),
+            ],
+        );
 
-        role_specific.insert("Guard".to_string(), vec![
-            "Move along, citizen. Nothing to see here.".to_string(),
-            "Keep the peace and we'll have no trouble.".to_string(),
-            "I'm watching this area. Stay out of trouble.".to_string(),
-        ]);
+        role_specific.insert(
+            "Guard".to_string(),
+            vec![
+                "Move along, citizen. Nothing to see here.".to_string(),
+                "Keep the peace and we'll have no trouble.".to_string(),
+                "I'm watching this area. Stay out of trouble.".to_string(),
+            ],
+        );
 
-        role_specific.insert("Guide".to_string(), vec![
-            "Need directions? I know this place well.".to_string(),
-            "I can show you around if you'd like.".to_string(),
-            "First time here? Let me help you find your way.".to_string(),
-        ]);
+        role_specific.insert(
+            "Guide".to_string(),
+            vec![
+                "Need directions? I know this place well.".to_string(),
+                "I can show you around if you'd like.".to_string(),
+                "First time here? Let me help you find your way.".to_string(),
+            ],
+        );
 
-        role_specific.insert("Scholar".to_string(), vec![
-            "Knowledge is the greatest treasure.".to_string(),
-            "I've been studying the ancient texts...".to_string(),
-            "Ah, a curious mind! What would you like to know?".to_string(),
-        ]);
+        role_specific.insert(
+            "Scholar".to_string(),
+            vec![
+                "Knowledge is the greatest treasure.".to_string(),
+                "I've been studying the ancient texts...".to_string(),
+                "Ah, a curious mind! What would you like to know?".to_string(),
+            ],
+        );
 
         Self {
             greetings: vec![
@@ -279,7 +291,10 @@ impl NPCDialogueEngine {
                     }
                 }
                 Err(e) => {
-                    tracing::warn!("Failed to create LLM client: {}, using fallback responses", e);
+                    tracing::warn!(
+                        "Failed to create LLM client: {}, using fallback responses",
+                        e
+                    );
                     None
                 }
             }
@@ -316,9 +331,11 @@ impl NPCDialogueEngine {
         }
 
         let response = if let Some(llm) = &self.llm_client {
-            self.generate_llm_dialogue(llm, npc_profile, context, user_message).await?
+            self.generate_llm_dialogue(llm, npc_profile, context, user_message)
+                .await?
         } else {
-            self.generate_fallback_dialogue(npc_profile, context, user_message).await
+            self.generate_fallback_dialogue(npc_profile, context, user_message)
+                .await
         };
 
         self.record_conversation_turn(
@@ -326,7 +343,8 @@ impl NPCDialogueEngine {
             context.speaker_id,
             user_message,
             &response.response_text,
-        ).await;
+        )
+        .await;
 
         let mut final_response = response;
         final_response.processing_time_ms = start_time.elapsed().as_millis() as u64;
@@ -348,10 +366,9 @@ impl NPCDialogueEngine {
         user_message: &str,
     ) -> Result<DialogueResponse, AIError> {
         let system_prompt = self.build_system_prompt(npc_profile, context).await;
-        let conversation_context = self.build_conversation_context(
-            npc_profile.npc_id,
-            context.speaker_id,
-        ).await;
+        let conversation_context = self
+            .build_conversation_context(npc_profile.npc_id, context.speaker_id)
+            .await;
 
         let full_prompt = format!(
             "{}\n\nConversation history:\n{}\n\n{} says: \"{}\"\n\nRespond as {}:",
@@ -366,7 +383,8 @@ impl NPCDialogueEngine {
 
         let emotion = NPCEmotion::from_mood(&npc_profile.behavior_state.mood);
         let suggested_actions = self.infer_actions_from_response(&llm_response.text, npc_profile);
-        let relationship_change = self.calculate_relationship_change(user_message, &llm_response.text);
+        let relationship_change =
+            self.calculate_relationship_change(user_message, &llm_response.text);
 
         Ok(DialogueResponse {
             npc_id: npc_profile.npc_id,
@@ -379,7 +397,11 @@ impl NPCDialogueEngine {
         })
     }
 
-    async fn build_system_prompt(&self, npc_profile: &NPCProfile, context: &DialogueContext) -> String {
+    async fn build_system_prompt(
+        &self,
+        npc_profile: &NPCProfile,
+        context: &DialogueContext,
+    ) -> String {
         let personality_desc = self.describe_personality(&npc_profile.personality);
         let role_desc = self.describe_role(&npc_profile.role);
         let emotion = NPCEmotion::from_mood(&npc_profile.behavior_state.mood);
@@ -477,7 +499,8 @@ Do not break character or mention that you are an AI."#,
         let key = (npc_id, speaker_id);
 
         if let Some(turns) = history.get(&key) {
-            let recent: Vec<&ConversationTurn> = turns.iter()
+            let recent: Vec<&ConversationTurn> = turns
+                .iter()
                 .rev()
                 .take(self.config.max_conversation_history)
                 .collect::<Vec<_>>()
@@ -485,7 +508,8 @@ Do not break character or mention that you are an AI."#,
                 .rev()
                 .collect();
 
-            recent.iter()
+            recent
+                .iter()
                 .map(|turn| {
                     let speaker = match turn.speaker {
                         Speaker::NPC => "NPC",
@@ -507,11 +531,21 @@ Do not break character or mention that you are an AI."#,
         user_message: &str,
     ) -> DialogueResponse {
         let message_lower = user_message.to_lowercase();
-        let response_text = if message_lower.contains("hello") || message_lower.contains("hi") || message_lower.contains("greet") {
+        let response_text = if message_lower.contains("hello")
+            || message_lower.contains("hi")
+            || message_lower.contains("greet")
+        {
             self.get_random_response(&self.fallback_responses.greetings)
-        } else if message_lower.contains("bye") || message_lower.contains("farewell") || message_lower.contains("leave") {
+        } else if message_lower.contains("bye")
+            || message_lower.contains("farewell")
+            || message_lower.contains("leave")
+        {
             self.get_random_response(&self.fallback_responses.farewells)
-        } else if let Some(role_responses) = self.fallback_responses.role_specific.get(&format!("{:?}", npc_profile.role)) {
+        } else if let Some(role_responses) = self
+            .fallback_responses
+            .role_specific
+            .get(&format!("{:?}", npc_profile.role))
+        {
             self.get_random_response(role_responses)
         } else {
             self.get_random_response(&self.fallback_responses.confused)
@@ -544,11 +578,18 @@ Do not break character or mention that you are an AI."#,
         }
     }
 
-    fn infer_actions_from_response(&self, response: &str, npc_profile: &NPCProfile) -> Vec<SuggestedAction> {
+    fn infer_actions_from_response(
+        &self,
+        response: &str,
+        npc_profile: &NPCProfile,
+    ) -> Vec<SuggestedAction> {
         let mut actions = Vec::new();
         let response_lower = response.to_lowercase();
 
-        if response_lower.contains("quest") || response_lower.contains("task") || response_lower.contains("mission") {
+        if response_lower.contains("quest")
+            || response_lower.contains("task")
+            || response_lower.contains("mission")
+        {
             actions.push(SuggestedAction {
                 action_type: ActionType::OfferQuest,
                 description: "Offer a quest to the player".to_string(),
@@ -556,7 +597,10 @@ Do not break character or mention that you are an AI."#,
             });
         }
 
-        if response_lower.contains("buy") || response_lower.contains("sell") || response_lower.contains("trade") {
+        if response_lower.contains("buy")
+            || response_lower.contains("sell")
+            || response_lower.contains("trade")
+        {
             actions.push(SuggestedAction {
                 action_type: ActionType::InitiateTrade,
                 description: "Open trade interface".to_string(),
@@ -564,7 +608,10 @@ Do not break character or mention that you are an AI."#,
             });
         }
 
-        if response_lower.contains("follow") || response_lower.contains("show you") || response_lower.contains("this way") {
+        if response_lower.contains("follow")
+            || response_lower.contains("show you")
+            || response_lower.contains("this way")
+        {
             actions.push(SuggestedAction {
                 action_type: ActionType::ProvideDirection,
                 description: "Guide player to location".to_string(),
@@ -572,7 +619,10 @@ Do not break character or mention that you are an AI."#,
             });
         }
 
-        if response_lower.contains("take this") || response_lower.contains("here, have") || response_lower.contains("gift") {
+        if response_lower.contains("take this")
+            || response_lower.contains("here, have")
+            || response_lower.contains("gift")
+        {
             actions.push(SuggestedAction {
                 action_type: ActionType::GiveItem,
                 description: "Give item to player".to_string(),
@@ -582,7 +632,10 @@ Do not break character or mention that you are an AI."#,
 
         match npc_profile.role {
             NPCRole::Merchant | NPCRole::Vendor => {
-                if actions.iter().all(|a| !matches!(a.action_type, ActionType::InitiateTrade)) {
+                if actions
+                    .iter()
+                    .all(|a| !matches!(a.action_type, ActionType::InitiateTrade))
+                {
                     actions.push(SuggestedAction {
                         action_type: ActionType::InitiateTrade,
                         description: "Offer to trade".to_string(),
@@ -591,7 +644,10 @@ Do not break character or mention that you are an AI."#,
                 }
             }
             NPCRole::Questgiver => {
-                if actions.iter().all(|a| !matches!(a.action_type, ActionType::OfferQuest)) {
+                if actions
+                    .iter()
+                    .all(|a| !matches!(a.action_type, ActionType::OfferQuest))
+                {
                     actions.push(SuggestedAction {
                         action_type: ActionType::OfferQuest,
                         description: "Offer available quests".to_string(),
@@ -609,7 +665,11 @@ Do not break character or mention that you are an AI."#,
             _ => {}
         }
 
-        actions.sort_by(|a, b| b.priority.partial_cmp(&a.priority).unwrap_or(std::cmp::Ordering::Equal));
+        actions.sort_by(|a, b| {
+            b.priority
+                .partial_cmp(&a.priority)
+                .unwrap_or(std::cmp::Ordering::Equal)
+        });
         actions
     }
 
@@ -617,8 +677,18 @@ Do not break character or mention that you are an AI."#,
         let message_lower = user_message.to_lowercase();
         let mut change: f32 = 0.0;
 
-        let positive_words = ["thank", "please", "help", "friend", "appreciate", "wonderful", "great"];
-        let negative_words = ["hate", "stupid", "idiot", "ugly", "terrible", "awful", "die"];
+        let positive_words = [
+            "thank",
+            "please",
+            "help",
+            "friend",
+            "appreciate",
+            "wonderful",
+            "great",
+        ];
+        let negative_words = [
+            "hate", "stupid", "idiot", "ugly", "terrible", "awful", "die",
+        ];
 
         for word in positive_words.iter() {
             if message_lower.contains(word) {
@@ -684,7 +754,12 @@ Do not break character or mention that you are an AI."#,
         }
     }
 
-    fn compute_cache_key(&self, npc_profile: &NPCProfile, context: &DialogueContext, message: &str) -> String {
+    fn compute_cache_key(
+        &self,
+        npc_profile: &NPCProfile,
+        context: &DialogueContext,
+        message: &str,
+    ) -> String {
         use std::collections::hash_map::DefaultHasher;
         use std::hash::{Hash, Hasher};
 
@@ -711,19 +786,19 @@ Do not break character or mention that you are an AI."#,
         let mut cache = self.response_cache.write().await;
 
         if cache.len() >= 1000 {
-            let keys_to_remove: Vec<String> = cache.keys()
-                .take(100)
-                .cloned()
-                .collect();
+            let keys_to_remove: Vec<String> = cache.keys().take(100).cloned().collect();
             for key in keys_to_remove {
                 cache.remove(&key);
             }
         }
 
-        cache.insert(cache_key.to_string(), CachedResponse {
-            response: response.clone(),
-            cached_at: Utc::now(),
-        });
+        cache.insert(
+            cache_key.to_string(),
+            CachedResponse {
+                response: response.clone(),
+                cached_at: Utc::now(),
+            },
+        );
     }
 
     pub async fn clear_conversation(&self, npc_id: Uuid, speaker_id: Uuid) {
@@ -858,8 +933,14 @@ Tags: [tag1, tag2, tag3]"#,
             request.creator_name.as_deref().unwrap_or("Unknown"),
             request.existing_description.as_deref().unwrap_or("None"),
             request.tags.join(", "),
-            request.prim_count.map(|c| c.to_string()).unwrap_or_else(|| "Unknown".to_string()),
-            request.script_count.map(|c| c.to_string()).unwrap_or_else(|| "Unknown".to_string()),
+            request
+                .prim_count
+                .map(|c| c.to_string())
+                .unwrap_or_else(|| "Unknown".to_string()),
+            request
+                .script_count
+                .map(|c| c.to_string())
+                .unwrap_or_else(|| "Unknown".to_string()),
         );
 
         let response = llm.generate(&prompt).await?;
@@ -882,21 +963,38 @@ Tags: [tag1, tag2, tag3]"#,
         }
 
         if description.is_empty() {
-            description = response.text.lines().next().unwrap_or("").trim().to_string();
+            description = response
+                .text
+                .lines()
+                .next()
+                .unwrap_or("")
+                .trim()
+                .to_string();
         }
 
         Ok((description, tags))
     }
 
-    fn generate_fallback_description(&self, request: &AssetDescriptionRequest) -> (String, Vec<String>) {
+    fn generate_fallback_description(
+        &self,
+        request: &AssetDescriptionRequest,
+    ) -> (String, Vec<String>) {
         let description = if let Some(existing) = &request.existing_description {
             if !existing.is_empty() {
                 existing.clone()
             } else {
-                format!("A {} named '{}'.", request.asset_type.to_lowercase(), request.asset_name)
+                format!(
+                    "A {} named '{}'.",
+                    request.asset_type.to_lowercase(),
+                    request.asset_name
+                )
             }
         } else {
-            format!("A {} named '{}'.", request.asset_type.to_lowercase(), request.asset_name)
+            format!(
+                "A {} named '{}'.",
+                request.asset_type.to_lowercase(),
+                request.asset_name
+            )
         };
 
         let mut tags = request.tags.clone();
@@ -910,7 +1008,12 @@ Tags: [tag1, tag2, tag3]"#,
     fn estimate_quality(&self, request: &AssetDescriptionRequest) -> f32 {
         let mut score: f32 = 0.5;
 
-        if request.existing_description.as_ref().map(|d| d.len() > 20).unwrap_or(false) {
+        if request
+            .existing_description
+            .as_ref()
+            .map(|d| d.len() > 20)
+            .unwrap_or(false)
+        {
             score += 0.1;
         }
 

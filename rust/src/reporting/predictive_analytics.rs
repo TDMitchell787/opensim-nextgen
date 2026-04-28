@@ -3,21 +3,20 @@
 //! Provides machine learning-powered predictive analytics with time series forecasting,
 //! business impact assessment, scenario analysis, and risk prediction.
 
+use super::{
+    AnalyticsCategory, AnalyticsDataPoint, ConfidenceInterval, ForecastPoint, ForecastResult,
+    ModelAlgorithm, ModelPerformanceMetrics, ModelType, PredictiveModel, ReportingError,
+    ReportingResult, RiskFactor, RiskLevel, ScenarioAnalysis, ScenarioResult, TimeWindow,
+};
+use crate::database::DatabaseManager;
+use crate::monitoring::MetricsCollector;
+use chrono::{DateTime, Duration, Utc};
+use serde::{Deserialize, Serialize};
+use sqlx::Row; // EADS fix for PgRow.get() method
 use std::collections::HashMap;
 use std::sync::Arc;
 use tokio::sync::RwLock;
 use uuid::Uuid;
-use chrono::{DateTime, Utc, Duration};
-use serde::{Deserialize, Serialize};
-use sqlx::Row;  // EADS fix for PgRow.get() method
-use crate::database::DatabaseManager;
-use crate::monitoring::MetricsCollector;
-use super::{
-    AnalyticsDataPoint, AnalyticsCategory, PredictiveModel, ModelType, ModelAlgorithm,
-    ModelPerformanceMetrics, ForecastResult, ForecastPoint, ConfidenceInterval,
-    ScenarioAnalysis, ScenarioResult, RiskFactor, RiskLevel, TimeWindow,
-    ReportingError, ReportingResult
-};
 
 /// Predictive Analytics Engine
 pub struct PredictiveAnalyticsEngine {
@@ -466,7 +465,7 @@ impl PredictiveAnalyticsEngine {
         let ml_pipeline = MLPipeline::new().await?;
         let feature_store = FeatureStore::new(database.clone()).await?;
         let model_registry = ModelRegistry::new(database.clone()).await?;
-        
+
         let engine = Self {
             database: database.clone(),
             metrics_collector,
@@ -477,26 +476,27 @@ impl PredictiveAnalyticsEngine {
             prediction_cache: Arc::new(RwLock::new(HashMap::new())),
             config,
         };
-        
+
         // Initialize database tables
         engine.initialize_tables().await?;
-        
+
         // Load existing models
         engine.load_existing_models().await?;
-        
+
         // Start background tasks
         engine.start_background_tasks().await?;
-        
+
         Ok(engine)
     }
-    
+
     /// Initialize database tables
     async fn initialize_tables(&self) -> ReportingResult<()> {
         let pool_ref = self.database.get_pool()?;
         let pool = pool_ref.as_postgres_pool()?;
-        
+
         // Forecasting models table
-        sqlx::query(r#"
+        sqlx::query(
+            r#"
             CREATE TABLE IF NOT EXISTS forecasting_models (
                 model_id TEXT PRIMARY KEY,
                 model_name TEXT NOT NULL,
@@ -512,10 +512,14 @@ impl PredictiveAnalyticsEngine {
                 is_active BOOLEAN DEFAULT true,
                 quality_score DOUBLE PRECISION NOT NULL
             )
-        "#).execute(pool).await?;
-        
+        "#,
+        )
+        .execute(pool)
+        .await?;
+
         // Features table
-        sqlx::query(r#"
+        sqlx::query(
+            r#"
             CREATE TABLE IF NOT EXISTS ml_features (
                 feature_id TEXT PRIMARY KEY,
                 feature_name TEXT NOT NULL,
@@ -527,10 +531,14 @@ impl PredictiveAnalyticsEngine {
                 created_at TIMESTAMP WITH TIME ZONE DEFAULT NOW(),
                 last_updated TIMESTAMP WITH TIME ZONE DEFAULT NOW()
             )
-        "#).execute(pool).await?;
-        
+        "#,
+        )
+        .execute(pool)
+        .await?;
+
         // Model registry table
-        sqlx::query(r#"
+        sqlx::query(
+            r#"
             CREATE TABLE IF NOT EXISTS model_registry (
                 model_id TEXT PRIMARY KEY,
                 model_name TEXT NOT NULL,
@@ -543,10 +551,14 @@ impl PredictiveAnalyticsEngine {
                 created_at TIMESTAMP WITH TIME ZONE DEFAULT NOW(),
                 last_updated TIMESTAMP WITH TIME ZONE DEFAULT NOW()
             )
-        "#).execute(pool).await?;
-        
+        "#,
+        )
+        .execute(pool)
+        .await?;
+
         // Model versions table
-        sqlx::query(r#"
+        sqlx::query(
+            r#"
             CREATE TABLE IF NOT EXISTS model_versions (
                 version_id TEXT PRIMARY KEY,
                 model_id TEXT NOT NULL,
@@ -562,10 +574,14 @@ impl PredictiveAnalyticsEngine {
                 deployed_at TIMESTAMP WITH TIME ZONE,
                 FOREIGN KEY (model_id) REFERENCES model_registry(model_id)
             )
-        "#).execute(pool).await?;
-        
+        "#,
+        )
+        .execute(pool)
+        .await?;
+
         // Predictions table
-        sqlx::query(r#"
+        sqlx::query(
+            r#"
             CREATE TABLE IF NOT EXISTS predictions (
                 prediction_id UUID PRIMARY KEY,
                 model_id TEXT NOT NULL,
@@ -575,27 +591,34 @@ impl PredictiveAnalyticsEngine {
                 generated_at TIMESTAMP WITH TIME ZONE DEFAULT NOW(),
                 valid_until TIMESTAMP WITH TIME ZONE NOT NULL
             )
-        "#).execute(pool).await?;
-        
+        "#,
+        )
+        .execute(pool)
+        .await?;
+
         Ok(())
     }
-    
+
     /// Load existing models from database
     async fn load_existing_models(&self) -> ReportingResult<()> {
         let pool_ref = self.database.get_pool()?;
         let pool = pool_ref.as_postgres_pool()?;
-        
-        let rows = sqlx::query(r#"
+
+        let rows = sqlx::query(
+            r#"
             SELECT model_id, model_name, model_type, algorithm, target_metric,
                    input_features, model_parameters, performance_metrics,
                    training_data_range, last_trained, next_training_due,
                    is_active, quality_score
             FROM forecasting_models
             WHERE is_active = true
-        "#).fetch_all(pool).await?;
-        
+        "#,
+        )
+        .fetch_all(pool)
+        .await?;
+
         let mut models = self.forecasting_models.write().await;
-        
+
         for row in rows {
             let model = ForecastingModel {
                 model_id: row.get("model_id"),
@@ -612,27 +635,27 @@ impl PredictiveAnalyticsEngine {
                 is_active: row.get("is_active"),
                 quality_score: row.get("quality_score"),
             };
-            
+
             models.insert(model.model_id.clone(), model);
         }
-        
+
         Ok(())
     }
-    
+
     /// Start background processing tasks
     async fn start_background_tasks(&self) -> ReportingResult<()> {
         // Start model training task
         self.start_model_training_task().await;
-        
+
         // Start prediction refresh task
         self.start_prediction_refresh_task().await;
-        
+
         // Start feature update task
         self.start_feature_update_task().await;
-        
+
         Ok(())
     }
-    
+
     /// Generate forecast for a metric
     pub async fn generate_forecast(
         &self,
@@ -645,33 +668,45 @@ impl PredictiveAnalyticsEngine {
         if let Some(cached) = self.get_cached_prediction(&cache_key).await? {
             return Ok(cached.forecast_result);
         }
-        
+
         // Find appropriate model
         let models = self.forecasting_models.read().await;
-        let model = models.values()
+        let model = models
+            .values()
             .find(|m| m.target_metric == metric_name && m.is_active)
-            .ok_or_else(|| ReportingError::DataSourceNotFound(
-                format!("Forecasting model for metric: {}", metric_name) 
-            ))?;
-        
+            .ok_or_else(|| {
+                ReportingError::DataSourceNotFound(format!(
+                    "Forecasting model for metric: {}",
+                    metric_name
+                ))
+            })?;
+
         // Generate features for prediction
-        let features = self.feature_store.get_features_for_model(&model.model_id).await?;
-        
+        let features = self
+            .feature_store
+            .get_features_for_model(&model.model_id)
+            .await?;
+
         // Generate forecast using the model
-        let forecast_result = self.generate_forecast_with_model(model, features, forecast_horizon, confidence_levels).await?;
-        
+        let forecast_result = self
+            .generate_forecast_with_model(model, features, forecast_horizon, confidence_levels)
+            .await?;
+
         // Cache the result
-        self.cache_prediction(cache_key, &model.model_id, &metric_name, &forecast_result).await?;
-        
+        self.cache_prediction(cache_key, &model.model_id, &metric_name, &forecast_result)
+            .await?;
+
         // Update metrics
         let mut tags = HashMap::new();
         tags.insert("model".to_string(), model.model_id.clone());
         tags.insert("metric".to_string(), metric_name.clone());
-        self.metrics_collector.increment_counter("predictions_generated", tags).await?;
-        
+        self.metrics_collector
+            .increment_counter("predictions_generated", tags)
+            .await?;
+
         Ok(forecast_result)
     }
-    
+
     /// Generate business impact assessment
     pub async fn generate_business_impact_assessment(
         &self,
@@ -679,14 +714,16 @@ impl PredictiveAnalyticsEngine {
         business_metric: String,
     ) -> ReportingResult<BusinessImpactAssessment> {
         // Calculate predicted impact based on forecast
-        let predicted_impact = self.calculate_business_impact(forecast_result, &business_metric).await?;
-        
+        let predicted_impact = self
+            .calculate_business_impact(forecast_result, &business_metric)
+            .await?;
+
         // Assess risks
         let risk_factors = self.assess_risk_factors(forecast_result).await?;
-        
+
         // Generate mitigation strategies
         let mitigation_strategies = self.generate_mitigation_strategies(&risk_factors).await?;
-        
+
         let assessment = BusinessImpactAssessment {
             assessment_id: Uuid::new_v4(),
             forecast_id: forecast_result.forecast_id,
@@ -703,10 +740,10 @@ impl PredictiveAnalyticsEngine {
             mitigation_strategies,
             generated_at: Utc::now(),
         };
-        
+
         Ok(assessment)
     }
-    
+
     /// Perform scenario analysis
     pub async fn perform_scenario_analysis(
         &self,
@@ -714,17 +751,21 @@ impl PredictiveAnalyticsEngine {
         scenarios: HashMap<String, HashMap<String, f64>>,
     ) -> ReportingResult<ScenarioAnalysis> {
         let mut scenario_results = HashMap::new();
-        
+
         for (scenario_name, parameter_changes) in scenarios {
             let result = self.run_scenario(&metric_name, &parameter_changes).await?;
             scenario_results.insert(scenario_name, result);
         }
-        
+
         // Generate standard scenarios
-        let best_case = self.run_scenario(&metric_name, &self.get_best_case_parameters()).await?;
-        let worst_case = self.run_scenario(&metric_name, &self.get_worst_case_parameters()).await?;
+        let best_case = self
+            .run_scenario(&metric_name, &self.get_best_case_parameters())
+            .await?;
+        let worst_case = self
+            .run_scenario(&metric_name, &self.get_worst_case_parameters())
+            .await?;
         let most_likely = self.run_scenario(&metric_name, &HashMap::new()).await?; // Base case
-        
+
         Ok(ScenarioAnalysis {
             best_case,
             worst_case,
@@ -732,7 +773,7 @@ impl PredictiveAnalyticsEngine {
             custom_scenarios: scenario_results,
         })
     }
-    
+
     /// Train new forecasting model
     pub async fn train_forecasting_model(
         &self,
@@ -740,27 +781,37 @@ impl PredictiveAnalyticsEngine {
     ) -> ReportingResult<String> {
         // Prepare training data
         let training_data = self.prepare_training_data(&model_config).await?;
-        
+
         // Train model using ML pipeline
-        let trained_model = self.ml_pipeline.train_model(&model_config, training_data).await?;
-        
+        let trained_model = self
+            .ml_pipeline
+            .train_model(&model_config, training_data)
+            .await?;
+
         // Validate model performance
         let performance = self.ml_pipeline.validate_model(&trained_model).await?;
-        
+
         // Check if model meets quality threshold
-        if performance.cross_validation_score.unwrap_or(0.0) < self.config.model_performance_threshold {
+        if performance.cross_validation_score.unwrap_or(0.0)
+            < self.config.model_performance_threshold
+        {
             return Err(ReportingError::ModelTrainingFailed {
-                reason: format!("Model performance below threshold: {:.3}", 
-                    performance.cross_validation_score.unwrap_or(0.0))
+                reason: format!(
+                    "Model performance below threshold: {:.3}",
+                    performance.cross_validation_score.unwrap_or(0.0)
+                ),
             });
         }
-        
+
         // Store quality score before moving performance
         let quality_score = performance.cross_validation_score.unwrap_or(0.0);
-        
+
         // Register model
-        let model_id = self.model_registry.register_model(trained_model, performance.clone()).await?;
-        
+        let model_id = self
+            .model_registry
+            .register_model(trained_model, performance.clone())
+            .await?;
+
         // Add to active models
         let forecasting_model = ForecastingModel {
             model_id: model_id.clone(),
@@ -773,28 +824,31 @@ impl PredictiveAnalyticsEngine {
             performance_metrics: performance,
             training_data_range: model_config.training_data_range,
             last_trained: Utc::now(),
-            next_training_due: Utc::now() + Duration::hours(self.config.model_training_interval_hours as i64),
+            next_training_due: Utc::now()
+                + Duration::hours(self.config.model_training_interval_hours as i64),
             is_active: true,
             quality_score,
         };
-        
+
         let mut models = self.forecasting_models.write().await;
         models.insert(model_id.clone(), forecasting_model);
-        
+
         Ok(model_id)
     }
-    
+
     /// Get model performance metrics
-    pub async fn get_model_performance(&self, model_id: &str) -> ReportingResult<ModelPerformanceMetrics> {
+    pub async fn get_model_performance(
+        &self,
+        model_id: &str,
+    ) -> ReportingResult<ModelPerformanceMetrics> {
         let models = self.forecasting_models.read().await;
-        let model = models.get(model_id)
-            .ok_or_else(|| ReportingError::DataSourceNotFound(
-                format!("Model: {}", model_id) 
-            ))?;
-        
+        let model = models
+            .get(model_id)
+            .ok_or_else(|| ReportingError::DataSourceNotFound(format!("Model: {}", model_id)))?;
+
         Ok(model.performance_metrics.clone())
     }
-    
+
     /// Generate forecast with specific model
     async fn generate_forecast_with_model(
         &self,
@@ -807,20 +861,20 @@ impl PredictiveAnalyticsEngine {
         let num_points = forecast_horizon.num_days() as usize;
         let mut predicted_values = Vec::new();
         let mut confidence_intervals = Vec::new();
-        
+
         let base_time = Utc::now();
         let base_value = features.values().sum::<f64>() / features.len() as f64;
-        
+
         for i in 0..num_points {
             let timestamp = base_time + Duration::days(i as i64);
             let predicted_value = base_value * (1.0 + 0.02 * i as f64); // Simple growth
-            
+
             predicted_values.push(ForecastPoint {
                 timestamp,
                 predicted_value,
                 confidence_score: 0.85,
             });
-            
+
             for &confidence_level in &confidence_levels {
                 let margin = predicted_value * 0.1 * (confidence_level as f64);
                 confidence_intervals.push(ConfidenceInterval {
@@ -831,7 +885,7 @@ impl PredictiveAnalyticsEngine {
                 });
             }
         }
-        
+
         Ok(ForecastResult {
             forecast_id: Uuid::new_v4(),
             model_id: Uuid::parse_str(&model.model_id).unwrap_or_else(|_| Uuid::new_v4()),
@@ -844,7 +898,7 @@ impl PredictiveAnalyticsEngine {
             generated_at: Utc::now(),
         })
     }
-    
+
     /// Calculate business impact from forecast
     async fn calculate_business_impact(
         &self,
@@ -852,12 +906,14 @@ impl PredictiveAnalyticsEngine {
         business_metric: &str,
     ) -> ReportingResult<f64> {
         // Simplified calculation - would use business rules and historical data
-        let total_predicted = forecast_result.predicted_values.iter()
+        let total_predicted = forecast_result
+            .predicted_values
+            .iter()
             .map(|p| p.predicted_value)
             .sum::<f64>();
-        
+
         let average_predicted = total_predicted / forecast_result.predicted_values.len() as f64;
-        
+
         // Convert to business impact based on metric type
         let impact_multiplier = match business_metric.as_ref() {
             "revenue" => 1.0,
@@ -865,12 +921,15 @@ impl PredictiveAnalyticsEngine {
             "engagement" => 25.0,
             _ => 1.0,
         };
-        
+
         Ok(average_predicted * impact_multiplier)
     }
-    
+
     /// Assess risk factors from forecast
-    async fn assess_risk_factors(&self, _forecast_result: &ForecastResult) -> ReportingResult<Vec<RiskFactor>> {
+    async fn assess_risk_factors(
+        &self,
+        _forecast_result: &ForecastResult,
+    ) -> ReportingResult<Vec<RiskFactor>> {
         // Simplified implementation
         Ok(vec![
             RiskFactor {
@@ -893,11 +952,14 @@ impl PredictiveAnalyticsEngine {
             },
         ])
     }
-    
+
     /// Generate mitigation strategies
-    async fn generate_mitigation_strategies(&self, risk_factors: &[RiskFactor]) -> ReportingResult<Vec<MitigationStrategy>> {
+    async fn generate_mitigation_strategies(
+        &self,
+        risk_factors: &[RiskFactor],
+    ) -> ReportingResult<Vec<MitigationStrategy>> {
         let mut strategies = Vec::new();
-        
+
         for risk_factor in risk_factors {
             for strategy_description in &risk_factor.mitigation_strategies {
                 strategies.push(MitigationStrategy {
@@ -907,14 +969,17 @@ impl PredictiveAnalyticsEngine {
                     implementation_cost: 10000.0, // Would calculate based on strategy
                     expected_effectiveness: 0.7,
                     time_to_implement: Duration::days(30),
-                    required_resources: vec!["Engineering team".to_string(), "Budget approval".to_string()],
+                    required_resources: vec![
+                        "Engineering team".to_string(),
+                        "Budget approval".to_string(),
+                    ],
                 });
             }
         }
-        
+
         Ok(strategies)
     }
-    
+
     /// Run scenario with parameter changes
     async fn run_scenario(
         &self,
@@ -923,9 +988,10 @@ impl PredictiveAnalyticsEngine {
     ) -> ReportingResult<ScenarioResult> {
         // Simplified scenario calculation
         let base_value = 1000.0; // Would get from historical data
-        let impact_factor: f64 = parameter_changes.values().sum::<f64>() / parameter_changes.len() as f64;
+        let impact_factor: f64 =
+            parameter_changes.values().sum::<f64>() / parameter_changes.len() as f64;
         let predicted_outcome = base_value * (1.0 + impact_factor);
-        
+
         Ok(ScenarioResult {
             scenario_name: "Custom Scenario".to_string(),
             probability: 0.6,
@@ -938,7 +1004,7 @@ impl PredictiveAnalyticsEngine {
             risk_factors: vec![],
         })
     }
-    
+
     /// Get best case parameters
     fn get_best_case_parameters(&self) -> HashMap<String, f64> {
         let mut params = HashMap::new();
@@ -947,7 +1013,7 @@ impl PredictiveAnalyticsEngine {
         params.insert("conversion_rate".to_string(), 0.08);
         params
     }
-    
+
     /// Get worst case parameters
     fn get_worst_case_parameters(&self) -> HashMap<String, f64> {
         let mut params = HashMap::new();
@@ -956,20 +1022,23 @@ impl PredictiveAnalyticsEngine {
         params.insert("conversion_rate".to_string(), 0.02);
         params
     }
-    
+
     /// Get cached prediction
-    async fn get_cached_prediction(&self, cache_key: &str) -> ReportingResult<Option<CachedPrediction>> {
+    async fn get_cached_prediction(
+        &self,
+        cache_key: &str,
+    ) -> ReportingResult<Option<CachedPrediction>> {
         let cache = self.prediction_cache.read().await;
-        
+
         if let Some(cached) = cache.get(cache_key) {
             if cached.expires_at > Utc::now() {
                 return Ok(Some(cached.clone()));
             }
         }
-        
+
         Ok(None)
     }
-    
+
     /// Cache prediction result
     async fn cache_prediction(
         &self,
@@ -986,15 +1055,18 @@ impl PredictiveAnalyticsEngine {
             cached_at: Utc::now(),
             expires_at: Utc::now() + Duration::hours(self.config.prediction_cache_ttl_hours as i64),
         };
-        
+
         let mut cache = self.prediction_cache.write().await;
         cache.insert(cache_key, cached_prediction);
-        
+
         Ok(())
     }
-    
+
     /// Prepare training data for model
-    async fn prepare_training_data(&self, _config: &ModelTrainingConfig) -> ReportingResult<TrainingData> {
+    async fn prepare_training_data(
+        &self,
+        _config: &ModelTrainingConfig,
+    ) -> ReportingResult<TrainingData> {
         // Simplified implementation - would fetch and prepare actual data
         Ok(TrainingData {
             features: HashMap::new(),
@@ -1002,24 +1074,23 @@ impl PredictiveAnalyticsEngine {
             timestamps: Vec::new(),
         })
     }
-    
+
     /// Start model training background task
     async fn start_model_training_task(&self) {
         let models = self.forecasting_models.clone();
         let interval_hours = self.config.model_training_interval_hours;
-        
+
         tokio::spawn(async move {
-            let mut interval = tokio::time::interval(
-                std::time::Duration::from_secs(interval_hours as u64 * 3600)
-            );
-            
+            let mut interval =
+                tokio::time::interval(std::time::Duration::from_secs(interval_hours as u64 * 3600));
+
             loop {
                 interval.tick().await;
-                
+
                 // Check which models need retraining
                 let models_guard = models.read().await;
                 let now = Utc::now();
-                
+
                 for (model_id, model) in models_guard.iter() {
                     if model.next_training_due <= now && model.is_active {
                         tracing::info!("Model {} needs retraining", model_id);
@@ -1029,17 +1100,17 @@ impl PredictiveAnalyticsEngine {
             }
         });
     }
-    
+
     /// Start prediction refresh background task
     async fn start_prediction_refresh_task(&self) {
         let cache = self.prediction_cache.clone();
-        
+
         tokio::spawn(async move {
             let mut interval = tokio::time::interval(std::time::Duration::from_secs(3600)); // Hourly
-            
+
             loop {
                 interval.tick().await;
-                
+
                 // Clean expired predictions
                 let mut cache_guard = cache.write().await;
                 let now = Utc::now();
@@ -1047,15 +1118,15 @@ impl PredictiveAnalyticsEngine {
             }
         });
     }
-    
+
     /// Start feature update background task
     async fn start_feature_update_task(&self) {
         tokio::spawn(async move {
             let mut interval = tokio::time::interval(std::time::Duration::from_secs(1800)); // 30 minutes
-            
+
             loop {
                 interval.tick().await;
-                
+
                 // Update features that need refreshing
                 tracing::info!("Refreshing ML features...");
                 // Would implement feature refresh logic
@@ -1095,16 +1166,23 @@ impl MLPipeline {
             hyperparameter_tuner: HyperparameterTuner::new(),
         })
     }
-    
-    async fn train_model(&self, _config: &ModelTrainingConfig, _data: TrainingData) -> ReportingResult<TrainedModel> {
+
+    async fn train_model(
+        &self,
+        _config: &ModelTrainingConfig,
+        _data: TrainingData,
+    ) -> ReportingResult<TrainedModel> {
         // Simplified implementation
         Ok(TrainedModel {
             model_id: Uuid::new_v4().to_string(),
             artifacts: HashMap::new(),
         })
     }
-    
-    async fn validate_model(&self, _model: &TrainedModel) -> ReportingResult<ModelPerformanceMetrics> {
+
+    async fn validate_model(
+        &self,
+        _model: &TrainedModel,
+    ) -> ReportingResult<ModelPerformanceMetrics> {
         // Simplified implementation
         Ok(ModelPerformanceMetrics {
             accuracy: Some(0.92),
@@ -1129,8 +1207,11 @@ impl FeatureStore {
             database,
         })
     }
-    
-    async fn get_features_for_model(&self, _model_id: &str) -> ReportingResult<HashMap<String, f64>> {
+
+    async fn get_features_for_model(
+        &self,
+        _model_id: &str,
+    ) -> ReportingResult<HashMap<String, f64>> {
         // Simplified implementation
         let mut features = HashMap::new();
         features.insert("user_growth_rate".to_string(), 0.05);
@@ -1148,8 +1229,12 @@ impl ModelRegistry {
             database,
         })
     }
-    
-    async fn register_model(&self, _model: TrainedModel, _performance: ModelPerformanceMetrics) -> ReportingResult<String> {
+
+    async fn register_model(
+        &self,
+        _model: TrainedModel,
+        _performance: ModelPerformanceMetrics,
+    ) -> ReportingResult<String> {
         // Simplified implementation
         Ok(Uuid::new_v4().to_string())
     }

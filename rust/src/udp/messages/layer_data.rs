@@ -1,6 +1,6 @@
+use crate::protocol::terrain::{LayerType, TerrainCompressor, TerrainPatch};
 use anyhow::Result;
-use bytes::{BytesMut, BufMut};
-use crate::protocol::terrain::{TerrainCompressor, TerrainPatch, LayerType};
+use bytes::{BufMut, BytesMut};
 
 const LAYER_DATA_MESSAGE_ID: u32 = 0x0B;
 
@@ -41,7 +41,7 @@ impl LayerDataMessage {
         // Header: flags(1) + sequence(4) + extra_header(1) + message_id(1) = 7 bytes for HIGH freq
         // LayerID block: Type(1) = 1 byte
         // LayerData block: Length(2) + Data = 2 + data.len() bytes
-        let header_size = 7;  // includes extra_header byte
+        let header_size = 7; // includes extra_header byte
         let block_overhead = 1 + 2; // LayerID.Type + LayerData.Length
         let payload_size = self.data.len();
         let total_size = header_size + block_overhead + payload_size;
@@ -57,7 +57,7 @@ impl LayerDataMessage {
         // Phase 70.15: Extra header byte IS REQUIRED for LLUDP compatibility!
         // Without it, the viewer interprets message_id (0x0B) as extra_header_length
         // and tries to skip 11 bytes of "extra header", corrupting the entire message!
-        packet.put_u8(0x00);  // Extra header length = 0
+        packet.put_u8(0x00); // Extra header length = 0
 
         // LayerData (0x0B) is HIGH frequency - only 1 byte for message ID!
         packet.put_u8(LAYER_DATA_MESSAGE_ID as u8);
@@ -89,7 +89,10 @@ impl LayerDataMessage {
         if heightmap.len() != expected {
             anyhow::bail!(
                 "Heightmap must be {}x{} ({} floats), got {}",
-                region_size_x, region_size_y, expected, heightmap.len()
+                region_size_x,
+                region_size_y,
+                expected,
+                heightmap.len()
             );
         }
 
@@ -120,7 +123,11 @@ impl LayerDataMessage {
 
                 if current_patches.len() >= PATCHES_PER_PACKET {
                     let compressor = TerrainCompressor::new();
-                    let data = compressor.create_layer_data_packet_ex(&current_patches, layer_type, large_region)?;
+                    let data = compressor.create_layer_data_packet_ex(
+                        &current_patches,
+                        layer_type,
+                        large_region,
+                    )?;
                     packets.push(LayerDataMessage { layer_type, data });
                     current_patches.clear();
                 }
@@ -129,7 +136,11 @@ impl LayerDataMessage {
 
         if !current_patches.is_empty() {
             let compressor = TerrainCompressor::new();
-            let data = compressor.create_layer_data_packet_ex(&current_patches, layer_type, large_region)?;
+            let data = compressor.create_layer_data_packet_ex(
+                &current_patches,
+                layer_type,
+                large_region,
+            )?;
             packets.push(LayerDataMessage { layer_type, data });
         }
 
@@ -169,12 +180,12 @@ mod tests {
         // Header(6) + LayerID.Type(1) + LayerData.Length(2) = 9 bytes minimum
         assert!(udp_packet.len() >= 9);
         assert_eq!(udp_packet[0], 0x40); // Reliable flag
-        // Sequence is big-endian: [0, 0, 0, 1]
+                                         // Sequence is big-endian: [0, 0, 0, 1]
         assert_eq!(udp_packet[1], 0x00);
         assert_eq!(udp_packet[4], 0x01);
         // Phase 70.7: No extra header byte - message ID immediately after sequence
         assert_eq!(udp_packet[5], 0x0B); // LayerData HIGH frequency message ID
         assert_eq!(udp_packet[6], 0x4C); // LayerID.Type = Land (0x4C)
-        // Bytes 7-8 are the 2-byte length prefix (little-endian)
+                                         // Bytes 7-8 are the 2-byte length prefix (little-endian)
     }
 }

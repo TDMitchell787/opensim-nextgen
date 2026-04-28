@@ -6,11 +6,11 @@
 //! Encoding uses the system's opj_compress tool from OpenJPEG.
 //! Decoding uses the jpeg2k Rust crate.
 
-use anyhow::{Result, anyhow};
-use tracing::{debug, warn, info};
+use anyhow::{anyhow, Result};
 use image::{DynamicImage, ImageBuffer, Rgba, RgbaImage};
-use std::process::Command;
 use std::path::Path;
+use std::process::Command;
+use tracing::{debug, info, warn};
 
 pub struct J2KCodec {
     reduction_factor: u32,
@@ -43,8 +43,7 @@ impl J2KCodec {
             return Err(anyhow!("Invalid J2K/JP2 format marker"));
         }
 
-        let params = jpeg2k::DecodeParameters::default()
-            .reduce(self.reduction_factor);
+        let params = jpeg2k::DecodeParameters::default().reduce(self.reduction_factor);
 
         let image = jpeg2k::Image::from_bytes_with(j2k_data, params)
             .map_err(|e| anyhow!("Failed to decode J2K: {:?}", e))?;
@@ -59,7 +58,10 @@ impl J2KCodec {
         let pixels = rgba.into_raw();
         let has_alpha = dynamic_image.color().has_alpha();
 
-        debug!("Decoded J2K image: {}x{}, has_alpha={}", width, height, has_alpha);
+        debug!(
+            "Decoded J2K image: {}x{}, has_alpha={}",
+            width, height, has_alpha
+        );
 
         Ok(DecodedImage {
             width,
@@ -142,7 +144,8 @@ impl J2KEncoder {
         let input_path = temp_dir.join(format!("opensim_j2k_input_{}.png", timestamp));
         let output_path = temp_dir.join(format!("opensim_j2k_output_{}.j2k", timestamp));
 
-        resized.save(&input_path)
+        resized
+            .save(&input_path)
             .map_err(|e| anyhow!("Failed to save temp PNG: {}", e))?;
 
         let result = self.run_opj_compress(&input_path, &output_path);
@@ -159,8 +162,12 @@ impl J2KEncoder {
                     return Err(anyhow!("opj_compress produced invalid J2K output"));
                 }
 
-                info!("Encoded J2K image: {}x{} -> {} bytes",
-                      resized.width(), resized.height(), j2k_data.len());
+                info!(
+                    "Encoded J2K image: {}x{} -> {} bytes",
+                    resized.width(),
+                    resized.height(),
+                    j2k_data.len()
+                );
                 Ok(j2k_data)
             }
             Err(e) => {
@@ -173,8 +180,7 @@ impl J2KEncoder {
     fn run_opj_compress(&self, input: &Path, output: &Path) -> Result<()> {
         let mut cmd = Command::new("opj_compress");
 
-        cmd.arg("-i").arg(input)
-           .arg("-o").arg(output);
+        cmd.arg("-i").arg(input).arg("-o").arg(output);
 
         if self.lossless {
             // Lossless mode (default for opj_compress)
@@ -187,7 +193,8 @@ impl J2KEncoder {
 
         cmd.arg("-n").arg(self.num_resolutions.to_string());
 
-        let output_result = cmd.output()
+        let output_result = cmd
+            .output()
             .map_err(|e| anyhow!("Failed to run opj_compress: {}. Is OpenJPEG installed?", e))?;
 
         if !output_result.status.success() {
@@ -223,7 +230,12 @@ pub struct DecodedImage {
 
 impl DecodedImage {
     pub fn new(width: u32, height: u32, pixels: Vec<u8>, has_alpha: bool) -> Self {
-        Self { width, height, pixels, has_alpha }
+        Self {
+            width,
+            height,
+            pixels,
+            has_alpha,
+        }
     }
 
     pub fn from_png(png_data: &[u8]) -> Result<Self> {
@@ -259,8 +271,8 @@ impl DecodedImage {
     }
 
     pub fn from_any(data: &[u8]) -> Result<Self> {
-        let img = image::load_from_memory(data)
-            .map_err(|e| anyhow!("Failed to load image: {}", e))?;
+        let img =
+            image::load_from_memory(data).map_err(|e| anyhow!("Failed to load image: {}", e))?;
 
         let rgba = img.to_rgba8();
         let (width, height) = rgba.dimensions();
@@ -275,11 +287,8 @@ impl DecodedImage {
     }
 
     pub fn to_png(&self) -> Result<Vec<u8>> {
-        let img: RgbaImage = ImageBuffer::from_raw(
-            self.width,
-            self.height,
-            self.pixels.clone()
-        ).ok_or_else(|| anyhow!("Failed to create image buffer"))?;
+        let img: RgbaImage = ImageBuffer::from_raw(self.width, self.height, self.pixels.clone())
+            .ok_or_else(|| anyhow!("Failed to create image buffer"))?;
 
         let mut png_data = Vec::new();
         let mut cursor = std::io::Cursor::new(&mut png_data);
@@ -291,11 +300,8 @@ impl DecodedImage {
     }
 
     pub fn to_dynamic_image(&self) -> Result<DynamicImage> {
-        let img: RgbaImage = ImageBuffer::from_raw(
-            self.width,
-            self.height,
-            self.pixels.clone()
-        ).ok_or_else(|| anyhow!("Failed to create image buffer"))?;
+        let img: RgbaImage = ImageBuffer::from_raw(self.width, self.height, self.pixels.clone())
+            .ok_or_else(|| anyhow!("Failed to create image buffer"))?;
 
         Ok(DynamicImage::ImageRgba8(img))
     }
@@ -373,8 +379,7 @@ pub fn is_valid_jp2(data: &[u8]) -> bool {
     if data.len() < 12 {
         return false;
     }
-    &data[0..4] == &[0x00, 0x00, 0x00, 0x0C] &&
-    &data[4..8] == b"jP  "
+    &data[0..4] == &[0x00, 0x00, 0x00, 0x0C] && &data[4..8] == b"jP  "
 }
 
 pub fn extract_j2c_from_jp2(data: &[u8]) -> Option<&[u8]> {
@@ -387,7 +392,8 @@ pub fn extract_j2c_from_jp2(data: &[u8]) -> Option<&[u8]> {
 
     let mut pos = 0;
     while pos + 8 <= data.len() {
-        let box_size = u32::from_be_bytes([data[pos], data[pos + 1], data[pos + 2], data[pos + 3]]) as usize;
+        let box_size =
+            u32::from_be_bytes([data[pos], data[pos + 1], data[pos + 2], data[pos + 3]]) as usize;
         let box_type = &data[pos + 4..pos + 8];
 
         if box_type == b"jp2c" {
@@ -396,8 +402,14 @@ pub fn extract_j2c_from_jp2(data: &[u8]) -> Option<&[u8]> {
                 data.len()
             } else if box_size == 1 && pos + 16 <= data.len() {
                 let xl_size = u64::from_be_bytes([
-                    data[pos + 8], data[pos + 9], data[pos + 10], data[pos + 11],
-                    data[pos + 12], data[pos + 13], data[pos + 14], data[pos + 15],
+                    data[pos + 8],
+                    data[pos + 9],
+                    data[pos + 10],
+                    data[pos + 11],
+                    data[pos + 12],
+                    data[pos + 13],
+                    data[pos + 14],
+                    data[pos + 15],
                 ]) as usize;
                 pos + xl_size
             } else {
@@ -407,8 +419,11 @@ pub fn extract_j2c_from_jp2(data: &[u8]) -> Option<&[u8]> {
             if content_start < content_end && content_end <= data.len() {
                 let codestream = &data[content_start..content_end];
                 if is_valid_j2k(codestream) {
-                    debug!("Extracted J2C codestream from JP2: {} bytes -> {} bytes",
-                           data.len(), codestream.len());
+                    debug!(
+                        "Extracted J2C codestream from JP2: {} bytes -> {} bytes",
+                        data.len(),
+                        codestream.len()
+                    );
                     return Some(codestream);
                 }
             }
@@ -499,33 +514,12 @@ impl TextureFormat {
 
 pub fn create_minimal_j2k_texture() -> Vec<u8> {
     vec![
-        0xFF, 0x4F,
-        0xFF, 0x51, 0x00, 0x29,
-        0x00, 0x00,
-        0x00, 0x00, 0x00, 0x04,
-        0x00, 0x00, 0x00, 0x04,
-        0x00, 0x00, 0x00, 0x00,
-        0x00, 0x00, 0x00, 0x00,
-        0x00, 0x00, 0x00, 0x04,
-        0x00, 0x00, 0x00, 0x04,
-        0x00, 0x00, 0x00, 0x00,
-        0x00, 0x00, 0x00, 0x00,
-        0x00, 0x03,
-        0x07, 0x01, 0x01,
-        0x07, 0x01, 0x01,
-        0x07, 0x01, 0x01,
-        0xFF, 0x52, 0x00, 0x0C,
-        0x00,
-        0x00, 0x00, 0x01,
-        0x01,
-        0x00, 0x02, 0x02, 0x00,
-        0xFF, 0x90, 0x00, 0x0A,
-        0x00, 0x00,
-        0x00, 0x00, 0x00, 0x00,
-        0x00, 0x01,
-        0xFF, 0x93,
-        0x00,
-        0xFF, 0xD9,
+        0xFF, 0x4F, 0xFF, 0x51, 0x00, 0x29, 0x00, 0x00, 0x00, 0x00, 0x00, 0x04, 0x00, 0x00, 0x00,
+        0x04, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x04, 0x00, 0x00,
+        0x00, 0x04, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x03, 0x07, 0x01, 0x01,
+        0x07, 0x01, 0x01, 0x07, 0x01, 0x01, 0xFF, 0x52, 0x00, 0x0C, 0x00, 0x00, 0x00, 0x01, 0x01,
+        0x00, 0x02, 0x02, 0x00, 0xFF, 0x90, 0x00, 0x0A, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00,
+        0x01, 0xFF, 0x93, 0x00, 0xFF, 0xD9,
     ]
 }
 
@@ -536,7 +530,9 @@ pub fn is_power_of_two(n: u32) -> bool {
 
 /// Get next power of two >= n
 pub fn next_power_of_two(n: u32) -> u32 {
-    if n == 0 { return 1; }
+    if n == 0 {
+        return 1;
+    }
     let mut v = n - 1;
     v |= v >> 1;
     v |= v >> 2;
@@ -575,16 +571,27 @@ mod tests {
 
     #[test]
     fn test_jp2_marker_detection() {
-        let valid_jp2 = vec![0x00, 0x00, 0x00, 0x0C, b'j', b'P', b' ', b' ', 0x0D, 0x0A, 0x87, 0x0A];
+        let valid_jp2 = vec![
+            0x00, 0x00, 0x00, 0x0C, b'j', b'P', b' ', b' ', 0x0D, 0x0A, 0x87, 0x0A,
+        ];
         assert!(is_valid_jp2(&valid_jp2));
     }
 
     #[test]
     fn test_texture_format_detection() {
         assert_eq!(detect_texture_format(&[0xFF, 0x4F]), TextureFormat::J2K);
-        assert_eq!(detect_texture_format(&[0x89, 0x50, 0x4E, 0x47, 0x0D, 0x0A, 0x1A, 0x0A]), TextureFormat::PNG);
-        assert_eq!(detect_texture_format(&[0xFF, 0xD8, 0xFF]), TextureFormat::JPEG);
-        assert_eq!(detect_texture_format(&[b'D', b'D', b'S', b' ']), TextureFormat::DDS);
+        assert_eq!(
+            detect_texture_format(&[0x89, 0x50, 0x4E, 0x47, 0x0D, 0x0A, 0x1A, 0x0A]),
+            TextureFormat::PNG
+        );
+        assert_eq!(
+            detect_texture_format(&[0xFF, 0xD8, 0xFF]),
+            TextureFormat::JPEG
+        );
+        assert_eq!(
+            detect_texture_format(&[b'D', b'D', b'S', b' ']),
+            TextureFormat::DDS
+        );
     }
 
     #[test]
@@ -705,6 +712,9 @@ mod tests {
 
         assert_eq!(decoded.width, 32);
         assert_eq!(decoded.height, 32);
-        println!("Roundtrip successful: 32x32 -> {} bytes J2K -> decoded", j2k_data.len());
+        println!(
+            "Roundtrip successful: 32x32 -> {} bytes J2K -> decoded",
+            j2k_data.len()
+        );
     }
 }

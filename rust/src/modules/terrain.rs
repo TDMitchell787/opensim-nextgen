@@ -18,8 +18,14 @@ use super::traits::{ModuleConfig, RegionModule, SceneContext, SharedRegionModule
 use crate::udp::server::AvatarMovementState;
 
 pub trait ITerrainModule: Send + Sync + 'static {
-    fn modify_terrain(&self, action: u8, brush_size: u8, position: [f32; 3],
-                      agent_id: Uuid, seconds: f32);
+    fn modify_terrain(
+        &self,
+        action: u8,
+        brush_size: u8,
+        position: [f32; 3],
+        agent_id: Uuid,
+        seconds: f32,
+    );
     fn get_height(&self, x: f32, y: f32) -> f32;
     fn set_height(&self, x: f32, y: f32, height: f32);
     fn save_terrain(&self);
@@ -85,7 +91,7 @@ impl TerrainModuleImpl {
             2 => -(self.config.lower_strength * seconds),
             3 => self.config.smooth_strength * seconds,
             4 => 0.1 * seconds, // Noise
-            5 => 0.0, // Revert
+            5 => 0.0,           // Revert
             _ => return,
         };
 
@@ -108,21 +114,26 @@ impl TerrainModuleImpl {
                 let dx = x as f32 - center_x;
                 let dy = y as f32 - center_y;
                 let dist = (dx * dx + dy * dy).sqrt();
-                if dist > radius { continue; }
+                if dist > radius {
+                    continue;
+                }
 
                 let falloff = 1.0 - (dist / radius);
                 let idx = y * 256 + x;
 
                 match action {
-                    0 => { // Flatten
+                    0 => {
+                        // Flatten
                         let current = heightmap[idx];
                         heightmap[idx] = current + (center_height - current) * falloff * 0.5;
                     }
-                    1 | 2 => { // Raise / Lower
+                    1 | 2 => {
+                        // Raise / Lower
                         heightmap[idx] += strength * falloff;
                         heightmap[idx] = heightmap[idx].max(0.0).min(500.0);
                     }
-                    3 => { // Smooth
+                    3 => {
+                        // Smooth
                         let mut sum = 0.0f32;
                         let mut count = 0;
                         for sy in (y.saturating_sub(1))..=(y + 1).min(255) {
@@ -134,11 +145,14 @@ impl TerrainModuleImpl {
                         let avg = sum / count as f32;
                         heightmap[idx] += (avg - heightmap[idx]) * strength * falloff;
                     }
-                    4 => { // Noise
-                        let noise = ((x as f32 * 17.3 + y as f32 * 31.7).sin() * 43758.5453).fract() - 0.5;
+                    4 => {
+                        // Noise
+                        let noise =
+                            ((x as f32 * 17.3 + y as f32 * 31.7).sin() * 43758.5453).fract() - 0.5;
                         heightmap[idx] += noise * strength * falloff;
                     }
-                    5 => { // Revert
+                    5 => {
+                        // Revert
                         heightmap[idx] = self.config.default_height;
                     }
                     _ => {}
@@ -151,8 +165,14 @@ impl TerrainModuleImpl {
 }
 
 impl ITerrainModule for TerrainModuleImpl {
-    fn modify_terrain(&self, action: u8, brush_size: u8, position: [f32; 3],
-                      _agent_id: Uuid, seconds: f32) {
+    fn modify_terrain(
+        &self,
+        action: u8,
+        brush_size: u8,
+        position: [f32; 3],
+        _agent_id: Uuid,
+        seconds: f32,
+    ) {
         self.apply_brush(action, brush_size, position[0], position[1], seconds);
     }
 
@@ -166,7 +186,9 @@ impl ITerrainModule for TerrainModuleImpl {
         let ix = (x as usize).min(255);
         let iy = (y as usize).min(255);
         self.heightmap.write()[iy * 256 + ix] = height;
-        self.dirty_patches.write().insert(((ix / 16) as u16, (iy / 16) as u16));
+        self.dirty_patches
+            .write()
+            .insert(((ix / 16) as u16, (iy / 16) as u16));
     }
 
     fn save_terrain(&self) {
@@ -174,21 +196,31 @@ impl ITerrainModule for TerrainModuleImpl {
     }
 
     fn load_terrain(&self, filename: &str) {
-        info!("[TERRAIN MODULE] Load terrain from '{}' requested", filename);
+        info!(
+            "[TERRAIN MODULE] Load terrain from '{}' requested",
+            filename
+        );
     }
 }
 
 #[async_trait]
 impl RegionModule for TerrainModuleImpl {
-    fn name(&self) -> &'static str { "TerrainModule" }
-    fn replaceable_interface(&self) -> Option<&'static str> { Some("ITerrainModule") }
+    fn name(&self) -> &'static str {
+        "TerrainModule"
+    }
+    fn replaceable_interface(&self) -> Option<&'static str> {
+        Some("ITerrainModule")
+    }
 
     async fn initialize(&mut self, config: &ModuleConfig) -> Result<()> {
         self.config.default_height = config.get_f32("default_height", 21.0);
         self.config.raise_strength = config.get_f32("raise_strength", 0.25);
         self.config.lower_strength = config.get_f32("lower_strength", 0.25);
         self.config.smooth_strength = config.get_f32("smooth_strength", 0.5);
-        info!("[TERRAIN MODULE] Initialized (default_height={})", self.config.default_height);
+        info!(
+            "[TERRAIN MODULE] Initialized (default_height={})",
+            self.config.default_height
+        );
         Ok(())
     }
 
@@ -212,15 +244,21 @@ impl RegionModule for TerrainModuleImpl {
         });
         scene.event_bus.subscribe(
             SceneEvent::OnModifyLand {
-                agent_id: Uuid::nil(), action: 0, brush_size: 0,
-                seconds: 0.0, height: 0.0, position: [0.0; 3],
+                agent_id: Uuid::nil(),
+                action: 0,
+                brush_size: 0,
+                seconds: 0.0,
+                height: 0.0,
+                position: [0.0; 3],
             },
             handler,
             100,
         );
 
-        scene.service_registry.write().register::<TerrainModuleImpl>(
-            Arc::new(TerrainModuleImpl {
+        scene
+            .service_registry
+            .write()
+            .register::<TerrainModuleImpl>(Arc::new(TerrainModuleImpl {
                 config: TerrainConfig {
                     default_height: self.config.default_height,
                     raise_strength: self.config.raise_strength,
@@ -235,15 +273,18 @@ impl RegionModule for TerrainModuleImpl {
                 db: self.db.clone(),
                 avatar_states: self.avatar_states.clone(),
                 service_registry: self.service_registry.clone(),
-            }),
-        );
+            }));
 
         info!("[TERRAIN MODULE] Added to region {:?}", scene.region_name);
         Ok(())
     }
 
-    fn as_any(&self) -> &dyn Any { self }
-    fn as_any_mut(&mut self) -> &mut dyn Any { self }
+    fn as_any(&self) -> &dyn Any {
+        self
+    }
+    fn as_any_mut(&mut self) -> &mut dyn Any {
+        self
+    }
 }
 
 #[async_trait]
@@ -256,7 +297,14 @@ struct TerrainEventHandler {
 }
 
 impl TerrainEventHandler {
-    fn apply_brush_internal(&self, action: u8, brush_size: u8, center_x: f32, center_y: f32, seconds: f32) {
+    fn apply_brush_internal(
+        &self,
+        action: u8,
+        brush_size: u8,
+        center_x: f32,
+        center_y: f32,
+        seconds: f32,
+    ) {
         let radius = match brush_size {
             1 => 2.0f32,
             2 => 4.0,
@@ -293,7 +341,9 @@ impl TerrainEventHandler {
                 let dx = x as f32 - center_x;
                 let dy = y as f32 - center_y;
                 let dist = (dx * dx + dy * dy).sqrt();
-                if dist > radius { continue; }
+                if dist > radius {
+                    continue;
+                }
 
                 let falloff = 1.0 - (dist / radius);
                 let idx = y * 256 + x;
@@ -320,7 +370,8 @@ impl TerrainEventHandler {
                         heightmap[idx] += (avg - heightmap[idx]) * strength * falloff;
                     }
                     4 => {
-                        let noise = ((x as f32 * 17.3 + y as f32 * 31.7).sin() * 43758.5453).fract() - 0.5;
+                        let noise =
+                            ((x as f32 * 17.3 + y as f32 * 31.7).sin() * 43758.5453).fract() - 0.5;
                         heightmap[idx] += noise * strength * falloff;
                     }
                     5 => {
@@ -338,10 +389,20 @@ impl TerrainEventHandler {
 #[async_trait]
 impl EventHandler for TerrainEventHandler {
     async fn handle_event(&self, event: &SceneEvent, _scene: &SceneContext) -> Result<()> {
-        if let SceneEvent::OnModifyLand { agent_id, action, brush_size, seconds, position, .. } = event {
+        if let SceneEvent::OnModifyLand {
+            agent_id,
+            action,
+            brush_size,
+            seconds,
+            position,
+            ..
+        } = event
+        {
             self.apply_brush_internal(*action, *brush_size, position[0], position[1], *seconds);
-            info!("[TERRAIN MODULE] Agent {} modified terrain (action={}, brush={}) at ({:.0},{:.0})",
-                  agent_id, action, brush_size, position[0], position[1]);
+            info!(
+                "[TERRAIN MODULE] Agent {} modified terrain (action={}, brush={}) at ({:.0},{:.0})",
+                agent_id, action, brush_size, position[0], position[1]
+            );
         }
         Ok(())
     }

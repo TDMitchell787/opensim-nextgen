@@ -1,19 +1,19 @@
-pub mod scene_exporter;
+pub mod audio_renderer;
+pub mod encoder;
+pub mod luxor;
+pub mod photographer;
+pub mod post_process;
+pub mod print_compositor;
 pub mod render_script;
 pub mod renderer;
-pub mod encoder;
-pub mod post_process;
-pub mod photographer;
-pub mod print_compositor;
-pub mod audio_renderer;
-pub mod luxor;
+pub mod scene_exporter;
 
+use anyhow::{anyhow, Result};
+use serde::{Deserialize, Serialize};
 use std::path::{Path, PathBuf};
 use std::sync::Arc;
-use anyhow::{Result, anyhow};
-use uuid::Uuid;
-use serde::{Serialize, Deserialize};
 use tracing::{info, warn};
+use uuid::Uuid;
 
 use crate::ai::npc_avatar::{CameraWaypoint, CinemaLight};
 
@@ -157,8 +157,12 @@ impl MediaDirector {
         let meshes_dir = job_dir.join("meshes");
         std::fs::create_dir_all(&meshes_dir)?;
 
-        info!("[MEDIA] Starting render job '{}' ({} objects, {} waypoints)",
-            job.output_name, job.scene_objects.len(), job.waypoints.len());
+        info!(
+            "[MEDIA] Starting render job '{}' ({} objects, {} waypoints)",
+            job.output_name,
+            job.scene_objects.len(),
+            job.waypoints.len()
+        );
 
         scene_exporter::export_scene(job, &meshes_dir)?;
 
@@ -175,7 +179,10 @@ impl MediaDirector {
             if Path::new(&self.gimp_path).exists() {
                 post_process::apply_gimp_filter(&self.gimp_path, &frames_dir, filter_name).await?;
             } else {
-                warn!("[MEDIA] GIMP not found at {}, skipping post-process", self.gimp_path);
+                warn!(
+                    "[MEDIA] GIMP not found at {}, skipping post-process",
+                    self.gimp_path
+                );
             }
         }
 
@@ -183,20 +190,34 @@ impl MediaDirector {
 
         let output_path = match job.settings.output_mode {
             OutputMode::Video | OutputMode::Both => {
-                let video_path = self.output_base.join("video")
+                let video_path = self
+                    .output_base
+                    .join("video")
                     .join(format!("{}_{}.mp4", job.output_name, timestamp));
-                encoder::encode_video(&self.ffmpeg_path, &frames_dir, &video_path, job.settings.fps).await?;
+                encoder::encode_video(
+                    &self.ffmpeg_path,
+                    &frames_dir,
+                    &video_path,
+                    job.settings.fps,
+                )
+                .await?;
 
                 if let Some(ref audio_preset) = job.audio_preset {
-                    let audio_path = self.output_base.join("audio")
+                    let audio_path = self
+                        .output_base
+                        .join("audio")
                         .join(format!("{}_{}.wav", job.output_name, timestamp));
-                    let total_frames = job.waypoints.len() as u32 * job.settings.frames_per_waypoint;
+                    let total_frames =
+                        job.waypoints.len() as u32 * job.settings.frames_per_waypoint;
                     let duration_secs = total_frames as f32 / job.settings.fps as f32;
                     audio_renderer::render_ambient_audio(audio_preset, duration_secs, &audio_path)?;
 
-                    let muxed_path = self.output_base.join("video")
+                    let muxed_path = self
+                        .output_base
+                        .join("video")
                         .join(format!("{}_{}_final.mp4", job.output_name, timestamp));
-                    encoder::mux_audio(&self.ffmpeg_path, &video_path, &audio_path, &muxed_path).await?;
+                    encoder::mux_audio(&self.ffmpeg_path, &video_path, &audio_path, &muxed_path)
+                        .await?;
                     std::fs::rename(&muxed_path, &video_path)?;
                     info!("[MEDIA] Audio muxed into video: {}", video_path.display());
                 }
@@ -208,31 +229,37 @@ impl MediaDirector {
                 let mut last_path = stills_dir.clone();
                 for entry in std::fs::read_dir(&frames_dir)? {
                     let entry = entry?;
-                    let dest = stills_dir.join(format!("{}_{}_{}",
-                        job.output_name, timestamp,
-                        entry.file_name().to_string_lossy()));
+                    let dest = stills_dir.join(format!(
+                        "{}_{}_{}",
+                        job.output_name,
+                        timestamp,
+                        entry.file_name().to_string_lossy()
+                    ));
                     std::fs::copy(entry.path(), &dest)?;
                     last_path = dest;
                 }
                 last_path
             }
-            OutputMode::Print => {
-                frames_dir.clone()
-            }
+            OutputMode::Print => frames_dir.clone(),
         };
 
         if matches!(job.settings.output_mode, OutputMode::Both) {
             let stills_dir = self.output_base.join("images");
             for entry in std::fs::read_dir(&frames_dir)? {
                 let entry = entry?;
-                let dest = stills_dir.join(format!("{}_{}_{}",
-                    job.output_name, timestamp,
-                    entry.file_name().to_string_lossy()));
+                let dest = stills_dir.join(format!(
+                    "{}_{}_{}",
+                    job.output_name,
+                    timestamp,
+                    entry.file_name().to_string_lossy()
+                ));
                 std::fs::copy(entry.path(), &dest)?;
             }
         }
 
-        let blend_path = self.output_base.join("projects")
+        let blend_path = self
+            .output_base
+            .join("projects")
             .join(format!("{}_{}.blend", job.output_name, timestamp));
         let blend_script = render_script::generate_save_blend_script(&blend_path);
         let blend_script_path = job_dir.join("save_blend.py");
@@ -243,13 +270,19 @@ impl MediaDirector {
             warn!("[MEDIA] Failed to clean temp dir: {}", e);
         }
 
-        info!("[MEDIA] Render job '{}' complete: {}", job.output_name, output_path.display());
+        info!(
+            "[MEDIA] Render job '{}' complete: {}",
+            job.output_name,
+            output_path.display()
+        );
         Ok(output_path)
     }
 
     pub fn save_recipe(&self, recipe: &MediaRecipe) -> Result<PathBuf> {
         let timestamp = chrono::Local::now().format("%Y%m%d_%H%M%S");
-        let path = self.output_base.join("projects")
+        let path = self
+            .output_base
+            .join("projects")
             .join(format!("{}_recipe_{}.json", recipe.recipe_name, timestamp));
         let json = serde_json::to_string_pretty(recipe)?;
         std::fs::write(&path, &json)?;

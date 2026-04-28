@@ -1,30 +1,30 @@
 //! Enterprise Reporting Engine
-//! 
+//!
 //! Comprehensive report generation, scheduling, and distribution
 //! system for enterprise analytics and business intelligence.
 
 use super::*;
-use tokio::sync::RwLock;
-use tracing::{info, warn, error, debug};
 use std::collections::{HashMap, VecDeque};
 use std::time::Duration;
+use tokio::sync::RwLock;
+use tracing::{debug, error, info, warn};
 
 /// Reporting engine
 pub struct ReportingEngine {
     database: Arc<DatabaseManager>,
     config: AnalyticsConfig,
-    
+
     // Report management
     report_templates: Arc<RwLock<HashMap<Uuid, ReportTemplate>>>,
     generated_reports: Arc<RwLock<HashMap<Uuid, Report>>>,
     scheduled_reports: Arc<RwLock<HashMap<Uuid, ScheduledReport>>>,
-    
+
     // Report generation pipeline
     report_generators: HashMap<ReportType, Box<dyn ReportGenerator>>,
-    
+
     // Distribution system
     distribution_manager: ReportDistributionManager,
-    
+
     // Report queue
     generation_queue: Arc<RwLock<VecDeque<ReportGenerationTask>>>,
 }
@@ -724,21 +724,22 @@ pub struct ReportDistributionManager {
 
 /// Report distributor trait
 pub trait ReportDistributor: Send + Sync {
-    fn distribute_report(&self, report: &Report, delivery_options: &DeliveryOptions) -> AnalyticsResult<()>;
+    fn distribute_report(
+        &self,
+        report: &Report,
+        delivery_options: &DeliveryOptions,
+    ) -> AnalyticsResult<()>;
     fn supports_format(&self, format: &OutputFormat) -> bool;
 }
 
 impl ReportingEngine {
     /// Create new reporting engine
-    pub fn new(
-        database: Arc<DatabaseManager>,
-        config: AnalyticsConfig,
-    ) -> AnalyticsResult<Self> {
+    pub fn new(database: Arc<DatabaseManager>, config: AnalyticsConfig) -> AnalyticsResult<Self> {
         let report_generators: HashMap<ReportType, Box<dyn ReportGenerator>> = HashMap::new();
-        
+
         // Initialize generators for each report type
         // (placeholder implementations)
-        
+
         Ok(Self {
             database,
             config,
@@ -750,28 +751,28 @@ impl ReportingEngine {
             generation_queue: Arc::new(RwLock::new(VecDeque::new())),
         })
     }
-    
+
     /// Initialize reporting engine
     pub async fn initialize(&self) -> AnalyticsResult<()> {
         info!("Initializing reporting engine");
-        
+
         // Load report templates
         self.load_report_templates().await?;
-        
+
         // Start report generation worker
         self.start_report_generation_worker().await?;
-        
+
         // Start scheduled report processor
         self.start_scheduled_report_processor().await?;
-        
+
         info!("Reporting engine initialized");
         Ok(())
     }
-    
+
     /// Generate report
     pub async fn generate_report(&self, request: ReportRequest) -> AnalyticsResult<Report> {
         info!("Generating report: {:?}", request.report_type);
-        
+
         // Add to generation queue
         let task = ReportGenerationTask {
             task_id: Uuid::new_v4(),
@@ -780,13 +781,16 @@ impl ReportingEngine {
             created_at: Utc::now(),
             estimated_duration: self.estimate_generation_time(&request).await,
         };
-        
+
         let mut queue = self.generation_queue.write().await;
         queue.push_back(task);
         drop(queue);
-        
+
         // For high priority requests, process immediately
-        if matches!(request.priority, ReportPriority::Critical | ReportPriority::High) {
+        if matches!(
+            request.priority,
+            ReportPriority::Critical | ReportPriority::High
+        ) {
             self.process_report_generation(&request).await
         } else {
             // Return placeholder for queued reports
@@ -815,54 +819,60 @@ impl ReportingEngine {
             })
         }
     }
-    
+
     /// Get report by ID
     pub async fn get_report(&self, report_id: Uuid) -> AnalyticsResult<Report> {
         let reports = self.generated_reports.read().await;
-        reports.get(&report_id)
+        reports
+            .get(&report_id)
             .cloned()
             .ok_or_else(|| AnalyticsError::ReportGenerationFailed {
-                reason: format!("Report {} not found", report_id)
+                reason: format!("Report {} not found", report_id),
             })
     }
-    
+
     /// List reports
     pub async fn list_reports(&self, user_id: Option<Uuid>) -> Vec<Report> {
         let reports = self.generated_reports.read().await;
         let mut filtered_reports: Vec<Report> = reports.values().cloned().collect();
-        
+
         if let Some(user_id) = user_id {
             filtered_reports.retain(|report| report.generated_by == user_id);
         }
-        
+
         // Sort by generation date (newest first)
         filtered_reports.sort_by(|a, b| b.generated_at.cmp(&a.generated_at));
-        
+
         filtered_reports
     }
-    
+
     /// Create report template
     pub async fn create_template(&self, template: ReportTemplate) -> AnalyticsResult<Uuid> {
         let template_id = template.template_id;
-        
+
         let mut templates = self.report_templates.write().await;
         templates.insert(template_id, template);
-        
+
         Ok(template_id)
     }
-    
+
     /// Get report template
     pub async fn get_template(&self, template_id: Uuid) -> AnalyticsResult<ReportTemplate> {
         let templates = self.report_templates.read().await;
-        templates.get(&template_id)
+        templates
+            .get(&template_id)
             .cloned()
             .ok_or_else(|| AnalyticsError::ProcessingFailed {
-                reason: format!("Template {} not found", template_id)
+                reason: format!("Template {} not found", template_id),
             })
     }
-    
+
     /// Schedule report
-    pub async fn schedule_report(&self, request: ReportRequest, schedule: ReportSchedule) -> AnalyticsResult<Uuid> {
+    pub async fn schedule_report(
+        &self,
+        request: ReportRequest,
+        schedule: ReportSchedule,
+    ) -> AnalyticsResult<Uuid> {
         let scheduled_report = ScheduledReport {
             schedule_id: schedule.schedule_id,
             report_request: request,
@@ -873,25 +883,25 @@ impl ReportingEngine {
             failure_count: 0,
             is_active: schedule.is_active,
         };
-        
+
         let mut scheduled = self.scheduled_reports.write().await;
         scheduled.insert(schedule.schedule_id, scheduled_report);
-        
+
         Ok(schedule.schedule_id)
     }
-    
+
     /// Cancel scheduled report
     pub async fn cancel_scheduled_report(&self, schedule_id: Uuid) -> AnalyticsResult<()> {
         let mut scheduled = self.scheduled_reports.write().await;
         if let Some(mut report) = scheduled.get_mut(&schedule_id) {
             report.is_active = false;
         }
-        
+
         Ok(())
     }
-    
+
     // Private helper methods
-    
+
     async fn load_report_templates(&self) -> AnalyticsResult<()> {
         // Load from database or create defaults
         let default_templates = self.create_default_templates();
@@ -901,74 +911,81 @@ impl ReportingEngine {
         }
         Ok(())
     }
-    
+
     fn create_default_templates(&self) -> Vec<ReportTemplate> {
-        vec![
-            ReportTemplate {
-                template_id: Uuid::new_v4(),
-                name: "Executive Summary".to_string(),
-                description: "High-level executive overview report".to_string(),
-                report_type: ReportType::ExecutiveSummary,
-                version: "1.0.0".to_string(),
-                layout: ReportLayout {
-                    layout_type: LayoutType::Template("executive".to_string()),
-                    page_size: PageSize::A4,
-                    orientation: PageOrientation::Portrait,
-                    margins: PageMargins { top: 1.0, right: 1.0, bottom: 1.0, left: 1.0 },
-                    header: Some(ReportHeader {
-                        content: "Executive Summary Report".to_string(),
-                        logo_url: None,
-                        height: 2.0,
-                        styling: HashMap::new(),
-                    }),
-                    footer: Some(ReportFooter {
-                        content: "OpenSim Next Analytics Platform".to_string(),
-                        height: 1.0,
-                        show_page_numbers: true,
-                        show_generation_date: true,
-                        styling: HashMap::new(),
-                    }),
+        vec![ReportTemplate {
+            template_id: Uuid::new_v4(),
+            name: "Executive Summary".to_string(),
+            description: "High-level executive overview report".to_string(),
+            report_type: ReportType::ExecutiveSummary,
+            version: "1.0.0".to_string(),
+            layout: ReportLayout {
+                layout_type: LayoutType::Template("executive".to_string()),
+                page_size: PageSize::A4,
+                orientation: PageOrientation::Portrait,
+                margins: PageMargins {
+                    top: 1.0,
+                    right: 1.0,
+                    bottom: 1.0,
+                    left: 1.0,
                 },
-                sections: Vec::new(),
-                styling: ReportStyling {
-                    theme: ReportTheme::Corporate,
-                    font_family: "Arial".to_string(),
-                    font_size: 12.0,
-                    color_palette: vec!["#2E86AB".to_string(), "#A23B72".to_string(), "#F18F01".to_string()],
-                    branding: BrandingConfiguration {
-                        company_name: "OpenSim Next".to_string(),
-                        logo_url: None,
-                        primary_color: "#2E86AB".to_string(),
-                        secondary_color: "#A23B72".to_string(),
-                        accent_color: "#F18F01".to_string(),
-                    },
+                header: Some(ReportHeader {
+                    content: "Executive Summary Report".to_string(),
+                    logo_url: None,
+                    height: 2.0,
+                    styling: HashMap::new(),
+                }),
+                footer: Some(ReportFooter {
+                    content: "OpenSim Next Analytics Platform".to_string(),
+                    height: 1.0,
+                    show_page_numbers: true,
+                    show_generation_date: true,
+                    styling: HashMap::new(),
+                }),
+            },
+            sections: Vec::new(),
+            styling: ReportStyling {
+                theme: ReportTheme::Corporate,
+                font_family: "Arial".to_string(),
+                font_size: 12.0,
+                color_palette: vec![
+                    "#2E86AB".to_string(),
+                    "#A23B72".to_string(),
+                    "#F18F01".to_string(),
+                ],
+                branding: BrandingConfiguration {
+                    company_name: "OpenSim Next".to_string(),
+                    logo_url: None,
+                    primary_color: "#2E86AB".to_string(),
+                    secondary_color: "#A23B72".to_string(),
+                    accent_color: "#F18F01".to_string(),
                 },
-                parameters: Vec::new(),
-                created_by: Uuid::new_v4(),
-                created_at: Utc::now(),
-                last_modified: Utc::now(),
-                is_public: true,
-                tags: vec!["executive".to_string(), "summary".to_string()],
-            }
-        ]
+            },
+            parameters: Vec::new(),
+            created_by: Uuid::new_v4(),
+            created_at: Utc::now(),
+            last_modified: Utc::now(),
+            is_public: true,
+            tags: vec!["executive".to_string(), "summary".to_string()],
+        }]
     }
-    
+
     async fn start_report_generation_worker(&self) -> AnalyticsResult<()> {
         let queue = self.generation_queue.clone();
         let reports = self.generated_reports.clone();
-        
+
         tokio::spawn(async move {
             let mut interval = tokio::time::interval(Duration::from_secs(30));
             loop {
                 interval.tick().await;
-                
+
                 // Process queued reports
                 let mut queue_guard = queue.write().await;
                 if let Some(task) = queue_guard.pop_front() {
                     drop(queue_guard);
-                    
+
                     debug!("Processing report generation task: {}", task.task_id);
-                    
+
                     // Generate report (placeholder)
                     let report = Report {
                         report_id: Uuid::new_v4(),
@@ -993,16 +1010,16 @@ impl ReportingEngine {
                         delivery_status: DeliveryStatus::Delivered,
                         expires_at: Some(Utc::now() + chrono::Duration::days(30)),
                     };
-                    
+
                     let mut reports_guard = reports.write().await;
                     reports_guard.insert(report.report_id, report);
                 }
             }
         });
-        
+
         Ok(())
     }
-    
+
     async fn start_scheduled_report_processor(&self) -> AnalyticsResult<()> {
         tokio::spawn(async move {
             let mut interval = tokio::time::interval(Duration::from_secs(300)); // 5 minutes
@@ -1011,15 +1028,15 @@ impl ReportingEngine {
                 debug!("Checking for scheduled reports");
             }
         });
-        
+
         Ok(())
     }
-    
+
     async fn estimate_generation_time(&self, _request: &ReportRequest) -> Option<Duration> {
         // Estimate based on report type and complexity
         Some(Duration::from_secs(60))
     }
-    
+
     async fn process_report_generation(&self, request: &ReportRequest) -> AnalyticsResult<Report> {
         // Process report generation immediately
         if let Some(generator) = self.report_generators.get(&request.report_type) {
@@ -1051,7 +1068,7 @@ impl ReportingEngine {
             })
         }
     }
-    
+
     async fn calculate_next_generation(&self, _schedule: &ReportSchedule) -> DateTime<Utc> {
         // Calculate next generation time based on schedule
         Utc::now() + chrono::Duration::days(1)

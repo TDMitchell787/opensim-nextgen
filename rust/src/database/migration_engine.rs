@@ -1,12 +1,12 @@
 //! Database Migration Engine for OpenSim Next
-//! 
+//!
 //! Rust implementation of OpenSim's Migration.cs system
 //! Provides Ruby on Rails-style database migrations with SQLite support
 
+use anyhow::{anyhow, Result};
+use sqlx::{Row, SqliteConnection};
 use std::collections::BTreeMap;
-use sqlx::{SqliteConnection, Row};
-use tracing::{info, warn, error, debug};
-use anyhow::{Result, anyhow};
+use tracing::{debug, error, info, warn};
 
 /// Migration engine that manages database schema updates
 #[derive(Debug)]
@@ -28,11 +28,9 @@ impl MigrationEngine {
                 version INT
             )
         "#;
-        
-        sqlx::query(create_table_sql)
-            .execute(conn)
-            .await?;
-            
+
+        sqlx::query(create_table_sql).execute(conn).await?;
+
         debug!("Migrations table initialized");
         Ok(())
     }
@@ -40,12 +38,12 @@ impl MigrationEngine {
     /// Find current version for a specific store
     pub async fn find_version(conn: &mut SqliteConnection, store_name: &str) -> Result<i32> {
         Self::init_migrations_table(conn).await?;
-        
+
         let row = sqlx::query("SELECT version FROM migrations WHERE name = ?")
             .bind(store_name)
             .fetch_optional(conn)
             .await?;
-            
+
         match row {
             Some(row) => Ok(row.get::<i32, _>("version")),
             None => Ok(0), // No migrations applied yet
@@ -54,9 +52,9 @@ impl MigrationEngine {
 
     /// Update store version in migrations table
     pub async fn update_store_version(
-        conn: &mut SqliteConnection, 
-        store_name: &str, 
-        version: i32
+        conn: &mut SqliteConnection,
+        store_name: &str,
+        version: i32,
     ) -> Result<()> {
         // First try to update existing record
         let rows_affected = sqlx::query("UPDATE migrations SET version = ? WHERE name = ?")
@@ -65,7 +63,7 @@ impl MigrationEngine {
             .execute(&mut *conn)
             .await?
             .rows_affected();
-            
+
         // If no rows were updated, insert new record
         if rows_affected == 0 {
             sqlx::query("INSERT INTO migrations (name, version) VALUES (?, ?)")
@@ -74,7 +72,7 @@ impl MigrationEngine {
                 .execute(&mut *conn)
                 .await?;
         }
-        
+
         debug!("Updated {} to version {}", store_name, version);
         Ok(())
     }
@@ -84,17 +82,17 @@ impl MigrationEngine {
         conn: &mut SqliteConnection,
         script: &str,
         version: i32,
-        store_name: &str
+        store_name: &str,
     ) -> Result<()> {
         info!("Applying migration {} version {}", store_name, version);
-        
+
         // Split script into individual statements (simple implementation)
         let statements: Vec<&str> = script
             .split(';')
             .map(|s| s.trim())
             .filter(|s| !s.is_empty())
             .collect();
-            
+
         for statement in statements {
             if !statement.is_empty() {
                 debug!("Executing: {}", statement);
@@ -104,8 +102,11 @@ impl MigrationEngine {
                     .map_err(|e| anyhow!("Failed to execute statement '{}': {}", statement, e))?;
             }
         }
-        
-        info!("Successfully applied migration {} version {}", store_name, version);
+
+        info!(
+            "Successfully applied migration {} version {}",
+            store_name, version
+        );
         Ok(())
     }
 
@@ -113,32 +114,38 @@ impl MigrationEngine {
     pub async fn update_store(
         &self,
         conn: &mut SqliteConnection,
-        migrations: BTreeMap<i32, String>
+        migrations: BTreeMap<i32, String>,
     ) -> Result<()> {
         let current_version = Self::find_version(conn, &self.store_name).await?;
-        
+
         let pending_migrations: BTreeMap<i32, String> = migrations
             .into_iter()
             .filter(|(version, _)| *version > current_version)
             .collect();
-            
+
         if pending_migrations.is_empty() {
-            debug!("{} is already at latest version {}", self.store_name, current_version);
+            debug!(
+                "{} is already at latest version {}",
+                self.store_name, current_version
+            );
             return Ok(());
         }
-        
+
         let latest_version = *pending_migrations.keys().last().unwrap();
         info!(
             "Upgrading {} from version {} to version {}",
             self.store_name, current_version, latest_version
         );
-        
+
         for (version, script) in pending_migrations {
             Self::execute_migration(conn, &script, version, &self.store_name).await?;
             Self::update_store_version(conn, &self.store_name, version).await?;
         }
-        
-        info!("Successfully upgraded {} to version {}", self.store_name, latest_version);
+
+        info!(
+            "Successfully upgraded {} to version {}",
+            self.store_name, latest_version
+        );
         Ok(())
     }
 }
@@ -146,9 +153,11 @@ impl MigrationEngine {
 /// Asset Store migrations converted from MySQL to SQLite
 pub fn get_asset_store_migrations() -> BTreeMap<i32, String> {
     let mut migrations = BTreeMap::new();
-    
+
     // Version 10: Create assets table (converted from MySQL)
-    migrations.insert(10, r#"
+    migrations.insert(
+        10,
+        r#"
         CREATE TABLE IF NOT EXISTS assets (
             name VARCHAR(64) NOT NULL,
             description VARCHAR(64) NOT NULL,
@@ -163,15 +172,17 @@ pub fn get_asset_store_migrations() -> BTreeMap<i32, String> {
             CreatorID VARCHAR(128) NOT NULL DEFAULT '',
             PRIMARY KEY (id)
         )
-    "#.to_string());
-    
+    "#
+        .to_string(),
+    );
+
     migrations
 }
 
 /// Inventory Store migrations converted from MySQL to SQLite  
 pub fn get_inventory_store_migrations() -> BTreeMap<i32, String> {
     let mut migrations = BTreeMap::new();
-    
+
     // Version 7: Create inventory tables (converted from MySQL)
     migrations.insert(7, r#"
         CREATE TABLE IF NOT EXISTS inventoryitems (
@@ -214,16 +225,18 @@ pub fn get_inventory_store_migrations() -> BTreeMap<i32, String> {
         CREATE INDEX IF NOT EXISTS inventoryfolders_agentid ON inventoryfolders(agentID);
         CREATE INDEX IF NOT EXISTS inventoryfolders_parentFolderid ON inventoryfolders(parentFolderID);
     "#.to_string());
-    
+
     migrations
 }
 
 /// Estate Store migrations (complete implementation to version 36)
 pub fn get_estate_store_migrations() -> BTreeMap<i32, String> {
     let mut migrations = BTreeMap::new();
-    
+
     // Version 34: Create estate tables (converted from MySQL)
-    migrations.insert(34, r#"
+    migrations.insert(
+        34,
+        r#"
         CREATE TABLE IF NOT EXISTS estate_groups (
             EstateID INTEGER NOT NULL,
             uuid CHAR(36) NOT NULL
@@ -292,7 +305,9 @@ pub fn get_estate_store_migrations() -> BTreeMap<i32, String> {
         );
 
         CREATE INDEX IF NOT EXISTS estateban_EstateID ON estateban(EstateID);
-    "#.to_string());
+    "#
+        .to_string(),
+    );
 
     // Version 35: Add banning fields to estateban table
     migrations.insert(35, r#"
@@ -301,10 +316,14 @@ pub fn get_estate_store_migrations() -> BTreeMap<i32, String> {
     "#.to_string());
 
     // Version 36: Add environment override to estate settings
-    migrations.insert(36, r#"
+    migrations.insert(
+        36,
+        r#"
         ALTER TABLE estate_settings ADD COLUMN AllowEnviromentOverride INTEGER NOT NULL DEFAULT 0;
-    "#.to_string());
-    
+    "#
+        .to_string(),
+    );
+
     migrations
 }
 
@@ -317,17 +336,25 @@ mod tests {
     async fn test_migration_engine() {
         let pool = SqlitePool::connect(":memory:").await.unwrap();
         let mut conn = pool.acquire().await.unwrap();
-        
+
         // Test migrations table creation
-        MigrationEngine::init_migrations_table(&mut conn).await.unwrap();
-        
+        MigrationEngine::init_migrations_table(&mut conn)
+            .await
+            .unwrap();
+
         // Test version tracking
-        let version = MigrationEngine::find_version(&mut conn, "test_store").await.unwrap();
+        let version = MigrationEngine::find_version(&mut conn, "test_store")
+            .await
+            .unwrap();
         assert_eq!(version, 0);
-        
+
         // Test version update
-        MigrationEngine::update_store_version(&mut conn, "test_store", 5).await.unwrap();
-        let version = MigrationEngine::find_version(&mut conn, "test_store").await.unwrap();
+        MigrationEngine::update_store_version(&mut conn, "test_store", 5)
+            .await
+            .unwrap();
+        let version = MigrationEngine::find_version(&mut conn, "test_store")
+            .await
+            .unwrap();
         assert_eq!(version, 5);
     }
 }

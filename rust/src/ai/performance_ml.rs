@@ -2,14 +2,14 @@
 // Predictive analytics and ML-driven performance enhancement
 // Using ELEGANT ARCHIVE SOLUTION methodology
 
-use crate::monitoring::metrics::MetricsCollector;
-use crate::database::DatabaseManager;
 use super::{AIError, PerformanceRecommendation};
-use std::sync::Arc;
-use std::collections::HashMap;
-use tokio::sync::RwLock;
+use crate::database::DatabaseManager;
+use crate::monitoring::metrics::MetricsCollector;
+use chrono::{DateTime, Duration, Utc};
 use serde::{Deserialize, Serialize};
-use chrono::{DateTime, Utc, Duration};
+use std::collections::HashMap;
+use std::sync::Arc;
+use tokio::sync::RwLock;
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct PerformanceMetrics {
@@ -127,7 +127,9 @@ impl PerformanceMLEngine {
         if load_predictions.predicted_cpu_usage > 0.8 {
             recommendations.push(PerformanceRecommendation {
                 category: "Load Balancing".to_string(),
-                recommendation: "Scale up CPU resources or distribute load across additional instances".to_string(),
+                recommendation:
+                    "Scale up CPU resources or distribute load across additional instances"
+                        .to_string(),
                 impact_score: 0.9,
                 estimated_improvement: "30-50% reduction in response time".to_string(),
                 implementation_complexity: "Medium".to_string(),
@@ -140,11 +142,15 @@ impl PerformanceMLEngine {
             if optimization.estimated_improvement > 0.2 {
                 recommendations.push(PerformanceRecommendation {
                     category: "Caching".to_string(),
-                    recommendation: format!("Optimize {} cache: increase size to {} bytes", 
-                        optimization.cache_type, optimization.predicted_optimal_size),
+                    recommendation: format!(
+                        "Optimize {} cache: increase size to {} bytes",
+                        optimization.cache_type, optimization.predicted_optimal_size
+                    ),
                     impact_score: optimization.estimated_improvement,
-                    estimated_improvement: format!("{:.1}% improvement in cache hit ratio", 
-                        optimization.estimated_improvement * 100.0),
+                    estimated_improvement: format!(
+                        "{:.1}% improvement in cache hit ratio",
+                        optimization.estimated_improvement * 100.0
+                    ),
                     implementation_complexity: optimization.implementation_cost,
                 });
             }
@@ -162,7 +168,7 @@ impl PerformanceMLEngine {
                         estimated_improvement: "Resolve critical performance issue".to_string(),
                         implementation_complexity: "High".to_string(),
                     });
-                },
+                }
                 _ => {}
             }
         }
@@ -181,7 +187,7 @@ impl PerformanceMLEngine {
 
     async fn predict_load(&self) -> Result<LoadPrediction, AIError> {
         let metrics_history = self.metrics_history.read().await;
-        
+
         if metrics_history.len() < 10 {
             return Ok(LoadPrediction {
                 predicted_cpu_usage: 0.5,
@@ -193,7 +199,9 @@ impl PerformanceMLEngine {
             });
         }
 
-        self.load_predictor.predict(&metrics_history, self.config.prediction_window_minutes).await
+        self.load_predictor
+            .predict(&metrics_history, self.config.prediction_window_minutes)
+            .await
     }
 
     async fn analyze_cache_performance(&self) -> Result<Vec<CacheOptimization>, AIError> {
@@ -202,7 +210,9 @@ impl PerformanceMLEngine {
 
     async fn detect_anomalies(&self) -> Result<Vec<AnomalyDetection>, AIError> {
         let metrics_history = self.metrics_history.read().await;
-        self.anomaly_detector.detect_anomalies(&metrics_history, self.config.anomaly_threshold).await
+        self.anomaly_detector
+            .detect_anomalies(&metrics_history, self.config.anomaly_threshold)
+            .await
     }
 
     async fn get_auto_tuning_suggestions(&self) -> Result<Vec<PerformanceRecommendation>, AIError> {
@@ -221,7 +231,7 @@ impl PerformanceMLEngine {
 
     pub async fn start_background_tasks(self: Arc<Self>) {
         // Start periodic tasks for metrics collection, model updates, etc.
-        
+
         // Metrics collection task
         tokio::spawn({
             let engine = self.clone();
@@ -268,7 +278,8 @@ impl PerformanceMLEngine {
         history.push(current_metrics);
 
         // Maintain retention window
-        let retention_cutoff = Utc::now() - Duration::hours(self.config.metrics_retention_hours as i64);
+        let retention_cutoff =
+            Utc::now() - Duration::hours(self.config.metrics_retention_hours as i64);
         history.retain(|m| m.timestamp > retention_cutoff);
 
         Ok(())
@@ -276,17 +287,17 @@ impl PerformanceMLEngine {
 
     async fn run_anomaly_detection(&self) -> Result<(), AIError> {
         let anomalies = self.detect_anomalies().await?;
-        
+
         for anomaly in anomalies {
             match anomaly.severity {
                 AnomalySeverity::Critical => {
                     // Trigger immediate alerts and automated responses
                     self.handle_critical_anomaly(&anomaly).await?;
-                },
+                }
                 AnomalySeverity::High => {
                     // Log and alert administrators
                     self.handle_high_severity_anomaly(&anomaly).await?;
-                },
+                }
                 _ => {
                     // Log for analysis
                     self.log_anomaly(&anomaly).await?;
@@ -303,7 +314,10 @@ impl PerformanceMLEngine {
         Ok(())
     }
 
-    async fn handle_high_severity_anomaly(&self, anomaly: &AnomalyDetection) -> Result<(), AIError> {
+    async fn handle_high_severity_anomaly(
+        &self,
+        anomaly: &AnomalyDetection,
+    ) -> Result<(), AIError> {
         // Implement high severity anomaly response
         println!("HIGH SEVERITY ANOMALY: {}", anomaly.description);
         Ok(())
@@ -326,11 +340,20 @@ impl LoadPredictor {
         Ok(Self)
     }
 
-    async fn predict(&self, history: &[PerformanceMetrics], horizon_minutes: u32) -> Result<LoadPrediction, AIError> {
+    async fn predict(
+        &self,
+        history: &[PerformanceMetrics],
+        horizon_minutes: u32,
+    ) -> Result<LoadPrediction, AIError> {
         // Simplified load prediction - in production, this would use actual ML models
-        let recent_cpu = history.iter().rev().take(10).map(|m| m.cpu_usage).collect::<Vec<_>>();
+        let recent_cpu = history
+            .iter()
+            .rev()
+            .take(10)
+            .map(|m| m.cpu_usage)
+            .collect::<Vec<_>>();
         let avg_cpu = recent_cpu.iter().sum::<f32>() / recent_cpu.len() as f32;
-        
+
         Ok(LoadPrediction {
             predicted_cpu_usage: (avg_cpu * 1.1).min(1.0), // Slight upward trend
             predicted_memory_usage: 0.7,
@@ -350,7 +373,11 @@ impl AnomalyDetector {
         Ok(Self)
     }
 
-    async fn detect_anomalies(&self, history: &[PerformanceMetrics], threshold: f32) -> Result<Vec<AnomalyDetection>, AIError> {
+    async fn detect_anomalies(
+        &self,
+        history: &[PerformanceMetrics],
+        threshold: f32,
+    ) -> Result<Vec<AnomalyDetection>, AIError> {
         let mut anomalies = Vec::new();
 
         if let Some(latest) = history.last() {
@@ -361,7 +388,8 @@ impl AnomalyDetector {
                     description: format!("CPU usage at {:.1}%", latest.cpu_usage * 100.0),
                     affected_component: "System CPU".to_string(),
                     detection_time: Utc::now(),
-                    suggested_response: "Scale up CPU resources or optimize high-usage processes".to_string(),
+                    suggested_response: "Scale up CPU resources or optimize high-usage processes"
+                        .to_string(),
                 });
             }
 
@@ -372,7 +400,8 @@ impl AnomalyDetector {
                     description: format!("Memory usage at {:.1}%", latest.memory_usage * 100.0),
                     affected_component: "System Memory".to_string(),
                     detection_time: Utc::now(),
-                    suggested_response: "Immediate memory optimization or system restart required".to_string(),
+                    suggested_response: "Immediate memory optimization or system restart required"
+                        .to_string(),
                 });
             }
         }
@@ -421,7 +450,8 @@ impl AutoTuner {
         Ok(vec![
             PerformanceRecommendation {
                 category: "Physics Engine".to_string(),
-                recommendation: "Reduce physics simulation step size for better performance".to_string(),
+                recommendation: "Reduce physics simulation step size for better performance"
+                    .to_string(),
                 impact_score: 0.3,
                 estimated_improvement: "10-15% CPU reduction".to_string(),
                 implementation_complexity: "Low".to_string(),

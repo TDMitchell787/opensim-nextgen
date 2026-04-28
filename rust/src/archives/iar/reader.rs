@@ -68,18 +68,19 @@ impl IarReader {
         let mut warnings = Vec::new();
         let errors = Vec::new();
 
-        info!("Loading IAR from {:?} for user {}", path.as_ref(), options.user_id);
+        info!(
+            "Loading IAR from {:?} for user {}",
+            path.as_ref(),
+            options.user_id
+        );
 
-        let archive = TarGzReader::open(path.as_ref())
-            .with_context(|| "Failed to open IAR archive")?;
+        let archive =
+            TarGzReader::open(path.as_ref()).with_context(|| "Failed to open IAR archive")?;
 
         if let Some(archive_xml_data) = archive.get_archive_xml() {
             match self.parse_archive_xml(archive_xml_data) {
                 Ok(meta) => {
-                    info!(
-                        "IAR version: {}.{}",
-                        meta.major_version, meta.minor_version
-                    );
+                    info!("IAR version: {}.{}", meta.major_version, meta.minor_version);
                 }
                 Err(e) => {
                     warnings.push(format!("Could not parse archive.xml: {}", e));
@@ -94,7 +95,10 @@ impl IarReader {
 
         info!("Processing assets...");
         for (path, data) in archive.get_asset_entries() {
-            match self.import_asset(path, data, options.skip_existing_assets).await {
+            match self
+                .import_asset(path, data, options.skip_existing_assets)
+                .await
+            {
                 Ok(imported) => {
                     if imported {
                         stats.assets_loaded += 1;
@@ -120,9 +124,20 @@ impl IarReader {
         folder_map.insert(String::new(), root_folder_id);
 
         let inventory_entries = archive.get_inventory_entries();
-        let inv_dirs = inventory_entries.iter().filter(|(p, _)| p.ends_with('/')).count();
-        let inv_files = inventory_entries.iter().filter(|(p, _)| p.ends_with(".xml")).count();
-        info!("Inventory entries: {} total ({} dirs, {} xml files)", inventory_entries.len(), inv_dirs, inv_files);
+        let inv_dirs = inventory_entries
+            .iter()
+            .filter(|(p, _)| p.ends_with('/'))
+            .count();
+        let inv_files = inventory_entries
+            .iter()
+            .filter(|(p, _)| p.ends_with(".xml"))
+            .count();
+        info!(
+            "Inventory entries: {} total ({} dirs, {} xml files)",
+            inventory_entries.len(),
+            inv_dirs,
+            inv_files
+        );
 
         let mut dir_entries: Vec<String> = inventory_entries
             .iter()
@@ -164,12 +179,7 @@ impl IarReader {
                 let folder_id = folder_uuid.unwrap_or_else(Uuid::new_v4);
 
                 match self
-                    .create_folder(
-                        folder_id,
-                        &options.user_id,
-                        current_parent_id,
-                        &folder_name,
-                    )
+                    .create_folder(folder_id, &options.user_id, current_parent_id, &folder_name)
                     .await
                 {
                     Ok(_) => {
@@ -193,19 +203,17 @@ impl IarReader {
                 continue;
             }
 
-            let rel_path = entry_path
-                .strip_prefix("inventory/")
-                .unwrap_or(entry_path);
+            let rel_path = entry_path.strip_prefix("inventory/").unwrap_or(entry_path);
 
-            let folder_rel_path = rel_path
-                .rsplit_once('/')
-                .map(|(p, _)| p)
-                .unwrap_or("");
+            let folder_rel_path = rel_path.rsplit_once('/').map(|(p, _)| p).unwrap_or("");
 
             let folder_id = if let Some(&id) = folder_map.get(folder_rel_path) {
                 id
             } else {
-                let components: Vec<&str> = folder_rel_path.split('/').filter(|s| !s.is_empty()).collect();
+                let components: Vec<&str> = folder_rel_path
+                    .split('/')
+                    .filter(|s| !s.is_empty())
+                    .collect();
                 let mut current_parent_id = root_folder_id;
                 let mut current_path = String::new();
 
@@ -222,7 +230,9 @@ impl IarReader {
 
                     let (folder_name, folder_uuid) = parse_iar_path_component(component);
                     let fid = folder_uuid.unwrap_or_else(Uuid::new_v4);
-                    let _ = self.create_folder(fid, &options.user_id, current_parent_id, &folder_name).await;
+                    let _ = self
+                        .create_folder(fid, &options.user_id, current_parent_id, &folder_name)
+                        .await;
                     stats.folders_created += 1;
                     folder_map.insert(current_path.clone(), fid);
                     current_parent_id = fid;
@@ -279,11 +289,10 @@ impl IarReader {
         let asset_type = self.determine_asset_type_from_path(path);
 
         if skip_existing {
-            let exists: Option<(i32,)> =
-                sqlx::query_as("SELECT 1 FROM assets WHERE id = $1")
-                    .bind(uuid)
-                    .fetch_optional(&self.db_pool)
-                    .await?;
+            let exists: Option<(i32,)> = sqlx::query_as("SELECT 1 FROM assets WHERE id = $1")
+                .bind(uuid)
+                .fetch_optional(&self.db_pool)
+                .await?;
 
             if exists.is_some() {
                 return Ok(false);

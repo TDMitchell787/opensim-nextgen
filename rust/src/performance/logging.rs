@@ -1,20 +1,16 @@
 //! Comprehensive logging and monitoring system
 
-use std::{
-    collections::HashMap,
-    sync::Arc,
-    time::{Duration, SystemTime, UNIX_EPOCH},
-    io::Write,
-};
 use anyhow::{anyhow, Result};
 use serde::{Deserialize, Serialize};
-use tokio::sync::RwLock;
-use tracing::{info, warn, error, debug, Level};
-use tracing_subscriber::{
-    layer::SubscriberExt,
-    util::SubscriberInitExt,
-    fmt, EnvFilter,
+use std::{
+    collections::HashMap,
+    io::Write,
+    sync::Arc,
+    time::{Duration, SystemTime, UNIX_EPOCH},
 };
+use tokio::sync::RwLock;
+use tracing::{debug, error, info, warn, Level};
+use tracing_subscriber::{fmt, layer::SubscriberExt, util::SubscriberInitExt, EnvFilter};
 
 /// Log levels for structured logging
 #[derive(Debug, Clone, Serialize, Deserialize, PartialEq, Eq, Hash)]
@@ -217,13 +213,17 @@ impl LogAggregator {
         let mut stats = self.log_stats.write().await;
         stats.total_logs += 1;
         *stats.logs_by_level.entry(entry.level.clone()).or_insert(0) += 1;
-        *stats.logs_by_module.entry(entry.module.clone()).or_insert(0) += 1;
+        *stats
+            .logs_by_module
+            .entry(entry.module.clone())
+            .or_insert(0) += 1;
 
         // Update uptime
         stats.uptime_seconds = SystemTime::now()
             .duration_since(UNIX_EPOCH)
             .unwrap()
-            .as_secs() - stats.start_time;
+            .as_secs()
+            - stats.start_time;
 
         // Track last error/warning
         match entry.level {
@@ -305,16 +305,14 @@ impl LogAggregator {
     /// Export logs in various formats
     pub async fn export_logs(&self, format: LogExportFormat) -> Result<String> {
         let buffer = self.log_buffer.read().await;
-        
+
         match format {
-            LogExportFormat::Json => {
-                serde_json::to_string_pretty(&*buffer)
-                    .map_err(|e| anyhow!("Failed to serialize logs: {}", e))
-            }
+            LogExportFormat::Json => serde_json::to_string_pretty(&*buffer)
+                .map_err(|e| anyhow!("Failed to serialize logs: {}", e)),
             LogExportFormat::Csv => {
                 let mut csv = String::new();
                 csv.push_str("timestamp,level,module,message,thread_id\n");
-                
+
                 for entry in buffer.iter() {
                     csv.push_str(&format!(
                         "{},{:?},{},{},{}\n",
@@ -325,23 +323,19 @@ impl LogAggregator {
                         entry.thread_id
                     ));
                 }
-                
+
                 Ok(csv)
             }
             LogExportFormat::Logfmt => {
                 let mut logfmt = String::new();
-                
+
                 for entry in buffer.iter() {
                     logfmt.push_str(&format!(
                         "ts={} level={:?} module={} msg=\"{}\" thread={}\n",
-                        entry.timestamp,
-                        entry.level,
-                        entry.module,
-                        entry.message,
-                        entry.thread_id
+                        entry.timestamp, entry.level, entry.module, entry.message, entry.thread_id
                     ));
                 }
-                
+
                 Ok(logfmt)
             }
         }
@@ -352,7 +346,7 @@ impl LogAggregator {
         let mut buffer = self.log_buffer.write().await;
         let cleared_count = buffer.len();
         buffer.clear();
-        
+
         info!("Cleared {} log entries", cleared_count);
         Ok(())
     }
@@ -395,7 +389,7 @@ impl LogAggregator {
 
         let mut rules = self.alert_rules.write().await;
         rules.extend(default_rules);
-        
+
         Ok(())
     }
 
@@ -406,38 +400,38 @@ impl LogAggregator {
 
         tokio::spawn(async move {
             let mut interval = tokio::time::interval(Duration::from_millis(flush_interval));
-            
+
             loop {
                 interval.tick().await;
-                
+
                 // Calculate rates
                 let buffer_guard = buffer.read().await;
                 let mut stats_guard = stats.write().await;
-                
+
                 let now = SystemTime::now()
                     .duration_since(UNIX_EPOCH)
                     .unwrap()
                     .as_secs();
-                
+
                 let one_minute_ago = now - 60;
-                
+
                 let recent_errors = buffer_guard
                     .iter()
                     .filter(|entry| {
                         entry.timestamp >= one_minute_ago && entry.level == LogLevel::Error
                     })
                     .count();
-                
+
                 let recent_warnings = buffer_guard
                     .iter()
                     .filter(|entry| {
                         entry.timestamp >= one_minute_ago && entry.level == LogLevel::Warn
                     })
                     .count();
-                
+
                 stats_guard.error_rate_per_minute = recent_errors as f64;
                 stats_guard.warning_rate_per_minute = recent_warnings as f64;
-                
+
                 debug!(
                     "Log processing: {} errors/min, {} warnings/min",
                     recent_errors, recent_warnings
@@ -450,7 +444,7 @@ impl LogAggregator {
 
     async fn check_alert_rules(&self, entry: &LogEntry) -> Result<()> {
         let rules = self.alert_rules.read().await;
-        
+
         for rule in rules.iter() {
             if !rule.enabled {
                 continue;
@@ -458,24 +452,46 @@ impl LogAggregator {
 
             let should_trigger = match &rule.condition {
                 AlertCondition::ErrorRateExceeds => {
-                    entry.level == LogLevel::Error && 
-                    self.check_rate_threshold(LogLevel::Error, rule.threshold, rule.window_minutes).await?
+                    entry.level == LogLevel::Error
+                        && self
+                            .check_rate_threshold(
+                                LogLevel::Error,
+                                rule.threshold,
+                                rule.window_minutes,
+                            )
+                            .await?
                 }
                 AlertCondition::WarningRateExceeds => {
-                    entry.level == LogLevel::Warn && 
-                    self.check_rate_threshold(LogLevel::Warn, rule.threshold, rule.window_minutes).await?
+                    entry.level == LogLevel::Warn
+                        && self
+                            .check_rate_threshold(
+                                LogLevel::Warn,
+                                rule.threshold,
+                                rule.window_minutes,
+                            )
+                            .await?
                 }
                 AlertCondition::SpecificErrorPattern { pattern } => {
-                    entry.level == LogLevel::Error && 
-                    entry.message.to_lowercase().contains(&pattern.to_lowercase())
+                    entry.level == LogLevel::Error
+                        && entry
+                            .message
+                            .to_lowercase()
+                            .contains(&pattern.to_lowercase())
                 }
                 AlertCondition::ModuleErrorRate { module } => {
-                    entry.level == LogLevel::Error && 
-                    entry.module == *module &&
-                    self.check_module_rate_threshold(module, rule.threshold, rule.window_minutes).await?
+                    entry.level == LogLevel::Error
+                        && entry.module == *module
+                        && self
+                            .check_module_rate_threshold(
+                                module,
+                                rule.threshold,
+                                rule.window_minutes,
+                            )
+                            .await?
                 }
                 AlertCondition::LogVolumeExceeds => {
-                    self.check_volume_threshold(rule.threshold, rule.window_minutes).await?
+                    self.check_volume_threshold(rule.threshold, rule.window_minutes)
+                        .await?
                 }
             };
 
@@ -487,44 +503,52 @@ impl LogAggregator {
         Ok(())
     }
 
-    async fn check_rate_threshold(&self, level: LogLevel, threshold: f64, window_minutes: u32) -> Result<bool> {
+    async fn check_rate_threshold(
+        &self,
+        level: LogLevel,
+        threshold: f64,
+        window_minutes: u32,
+    ) -> Result<bool> {
         let buffer = self.log_buffer.read().await;
         let now = SystemTime::now()
             .duration_since(UNIX_EPOCH)
             .unwrap()
             .as_secs();
-        
+
         let window_start = now - (window_minutes as u64 * 60);
-        
+
         let count = buffer
             .iter()
-            .filter(|entry| {
-                entry.timestamp >= window_start && entry.level == level
-            })
+            .filter(|entry| entry.timestamp >= window_start && entry.level == level)
             .count();
-        
+
         let rate_per_minute = count as f64 / window_minutes as f64;
         Ok(rate_per_minute >= threshold)
     }
 
-    async fn check_module_rate_threshold(&self, module: &str, threshold: f64, window_minutes: u32) -> Result<bool> {
+    async fn check_module_rate_threshold(
+        &self,
+        module: &str,
+        threshold: f64,
+        window_minutes: u32,
+    ) -> Result<bool> {
         let buffer = self.log_buffer.read().await;
         let now = SystemTime::now()
             .duration_since(UNIX_EPOCH)
             .unwrap()
             .as_secs();
-        
+
         let window_start = now - (window_minutes as u64 * 60);
-        
+
         let count = buffer
             .iter()
             .filter(|entry| {
-                entry.timestamp >= window_start && 
-                entry.level == LogLevel::Error && 
-                entry.module == module
+                entry.timestamp >= window_start
+                    && entry.level == LogLevel::Error
+                    && entry.module == module
             })
             .count();
-        
+
         let rate_per_minute = count as f64 / window_minutes as f64;
         Ok(rate_per_minute >= threshold)
     }
@@ -535,14 +559,14 @@ impl LogAggregator {
             .duration_since(UNIX_EPOCH)
             .unwrap()
             .as_secs();
-        
+
         let window_start = now - (window_minutes as u64 * 60);
-        
+
         let count = buffer
             .iter()
             .filter(|entry| entry.timestamp >= window_start)
             .count();
-        
+
         let rate_per_minute = count as f64 / window_minutes as f64;
         Ok(rate_per_minute >= threshold)
     }
@@ -556,9 +580,18 @@ impl LogAggregator {
             triggered_at: chrono::Utc::now(),
             resolved_at: None,
             context: HashMap::from([
-                ("module".to_string(), serde_json::Value::String(entry.module.clone())),
-                ("level".to_string(), serde_json::Value::String(format!("{:?}", entry.level))),
-                ("thread_id".to_string(), serde_json::Value::String(entry.thread_id.clone())),
+                (
+                    "module".to_string(),
+                    serde_json::Value::String(entry.module.clone()),
+                ),
+                (
+                    "level".to_string(),
+                    serde_json::Value::String(format!("{:?}", entry.level)),
+                ),
+                (
+                    "thread_id".to_string(),
+                    serde_json::Value::String(entry.thread_id.clone()),
+                ),
             ]),
         };
 
@@ -724,7 +757,11 @@ mod tests {
                     .duration_since(UNIX_EPOCH)
                     .unwrap()
                     .as_secs(),
-                level: if i % 2 == 0 { LogLevel::Info } else { LogLevel::Error },
+                level: if i % 2 == 0 {
+                    LogLevel::Info
+                } else {
+                    LogLevel::Error
+                },
                 message: format!("Test message {}", i),
                 module: "test".to_string(),
                 file: None,

@@ -1,15 +1,15 @@
 //! Caching layer implementation with Redis and in-memory support
 
+use anyhow::{anyhow, Result};
+use serde::{de::DeserializeOwned, Deserialize, Serialize};
 use std::{
     collections::HashMap,
+    hash::Hash,
     sync::Arc,
     time::{Duration, Instant},
-    hash::Hash,
 };
-use anyhow::{anyhow, Result};
-use serde::{Deserialize, Serialize, de::DeserializeOwned};
 use tokio::sync::RwLock;
-use tracing::{info, warn, error, debug};
+use tracing::{debug, error, info, warn};
 use uuid::Uuid;
 
 /// Cache backend types
@@ -65,8 +65,8 @@ impl Default for CacheConfig {
         Self {
             backend: CacheBackend::InMemory,
             max_entries: 10000,
-            max_size_bytes: 100 * 1024 * 1024, // 100MB
-            default_ttl: Duration::from_secs(3600), // 1 hour
+            max_size_bytes: 100 * 1024 * 1024,          // 100MB
+            default_ttl: Duration::from_secs(3600),     // 1 hour
             cleanup_interval: Duration::from_secs(300), // 5 minutes
             redis_url: None,
             redis_key_prefix: "opensim:".to_string(),
@@ -138,16 +138,16 @@ where
 
         tokio::spawn(async move {
             let mut interval = tokio::time::interval(cleanup_interval);
-            
+
             loop {
                 interval.tick().await;
-                
+
                 let now = chrono::Utc::now();
                 let mut entries_guard = entries.write().await;
                 let mut stats_guard = statistics.write().await;
-                
+
                 let initial_count = entries_guard.len();
-                
+
                 // Remove expired entries
                 entries_guard.retain(|_, entry| {
                     if let Some(expires_at) = entry.expires_at {
@@ -156,16 +156,16 @@ where
                         true
                     }
                 });
-                
+
                 let final_count = entries_guard.len();
                 let evicted = initial_count - final_count;
-                
+
                 if evicted > 0 {
                     stats_guard.eviction_count += evicted as u64;
                     stats_guard.total_entries = final_count;
                     debug!("Cache cleanup: evicted {} expired entries", evicted);
                 }
-                
+
                 stats_guard.last_cleanup = now;
             }
         });
@@ -182,32 +182,36 @@ where
     async fn evict_if_needed(&self) -> Result<()> {
         let mut entries = self.entries.write().await;
         let mut stats = self.statistics.write().await;
-        
+
         // Check if we need to evict entries
         if entries.len() >= self.config.max_entries {
             // LRU eviction - remove least recently accessed
             let mut entries_vec: Vec<_> = entries.iter().collect();
             entries_vec.sort_by(|a, b| a.1.last_accessed.cmp(&b.1.last_accessed));
-            
+
             // Collect keys to remove first
             let to_remove_count = (entries.len() / 10).max(1);
-            let keys_to_remove: Vec<_> = entries_vec.iter()
+            let keys_to_remove: Vec<_> = entries_vec
+                .iter()
                 .take(to_remove_count)
                 .map(|(key, _)| (*key).clone())
                 .collect();
-            
+
             // Now remove the entries
             for key in keys_to_remove {
                 entries.remove(&key);
                 stats.eviction_count += 1;
             }
-            
-            info!("Evicted {} entries due to max entries limit", to_remove_count);
+
+            info!(
+                "Evicted {} entries due to max entries limit",
+                to_remove_count
+            );
         }
-        
+
         // Update total entries count
         stats.total_entries = entries.len();
-        
+
         Ok(())
     }
 }
@@ -220,10 +224,10 @@ where
 {
     async fn get(&self, key: &K) -> Result<Option<V>> {
         let start_time = Instant::now();
-        
+
         let mut entries = self.entries.write().await;
         let mut stats = self.statistics.write().await;
-        
+
         if let Some(entry) = entries.get_mut(key) {
             // Check if entry is expired
             let now = chrono::Utc::now();
@@ -234,23 +238,23 @@ where
                     return Ok(None);
                 }
             }
-            
+
             // Update access statistics
             entry.access_count += 1;
             entry.last_accessed = now;
-            
+
             stats.hit_count += 1;
             stats.hit_ratio = stats.hit_count as f64 / (stats.hit_count + stats.miss_count) as f64;
-            
+
             let access_time = start_time.elapsed().as_millis() as f64;
             stats.average_access_time_ms = (stats.average_access_time_ms + access_time) / 2.0;
-            
+
             debug!("Cache hit for key (access time: {:.2}ms)", access_time);
             Ok(Some(entry.value.clone()))
         } else {
             stats.miss_count += 1;
             stats.hit_ratio = stats.hit_count as f64 / (stats.hit_count + stats.miss_count) as f64;
-            
+
             debug!("Cache miss for key");
             Ok(None)
         }
@@ -260,7 +264,7 @@ where
         let now = chrono::Utc::now();
         let expires_at = ttl.map(|duration| now + chrono::Duration::from_std(duration).unwrap());
         let size_bytes = self.estimate_size(&value);
-        
+
         let entry = CacheEntry {
             value,
             created_at: now,
@@ -269,23 +273,23 @@ where
             last_accessed: now,
             size_bytes,
         };
-        
+
         // Evict entries if needed
         self.evict_if_needed().await?;
-        
+
         let mut entries = self.entries.write().await;
         let mut stats = self.statistics.write().await;
-        
+
         // Update size statistics
         if let Some(old_entry) = entries.get(&key) {
             stats.total_size_bytes = stats.total_size_bytes.saturating_sub(old_entry.size_bytes);
         } else {
             stats.total_entries += 1;
         }
-        
+
         stats.total_size_bytes += size_bytes;
         entries.insert(key, entry);
-        
+
         debug!("Cache entry set (size: {} bytes)", size_bytes);
         Ok(())
     }
@@ -293,11 +297,11 @@ where
     async fn delete(&self, key: &K) -> Result<bool> {
         let mut entries = self.entries.write().await;
         let mut stats = self.statistics.write().await;
-        
+
         if let Some(entry) = entries.remove(key) {
             stats.total_entries = stats.total_entries.saturating_sub(1);
             stats.total_size_bytes = stats.total_size_bytes.saturating_sub(entry.size_bytes);
-            
+
             debug!("Cache entry deleted");
             Ok(true)
         } else {
@@ -308,7 +312,7 @@ where
     async fn exists(&self, key: &K) -> Result<bool> {
         let entries = self.entries.read().await;
         let exists = entries.contains_key(key);
-        
+
         if exists {
             // Check if expired
             if let Some(entry) = entries.get(key) {
@@ -318,20 +322,20 @@ where
                 }
             }
         }
-        
+
         Ok(exists)
     }
 
     async fn clear(&self) -> Result<()> {
         let mut entries = self.entries.write().await;
         let mut stats = self.statistics.write().await;
-        
+
         let cleared_count = entries.len();
         entries.clear();
-        
+
         stats.total_entries = 0;
         stats.total_size_bytes = 0;
-        
+
         info!("Cache cleared: {} entries removed", cleared_count);
         Ok(())
     }
@@ -388,7 +392,9 @@ impl DistributedCache {
 
     async fn get_redis_connection(&self) -> Result<redis::aio::Connection> {
         if let Some(client) = &self.redis_client {
-            client.get_async_connection().await
+            client
+                .get_async_connection()
+                .await
                 .map_err(|e| anyhow!("Failed to get Redis connection: {}", e))
         } else {
             Err(anyhow!("Redis client not configured"))
@@ -401,22 +407,28 @@ impl DistributedCache {
 
     async fn compress_if_needed(&self, data: &[u8]) -> Result<Vec<u8>> {
         if self.config.enable_compression && data.len() >= self.config.compression_threshold {
-            use flate2::{Compression, write::GzEncoder};
+            use flate2::{write::GzEncoder, Compression};
             use std::io::Write;
-            
+
             let mut encoder = GzEncoder::new(Vec::new(), Compression::default());
-            encoder.write_all(data)
+            encoder
+                .write_all(data)
                 .map_err(|e| anyhow!("Compression failed: {}", e))?;
-            let compressed = encoder.finish()
+            let compressed = encoder
+                .finish()
                 .map_err(|e| anyhow!("Compression finalization failed: {}", e))?;
-            
+
             // Add compression marker (simple prefix)
             let mut result = vec![0xFF, 0xFE]; // Compression marker
             result.extend_from_slice(&compressed);
-            
-            debug!("Compressed {} bytes to {} bytes (ratio: {:.2})", 
-                   data.len(), result.len(), result.len() as f64 / data.len() as f64);
-            
+
+            debug!(
+                "Compressed {} bytes to {} bytes (ratio: {:.2})",
+                data.len(),
+                result.len(),
+                result.len() as f64 / data.len() as f64
+            );
+
             Ok(result)
         } else {
             Ok(data.to_vec())
@@ -428,15 +440,20 @@ impl DistributedCache {
         if data.len() >= 2 && data[0] == 0xFF && data[1] == 0xFE {
             use flate2::read::GzDecoder;
             use std::io::Read;
-            
+
             let compressed_data = &data[2..]; // Skip marker
             let mut decoder = GzDecoder::new(compressed_data);
             let mut decompressed = Vec::new();
-            
-            decoder.read_to_end(&mut decompressed)
+
+            decoder
+                .read_to_end(&mut decompressed)
                 .map_err(|e| anyhow!("Decompression failed: {}", e))?;
-                
-            debug!("Decompressed {} bytes to {} bytes", compressed_data.len(), decompressed.len());
+
+            debug!(
+                "Decompressed {} bytes to {} bytes",
+                compressed_data.len(),
+                decompressed.len()
+            );
             Ok(decompressed)
         } else {
             Ok(data.to_vec())
@@ -448,7 +465,7 @@ impl DistributedCache {
 impl CacheInterface<String, Vec<u8>> for DistributedCache {
     async fn get(&self, key: &String) -> Result<Option<Vec<u8>>> {
         let start_time = Instant::now();
-        
+
         // Try local cache first
         if let Ok(Some(value)) = self.local_cache.get(key).await {
             let mut stats = self.statistics.write().await;
@@ -456,25 +473,40 @@ impl CacheInterface<String, Vec<u8>> for DistributedCache {
             debug!("Distributed cache: local hit for key '{}'", key);
             return Ok(Some(value));
         }
-        
+
         // Try Redis
         if let Ok(mut conn) = self.get_redis_connection().await {
             let redis_key = self.make_redis_key(key);
-            
-            match redis::cmd("GET").arg(&redis_key).query_async::<_, Option<Vec<u8>>>(&mut conn).await {
+
+            match redis::cmd("GET")
+                .arg(&redis_key)
+                .query_async::<_, Option<Vec<u8>>>(&mut conn)
+                .await
+            {
                 Ok(Some(data)) => {
                     let decompressed = self.decompress_if_needed(&data).await?;
-                    
+
                     // Store in local cache for faster access
-                    let _ = self.local_cache.set(key.to_string(), decompressed.clone(), Some(Duration::from_secs(300))).await;
-                    
+                    let _ = self
+                        .local_cache
+                        .set(
+                            key.to_string(),
+                            decompressed.clone(),
+                            Some(Duration::from_secs(300)),
+                        )
+                        .await;
+
                     let mut stats = self.statistics.write().await;
                     stats.hit_count += 1;
-                    
+
                     let access_time = start_time.elapsed().as_millis() as f64;
-                    stats.average_access_time_ms = (stats.average_access_time_ms + access_time) / 2.0;
-                    
-                    debug!("Distributed cache: Redis hit for key '{}' ({}ms)", key, access_time);
+                    stats.average_access_time_ms =
+                        (stats.average_access_time_ms + access_time) / 2.0;
+
+                    debug!(
+                        "Distributed cache: Redis hit for key '{}' ({}ms)",
+                        key, access_time
+                    );
                     return Ok(Some(decompressed));
                 }
                 Ok(None) => {
@@ -485,58 +517,62 @@ impl CacheInterface<String, Vec<u8>> for DistributedCache {
                 }
             }
         }
-        
+
         let mut stats = self.statistics.write().await;
         stats.miss_count += 1;
         stats.hit_ratio = stats.hit_count as f64 / (stats.hit_count + stats.miss_count) as f64;
-        
+
         Ok(None)
     }
 
     async fn set(&self, key: String, value: Vec<u8>, ttl: Option<Duration>) -> Result<()> {
         let compressed = self.compress_if_needed(&value).await?;
-        
+
         // Store in local cache
         let _ = self.local_cache.set(key.clone(), value.clone(), ttl).await;
-        
+
         // Store in Redis
         if let Ok(mut conn) = self.get_redis_connection().await {
             let redis_key = self.make_redis_key(&key);
-            
+
             let mut cmd = redis::cmd("SET");
             cmd.arg(&redis_key).arg(&compressed);
-            
+
             if let Some(ttl) = ttl {
                 cmd.arg("EX").arg(ttl.as_secs());
             }
-            
+
             if let Err(e) = cmd.query_async::<_, ()>(&mut conn).await {
                 warn!("Redis set error for key '{}': {}", key, e);
             } else {
                 debug!("Distributed cache: set key '{}' in Redis", key);
             }
         }
-        
+
         let mut stats = self.statistics.write().await;
         stats.total_entries += 1;
         stats.total_size_bytes += value.len();
-        
+
         Ok(())
     }
 
     async fn delete(&self, key: &String) -> Result<bool> {
         let mut deleted = false;
-        
+
         // Delete from local cache
         if self.local_cache.delete(key).await? {
             deleted = true;
         }
-        
+
         // Delete from Redis
         if let Ok(mut conn) = self.get_redis_connection().await {
             let redis_key = self.make_redis_key(key);
-            
-            match redis::cmd("DEL").arg(&redis_key).query_async::<_, i32>(&mut conn).await {
+
+            match redis::cmd("DEL")
+                .arg(&redis_key)
+                .query_async::<_, i32>(&mut conn)
+                .await
+            {
                 Ok(count) => {
                     if count > 0 {
                         deleted = true;
@@ -548,12 +584,12 @@ impl CacheInterface<String, Vec<u8>> for DistributedCache {
                 }
             }
         }
-        
+
         if deleted {
             let mut stats = self.statistics.write().await;
             stats.total_entries = stats.total_entries.saturating_sub(1);
         }
-        
+
         Ok(deleted)
     }
 
@@ -562,34 +598,46 @@ impl CacheInterface<String, Vec<u8>> for DistributedCache {
         if self.local_cache.exists(key).await? {
             return Ok(true);
         }
-        
+
         // Check Redis
         if let Ok(mut conn) = self.get_redis_connection().await {
             let redis_key = self.make_redis_key(key);
-            
-            match redis::cmd("EXISTS").arg(&redis_key).query_async::<_, i32>(&mut conn).await {
+
+            match redis::cmd("EXISTS")
+                .arg(&redis_key)
+                .query_async::<_, i32>(&mut conn)
+                .await
+            {
                 Ok(exists) => return Ok(exists > 0),
                 Err(e) => {
                     warn!("Redis exists error for key '{}': {}", key, e);
                 }
             }
         }
-        
+
         Ok(false)
     }
 
     async fn clear(&self) -> Result<()> {
         // Clear local cache
         self.local_cache.clear().await?;
-        
+
         // Clear Redis (all keys with our prefix)
         if let Ok(mut conn) = self.get_redis_connection().await {
             let pattern = format!("{}*", self.config.redis_key_prefix);
-            
-            match redis::cmd("KEYS").arg(&pattern).query_async::<_, Vec<String>>(&mut conn).await {
+
+            match redis::cmd("KEYS")
+                .arg(&pattern)
+                .query_async::<_, Vec<String>>(&mut conn)
+                .await
+            {
                 Ok(keys) => {
                     if !keys.is_empty() {
-                        match redis::cmd("DEL").arg(&keys).query_async::<_, i32>(&mut conn).await {
+                        match redis::cmd("DEL")
+                            .arg(&keys)
+                            .query_async::<_, i32>(&mut conn)
+                            .await
+                        {
                             Ok(deleted) => {
                                 info!("Distributed cache: cleared {} keys from Redis", deleted);
                             }
@@ -604,11 +652,11 @@ impl CacheInterface<String, Vec<u8>> for DistributedCache {
                 }
             }
         }
-        
+
         let mut stats = self.statistics.write().await;
         stats.total_entries = 0;
         stats.total_size_bytes = 0;
-        
+
         Ok(())
     }
 
@@ -666,9 +714,7 @@ impl Default for CacheMetrics {
 impl CacheManager {
     pub async fn new(config: CacheConfig) -> Result<Self> {
         let primary_cache: Arc<dyn CacheInterface<String, Vec<u8>>> = match config.backend {
-            CacheBackend::InMemory => {
-                Arc::new(InMemoryCache::new(config.clone()))
-            }
+            CacheBackend::InMemory => Arc::new(InMemoryCache::new(config.clone())),
             CacheBackend::Redis | CacheBackend::Distributed | CacheBackend::Hybrid => {
                 Arc::new(DistributedCache::new(config.clone()).await?)
             }
@@ -689,29 +735,32 @@ impl CacheManager {
     fn start_metrics_updater(&self) {
         let metrics = self.metrics.clone();
         let cache = self.primary_cache.clone();
-        
+
         tokio::spawn(async move {
             let mut interval = tokio::time::interval(Duration::from_secs(60));
             let start_time = Instant::now();
-            
+
             loop {
                 interval.tick().await;
-                
+
                 if let Ok(cache_stats) = cache.get_statistics().await {
                     let mut metrics_guard = metrics.write().await;
-                    
+
                     metrics_guard.cache_hits = cache_stats.hit_count;
                     metrics_guard.cache_misses = cache_stats.miss_count;
                     metrics_guard.total_entries = cache_stats.total_entries;
                     metrics_guard.memory_usage_bytes = cache_stats.total_size_bytes;
                     metrics_guard.uptime_seconds = start_time.elapsed().as_secs();
                     metrics_guard.total_operations = cache_stats.hit_count + cache_stats.miss_count;
-                    
+
                     // Calculate hit ratio
                     if metrics_guard.total_operations > 0 {
-                        let hit_ratio = metrics_guard.cache_hits as f64 / metrics_guard.total_operations as f64;
-                        debug!("Cache metrics updated: hit_ratio={:.2}, entries={}, operations={}", 
-                               hit_ratio, metrics_guard.total_entries, metrics_guard.total_operations);
+                        let hit_ratio =
+                            metrics_guard.cache_hits as f64 / metrics_guard.total_operations as f64;
+                        debug!(
+                            "Cache metrics updated: hit_ratio={:.2}, entries={}, operations={}",
+                            hit_ratio, metrics_guard.total_entries, metrics_guard.total_operations
+                        );
                     }
                 }
             }
@@ -723,9 +772,9 @@ impl CacheManager {
     where
         T: Serialize,
     {
-        let data = serde_json::to_vec(object)
-            .map_err(|e| anyhow!("Failed to serialize object: {}", e))?;
-        
+        let data =
+            serde_json::to_vec(object).map_err(|e| anyhow!("Failed to serialize object: {}", e))?;
+
         self.primary_cache.set(key.to_string(), data, ttl).await
     }
 
@@ -790,7 +839,7 @@ impl CacheManager {
         T: Serialize,
     {
         let mut loaded = 0;
-        
+
         for (key, value) in data {
             if let Err(e) = self.cache_object(&key, &value, ttl).await {
                 warn!("Failed to warm up cache entry '{}': {}", key, e);
@@ -798,7 +847,7 @@ impl CacheManager {
                 loaded += 1;
             }
         }
-        
+
         info!("Cache warmup completed: {} entries loaded", loaded);
         Ok(loaded)
     }
@@ -806,20 +855,24 @@ impl CacheManager {
     /// Batch get operation for multiple keys
     pub async fn get_batch(&self, keys: &[&str]) -> Result<HashMap<String, Vec<u8>>> {
         let mut results = HashMap::new();
-        
+
         for key in keys {
             if let Some(value) = self.get_bytes(key).await? {
                 results.insert(key.to_string(), value);
             }
         }
-        
+
         Ok(results)
     }
 
     /// Batch set operation for multiple key-value pairs
-    pub async fn set_batch(&self, data: HashMap<String, Vec<u8>>, ttl: Option<Duration>) -> Result<usize> {
+    pub async fn set_batch(
+        &self,
+        data: HashMap<String, Vec<u8>>,
+        ttl: Option<Duration>,
+    ) -> Result<usize> {
         let mut stored = 0;
-        
+
         for (key, value) in data {
             if let Err(e) = self.cache_bytes(&key, value, ttl).await {
                 warn!("Failed to batch set cache entry '{}': {}", key, e);
@@ -827,7 +880,7 @@ impl CacheManager {
                 stored += 1;
             }
         }
-        
+
         Ok(stored)
     }
 
@@ -835,7 +888,10 @@ impl CacheManager {
     pub async fn invalidate_pattern(&self, pattern: &str) -> Result<usize> {
         // For now, this is a simplified implementation
         // In production, you'd want pattern matching support in Redis
-        warn!("Pattern invalidation not fully implemented for pattern: {}", pattern);
+        warn!(
+            "Pattern invalidation not fully implemented for pattern: {}",
+            pattern
+        );
         Ok(0)
     }
 
@@ -852,12 +908,12 @@ impl CacheManager {
     /// Force a cache cleanup/eviction cycle
     pub async fn force_cleanup(&self) -> Result<()> {
         info!("Forcing cache cleanup cycle");
-        
+
         // This would trigger cleanup in the underlying cache
         // For now, we'll just update the metrics
         let mut metrics = self.metrics.write().await;
         metrics.last_cleanup = chrono::Utc::now();
-        
+
         Ok(())
     }
 
@@ -882,24 +938,26 @@ mod tests {
     async fn test_in_memory_cache() -> Result<()> {
         let config = CacheConfig::default();
         let cache = InMemoryCache::<String, String>::new(config);
-        
+
         // Test set and get
-        cache.set("key1".to_string(), "value1".to_string(), None).await?;
+        cache
+            .set("key1".to_string(), "value1".to_string(), None)
+            .await?;
         let value = cache.get(&"key1".to_string()).await?;
         assert_eq!(value, Some("value1".to_string()));
-        
+
         // Test miss
         let missing = cache.get(&"key2".to_string()).await?;
         assert_eq!(missing, None);
-        
+
         // Test exists
         assert!(cache.exists(&"key1".to_string()).await?);
         assert!(!cache.exists(&"key2".to_string()).await?);
-        
+
         // Test delete
         assert!(cache.delete(&"key1".to_string()).await?);
         assert!(!cache.exists(&"key1".to_string()).await?);
-        
+
         Ok(())
     }
 
@@ -907,25 +965,25 @@ mod tests {
     async fn test_cache_manager() -> Result<()> {
         let config = CacheConfig::default();
         let manager = CacheManager::new(config).await?;
-        
+
         #[derive(Serialize, Deserialize, PartialEq, Debug)]
         struct TestObject {
             id: u32,
             name: String,
         }
-        
+
         let obj = TestObject {
             id: 123,
             name: "test".to_string(),
         };
-        
+
         // Cache object
         manager.cache_object("test_obj", &obj, None).await?;
-        
+
         // Retrieve object
         let retrieved: Option<TestObject> = manager.get_object("test_obj").await?;
         assert_eq!(retrieved, Some(obj));
-        
+
         Ok(())
     }
 
@@ -933,20 +991,26 @@ mod tests {
     async fn test_cache_expiration() -> Result<()> {
         let config = CacheConfig::default();
         let cache = InMemoryCache::<String, String>::new(config);
-        
+
         // Set with short TTL
-        cache.set("key1".to_string(), "value1".to_string(), Some(Duration::from_millis(100))).await?;
-        
+        cache
+            .set(
+                "key1".to_string(),
+                "value1".to_string(),
+                Some(Duration::from_millis(100)),
+            )
+            .await?;
+
         // Should exist immediately
         assert!(cache.exists(&"key1".to_string()).await?);
-        
+
         // Wait for expiration
         tokio::time::sleep(Duration::from_millis(150)).await;
-        
+
         // Should be expired
         let value = cache.get(&"key1".to_string()).await?;
         assert_eq!(value, None);
-        
+
         Ok(())
     }
 }

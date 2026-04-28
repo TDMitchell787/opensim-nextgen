@@ -3,21 +3,21 @@
 //! Provides comprehensive report generation capabilities with multiple formats,
 //! automated scheduling, template management, and multi-channel distribution.
 
-use std::collections::HashMap;
-use std::sync::Arc;
-use std::path::PathBuf;
-use tokio::sync::{RwLock, mpsc};
-use uuid::Uuid;
-use chrono::{DateTime, Utc, Duration};
-use serde::{Deserialize, Serialize};
-use sqlx::Row;  // EADS fix for PgRow.get() method
+use super::{
+    AnalyticsDataPoint, BusinessDashboard, BusinessKPI, OutputFormat, ReportDefinition,
+    ReportDistribution, ReportSchedule, ReportType, ReportingError, ReportingFrequency,
+    ReportingResult, TimeWindow,
+};
 use crate::database::DatabaseManager;
 use crate::monitoring::MetricsCollector;
-use super::{
-    ReportDefinition, ReportType, ReportSchedule, ReportingFrequency, OutputFormat,
-    ReportDistribution, AnalyticsDataPoint, BusinessKPI, BusinessDashboard,
-    TimeWindow, ReportingError, ReportingResult
-};
+use chrono::{DateTime, Duration, Utc};
+use serde::{Deserialize, Serialize};
+use sqlx::Row; // EADS fix for PgRow.get() method
+use std::collections::HashMap;
+use std::path::PathBuf;
+use std::sync::Arc;
+use tokio::sync::{mpsc, RwLock};
+use uuid::Uuid;
 
 /// Report generation engine
 pub struct ReportGenerationEngine {
@@ -481,7 +481,11 @@ pub struct DistributionTask {
 
 /// Distribution channel trait
 pub trait DistributionChannel: Send + Sync {
-    fn distribute_report(&self, report: &Report, distribution: &ReportDistribution) -> ReportingResult<()>;
+    fn distribute_report(
+        &self,
+        report: &Report,
+        distribution: &ReportDistribution,
+    ) -> ReportingResult<()>;
     fn channel_name(&self) -> &str;
     fn is_available(&self) -> bool;
 }
@@ -545,7 +549,7 @@ impl ReportGenerationEngine {
         config: ReportGenerationConfig,
     ) -> ReportingResult<Self> {
         let distribution_manager = ReportDistributionManager::new().await?;
-        
+
         let engine = Self {
             database: database.clone(),
             metrics_collector,
@@ -556,26 +560,27 @@ impl ReportGenerationEngine {
             generation_queue: Arc::new(RwLock::new(std::collections::VecDeque::new())),
             config,
         };
-        
+
         // Initialize database tables
         engine.initialize_tables().await?;
-        
+
         // Load existing templates and schedules
         engine.load_existing_data().await?;
-        
+
         // Start background tasks
         engine.start_background_tasks().await?;
-        
+
         Ok(engine)
     }
-    
+
     /// Initialize database tables
     async fn initialize_tables(&self) -> ReportingResult<()> {
         let pool_ref = self.database.get_pool()?;
         let pool = pool_ref.as_postgres_pool()?;
-        
+
         // Report templates table
-        sqlx::query(r#"
+        sqlx::query(
+            r#"
             CREATE TABLE IF NOT EXISTS report_templates (
                 template_id UUID PRIMARY KEY,
                 template_name TEXT NOT NULL,
@@ -592,10 +597,14 @@ impl ReportGenerationEngine {
                 version TEXT NOT NULL,
                 is_active BOOLEAN DEFAULT true
             )
-        "#).execute(pool).await?;
-        
+        "#,
+        )
+        .execute(pool)
+        .await?;
+
         // Generated reports table
-        sqlx::query(r#"
+        sqlx::query(
+            r#"
             CREATE TABLE IF NOT EXISTS generated_reports (
                 report_id UUID PRIMARY KEY,
                 report_name TEXT NOT NULL,
@@ -614,10 +623,14 @@ impl ReportGenerationEngine {
                 download_count INTEGER DEFAULT 0,
                 last_accessed TIMESTAMP WITH TIME ZONE
             )
-        "#).execute(pool).await?;
-        
+        "#,
+        )
+        .execute(pool)
+        .await?;
+
         // Scheduled reports table
-        sqlx::query(r#"
+        sqlx::query(
+            r#"
             CREATE TABLE IF NOT EXISTS scheduled_reports (
                 schedule_id UUID PRIMARY KEY,
                 report_definition JSONB NOT NULL,
@@ -629,10 +642,14 @@ impl ReportGenerationEngine {
                 created_at TIMESTAMP WITH TIME ZONE DEFAULT NOW(),
                 last_updated TIMESTAMP WITH TIME ZONE DEFAULT NOW()
             )
-        "#).execute(pool).await?;
-        
+        "#,
+        )
+        .execute(pool)
+        .await?;
+
         // Report distribution log table
-        sqlx::query(r#"
+        sqlx::query(
+            r#"
             CREATE TABLE IF NOT EXISTS report_distribution_log (
                 distribution_id UUID PRIMARY KEY,
                 report_id UUID NOT NULL,
@@ -644,37 +661,44 @@ impl ReportGenerationEngine {
                 retry_count INTEGER DEFAULT 0,
                 FOREIGN KEY (report_id) REFERENCES generated_reports(report_id)
             )
-        "#).execute(pool).await?;
-        
+        "#,
+        )
+        .execute(pool)
+        .await?;
+
         Ok(())
     }
-    
+
     /// Load existing data from database
     async fn load_existing_data(&self) -> ReportingResult<()> {
         // Load templates
         self.load_report_templates().await?;
-        
+
         // Load scheduled reports
         self.load_scheduled_reports().await?;
-        
+
         Ok(())
     }
-    
+
     /// Load report templates from database
     async fn load_report_templates(&self) -> ReportingResult<()> {
         let pool_ref = self.database.get_pool()?;
         let pool = pool_ref.as_postgres_pool()?;
-        
-        let rows = sqlx::query(r#"
+
+        let rows = sqlx::query(
+            r#"
             SELECT template_id, template_name, description, report_type, template_format,
                    template_content, variables, sections, styling, created_by,
                    created_at, last_updated, version, is_active
             FROM report_templates
             WHERE is_active = true
-        "#).fetch_all(pool).await?;
-        
+        "#,
+        )
+        .fetch_all(pool)
+        .await?;
+
         let mut templates = self.report_templates.write().await;
-        
+
         for row in rows {
             let template = ReportTemplate {
                 template_id: row.get("template_id"),
@@ -692,27 +716,31 @@ impl ReportGenerationEngine {
                 version: row.get("version"),
                 is_active: row.get("is_active"),
             };
-            
+
             templates.insert(template.template_id, template);
         }
-        
+
         Ok(())
     }
-    
+
     /// Load scheduled reports from database
     async fn load_scheduled_reports(&self) -> ReportingResult<()> {
         let pool_ref = self.database.get_pool()?;
         let pool = pool_ref.as_postgres_pool()?;
-        
-        let rows = sqlx::query(r#"
+
+        let rows = sqlx::query(
+            r#"
             SELECT schedule_id, report_definition, next_execution, last_execution,
                    execution_count, is_active, created_by, created_at, last_updated
             FROM scheduled_reports
             WHERE is_active = true
-        "#).fetch_all(pool).await?;
-        
+        "#,
+        )
+        .fetch_all(pool)
+        .await?;
+
         let mut scheduled = self.scheduled_reports.write().await;
-        
+
         for row in rows {
             let scheduled_report = ScheduledReport {
                 schedule_id: row.get("schedule_id"),
@@ -725,30 +753,30 @@ impl ReportGenerationEngine {
                 created_at: row.get("created_at"),
                 last_updated: row.get("last_updated"),
             };
-            
+
             scheduled.insert(scheduled_report.schedule_id, scheduled_report);
         }
-        
+
         Ok(())
     }
-    
+
     /// Start background processing tasks
     async fn start_background_tasks(&self) -> ReportingResult<()> {
         // Start report generation worker
         self.start_generation_worker().await;
-        
+
         // Start scheduled report processor
         self.start_scheduled_report_processor().await;
-        
+
         // Start distribution worker
         self.start_distribution_worker().await;
-        
+
         // Start cleanup task
         self.start_cleanup_task().await;
-        
+
         Ok(())
     }
-    
+
     /// Generate report
     pub async fn generate_report(&self, report_request: ReportRequest) -> ReportingResult<Uuid> {
         // Create report generation task
@@ -760,34 +788,36 @@ impl ReportGenerationEngine {
             requested_at: Utc::now(),
             timeout: Duration::minutes(self.config.default_timeout_minutes as i64),
         };
-        
+
         // Add to generation queue
         let mut queue = self.generation_queue.write().await;
         queue.push_back(task.clone());
-        
+
         // Sort queue by priority
         let mut temp_vec: Vec<_> = queue.drain(..).collect();
         temp_vec.sort_by(|a, b| b.priority.cmp(&a.priority));
         queue.extend(temp_vec);
-        
+
         Ok(task.task_id)
     }
-    
+
     /// Create report template
     pub async fn create_template(&self, template: ReportTemplate) -> ReportingResult<Uuid> {
         // Validate template
         self.validate_template(&template).await?;
-        
+
         // Store in database
         let pool_ref = self.database.get_pool()?;
         let pool = pool_ref.as_postgres_pool()?;
-        
-        sqlx::query(r#"
+
+        sqlx::query(
+            r#"
             INSERT INTO report_templates 
             (template_id, template_name, description, report_type, template_format,
              template_content, variables, sections, styling, created_by, version)
             VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11)
-        "#)
+        "#,
+        )
         .bind(&template.template_id)
         .bind(&template.template_name)
         .bind(&template.description)
@@ -799,45 +829,49 @@ impl ReportGenerationEngine {
         .bind(serde_json::to_value(&template.styling)?)
         .bind(&template.created_by)
         .bind(&template.version)
-        .execute(pool).await?;
-        
+        .execute(pool)
+        .await?;
+
         // Add to cache
         let mut templates = self.report_templates.write().await;
         let template_id = template.template_id;
         templates.insert(template_id, template);
-        
+
         Ok(template_id)
     }
-    
+
     /// Schedule report
     pub async fn schedule_report(&self, schedule: ScheduledReport) -> ReportingResult<Uuid> {
         // Store in database
         let pool_ref = self.database.get_pool()?;
         let pool = pool_ref.as_postgres_pool()?;
-        
-        sqlx::query(r#"
+
+        sqlx::query(
+            r#"
             INSERT INTO scheduled_reports 
             (schedule_id, report_definition, next_execution, created_by)
             VALUES ($1, $2, $3, $4)
-        "#)
+        "#,
+        )
         .bind(&schedule.schedule_id)
         .bind(serde_json::to_value(&schedule.report_definition)?)
         .bind(&schedule.next_execution)
         .bind(&schedule.created_by)
-        .execute(pool).await?;
-        
+        .execute(pool)
+        .await?;
+
         // Add to memory
         let mut scheduled = self.scheduled_reports.write().await;
         let schedule_id = schedule.schedule_id;
         scheduled.insert(schedule_id, schedule);
-        
+
         Ok(schedule_id)
     }
-    
+
     /// Get report status
     pub async fn get_report_status(&self, report_id: Uuid) -> ReportingResult<ReportStatus> {
         let reports = self.generated_reports.read().await;
-        
+
         if let Some(report) = reports.get(&report_id) {
             Ok(report.status.clone())
         } else {
@@ -846,42 +880,46 @@ impl ReportGenerationEngine {
             if queue.iter().any(|task| task.task_id == report_id) {
                 Ok(ReportStatus::Pending)
             } else {
-                Err(ReportingError::DataSourceNotFound(
-                    format!("Report {}", report_id) 
-                ))
+                Err(ReportingError::DataSourceNotFound(format!(
+                    "Report {}",
+                    report_id
+                )))
             }
         }
     }
-    
+
     /// Get generated report
     pub async fn get_report(&self, report_id: Uuid) -> ReportingResult<Report> {
         let reports = self.generated_reports.read().await;
-        
-        reports.get(&report_id)
+
+        reports
+            .get(&report_id)
             .cloned()
-            .ok_or_else(|| ReportingError::DataSourceNotFound(
-                format!("Report {}", report_id) 
-            ))
+            .ok_or_else(|| ReportingError::DataSourceNotFound(format!("Report {}", report_id)))
     }
-    
+
     /// Download report file
     pub async fn download_report(&self, report_id: Uuid) -> ReportingResult<Vec<u8>> {
         let report = self.get_report(report_id).await?;
-        
+
         // Read file from disk
-        let file_content = tokio::fs::read(&report.file_path).await
+        let file_content = tokio::fs::read(&report.file_path)
+            .await
             .map_err(|e| ReportingError::IoError(e))?;
-        
+
         // Update download count
         self.update_download_count(report_id).await?;
-        
+
         Ok(file_content)
     }
-    
+
     /// Generate report from task
-    async fn generate_report_from_task(&self, task: ReportGenerationTask) -> ReportingResult<Report> {
+    async fn generate_report_from_task(
+        &self,
+        task: ReportGenerationTask,
+    ) -> ReportingResult<Report> {
         let start_time = Utc::now();
-        
+
         // Get template if specified
         let template = if let Some(template_id) = task.report_definition.template_id {
             let templates = self.report_templates.read().await;
@@ -889,18 +927,28 @@ impl ReportGenerationEngine {
         } else {
             None
         };
-        
+
         // Generate report content
-        let content = self.generate_report_content(&task.report_definition, template.as_ref()).await?;
-        
+        let content = self
+            .generate_report_content(&task.report_definition, template.as_ref())
+            .await?;
+
         // Convert to output format
-        let output_data = self.convert_to_output_format(&content, &task.report_definition.output_formats[0]).await?;
-        
+        let output_data = self
+            .convert_to_output_format(&content, &task.report_definition.output_formats[0])
+            .await?;
+
         // Save to file
-        let file_path = self.save_report_file(&task.task_id, &task.report_definition.output_formats[0], &output_data).await?;
-        
+        let file_path = self
+            .save_report_file(
+                &task.task_id,
+                &task.report_definition.output_formats[0],
+                &output_data,
+            )
+            .await?;
+
         let generation_duration = Utc::now().signed_duration_since(start_time);
-        
+
         let report = Report {
             report_id: task.task_id,
             report_name: task.report_definition.name,
@@ -919,23 +967,25 @@ impl ReportGenerationEngine {
             download_count: 0,
             last_accessed: None,
         };
-        
+
         // Store report in database
         self.store_generated_report(&report).await?;
-        
+
         // Add to memory cache
         let mut reports = self.generated_reports.write().await;
         reports.insert(report.report_id, report.clone());
-        
+
         // Update metrics
         let mut tags = HashMap::new();
         tags.insert("type".to_string(), format!("{:?}", report.report_type));
         tags.insert("format".to_string(), format!("{:?}", report.output_format));
-        self.metrics_collector.increment_counter("reports_generated", tags).await?;
-        
+        self.metrics_collector
+            .increment_counter("reports_generated", tags)
+            .await?;
+
         Ok(report)
     }
-    
+
     /// Generate report content
     async fn generate_report_content(
         &self,
@@ -944,19 +994,19 @@ impl ReportGenerationEngine {
     ) -> ReportingResult<ReportContent> {
         // Simplified implementation - would use actual template engine
         let mut sections = Vec::new();
-        
+
         // Generate executive summary
         sections.push(ReportContentSection {
             section_name: "Executive Summary".to_string(),
             content: "This report provides an overview of virtual world analytics...".to_string(),
         });
-        
+
         // Generate data analysis section
         sections.push(ReportContentSection {
             section_name: "Data Analysis".to_string(),
             content: "Key metrics show positive trends in user engagement...".to_string(),
         });
-        
+
         Ok(ReportContent {
             title: definition.name.clone(),
             subtitle: definition.description.clone(),
@@ -965,7 +1015,7 @@ impl ReportGenerationEngine {
             metadata: definition.parameters.clone(),
         })
     }
-    
+
     /// Convert content to output format
     async fn convert_to_output_format(
         &self,
@@ -979,11 +1029,11 @@ impl ReportGenerationEngine {
             OutputFormat::CSV => self.generate_csv(content).await,
             OutputFormat::JSON => self.generate_json(content).await,
             _ => Err(ReportingError::GenerationFailed {
-                reason: format!("Unsupported output format: {:?}", format)
-            })
+                reason: format!("Unsupported output format: {:?}", format),
+            }),
         }
     }
-    
+
     /// Generate PDF output
     async fn generate_pdf(&self, content: &ReportContent) -> ReportingResult<Vec<u8>> {
         // Simplified implementation - would use actual PDF generation library
@@ -991,14 +1041,16 @@ impl ReportGenerationEngine {
             "PDF Report: {}\n\nGenerated: {}\n\n{}",
             content.title,
             content.generated_at.format("%Y-%m-%d %H:%M:%S"),
-            content.sections.iter()
+            content
+                .sections
+                .iter()
                 .map(|s| format!("{}\n{}\n", s.section_name, s.content))
                 .collect::<String>()
         );
-        
+
         Ok(pdf_content.into_bytes())
     }
-    
+
     /// Generate HTML output
     async fn generate_html(&self, content: &ReportContent) -> ReportingResult<Vec<u8>> {
         let html_content = format!(
@@ -1023,14 +1075,16 @@ impl ReportGenerationEngine {
             content.title,
             content.title,
             content.generated_at.format("%Y-%m-%d %H:%M:%S"),
-            content.sections.iter()
+            content
+                .sections
+                .iter()
                 .map(|s| format!("<h2>{}</h2><p>{}</p>", s.section_name, s.content))
                 .collect::<String>()
         );
-        
+
         Ok(html_content.into_bytes())
     }
-    
+
     /// Generate Excel output
     async fn generate_excel(&self, content: &ReportContent) -> ReportingResult<Vec<u8>> {
         // Simplified implementation - would use actual Excel generation library
@@ -1038,33 +1092,37 @@ impl ReportGenerationEngine {
             "Excel Report: {}\nGenerated: {}\n\n{}",
             content.title,
             content.generated_at.format("%Y-%m-%d %H:%M:%S"),
-            content.sections.iter()
+            content
+                .sections
+                .iter()
                 .map(|s| format!("{}\t{}\n", s.section_name, s.content))
                 .collect::<String>()
         );
-        
+
         Ok(excel_content.into_bytes())
     }
-    
+
     /// Generate CSV output
     async fn generate_csv(&self, content: &ReportContent) -> ReportingResult<Vec<u8>> {
         let csv_content = format!(
             "Section,Content\n{}",
-            content.sections.iter()
+            content
+                .sections
+                .iter()
                 .map(|s| format!("\"{}\",\"{}\"", s.section_name, s.content))
                 .collect::<Vec<_>>()
                 .join("\n")
         );
-        
+
         Ok(csv_content.into_bytes())
     }
-    
+
     /// Generate JSON output
     async fn generate_json(&self, content: &ReportContent) -> ReportingResult<Vec<u8>> {
         let json_content = serde_json::to_string_pretty(content)?;
         Ok(json_content.into_bytes())
     }
-    
+
     /// Save report file to disk
     async fn save_report_file(
         &self,
@@ -1080,37 +1138,42 @@ impl ReportGenerationEngine {
             OutputFormat::JSON => "json",
             _ => "bin",
         };
-        
-        let file_name = format!("report_{}_{}.{}", 
-            report_id, 
+
+        let file_name = format!(
+            "report_{}_{}.{}",
+            report_id,
             Utc::now().format("%Y%m%d_%H%M%S"),
             file_extension
         );
-        
+
         let file_path = format!("{}/{}", self.config.output_directory, file_name);
-        
+
         // Ensure output directory exists
-        tokio::fs::create_dir_all(&self.config.output_directory).await
+        tokio::fs::create_dir_all(&self.config.output_directory)
+            .await
             .map_err(|e| ReportingError::IoError(e))?;
-        
+
         // Write file
-        tokio::fs::write(&file_path, data).await
+        tokio::fs::write(&file_path, data)
+            .await
             .map_err(|e| ReportingError::IoError(e))?;
-        
+
         Ok(file_path)
     }
-    
+
     /// Store generated report in database
     async fn store_generated_report(&self, report: &Report) -> ReportingResult<()> {
         let pool_ref = self.database.get_pool()?;
         let pool = pool_ref.as_postgres_pool()?;
-        
-        sqlx::query(r#"
+
+        sqlx::query(
+            r#"
             INSERT INTO generated_reports 
             (report_id, report_name, report_type, template_id, parameters, output_format,
              file_path, file_size_bytes, generation_duration_ms, status, generated_by)
             VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11)
-        "#)
+        "#,
+        )
         .bind(&report.report_id)
         .bind(&report.report_name)
         .bind(&format!("{:?}", report.report_type))
@@ -1122,69 +1185,73 @@ impl ReportGenerationEngine {
         .bind(report.generation_duration_ms as i64)
         .bind(&format!("{:?}", report.status))
         .bind(&report.generated_by)
-        .execute(pool).await?;
-        
+        .execute(pool)
+        .await?;
+
         Ok(())
     }
-    
+
     /// Update download count
     async fn update_download_count(&self, report_id: Uuid) -> ReportingResult<()> {
         let pool_ref = self.database.get_pool()?;
         let pool = pool_ref.as_postgres_pool()?;
-        
-        sqlx::query(r#"
+
+        sqlx::query(
+            r#"
             UPDATE generated_reports 
             SET download_count = download_count + 1, last_accessed = NOW()
             WHERE report_id = $1
-        "#)
+        "#,
+        )
         .bind(&report_id)
-        .execute(pool).await?;
-        
+        .execute(pool)
+        .await?;
+
         // Update in memory cache
         let mut reports = self.generated_reports.write().await;
         if let Some(report) = reports.get_mut(&report_id) {
             report.download_count += 1;
             report.last_accessed = Some(Utc::now());
         }
-        
+
         Ok(())
     }
-    
+
     /// Validate template
     async fn validate_template(&self, template: &ReportTemplate) -> ReportingResult<()> {
         // Validate template content
         if template.template_content.is_empty() {
             return Err(ReportingError::InvalidConfiguration {
-                reason: "Template content cannot be empty".to_string()
+                reason: "Template content cannot be empty".to_string(),
             });
         }
-        
+
         // Validate variables
         for variable in &template.variables {
             if variable.variable_name.is_empty() {
                 return Err(ReportingError::InvalidConfiguration {
-                    reason: "Variable name cannot be empty".to_string()
+                    reason: "Variable name cannot be empty".to_string(),
                 });
             }
         }
-        
+
         // Validate sections
         for section in &template.sections {
             if section.section_name.is_empty() {
                 return Err(ReportingError::InvalidConfiguration {
-                    reason: "Section name cannot be empty".to_string()
+                    reason: "Section name cannot be empty".to_string(),
                 });
             }
         }
-        
+
         Ok(())
     }
-    
+
     /// Start report generation worker
     async fn start_generation_worker(&self) {
         let queue = self.generation_queue.clone();
         let engine = self.clone_for_worker();
-        
+
         tokio::spawn(async move {
             loop {
                 // Check for tasks in queue
@@ -1192,13 +1259,13 @@ impl ReportGenerationEngine {
                     let mut queue_guard = queue.write().await;
                     queue_guard.pop_front()
                 };
-                
+
                 if let Some(task) = task {
                     // Generate report
                     match engine.generate_report_from_task(task.clone()).await {
                         Ok(report) => {
                             tracing::info!("Report generated successfully: {}", report.report_id);
-                        },
+                        }
                         Err(e) => {
                             tracing::error!("Failed to generate report {}: {}", task.task_id, e);
                         }
@@ -1210,21 +1277,21 @@ impl ReportGenerationEngine {
             }
         });
     }
-    
+
     /// Start scheduled report processor
     async fn start_scheduled_report_processor(&self) {
         let scheduled_reports = self.scheduled_reports.clone();
         let generation_queue = self.generation_queue.clone();
-        
+
         tokio::spawn(async move {
             let mut interval = tokio::time::interval(std::time::Duration::from_secs(60)); // Check every minute
-            
+
             loop {
                 interval.tick().await;
-                
+
                 let now = Utc::now();
                 let mut scheduled_guard = scheduled_reports.write().await;
-                
+
                 for (_, scheduled_report) in scheduled_guard.iter_mut() {
                     if scheduled_report.is_active && scheduled_report.next_execution <= now {
                         // Create generation task
@@ -1236,24 +1303,29 @@ impl ReportGenerationEngine {
                             requested_at: now,
                             timeout: Duration::minutes(30),
                         };
-                        
+
                         // Add to queue
                         let mut queue_guard = generation_queue.write().await;
                         queue_guard.push_back(task);
-                        
+
                         // Update next execution time
                         scheduled_report.last_execution = Some(now);
                         scheduled_report.execution_count += 1;
                         scheduled_report.next_execution = Self::calculate_next_execution(
-                            &scheduled_report.report_definition.schedule.as_ref().unwrap().frequency,
-                            now
+                            &scheduled_report
+                                .report_definition
+                                .schedule
+                                .as_ref()
+                                .unwrap()
+                                .frequency,
+                            now,
                         );
                     }
                 }
             }
         });
     }
-    
+
     /// Start distribution worker
     async fn start_distribution_worker(&self) {
         tokio::spawn(async move {
@@ -1261,21 +1333,21 @@ impl ReportGenerationEngine {
             tracing::info!("Distribution worker started");
         });
     }
-    
+
     /// Start cleanup task
     async fn start_cleanup_task(&self) {
         let reports = self.generated_reports.clone();
-        
+
         tokio::spawn(async move {
             let mut interval = tokio::time::interval(std::time::Duration::from_secs(3600)); // Hourly
-            
+
             loop {
                 interval.tick().await;
-                
+
                 // Clean up expired reports
                 let now = Utc::now();
                 let mut reports_guard = reports.write().await;
-                
+
                 reports_guard.retain(|_, report| {
                     if let Some(expires_at) = report.expires_at {
                         expires_at > now
@@ -1286,9 +1358,12 @@ impl ReportGenerationEngine {
             }
         });
     }
-    
+
     /// Calculate next execution time
-    fn calculate_next_execution(frequency: &ReportingFrequency, from: DateTime<Utc>) -> DateTime<Utc> {
+    fn calculate_next_execution(
+        frequency: &ReportingFrequency,
+        from: DateTime<Utc>,
+    ) -> DateTime<Utc> {
         match frequency {
             ReportingFrequency::Hourly => from + Duration::hours(1),
             ReportingFrequency::Daily => from + Duration::days(1),
@@ -1300,7 +1375,7 @@ impl ReportGenerationEngine {
             _ => from + Duration::hours(1),
         }
     }
-    
+
     /// Clone engine for worker tasks
     fn clone_for_worker(&self) -> ReportGenerationEngine {
         // This is a simplified clone - in practice would need proper Arc handling
@@ -1336,18 +1411,19 @@ pub struct ReportContentSection {
 // Implementation stubs for distribution channels
 impl ReportDistributionManager {
     async fn new() -> ReportingResult<Self> {
-        let mut distribution_channels: HashMap<String, Box<dyn DistributionChannel + Send + Sync>> = HashMap::new();
-        
+        let mut distribution_channels: HashMap<String, Box<dyn DistributionChannel + Send + Sync>> =
+            HashMap::new();
+
         // Add default distribution channels
         distribution_channels.insert(
             "email".to_string(),
-            Box::new(EmailDistributionChannel::new()?)
+            Box::new(EmailDistributionChannel::new()?),
         );
         distribution_channels.insert(
             "filesystem".to_string(),
-            Box::new(FileSystemDistributionChannel::new()?)
+            Box::new(FileSystemDistributionChannel::new()?),
         );
-        
+
         Ok(Self {
             distribution_channels,
             distribution_queue: Arc::new(RwLock::new(std::collections::VecDeque::new())),
@@ -1372,15 +1448,19 @@ impl EmailDistributionChannel {
 }
 
 impl DistributionChannel for EmailDistributionChannel {
-    fn distribute_report(&self, _report: &Report, _distribution: &ReportDistribution) -> ReportingResult<()> {
+    fn distribute_report(
+        &self,
+        _report: &Report,
+        _distribution: &ReportDistribution,
+    ) -> ReportingResult<()> {
         // Would implement actual email sending
         Ok(())
     }
-    
+
     fn channel_name(&self) -> &str {
         "email"
     }
-    
+
     fn is_available(&self) -> bool {
         true
     }
@@ -1395,15 +1475,19 @@ impl FileSystemDistributionChannel {
 }
 
 impl DistributionChannel for FileSystemDistributionChannel {
-    fn distribute_report(&self, _report: &Report, _distribution: &ReportDistribution) -> ReportingResult<()> {
+    fn distribute_report(
+        &self,
+        _report: &Report,
+        _distribution: &ReportDistribution,
+    ) -> ReportingResult<()> {
         // Would implement file system distribution
         Ok(())
     }
-    
+
     fn channel_name(&self) -> &str {
         "filesystem"
     }
-    
+
     fn is_available(&self) -> bool {
         true
     }

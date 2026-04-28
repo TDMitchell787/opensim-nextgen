@@ -5,13 +5,13 @@
 pub mod entity;
 pub mod spatial;
 
+use crate::ffi::physics::PhysicsBridge;
+use crate::ffi::{PhysicsBody, Vec3};
+use crate::region::{RegionConfig, RegionError, RegionId};
+use crate::state::StateManager;
+use rand::Rng;
 use std::sync::Arc;
 use tokio::sync::RwLock;
-use crate::ffi::physics::PhysicsBridge;
-use crate::ffi::{Vec3, PhysicsBody};
-use crate::state::StateManager;
-use crate::region::{RegionId, RegionConfig, RegionError};
-use rand::Rng;
 
 use self::entity::{Entity, EntityId, EntityType};
 use self::spatial::{SpatialIndex, SpatialQuery};
@@ -58,7 +58,7 @@ impl RegionScene {
         state_manager: Arc<StateManager>,
     ) -> Result<Self, RegionError> {
         let spatial_index = Arc::new(SpatialIndex::new(config.size.0, config.size.1));
-        
+
         Ok(Self {
             region_id,
             config,
@@ -84,7 +84,7 @@ impl RegionScene {
     ) -> Result<EntityId, RegionError> {
         let mut rng = rand::thread_rng();
         let entity_id = EntityId(rng.gen());
-        
+
         let mut entity = Entity::new(entity_id, entity_type);
         entity.position = position;
 
@@ -92,20 +92,24 @@ impl RegionScene {
         self.spatial_index.add_entity(entity_id, position).await;
 
         // Create physics body if needed
-        if let Ok(physics_body) = self.physics_bridge.create_body(
-            crate::ffi::physics::PhysicsData {
-                position,
-                velocity: Vec3::new(0.0, 0.0, 0.0),
-                mass: 1.0,
-                shape: crate::ffi::physics::PhysicsShape::Sphere { radius: 0.5 },
-            }
-        ) {
-            self.physics_bodies.write().await.insert(entity_id, physics_body);
+        if let Ok(physics_body) =
+            self.physics_bridge
+                .create_body(crate::ffi::physics::PhysicsData {
+                    position,
+                    velocity: Vec3::new(0.0, 0.0, 0.0),
+                    mass: 1.0,
+                    shape: crate::ffi::physics::PhysicsShape::Sphere { radius: 0.5 },
+                })
+        {
+            self.physics_bodies
+                .write()
+                .await
+                .insert(entity_id, physics_body);
         }
 
         // Store entity
         self.entities.write().await.insert(entity_id, entity);
-        
+
         // Update stats
         let mut stats = self.stats.write().await;
         stats.entity_count += 1;
@@ -126,7 +130,7 @@ impl RegionScene {
 
         // Remove entity
         self.entities.write().await.remove(&entity_id);
-        
+
         // Update stats
         let mut stats = self.stats.write().await;
         stats.entity_count = self.entities.read().await.len();
@@ -146,13 +150,17 @@ impl RegionScene {
         // Update entity positions from physics
         let mut entities = self.entities.write().await;
         let physics_bodies = self.physics_bodies.read().await;
-        
+
         for (entity_id, entity) in entities.iter_mut() {
             if let Some(physics_body) = physics_bodies.get(entity_id) {
-                if let Ok(new_position) = self.physics_bridge.get_body_position(physics_body.clone()) {
+                if let Ok(new_position) =
+                    self.physics_bridge.get_body_position(physics_body.clone())
+                {
                     entity.position = new_position;
                     // Update spatial index
-                    self.spatial_index.update_entity_position(*entity_id, new_position).await;
+                    self.spatial_index
+                        .update_entity_position(*entity_id, new_position)
+                        .await;
                 }
             }
         }
@@ -165,13 +173,10 @@ impl RegionScene {
     }
 
     /// Query entities in a region
-    pub async fn query_entities(
-        &self,
-        query: SpatialQuery,
-    ) -> Result<Vec<Entity>, RegionError> {
+    pub async fn query_entities(&self, query: SpatialQuery) -> Result<Vec<Entity>, RegionError> {
         let entity_ids = self.spatial_index.query(query).await;
         let entities = self.entities.read().await;
-        
+
         let mut result = Vec::new();
         for entity_id in entity_ids {
             if let Some(entity) = entities.get(&entity_id) {
@@ -213,13 +218,13 @@ impl RegionScene {
 pub enum SceneError {
     #[error("Entity not found: {0:?}")]
     EntityNotFound(EntityId),
-    
+
     #[error("Physics error: {0}")]
     Physics(#[from] crate::ffi::physics::PhysicsError),
-    
+
     #[error("Spatial index error: {0}")]
     Spatial(#[from] spatial::SpatialError),
-    
+
     #[error("Internal error: {0}")]
     Internal(String),
 }
@@ -243,13 +248,8 @@ mod tests {
             max_entities: 1000,
         };
 
-        let scene = RegionScene::new(
-            RegionId(1),
-            config,
-            physics_bridge,
-            state_manager,
-        ).unwrap();
+        let scene = RegionScene::new(RegionId(1), config, physics_bridge, state_manager).unwrap();
 
         assert_eq!(scene.get_stats().await.entity_count, 0);
     }
-} 
+}

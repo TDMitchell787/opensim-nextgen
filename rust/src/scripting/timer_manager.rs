@@ -37,11 +37,14 @@ impl TimerManager {
         let actual_interval = interval.max(self.min_interval);
 
         let now = Instant::now();
-        self.timers.insert(script_id, TimerEntry {
+        self.timers.insert(
             script_id,
-            interval: actual_interval,
-            next_fire: now + std::time::Duration::from_secs_f64(actual_interval),
-        });
+            TimerEntry {
+                script_id,
+                interval: actual_interval,
+                next_fire: now + std::time::Duration::from_secs_f64(actual_interval),
+            },
+        );
     }
 
     pub fn stop_timer(&mut self, script_id: Uuid) {

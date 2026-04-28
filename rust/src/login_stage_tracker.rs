@@ -2,7 +2,7 @@ use std::collections::HashMap;
 use std::sync::Arc;
 use std::time::Instant;
 use tokio::sync::RwLock;
-use tracing::{info, warn, error};
+use tracing::{error, info, warn};
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Hash)]
 #[repr(u8)]
@@ -139,7 +139,12 @@ impl SessionStageTracker {
         }
     }
 
-    pub fn mark_passed_with_count(&mut self, stage: LoginStage, count: u32, details: Option<String>) {
+    pub fn mark_passed_with_count(
+        &mut self,
+        stage: LoginStage,
+        count: u32,
+        details: Option<String>,
+    ) {
         let status = self.stages.entry(stage).or_default();
         if !status.passed {
             status.passed = true;
@@ -183,13 +188,14 @@ impl SessionStageTracker {
         self.agent_update_count += 1;
 
         if self.agent_update_count == 1 {
-            info!(
-                "[LOGIN_STAGE] First AgentUpdate received (count=1)"
-            );
+            info!("[LOGIN_STAGE] First AgentUpdate received (count=1)");
         } else if self.agent_update_count == 20 {
             self.mark_passed(
                 LoginStage::AgentUpdateStream,
-                Some(format!("Received {} AgentUpdates - stream confirmed", self.agent_update_count))
+                Some(format!(
+                    "Received {} AgentUpdates - stream confirmed",
+                    self.agent_update_count
+                )),
             );
         } else if self.agent_update_count % 100 == 0 {
             info!(
@@ -208,7 +214,8 @@ impl SessionStageTracker {
         for stage in LoginStage::all_stages() {
             let status = self.stages.get(&stage).unwrap();
             let status_str = if status.passed { "PASS" } else { "----" };
-            let time_str = status.timestamp
+            let time_str = status
+                .timestamp
                 .map(|t| format!("+{}ms", t.duration_since(self.created_at).as_millis()))
                 .unwrap_or_else(|| "     ".to_string());
 
@@ -226,7 +233,9 @@ impl SessionStageTracker {
             "  AgentUpdate count: {}\n",
             self.agent_update_count
         ));
-        summary.push_str("==========================================================================\n");
+        summary.push_str(
+            "==========================================================================\n",
+        );
         summary
     }
 
@@ -273,12 +282,18 @@ impl LoginStageTracker {
         } else {
             warn!(
                 "[LOGIN_STAGE] No tracker found for session {} when marking {} passed",
-                session_id, stage.name()
+                session_id,
+                stage.name()
             );
         }
     }
 
-    pub async fn mark_passed_by_circuit(&self, circuit_code: u32, stage: LoginStage, details: Option<String>) {
+    pub async fn mark_passed_by_circuit(
+        &self,
+        circuit_code: u32,
+        stage: LoginStage,
+        details: Option<String>,
+    ) {
         let circuits = self.circuits.read().await;
         if let Some(session_id) = circuits.get(&circuit_code) {
             let session_id = session_id.clone();
@@ -287,24 +302,38 @@ impl LoginStageTracker {
         } else {
             warn!(
                 "[LOGIN_STAGE] No tracker found for circuit {} when marking {} passed",
-                circuit_code, stage.name()
+                circuit_code,
+                stage.name()
             );
         }
     }
 
-    pub async fn mark_passed_with_count(&self, session_id: &str, stage: LoginStage, count: u32, details: Option<String>) {
+    pub async fn mark_passed_with_count(
+        &self,
+        session_id: &str,
+        stage: LoginStage,
+        count: u32,
+        details: Option<String>,
+    ) {
         let mut sessions = self.sessions.write().await;
         if let Some(tracker) = sessions.get_mut(session_id) {
             tracker.mark_passed_with_count(stage, count, details);
         }
     }
 
-    pub async fn mark_passed_with_count_by_circuit(&self, circuit_code: u32, stage: LoginStage, count: u32, details: Option<String>) {
+    pub async fn mark_passed_with_count_by_circuit(
+        &self,
+        circuit_code: u32,
+        stage: LoginStage,
+        count: u32,
+        details: Option<String>,
+    ) {
         let circuits = self.circuits.read().await;
         if let Some(session_id) = circuits.get(&circuit_code) {
             let session_id = session_id.clone();
             drop(circuits);
-            self.mark_passed_with_count(&session_id, stage, count, details).await;
+            self.mark_passed_with_count(&session_id, stage, count, details)
+                .await;
         }
     }
 
@@ -339,7 +368,10 @@ impl LoginStageTracker {
 
     pub async fn is_passed(&self, session_id: &str, stage: LoginStage) -> bool {
         let sessions = self.sessions.read().await;
-        sessions.get(session_id).map(|t| t.is_passed(stage)).unwrap_or(false)
+        sessions
+            .get(session_id)
+            .map(|t| t.is_passed(stage))
+            .unwrap_or(false)
     }
 
     pub async fn is_passed_by_circuit(&self, circuit_code: u32, stage: LoginStage) -> bool {
@@ -390,7 +422,10 @@ impl LoginStageTracker {
             drop(circuits);
 
             let sessions = self.sessions.read().await;
-            return sessions.get(&session_id).map(|t| t.agent_update_count).unwrap_or(0);
+            return sessions
+                .get(&session_id)
+                .map(|t| t.agent_update_count)
+                .unwrap_or(0);
         }
         0
     }
@@ -443,12 +478,32 @@ mod tests {
 
         tracker.create_session("test-session", 12345).await;
 
-        tracker.mark_passed("test-session", LoginStage::XmlRpcSent, None).await;
-        assert!(tracker.is_passed("test-session", LoginStage::XmlRpcSent).await);
-        assert!(!tracker.is_passed("test-session", LoginStage::CircuitCodeReceived).await);
+        tracker
+            .mark_passed("test-session", LoginStage::XmlRpcSent, None)
+            .await;
+        assert!(
+            tracker
+                .is_passed("test-session", LoginStage::XmlRpcSent)
+                .await
+        );
+        assert!(
+            !tracker
+                .is_passed("test-session", LoginStage::CircuitCodeReceived)
+                .await
+        );
 
-        tracker.mark_passed_by_circuit(12345, LoginStage::CircuitCodeReceived, Some("test".to_string())).await;
-        assert!(tracker.is_passed_by_circuit(12345, LoginStage::CircuitCodeReceived).await);
+        tracker
+            .mark_passed_by_circuit(
+                12345,
+                LoginStage::CircuitCodeReceived,
+                Some("test".to_string()),
+            )
+            .await;
+        assert!(
+            tracker
+                .is_passed_by_circuit(12345, LoginStage::CircuitCodeReceived)
+                .await
+        );
 
         let summary = tracker.get_summary("test-session").await;
         assert!(summary.is_some());

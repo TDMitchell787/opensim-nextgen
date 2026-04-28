@@ -42,7 +42,12 @@ impl TextureResolver {
         let path = self.output_dir.join(&filename);
         std::fs::write(&path, &png_data)?;
 
-        info!("[TEXTURE-RESOLVER] Decoded {} → {} ({} bytes)", texture_id, path.display(), png_data.len());
+        info!(
+            "[TEXTURE-RESOLVER] Decoded {} → {} ({} bytes)",
+            texture_id,
+            path.display(),
+            png_data.len()
+        );
 
         self.cache.insert(*texture_id, path.clone());
         Ok(path)
@@ -86,19 +91,19 @@ pub async fn fetch_texture_asset(
     asset_fetcher: Option<&crate::asset::AssetFetcher>,
 ) -> Result<Vec<u8>> {
     if let Some(fetcher) = asset_fetcher {
-        if let Ok(Some(data)) = fetcher.fetch_asset_data_typed_pg(
-            &texture_id.to_string(), Some(0), db_pool
-        ).await {
+        if let Ok(Some(data)) = fetcher
+            .fetch_asset_data_typed_pg(&texture_id.to_string(), Some(0), db_pool)
+            .await
+        {
             return Ok(data);
         }
     }
 
-    let row: Option<(Vec<u8>,)> = sqlx::query_as(
-        "SELECT data FROM assets WHERE id = $1::uuid AND assettype = 0"
-    )
-    .bind(texture_id)
-    .fetch_optional(db_pool)
-    .await?;
+    let row: Option<(Vec<u8>,)> =
+        sqlx::query_as("SELECT data FROM assets WHERE id = $1::uuid AND assettype = 0")
+            .bind(texture_id)
+            .fetch_optional(db_pool)
+            .await?;
 
     row.map(|r| r.0)
         .ok_or_else(|| anyhow!("Texture asset {} not found", texture_id))
@@ -143,11 +148,8 @@ fn uuid_from_le_bytes(bytes: &[u8]) -> Uuid {
         return Uuid::nil();
     }
     Uuid::from_bytes([
-        bytes[3], bytes[2], bytes[1], bytes[0],
-        bytes[5], bytes[4],
-        bytes[7], bytes[6],
-        bytes[8], bytes[9],
-        bytes[10], bytes[11], bytes[12], bytes[13], bytes[14], bytes[15],
+        bytes[3], bytes[2], bytes[1], bytes[0], bytes[5], bytes[4], bytes[7], bytes[6], bytes[8],
+        bytes[9], bytes[10], bytes[11], bytes[12], bytes[13], bytes[14], bytes[15],
     ])
 }
 
@@ -160,9 +162,14 @@ mod tests {
         let mut te = vec![0u8; 16];
         let test_uuid = Uuid::parse_str("12345678-1234-1234-1234-123456789abc").unwrap();
         let bytes = test_uuid.as_bytes();
-        te[0] = bytes[3]; te[1] = bytes[2]; te[2] = bytes[1]; te[3] = bytes[0];
-        te[4] = bytes[5]; te[5] = bytes[4];
-        te[6] = bytes[7]; te[7] = bytes[6];
+        te[0] = bytes[3];
+        te[1] = bytes[2];
+        te[2] = bytes[1];
+        te[3] = bytes[0];
+        te[4] = bytes[5];
+        te[5] = bytes[4];
+        te[6] = bytes[7];
+        te[7] = bytes[6];
         te[8..16].copy_from_slice(&bytes[8..16]);
 
         let faces = parse_texture_entry_face_textures(&te);
@@ -176,11 +183,8 @@ mod tests {
         let uuid = Uuid::parse_str("550e8400-e29b-41d4-a716-446655440000").unwrap();
         let bytes = uuid.as_bytes();
         let le: Vec<u8> = vec![
-            bytes[3], bytes[2], bytes[1], bytes[0],
-            bytes[5], bytes[4],
-            bytes[7], bytes[6],
-            bytes[8], bytes[9],
-            bytes[10], bytes[11], bytes[12], bytes[13], bytes[14], bytes[15],
+            bytes[3], bytes[2], bytes[1], bytes[0], bytes[5], bytes[4], bytes[7], bytes[6],
+            bytes[8], bytes[9], bytes[10], bytes[11], bytes[12], bytes[13], bytes[14], bytes[15],
         ];
         let result = uuid_from_le_bytes(&le);
         assert_eq!(result, uuid);

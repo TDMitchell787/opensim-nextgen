@@ -1,50 +1,53 @@
 //! WebSocket protocol support for real-time client communication
-//! 
+//!
 //! This module provides comprehensive WebSocket support for OpenSim Next, enabling:
 //! - Real-time bidirectional communication with Second Life viewers
-//! - Web-based client interfaces 
+//! - Web-based client interfaces
 //! - Binary and text message protocols
 //! - Authentication and session management
 //! - Message routing and handling
 
-use std::{
-    collections::HashMap,
-    net::SocketAddr,
-    sync::{Arc, atomic::{AtomicU64, Ordering}},
-    time::{Duration, Instant},
-};
-use tokio::{
-    sync::{RwLock, mpsc, broadcast},
-    time::timeout,
-};
+use anyhow::{anyhow, Result};
 use axum::{
     extract::{
-        ws::{WebSocket, WebSocketUpgrade, Message, CloseFrame},
-        State, ConnectInfo, Query,
+        ws::{CloseFrame, Message, WebSocket, WebSocketUpgrade},
+        ConnectInfo, Query, State,
     },
+    http::{HeaderMap, StatusCode},
     response::Response,
     routing::get,
     Router,
-    http::{StatusCode, HeaderMap},
 };
 use futures_util::{sink::SinkExt, stream::StreamExt};
 use serde::{Deserialize, Serialize};
+use std::{
+    collections::HashMap,
+    net::SocketAddr,
+    sync::{
+        atomic::{AtomicU64, Ordering},
+        Arc,
+    },
+    time::{Duration, Instant},
+};
+use tokio::{
+    sync::{broadcast, mpsc, RwLock},
+    time::timeout,
+};
+use tracing::{debug, error, info, trace, warn};
 use uuid::Uuid;
-use anyhow::{anyhow, Result};
-use tracing::{info, warn, error, debug, trace};
 
 use crate::{
+    asset::AssetManager,
+    database::user_accounts::UserAccountDatabase,
     monitoring::MonitoringSystem,
     network::{
-        llsd::{LLSDFormat, LLSDMessage, LLSDMessageHandler},
-        session::{Session, SessionManager},
-        security::SecurityManager,
         client::{ClientMessage, ViewerInfo},
+        llsd::{LLSDFormat, LLSDMessage, LLSDMessageHandler},
+        security::SecurityManager,
+        session::{Session, SessionManager},
     },
     region::RegionManager,
     state::StateManager,
-    asset::AssetManager,
-    database::user_accounts::UserAccountDatabase,
 };
 
 /// WebSocket server configuration
@@ -90,32 +93,80 @@ impl Default for WebSocketConfig {
 #[serde(tag = "type")]
 pub enum WebSocketMessageType {
     // Authentication and session
-    Auth { token: Option<String>, session_id: Option<String> },
-    AuthResponse { success: bool, session_id: Option<String>, error: Option<String> },
+    Auth {
+        token: Option<String>,
+        session_id: Option<String>,
+    },
+    AuthResponse {
+        success: bool,
+        session_id: Option<String>,
+        error: Option<String>,
+    },
 
     // Client-server communication
-    LLSD { data: String, format: String }, // LLSD message wrapper
-    LLSDResponse { data: String, format: String, success: bool },
+    LLSD {
+        data: String,
+        format: String,
+    }, // LLSD message wrapper
+    LLSDResponse {
+        data: String,
+        format: String,
+        success: bool,
+    },
 
     // Real-time updates
-    AvatarUpdate { agent_id: String, position: [f64; 3], rotation: [f64; 4] },
-    ObjectUpdate { object_id: String, position: [f64; 3], rotation: [f64; 4] },
-    ChatMessage { from: String, message: String, channel: i32 },
+    AvatarUpdate {
+        agent_id: String,
+        position: [f64; 3],
+        rotation: [f64; 4],
+    },
+    ObjectUpdate {
+        object_id: String,
+        position: [f64; 3],
+        rotation: [f64; 4],
+    },
+    ChatMessage {
+        from: String,
+        message: String,
+        channel: i32,
+    },
 
     // Region and world
-    RegionUpdate { region_id: String, stats: RegionStats },
-    TeleportRequest { region: String, position: [f64; 3] },
-    TeleportResponse { success: bool, region: Option<String>, error: Option<String> },
+    RegionUpdate {
+        region_id: String,
+        stats: RegionStats,
+    },
+    TeleportRequest {
+        region: String,
+        position: [f64; 3],
+    },
+    TeleportResponse {
+        success: bool,
+        region: Option<String>,
+        error: Option<String>,
+    },
 
     // Asset management
-    AssetRequest { asset_id: String, asset_type: String },
-    AssetResponse { asset_id: String, data: Option<String>, success: bool },
+    AssetRequest {
+        asset_id: String,
+        asset_type: String,
+    },
+    AssetResponse {
+        asset_id: String,
+        data: Option<String>,
+        success: bool,
+    },
 
     // System messages
     Heartbeat,
     Pong,
-    Error { code: u32, message: String },
-    Disconnect { reason: String },
+    Error {
+        code: u32,
+        message: String,
+    },
+    Disconnect {
+        reason: String,
+    },
 
     // Instance Manager - Control Commands
     InstanceControl {
@@ -297,7 +348,7 @@ pub struct WebSocketConnection {
 impl WebSocketConnection {
     pub fn new(id: Uuid, addr: SocketAddr) -> (Self, mpsc::UnboundedReceiver<WebSocketMessage>) {
         let (message_tx, message_rx) = mpsc::unbounded_channel();
-        
+
         let connection = Self {
             id,
             addr,
@@ -318,41 +369,42 @@ impl WebSocketConnection {
             })),
             sequence_counter: Arc::new(AtomicU64::new(0)),
         };
-        
+
         (connection, message_rx)
     }
-    
+
     pub async fn send_message(&self, message: WebSocketMessage) -> Result<()> {
-        self.message_tx.send(message)
+        self.message_tx
+            .send(message)
             .map_err(|e| anyhow!("Failed to send WebSocket message: {}", e))?;
-        
+
         let mut stats = self.stats.write().await;
         stats.messages_sent += 1;
-        
+
         Ok(())
     }
-    
+
     pub async fn update_activity(&self) {
         *self.last_activity.write().await = Instant::now();
     }
-    
+
     pub async fn set_session(&self, session: Session) {
         *self.session.write().await = Some(session);
         *self.authenticated.write().await = true;
     }
-    
+
     pub async fn is_authenticated(&self) -> bool {
         *self.authenticated.read().await
     }
-    
+
     pub async fn get_session(&self) -> Option<Session> {
         self.session.read().await.clone()
     }
-    
+
     pub async fn get_stats(&self) -> WebSocketStats {
         self.stats.read().await.clone()
     }
-    
+
     fn next_sequence(&self) -> u64 {
         self.sequence_counter.fetch_add(1, Ordering::SeqCst)
     }
@@ -386,7 +438,7 @@ impl WebSocketServer {
         monitoring: Arc<MonitoringSystem>,
     ) -> Self {
         let (event_broadcaster, _) = broadcast::channel(1000);
-        
+
         Self {
             config,
             connections: Arc::new(RwLock::new(HashMap::new())),
@@ -411,81 +463,91 @@ impl WebSocketServer {
             })),
         }
     }
-    
+
     /// Start the WebSocket server
     pub async fn start(&self) -> Result<()> {
         if !self.config.enabled {
             info!("WebSocket server is disabled");
             return Ok(());
         }
-        
+
         info!("Starting WebSocket server on port {}", self.config.port);
-        
+
         // Start cleanup task for inactive connections
         self.start_cleanup_task().await;
-        
+
         // Start heartbeat task
         self.start_heartbeat_task().await;
-        
+
         // Create router with WebSocket endpoint
         let app = self.create_router().await;
-        
+
         // Start server
         let addr = format!("0.0.0.0:{}", self.config.port);
-        let listener = tokio::net::TcpListener::bind(&addr).await
+        let listener = tokio::net::TcpListener::bind(&addr)
+            .await
             .map_err(|e| anyhow!("Failed to bind WebSocket server to {}: {}", addr, e))?;
-        
+
         info!("WebSocket server listening on {}", addr);
         info!("WebSocket endpoint: ws://{}/ws", addr);
-        
+
         axum::serve(
             listener,
-            app.into_make_service_with_connect_info::<SocketAddr>()
-        ).await
-            .map_err(|e| anyhow!("WebSocket server error: {}", e))?;
-        
+            app.into_make_service_with_connect_info::<SocketAddr>(),
+        )
+        .await
+        .map_err(|e| anyhow!("WebSocket server error: {}", e))?;
+
         Ok(())
     }
-    
+
     async fn create_router(&self) -> Router {
         let server_state = Arc::new(self.clone());
-        
+
         Router::new()
-            .route("/ws", get({
-                let state = server_state.clone();
-                move |ws, info, query, headers| {
-                    websocket_handler(ws, State(state), info, query, headers)
-                }
-            }))
+            .route(
+                "/ws",
+                get({
+                    let state = server_state.clone();
+                    move |ws, info, query, headers| {
+                        websocket_handler(ws, State(state), info, query, headers)
+                    }
+                }),
+            )
             .route("/", get(|| async { "OpenSim WebSocket Server" }))
             .route("/health", get(|| async { "OK" }))
-            .route("/stats", get({
-                let state = server_state.clone();
-                move || websocket_stats_handler(State(state))
-            }))
+            .route(
+                "/stats",
+                get({
+                    let state = server_state.clone();
+                    move || websocket_stats_handler(State(state))
+                }),
+            )
     }
-    
+
     async fn start_cleanup_task(&self) {
         let connections = self.connections.clone();
         let config = self.config.clone();
-        
+
         tokio::spawn(async move {
             let mut interval = tokio::time::interval(Duration::from_secs(60));
-            
+
             loop {
                 interval.tick().await;
-                
+
                 let mut to_remove = Vec::new();
                 {
                     let conns = connections.read().await;
                     for (id, conn) in conns.iter() {
                         let last_activity = *conn.last_activity.read().await;
-                        if last_activity.elapsed() > Duration::from_millis(config.heartbeat_interval_ms * 3) {
+                        if last_activity.elapsed()
+                            > Duration::from_millis(config.heartbeat_interval_ms * 3)
+                        {
                             to_remove.push(*id);
                         }
                     }
                 }
-                
+
                 if !to_remove.is_empty() {
                     let mut conns = connections.write().await;
                     for id in to_remove {
@@ -497,17 +559,18 @@ impl WebSocketServer {
             }
         });
     }
-    
+
     async fn start_heartbeat_task(&self) {
         let connections = self.connections.clone();
         let config = self.config.clone();
-        
+
         tokio::spawn(async move {
-            let mut interval = tokio::time::interval(Duration::from_millis(config.heartbeat_interval_ms));
-            
+            let mut interval =
+                tokio::time::interval(Duration::from_millis(config.heartbeat_interval_ms));
+
             loop {
                 interval.tick().await;
-                
+
                 let conns = connections.read().await;
                 for (_, conn) in conns.iter() {
                     let heartbeat_msg = WebSocketMessage {
@@ -516,7 +579,7 @@ impl WebSocketServer {
                         message: WebSocketMessageType::Heartbeat,
                         sequence: Some(conn.next_sequence()),
                     };
-                    
+
                     if let Err(e) = conn.send_message(heartbeat_msg).await {
                         debug!("Failed to send heartbeat to {}: {}", conn.id, e);
                     }
@@ -524,7 +587,7 @@ impl WebSocketServer {
             }
         });
     }
-    
+
     pub async fn handle_websocket_connection(
         &self,
         socket: WebSocket,
@@ -533,15 +596,18 @@ impl WebSocketServer {
         _headers: HeaderMap,
     ) {
         let connection_id = Uuid::new_v4();
-        info!("New WebSocket client connected: {} from {}", connection_id, addr);
-        
+        info!(
+            "New WebSocket client connected: {} from {}",
+            connection_id, addr
+        );
+
         // Update global stats
         {
             let mut stats = self.global_stats.write().await;
             stats.total_connections += 1;
             stats.active_connections += 1;
         }
-        
+
         // Check connection limit
         {
             let current_count = self.connections.read().await.len();
@@ -550,15 +616,18 @@ impl WebSocketServer {
                 return;
             }
         }
-        
+
         let (connection, message_rx) = WebSocketConnection::new(connection_id, addr);
         let connection_arc = Arc::new(connection);
-        
+
         // Add to active connections
-        self.connections.write().await.insert(connection_id, connection_arc.clone());
-        
+        self.connections
+            .write()
+            .await
+            .insert(connection_id, connection_arc.clone());
+
         let (mut sender, mut receiver) = socket.split();
-        
+
         // Send welcome message
         let welcome_msg = WebSocketMessage {
             id: Uuid::new_v4().to_string(),
@@ -570,16 +639,16 @@ impl WebSocketServer {
             },
             sequence: Some(connection_arc.next_sequence()),
         };
-        
+
         if let Ok(json) = serde_json::to_string(&welcome_msg) {
             let _ = sender.send(Message::Text(json)).await;
         }
-        
+
         // Spawn task to handle outgoing messages
         let sender_task = {
             let connection = connection_arc.clone();
             let mut message_receiver = message_rx;
-            
+
             tokio::spawn(async move {
                 while let Some(msg) = message_receiver.recv().await {
                     match serde_json::to_string(&msg) {
@@ -605,25 +674,25 @@ impl WebSocketServer {
                 }
             })
         };
-        
+
         // Spawn task to handle incoming messages
         let receiver_task = {
             let connection = connection_arc.clone();
             let server = self.clone();
-            
+
             tokio::spawn(async move {
                 while let Some(msg) = receiver.next().await {
                     match msg {
                         Ok(Message::Text(text)) => {
                             connection.update_activity().await;
                             let message_size = text.len();
-                            
+
                             {
                                 let mut stats = connection.stats.write().await;
                                 stats.messages_received += 1;
                                 stats.bytes_received += message_size as u64;
                             }
-                            
+
                             if let Err(e) = server.handle_text_message(&connection, text).await {
                                 error!("Error handling WebSocket text message: {}", e);
                                 let mut stats = connection.stats.write().await;
@@ -633,13 +702,13 @@ impl WebSocketServer {
                         Ok(Message::Binary(data)) => {
                             connection.update_activity().await;
                             let message_size = data.len();
-                            
+
                             {
                                 let mut stats = connection.stats.write().await;
                                 stats.messages_received += 1;
                                 stats.bytes_received += message_size as u64;
                             }
-                            
+
                             if let Err(e) = server.handle_binary_message(&connection, data).await {
                                 error!("Error handling WebSocket binary message: {}", e);
                                 let mut stats = connection.stats.write().await;
@@ -655,7 +724,10 @@ impl WebSocketServer {
                             debug!("WebSocket pong received from {}", connection.id);
                         }
                         Ok(Message::Close(frame)) => {
-                            info!("WebSocket client {} closed connection: {:?}", connection.id, frame);
+                            info!(
+                                "WebSocket client {} closed connection: {:?}",
+                                connection.id, frame
+                            );
                             break;
                         }
                         Err(e) => {
@@ -668,68 +740,94 @@ impl WebSocketServer {
                 }
             })
         };
-        
+
         // Wait for either task to complete
         tokio::select! {
             _ = sender_task => {},
             _ = receiver_task => {},
         }
-        
+
         // Clean up connection
         self.connections.write().await.remove(&connection_id);
-        
+
         // Update global stats
         {
             let mut stats = self.global_stats.write().await;
             stats.active_connections = stats.active_connections.saturating_sub(1);
         }
-        
+
         info!("WebSocket client {} disconnected", connection_id);
     }
-    
-    async fn handle_text_message(&self, connection: &Arc<WebSocketConnection>, text: String) -> Result<()> {
+
+    async fn handle_text_message(
+        &self,
+        connection: &Arc<WebSocketConnection>,
+        text: String,
+    ) -> Result<()> {
         trace!("Received WebSocket text message: {}", text);
-        
+
         let message: WebSocketMessage = serde_json::from_str(&text)
             .map_err(|e| anyhow!("Failed to parse WebSocket message: {}", e))?;
-        
+
         self.process_websocket_message(connection, message).await
     }
-    
-    async fn handle_binary_message(&self, connection: &Arc<WebSocketConnection>, data: Vec<u8>) -> Result<()> {
+
+    async fn handle_binary_message(
+        &self,
+        connection: &Arc<WebSocketConnection>,
+        data: Vec<u8>,
+    ) -> Result<()> {
         trace!("Received WebSocket binary message: {} bytes", data.len());
-        
+
         // Try to parse as LLSD binary format
         match LLSDMessage::from_bytes(&data, LLSDFormat::Binary) {
-            Ok(llsd_msg) => {
-                self.handle_llsd_message(connection, llsd_msg).await
-            }
+            Ok(llsd_msg) => self.handle_llsd_message(connection, llsd_msg).await,
             Err(e) => {
                 warn!("Failed to parse binary message as LLSD: {}", e);
                 Err(anyhow!("Invalid binary message format"))
             }
         }
     }
-    
-    async fn process_websocket_message(&self, connection: &Arc<WebSocketConnection>, message: WebSocketMessage) -> Result<()> {
+
+    async fn process_websocket_message(
+        &self,
+        connection: &Arc<WebSocketConnection>,
+        message: WebSocketMessage,
+    ) -> Result<()> {
         match message.message {
             WebSocketMessageType::Auth { token, session_id } => {
-                self.handle_auth_message(connection, token, session_id).await
+                self.handle_auth_message(connection, token, session_id)
+                    .await
             }
             WebSocketMessageType::LLSD { data, format } => {
                 self.handle_llsd_wrapper(connection, data, format).await
             }
-            WebSocketMessageType::AvatarUpdate { agent_id, position, rotation } => {
-                self.handle_avatar_update(connection, agent_id, position, rotation).await
+            WebSocketMessageType::AvatarUpdate {
+                agent_id,
+                position,
+                rotation,
+            } => {
+                self.handle_avatar_update(connection, agent_id, position, rotation)
+                    .await
             }
-            WebSocketMessageType::ChatMessage { from, message: chat_msg, channel } => {
-                self.handle_chat_message(connection, from, chat_msg, channel).await
+            WebSocketMessageType::ChatMessage {
+                from,
+                message: chat_msg,
+                channel,
+            } => {
+                self.handle_chat_message(connection, from, chat_msg, channel)
+                    .await
             }
             WebSocketMessageType::TeleportRequest { region, position } => {
-                self.handle_teleport_request(connection, region, position).await
+                self.handle_teleport_request(connection, region, position)
+                    .await
             }
-            WebSocketMessageType::AssetRequest { asset_id, asset_type } => {
-                self.handle_asset_request(connection, asset_id, asset_type).await
+            WebSocketMessageType::AssetRequest {
+                asset_id,
+                asset_type,
+            } => {
+                self.handle_asset_request(connection, asset_id, asset_type)
+                    .await
             }
             WebSocketMessageType::Pong => {
                 // Heartbeat response
@@ -742,8 +840,13 @@ impl WebSocketServer {
             }
         }
     }
-    
-    async fn handle_auth_message(&self, connection: &Arc<WebSocketConnection>, token: Option<String>, session_id: Option<String>) -> Result<()> {
+
+    async fn handle_auth_message(
+        &self,
+        connection: &Arc<WebSocketConnection>,
+        token: Option<String>,
+        session_id: Option<String>,
+    ) -> Result<()> {
         let success = if let Some(token) = token {
             // Look up session by token (treating token as session_id for now)
             if let Some(session) = self.session_manager.get_session(&token).await {
@@ -763,57 +866,78 @@ impl WebSocketServer {
         } else {
             false
         };
-        
+
         let response = WebSocketMessage {
             id: Uuid::new_v4().to_string(),
             timestamp: chrono::Utc::now().timestamp() as u64,
             message: WebSocketMessageType::AuthResponse {
                 success,
-                session_id: if success { connection.get_session().await.map(|s| s.session_id) } else { None },
-                error: if !success { Some("Authentication failed".to_string()) } else { None },
+                session_id: if success {
+                    connection.get_session().await.map(|s| s.session_id)
+                } else {
+                    None
+                },
+                error: if !success {
+                    Some("Authentication failed".to_string())
+                } else {
+                    None
+                },
             },
             sequence: Some(connection.next_sequence()),
         };
-        
+
         connection.send_message(response).await
     }
-    
-    async fn handle_llsd_wrapper(&self, connection: &Arc<WebSocketConnection>, data: String, format: String) -> Result<()> {
+
+    async fn handle_llsd_wrapper(
+        &self,
+        connection: &Arc<WebSocketConnection>,
+        data: String,
+        format: String,
+    ) -> Result<()> {
         if !connection.is_authenticated().await {
             return Err(anyhow!("Authentication required for LLSD messages"));
         }
-        
+
         let llsd_format = match format.as_str() {
             "xml" => LLSDFormat::Xml,
             "binary" => LLSDFormat::Binary,
             _ => return Err(anyhow!("Unsupported LLSD format: {}", format)),
         };
-        
+
         let llsd_msg = LLSDMessage::from_bytes(data.as_bytes(), llsd_format)?;
         self.handle_llsd_message(connection, llsd_msg).await
     }
-    
-    async fn handle_llsd_message(&self, connection: &Arc<WebSocketConnection>, llsd_msg: LLSDMessage) -> Result<()> {
+
+    async fn handle_llsd_message(
+        &self,
+        connection: &Arc<WebSocketConnection>,
+        llsd_msg: LLSDMessage,
+    ) -> Result<()> {
         if !connection.is_authenticated().await {
             return Err(anyhow!("Authentication required for LLSD messages"));
         }
-        
+
         let session = if let Some(session) = connection.session.read().await.clone() {
             Arc::new(RwLock::new(session))
         } else {
             return Err(anyhow!("No session available for LLSD message"));
         };
-        
-        match self.llsd_handler.handle_message(
-            llsd_msg,
-            session,
-            self.security_manager.clone(),
-            self.session_manager.clone(),
-            self.region_manager.clone(),
-            self.state_manager.clone(),
-            self.asset_manager.clone(),
-            self.user_account_database.clone(),
-        ).await {
+
+        match self
+            .llsd_handler
+            .handle_message(
+                llsd_msg,
+                session,
+                self.security_manager.clone(),
+                self.session_manager.clone(),
+                self.region_manager.clone(),
+                self.state_manager.clone(),
+                self.asset_manager.clone(),
+                self.user_account_database.clone(),
+            )
+            .await
+        {
             Ok(Some(response)) => {
                 let response_msg = WebSocketMessage {
                     id: Uuid::new_v4().to_string(),
@@ -825,13 +949,13 @@ impl WebSocketServer {
                     },
                     sequence: Some(connection.next_sequence()),
                 };
-                
+
                 connection.send_message(response_msg).await
             }
             Ok(None) => Ok(()),
             Err(e) => {
                 error!("LLSD message handling error: {}", e);
-                
+
                 let error_msg = WebSocketMessage {
                     id: Uuid::new_v4().to_string(),
                     timestamp: chrono::Utc::now().timestamp() as u64,
@@ -841,26 +965,43 @@ impl WebSocketServer {
                     },
                     sequence: Some(connection.next_sequence()),
                 };
-                
+
                 connection.send_message(error_msg).await
             }
         }
     }
-    
-    async fn handle_avatar_update(&self, _connection: &Arc<WebSocketConnection>, _agent_id: String, _position: [f64; 3], _rotation: [f64; 4]) -> Result<()> {
+
+    async fn handle_avatar_update(
+        &self,
+        _connection: &Arc<WebSocketConnection>,
+        _agent_id: String,
+        _position: [f64; 3],
+        _rotation: [f64; 4],
+    ) -> Result<()> {
         // Handle avatar position/rotation updates
         // This would integrate with the region manager to update avatar state
         // and broadcast to other clients in the same region
         Ok(())
     }
-    
-    async fn handle_chat_message(&self, _connection: &Arc<WebSocketConnection>, _from: String, _message: String, _channel: i32) -> Result<()> {
+
+    async fn handle_chat_message(
+        &self,
+        _connection: &Arc<WebSocketConnection>,
+        _from: String,
+        _message: String,
+        _channel: i32,
+    ) -> Result<()> {
         // Handle chat messages
         // This would broadcast to other clients in range
         Ok(())
     }
-    
-    async fn handle_teleport_request(&self, connection: &Arc<WebSocketConnection>, region: String, position: [f64; 3]) -> Result<()> {
+
+    async fn handle_teleport_request(
+        &self,
+        connection: &Arc<WebSocketConnection>,
+        region: String,
+        position: [f64; 3],
+    ) -> Result<()> {
         // Handle teleport requests
         let response = WebSocketMessage {
             id: Uuid::new_v4().to_string(),
@@ -872,48 +1013,53 @@ impl WebSocketServer {
             },
             sequence: Some(connection.next_sequence()),
         };
-        
+
         connection.send_message(response).await
     }
-    
-    async fn handle_asset_request(&self, connection: &Arc<WebSocketConnection>, asset_id: String, asset_type: String) -> Result<()> {
+
+    async fn handle_asset_request(
+        &self,
+        connection: &Arc<WebSocketConnection>,
+        asset_id: String,
+        asset_type: String,
+    ) -> Result<()> {
         // Handle asset requests
         let response = WebSocketMessage {
             id: Uuid::new_v4().to_string(),
             timestamp: chrono::Utc::now().timestamp() as u64,
             message: WebSocketMessageType::AssetResponse {
                 asset_id: asset_id.clone(),
-                data: None, // Would load from asset manager
+                data: None,     // Would load from asset manager
                 success: false, // Placeholder
             },
             sequence: Some(connection.next_sequence()),
         };
-        
+
         connection.send_message(response).await
     }
-    
+
     pub async fn get_stats(&self) -> WebSocketStats {
         self.global_stats.read().await.clone()
     }
-    
+
     pub async fn get_connection_count(&self) -> usize {
         self.connections.read().await.len()
     }
-    
+
     pub async fn broadcast_message(&self, message: WebSocketMessage) -> Result<()> {
         let connections = self.connections.read().await;
         let mut errors = 0;
-        
+
         for (_, conn) in connections.iter() {
             if let Err(_) = conn.send_message(message.clone()).await {
                 errors += 1;
             }
         }
-        
+
         if errors > 0 {
             warn!("Failed to send broadcast message to {} connections", errors);
         }
-        
+
         Ok(())
     }
 
@@ -1033,14 +1179,18 @@ async fn websocket_handler(
 ) -> Response {
     let query_params = query.map(|q| q.0);
     let server_clone = server.clone();
-    
+
     ws.on_upgrade(move |socket| async move {
-        server_clone.handle_websocket_connection(socket, addr, query_params, headers).await
+        server_clone
+            .handle_websocket_connection(socket, addr, query_params, headers)
+            .await
     })
 }
 
 /// WebSocket statistics handler
-async fn websocket_stats_handler(State(server): State<Arc<WebSocketServer>>) -> Result<axum::Json<WebSocketStats>, StatusCode> {
+async fn websocket_stats_handler(
+    State(server): State<Arc<WebSocketServer>>,
+) -> Result<axum::Json<WebSocketStats>, StatusCode> {
     match server.get_stats().await {
         stats => Ok(axum::Json(stats)),
     }
@@ -1049,7 +1199,7 @@ async fn websocket_stats_handler(State(server): State<Arc<WebSocketServer>>) -> 
 #[cfg(test)]
 mod tests {
     use super::*;
-    
+
     #[tokio::test]
     async fn test_websocket_config() {
         let config = WebSocketConfig::default();
@@ -1057,16 +1207,16 @@ mod tests {
         assert_eq!(config.port, 9001);
         assert!(config.max_connections > 0);
     }
-    
+
     #[tokio::test]
     async fn test_websocket_connection() {
         let addr = "127.0.0.1:8080".parse().unwrap();
         let (conn, _rx) = WebSocketConnection::new(Uuid::new_v4(), addr);
-        
+
         assert!(!conn.is_authenticated().await);
         assert!(conn.get_session().await.is_none());
     }
-    
+
     #[tokio::test]
     async fn test_websocket_message_serialization() -> Result<()> {
         let msg = WebSocketMessage {
@@ -1075,13 +1225,13 @@ mod tests {
             message: WebSocketMessageType::Heartbeat,
             sequence: Some(1),
         };
-        
+
         let json = serde_json::to_string(&msg)?;
         let deserialized: WebSocketMessage = serde_json::from_str(&json)?;
-        
+
         assert_eq!(msg.id, deserialized.id);
         assert_eq!(msg.timestamp, deserialized.timestamp);
-        
+
         Ok(())
     }
 }

@@ -59,12 +59,17 @@ pub fn parse_collada_skin(dae_xml: &str) -> Result<ColladaSkinData> {
                 let ln = e.local_name();
                 let local_name = std::str::from_utf8(ln.as_ref()).unwrap_or("");
                 match local_name {
-                    "skin" => { in_skin = true; }
-                    "bind_shape_matrix" if in_skin => { in_bind_shape = true; }
+                    "skin" => {
+                        in_skin = true;
+                    }
+                    "bind_shape_matrix" if in_skin => {
+                        in_bind_shape = true;
+                    }
                     "source" if in_skin => {
                         for attr in e.attributes().flatten() {
                             if attr.key.as_ref() == b"id" {
-                                current_source_id = format!("#{}", String::from_utf8_lossy(&attr.value));
+                                current_source_id =
+                                    format!("#{}", String::from_utf8_lossy(&attr.value));
                                 in_source = true;
                             }
                         }
@@ -72,7 +77,8 @@ pub fn parse_collada_skin(dae_xml: &str) -> Result<ColladaSkinData> {
                     "Name_array" | "IDREF_array" if in_source => {
                         for attr in e.attributes().flatten() {
                             if attr.key.as_ref() == b"count" {
-                                current_array_count = String::from_utf8_lossy(&attr.value).parse().unwrap_or(0);
+                                current_array_count =
+                                    String::from_utf8_lossy(&attr.value).parse().unwrap_or(0);
                             }
                         }
                         in_name_array = true;
@@ -80,20 +86,29 @@ pub fn parse_collada_skin(dae_xml: &str) -> Result<ColladaSkinData> {
                     "float_array" if in_source => {
                         for attr in e.attributes().flatten() {
                             if attr.key.as_ref() == b"count" {
-                                current_array_count = String::from_utf8_lossy(&attr.value).parse().unwrap_or(0);
+                                current_array_count =
+                                    String::from_utf8_lossy(&attr.value).parse().unwrap_or(0);
                             }
                         }
                         in_float_array = true;
                     }
-                    "joints" if in_skin => { in_joints = true; }
-                    "vertex_weights" if in_skin => { in_vertex_weights = true; }
+                    "joints" if in_skin => {
+                        in_joints = true;
+                    }
+                    "vertex_weights" if in_skin => {
+                        in_vertex_weights = true;
+                    }
                     "input" if in_joints => {
                         let mut semantic = String::new();
                         let mut source = String::new();
                         for attr in e.attributes().flatten() {
                             match attr.key.as_ref() {
-                                b"semantic" => semantic = String::from_utf8_lossy(&attr.value).to_string(),
-                                b"source" => source = String::from_utf8_lossy(&attr.value).to_string(),
+                                b"semantic" => {
+                                    semantic = String::from_utf8_lossy(&attr.value).to_string()
+                                }
+                                b"source" => {
+                                    source = String::from_utf8_lossy(&attr.value).to_string()
+                                }
                                 _ => {}
                             }
                         }
@@ -109,21 +124,37 @@ pub fn parse_collada_skin(dae_xml: &str) -> Result<ColladaSkinData> {
                         let mut offset = 0usize;
                         for attr in e.attributes().flatten() {
                             match attr.key.as_ref() {
-                                b"semantic" => semantic = String::from_utf8_lossy(&attr.value).to_string(),
-                                b"source" => source = String::from_utf8_lossy(&attr.value).to_string(),
-                                b"offset" => offset = String::from_utf8_lossy(&attr.value).parse().unwrap_or(0),
+                                b"semantic" => {
+                                    semantic = String::from_utf8_lossy(&attr.value).to_string()
+                                }
+                                b"source" => {
+                                    source = String::from_utf8_lossy(&attr.value).to_string()
+                                }
+                                b"offset" => {
+                                    offset =
+                                        String::from_utf8_lossy(&attr.value).parse().unwrap_or(0)
+                                }
                                 _ => {}
                             }
                         }
                         match semantic.as_str() {
-                            "JOINT" => { joint_input_offset = offset; }
-                            "WEIGHT" => { weight_source_ref = source; weight_input_offset = offset; }
+                            "JOINT" => {
+                                joint_input_offset = offset;
+                            }
+                            "WEIGHT" => {
+                                weight_source_ref = source;
+                                weight_input_offset = offset;
+                            }
                             _ => {}
                         }
                         input_stride = input_stride.max(offset + 1);
                     }
-                    "vcount" if in_vertex_weights => { in_vcount = true; }
-                    "v" if in_vertex_weights => { in_v = true; }
+                    "vcount" if in_vertex_weights => {
+                        in_vcount = true;
+                    }
+                    "v" if in_vertex_weights => {
+                        in_v = true;
+                    }
                     _ => {}
                 }
             }
@@ -131,43 +162,65 @@ pub fn parse_collada_skin(dae_xml: &str) -> Result<ColladaSkinData> {
                 let ln = e.local_name();
                 let local_name = std::str::from_utf8(ln.as_ref()).unwrap_or("");
                 match local_name {
-                    "skin" => { in_skin = false; }
-                    "bind_shape_matrix" => { in_bind_shape = false; }
-                    "source" => { in_source = false; current_source_id.clear(); }
-                    "Name_array" | "IDREF_array" => { in_name_array = false; }
-                    "float_array" => { in_float_array = false; }
-                    "joints" => { in_joints = false; }
-                    "vertex_weights" => { in_vertex_weights = false; }
-                    "vcount" => { in_vcount = false; }
-                    "v" => { in_v = false; }
+                    "skin" => {
+                        in_skin = false;
+                    }
+                    "bind_shape_matrix" => {
+                        in_bind_shape = false;
+                    }
+                    "source" => {
+                        in_source = false;
+                        current_source_id.clear();
+                    }
+                    "Name_array" | "IDREF_array" => {
+                        in_name_array = false;
+                    }
+                    "float_array" => {
+                        in_float_array = false;
+                    }
+                    "joints" => {
+                        in_joints = false;
+                    }
+                    "vertex_weights" => {
+                        in_vertex_weights = false;
+                    }
+                    "vcount" => {
+                        in_vcount = false;
+                    }
+                    "v" => {
+                        in_v = false;
+                    }
                     _ => {}
                 }
             }
             Ok(Event::Text(ref e)) => {
                 let text = e.unescape().unwrap_or_default().to_string();
                 if in_bind_shape {
-                    let vals: Vec<f32> = text.split_whitespace()
+                    let vals: Vec<f32> = text
+                        .split_whitespace()
                         .filter_map(|s| s.parse().ok())
                         .collect();
                     if vals.len() >= 16 {
                         bind_shape_matrix.copy_from_slice(&vals[..16]);
                     }
                 } else if in_name_array && in_source {
-                    let names: Vec<String> = text.split_whitespace()
-                        .map(|s| s.to_string())
-                        .collect();
+                    let names: Vec<String> =
+                        text.split_whitespace().map(|s| s.to_string()).collect();
                     sources.insert(current_source_id.clone(), SourceData::Names(names));
                 } else if in_float_array && in_source {
-                    let vals: Vec<f32> = text.split_whitespace()
+                    let vals: Vec<f32> = text
+                        .split_whitespace()
                         .filter_map(|s| s.parse().ok())
                         .collect();
                     sources.insert(current_source_id.clone(), SourceData::Floats(vals));
                 } else if in_vcount {
-                    vcounts = text.split_whitespace()
+                    vcounts = text
+                        .split_whitespace()
                         .filter_map(|s| s.parse().ok())
                         .collect();
                 } else if in_v {
-                    v_data = text.split_whitespace()
+                    v_data = text
+                        .split_whitespace()
                         .filter_map(|s| s.parse().ok())
                         .collect();
                 }
@@ -180,12 +233,18 @@ pub fn parse_collada_skin(dae_xml: &str) -> Result<ColladaSkinData> {
 
     let joint_names = match sources.get(&joint_source_ref) {
         Some(SourceData::Names(names)) => names.clone(),
-        _ => bail!("No joint names found in Collada skin (ref: {})", joint_source_ref),
+        _ => bail!(
+            "No joint names found in Collada skin (ref: {})",
+            joint_source_ref
+        ),
     };
 
     let inv_bind_floats = match sources.get(&inv_bind_source_ref) {
         Some(SourceData::Floats(f)) => f.clone(),
-        _ => bail!("No inverse bind matrices found (ref: {})", inv_bind_source_ref),
+        _ => bail!(
+            "No inverse bind matrices found (ref: {})",
+            inv_bind_source_ref
+        ),
     };
 
     let mut inverse_bind_matrices = Vec::new();
@@ -196,8 +255,11 @@ pub fn parse_collada_skin(dae_xml: &str) -> Result<ColladaSkinData> {
     }
 
     if inverse_bind_matrices.len() != joint_names.len() {
-        bail!("Joint count ({}) != inverse bind matrix count ({})",
-            joint_names.len(), inverse_bind_matrices.len());
+        bail!(
+            "Joint count ({}) != inverse bind matrix count ({})",
+            joint_names.len(),
+            inverse_bind_matrices.len()
+        );
     }
 
     let weight_values = match sources.get(&weight_source_ref) {
@@ -219,8 +281,12 @@ pub fn parse_collada_skin(dae_xml: &str) -> Result<ColladaSkinData> {
         }
     }
 
-    info!("[COLLADA_SKIN] Parsed: {} joints, {} vertices, {} weight values",
-        joint_names.len(), vcounts.len(), weight_values.len());
+    info!(
+        "[COLLADA_SKIN] Parsed: {} joints, {} vertices, {} weight values",
+        joint_names.len(),
+        vcounts.len(),
+        weight_values.len()
+    );
 
     Ok(ColladaSkinData {
         bind_shape_matrix,
@@ -239,7 +305,10 @@ enum SourceData {
 }
 
 pub fn normalize_joint_name(name: &str) -> String {
-    if name.starts_with('m') && name.len() > 1 && name.chars().nth(1).map_or(false, |c| c.is_uppercase()) {
+    if name.starts_with('m')
+        && name.len() > 1
+        && name.chars().nth(1).map_or(false, |c| c.is_uppercase())
+    {
         return name.to_string();
     }
 
@@ -507,15 +576,45 @@ fn sl_skeleton_world_positions() -> HashMap<String, [f32; 3]> {
         ("mFaceTeethUpper", "mFaceRoot", 0.020, 0.0, -0.030),
         ("mFaceLipUpperLeft", "mFaceTeethUpper", 0.045, 0.0, -0.003),
         ("mFaceLipUpperRight", "mFaceTeethUpper", 0.045, 0.0, -0.003),
-        ("mFaceLipCornerLeft", "mFaceTeethUpper", 0.028, -0.019, -0.010),
-        ("mFaceLipCornerRight", "mFaceTeethUpper", 0.028, 0.019, -0.010),
+        (
+            "mFaceLipCornerLeft",
+            "mFaceTeethUpper",
+            0.028,
+            -0.019,
+            -0.010,
+        ),
+        (
+            "mFaceLipCornerRight",
+            "mFaceTeethUpper",
+            0.028,
+            0.019,
+            -0.010,
+        ),
         ("mFaceLipUpperCenter", "mFaceTeethUpper", 0.045, 0.0, -0.003),
         ("mFaceEyecornerInnerLeft", "mFaceRoot", 0.075, 0.017, 0.032),
-        ("mFaceEyecornerInnerRight", "mFaceRoot", 0.075, -0.017, 0.032),
+        (
+            "mFaceEyecornerInnerRight",
+            "mFaceRoot",
+            0.075,
+            -0.017,
+            0.032,
+        ),
         // Left hand fingers
         ("mHandMiddle1Left", "mWristLeft", 0.013, 0.101, 0.015),
-        ("mHandMiddle2Left", "mHandMiddle1Left", -0.001, 0.040, -0.006),
-        ("mHandMiddle3Left", "mHandMiddle2Left", -0.001, 0.049, -0.008),
+        (
+            "mHandMiddle2Left",
+            "mHandMiddle1Left",
+            -0.001,
+            0.040,
+            -0.006,
+        ),
+        (
+            "mHandMiddle3Left",
+            "mHandMiddle2Left",
+            -0.001,
+            0.049,
+            -0.008,
+        ),
         ("mHandIndex1Left", "mWristLeft", 0.038, 0.097, 0.015),
         ("mHandIndex2Left", "mHandIndex1Left", 0.017, 0.036, -0.006),
         ("mHandIndex3Left", "mHandIndex2Left", 0.014, 0.032, -0.006),
@@ -530,20 +629,68 @@ fn sl_skeleton_world_positions() -> HashMap<String, [f32; 3]> {
         ("mHandThumb3Left", "mHandThumb2Left", 0.023, 0.031, -0.001),
         // Right hand fingers
         ("mHandMiddle1Right", "mWristRight", 0.013, -0.101, 0.015),
-        ("mHandMiddle2Right", "mHandMiddle1Right", -0.001, -0.040, -0.006),
-        ("mHandMiddle3Right", "mHandMiddle2Right", -0.001, -0.049, -0.008),
+        (
+            "mHandMiddle2Right",
+            "mHandMiddle1Right",
+            -0.001,
+            -0.040,
+            -0.006,
+        ),
+        (
+            "mHandMiddle3Right",
+            "mHandMiddle2Right",
+            -0.001,
+            -0.049,
+            -0.008,
+        ),
         ("mHandIndex1Right", "mWristRight", 0.038, -0.097, 0.015),
-        ("mHandIndex2Right", "mHandIndex1Right", 0.017, -0.036, -0.006),
-        ("mHandIndex3Right", "mHandIndex2Right", 0.014, -0.032, -0.006),
+        (
+            "mHandIndex2Right",
+            "mHandIndex1Right",
+            0.017,
+            -0.036,
+            -0.006,
+        ),
+        (
+            "mHandIndex3Right",
+            "mHandIndex2Right",
+            0.014,
+            -0.032,
+            -0.006,
+        ),
         ("mHandRing1Right", "mWristRight", -0.010, -0.099, 0.009),
         ("mHandRing2Right", "mHandRing1Right", -0.013, -0.038, -0.008),
         ("mHandRing3Right", "mHandRing2Right", -0.013, -0.040, -0.009),
         ("mHandPinky1Right", "mWristRight", -0.031, -0.095, 0.003),
-        ("mHandPinky2Right", "mHandPinky1Right", -0.024, -0.025, -0.006),
-        ("mHandPinky3Right", "mHandPinky2Right", -0.015, -0.018, -0.004),
+        (
+            "mHandPinky2Right",
+            "mHandPinky1Right",
+            -0.024,
+            -0.025,
+            -0.006,
+        ),
+        (
+            "mHandPinky3Right",
+            "mHandPinky2Right",
+            -0.015,
+            -0.018,
+            -0.004,
+        ),
         ("mHandThumb1Right", "mWristRight", 0.031, -0.026, 0.004),
-        ("mHandThumb2Right", "mHandThumb1Right", 0.028, -0.032, -0.001),
-        ("mHandThumb3Right", "mHandThumb2Right", 0.023, -0.031, -0.001),
+        (
+            "mHandThumb2Right",
+            "mHandThumb1Right",
+            0.028,
+            -0.032,
+            -0.001,
+        ),
+        (
+            "mHandThumb3Right",
+            "mHandThumb2Right",
+            0.023,
+            -0.031,
+            -0.001,
+        ),
         // Wings
         ("mWingsRoot", "mChest", -0.014, 0.0, 0.0),
         ("mWing1Left", "mWingsRoot", -0.099, 0.105, 0.181),
@@ -593,7 +740,9 @@ fn are_all_inverse_bind_matrices_identity(matrices: &[[f32; 16]]) -> bool {
     if matrices.is_empty() {
         return false;
     }
-    let identity = [1.0, 0.0, 0.0, 0.0, 0.0, 1.0, 0.0, 0.0, 0.0, 0.0, 1.0, 0.0, 0.0, 0.0, 0.0, 1.0];
+    let identity = [
+        1.0, 0.0, 0.0, 0.0, 0.0, 1.0, 0.0, 0.0, 0.0, 0.0, 1.0, 0.0, 0.0, 0.0, 0.0, 1.0,
+    ];
     let mut all_identity = true;
     for mat in matrices {
         for i in 0..16 {
@@ -602,7 +751,9 @@ fn are_all_inverse_bind_matrices_identity(matrices: &[[f32; 16]]) -> bool {
                 break;
             }
         }
-        if !all_identity { break; }
+        if !all_identity {
+            break;
+        }
     }
     all_identity
 }
@@ -611,8 +762,13 @@ pub fn to_mesh_skin_info(data: &ColladaSkinData) -> (MeshSkinInfo, Vec<VertexWei
     to_mesh_skin_info_with_axis(data, true)
 }
 
-pub fn to_mesh_skin_info_with_axis(data: &ColladaSkinData, y_up: bool) -> (MeshSkinInfo, Vec<VertexWeights>) {
-    let normalized_names: Vec<String> = data.joint_names.iter()
+pub fn to_mesh_skin_info_with_axis(
+    data: &ColladaSkinData,
+    y_up: bool,
+) -> (MeshSkinInfo, Vec<VertexWeights>) {
+    let normalized_names: Vec<String> = data
+        .joint_names
+        .iter()
         .map(|n| normalize_joint_name(n))
         .collect();
 
@@ -642,11 +798,18 @@ pub fn to_mesh_skin_info_with_axis(data: &ColladaSkinData, y_up: bool) -> (MeshS
             }
         }
 
-        influences.sort_by(|a, b| b.weight.partial_cmp(&a.weight).unwrap_or(std::cmp::Ordering::Equal));
+        influences.sort_by(|a, b| {
+            b.weight
+                .partial_cmp(&a.weight)
+                .unwrap_or(std::cmp::Ordering::Equal)
+        });
         influences.truncate(4);
 
         if influences.is_empty() {
-            influences.push(JointInfluence { joint_index: 0, weight: 1.0 });
+            influences.push(JointInfluence {
+                joint_index: 0,
+                weight: 1.0,
+            });
         }
 
         let wsum: f32 = influences.iter().map(|i| i.weight).sum();
@@ -660,32 +823,48 @@ pub fn to_mesh_skin_info_with_axis(data: &ColladaSkinData, y_up: bool) -> (MeshS
     }
 
     let inverse_bind_matrices = {
-        info!("[COLLADA_SKIN] Computing SL skeleton inverse bind matrices for {} joints", normalized_names.len());
+        info!(
+            "[COLLADA_SKIN] Computing SL skeleton inverse bind matrices for {} joints",
+            normalized_names.len()
+        );
         let skel = sl_skeleton_world_positions();
         let mut fixed: Vec<[f32; 16]> = Vec::with_capacity(normalized_names.len());
         let mut matched = 0usize;
         for name in &normalized_names {
             if let Some(wp) = skel.get(name.as_str()) {
                 fixed.push([
-                    1.0, 0.0, 0.0, 0.0,
-                    0.0, 1.0, 0.0, 0.0,
-                    0.0, 0.0, 1.0, 0.0,
-                    -wp[0], -wp[1], -wp[2], 1.0,
+                    1.0, 0.0, 0.0, 0.0, 0.0, 1.0, 0.0, 0.0, 0.0, 0.0, 1.0, 0.0, -wp[0], -wp[1],
+                    -wp[2], 1.0,
                 ]);
                 matched += 1;
             } else {
-                warn!("[COLLADA_SKIN] Joint '{}' not in SL skeleton — using identity", name);
-                fixed.push([1.0, 0.0, 0.0, 0.0, 0.0, 1.0, 0.0, 0.0, 0.0, 0.0, 1.0, 0.0, 0.0, 0.0, 0.0, 1.0]);
+                warn!(
+                    "[COLLADA_SKIN] Joint '{}' not in SL skeleton — using identity",
+                    name
+                );
+                fixed.push([
+                    1.0, 0.0, 0.0, 0.0, 0.0, 1.0, 0.0, 0.0, 0.0, 0.0, 1.0, 0.0, 0.0, 0.0, 0.0, 1.0,
+                ]);
             }
         }
-        info!("[COLLADA_SKIN] Matched {}/{} joints to SL skeleton", matched, normalized_names.len());
+        info!(
+            "[COLLADA_SKIN] Matched {}/{} joints to SL skeleton",
+            matched,
+            normalized_names.len()
+        );
         if !fixed.is_empty() {
             let m = &fixed[0];
-            info!("[COLLADA_SKIN] IBM[0] ({}): trans=({:.3},{:.3},{:.3})", normalized_names[0], m[12], m[13], m[14]);
+            info!(
+                "[COLLADA_SKIN] IBM[0] ({}): trans=({:.3},{:.3},{:.3})",
+                normalized_names[0], m[12], m[13], m[14]
+            );
         }
         if fixed.len() > 3 {
             let m = &fixed[3];
-            info!("[COLLADA_SKIN] IBM[3] ({}): trans=({:.3},{:.3},{:.3})", normalized_names[3], m[12], m[13], m[14]);
+            info!(
+                "[COLLADA_SKIN] IBM[3] ({}): trans=({:.3},{:.3},{:.3})",
+                normalized_names[3], m[12], m[13], m[14]
+            );
         }
         fixed
     };
@@ -693,23 +872,31 @@ pub fn to_mesh_skin_info_with_axis(data: &ColladaSkinData, y_up: bool) -> (MeshS
     let bsm = &data.bind_shape_matrix;
     let bind_shape_transposed = if y_up {
         let converted = [
-            bsm[0], -bsm[2],  bsm[1],  bsm[3],
-           -bsm[8],  bsm[10], -bsm[9], -bsm[11],
-            bsm[4], -bsm[6],  bsm[5],  bsm[7],
-            bsm[12], -bsm[14], bsm[13], bsm[15],
+            bsm[0], -bsm[2], bsm[1], bsm[3], -bsm[8], bsm[10], -bsm[9], -bsm[11], bsm[4], -bsm[6],
+            bsm[5], bsm[7], bsm[12], -bsm[14], bsm[13], bsm[15],
         ];
         [
-            converted[0], converted[4], converted[8],  converted[12],
-            converted[1], converted[5], converted[9],  converted[13],
-            converted[2], converted[6], converted[10], converted[14],
-            converted[3], converted[7], converted[11], converted[15],
+            converted[0],
+            converted[4],
+            converted[8],
+            converted[12],
+            converted[1],
+            converted[5],
+            converted[9],
+            converted[13],
+            converted[2],
+            converted[6],
+            converted[10],
+            converted[14],
+            converted[3],
+            converted[7],
+            converted[11],
+            converted[15],
         ]
     } else {
         [
-            bsm[0], bsm[4], bsm[8],  bsm[12],
-            bsm[1], bsm[5], bsm[9],  bsm[13],
-            bsm[2], bsm[6], bsm[10], bsm[14],
-            bsm[3], bsm[7], bsm[11], bsm[15],
+            bsm[0], bsm[4], bsm[8], bsm[12], bsm[1], bsm[5], bsm[9], bsm[13], bsm[2], bsm[6],
+            bsm[10], bsm[14], bsm[3], bsm[7], bsm[11], bsm[15],
         ]
     };
 
@@ -809,13 +996,29 @@ mod tests {
         // SL viewer reads translation from mMatrix[3][0..2] = flat[12..14]
         // mPelvis world pos = (0, 0, 1.067) → flat[12]=0.0, flat[13]=0.0, flat[14]=-1.067
         let pelvis_mat = &info.inverse_bind_matrices[0];
-        assert!((pelvis_mat[12] - 0.0).abs() < 0.01, "pelvis inv_bind X: {}", pelvis_mat[12]);
-        assert!((pelvis_mat[13] - 0.0).abs() < 0.01, "pelvis inv_bind Y: {}", pelvis_mat[13]);
-        assert!((pelvis_mat[14] - (-1.067)).abs() < 0.01, "pelvis inv_bind Z: {} expected -1.067", pelvis_mat[14]);
+        assert!(
+            (pelvis_mat[12] - 0.0).abs() < 0.01,
+            "pelvis inv_bind X: {}",
+            pelvis_mat[12]
+        );
+        assert!(
+            (pelvis_mat[13] - 0.0).abs() < 0.01,
+            "pelvis inv_bind Y: {}",
+            pelvis_mat[13]
+        );
+        assert!(
+            (pelvis_mat[14] - (-1.067)).abs() < 0.01,
+            "pelvis inv_bind Z: {} expected -1.067",
+            pelvis_mat[14]
+        );
 
         // mTorso world pos: mPelvis(0,0,1.067) + mSpine1(0,0,0.084) + mSpine2(0,0,-0.084) + mTorso(0,0,0.084) = (0,0,1.151)
         let torso_mat = &info.inverse_bind_matrices[1];
-        assert!((torso_mat[14] - (-1.151)).abs() < 0.01, "torso inv_bind Z: {} expected -1.151", torso_mat[14]);
+        assert!(
+            (torso_mat[14] - (-1.151)).abs() < 0.01,
+            "torso inv_bind Z: {} expected -1.151",
+            torso_mat[14]
+        );
     }
 
     #[test]
@@ -852,17 +1055,35 @@ mod tests {
 
         let skin = parse_collada_skin(dae).expect("parse failed");
         let (info, _) = to_mesh_skin_info(&skin);
-        assert!((info.inverse_bind_matrices[0][14] - (-1.067)).abs() < 0.01, "pelvis Z: {}", info.inverse_bind_matrices[0][14]);
-        assert!((info.inverse_bind_matrices[1][14] - (-1.356)).abs() < 0.01, "chest Z: {}", info.inverse_bind_matrices[1][14]);
-        assert!((info.inverse_bind_matrices[0][12] - 0.0).abs() < 0.01, "pelvis X should be 0");
-        assert!((info.inverse_bind_matrices[0][13] - 0.0).abs() < 0.01, "pelvis Y should be 0");
+        assert!(
+            (info.inverse_bind_matrices[0][14] - (-1.067)).abs() < 0.01,
+            "pelvis Z: {}",
+            info.inverse_bind_matrices[0][14]
+        );
+        assert!(
+            (info.inverse_bind_matrices[1][14] - (-1.356)).abs() < 0.01,
+            "chest Z: {}",
+            info.inverse_bind_matrices[1][14]
+        );
+        assert!(
+            (info.inverse_bind_matrices[0][12] - 0.0).abs() < 0.01,
+            "pelvis X should be 0"
+        );
+        assert!(
+            (info.inverse_bind_matrices[0][13] - 0.0).abs() < 0.01,
+            "pelvis Y should be 0"
+        );
     }
 
     #[test]
     fn test_skeleton_world_positions() {
         let skel = sl_skeleton_world_positions();
         let pelvis = skel.get("mPelvis").unwrap();
-        assert!((pelvis[2] - 1.067).abs() < 0.001, "mPelvis Z: {}", pelvis[2]);
+        assert!(
+            (pelvis[2] - 1.067).abs() < 0.001,
+            "mPelvis Z: {}",
+            pelvis[2]
+        );
 
         let chest = skel.get("mChest").unwrap();
         assert!((chest[2] - 1.356).abs() < 0.001, "mChest Z: {}", chest[2]);
@@ -871,6 +1092,10 @@ mod tests {
         assert!(head[2] > 1.6, "mHead Z should be >1.6, got {}", head[2]);
 
         let ankle_left = skel.get("mAnkleLeft").unwrap();
-        assert!(ankle_left[2] < 0.1, "mAnkleLeft Z should be near ground, got {}", ankle_left[2]);
+        assert!(
+            ankle_left[2] < 0.1,
+            "mAnkleLeft Z should be near ground, got {}",
+            ankle_left[2]
+        );
     }
 }

@@ -1,17 +1,14 @@
-use std::{
-    collections::HashMap,
-    net::SocketAddr,
-    sync::Arc,
-};
+use std::{collections::HashMap, net::SocketAddr, sync::Arc};
 use tokio::{
     io::{split, AsyncReadExt, AsyncWriteExt},
     net::TcpStream,
     sync::{mpsc, RwLock},
 };
+use tracing::{debug, error, info, warn};
 use uuid::Uuid;
-use tracing::{debug, info, warn, error};
 
 use crate::{
+    database::user_accounts::UserAccountDatabase,
     monitoring::MonitoringSystem,
     network::{
         llsd::{LLSDFormat, LLSDMessage, LLSDMessageHandler},
@@ -21,7 +18,6 @@ use crate::{
     },
     region::RegionManager,
     state::StateManager,
-    database::user_accounts::UserAccountDatabase,
 };
 
 /// Information about the client's viewer.
@@ -71,7 +67,11 @@ impl ClientConnection {
         state_manager: Arc<StateManager>,
         asset_manager: Arc<crate::asset::AssetManager>,
         user_account_database: Arc<UserAccountDatabase>,
-    ) -> (Self, mpsc::UnboundedReceiver<ClientMessage>, mpsc::Receiver<()>) {
+    ) -> (
+        Self,
+        mpsc::UnboundedReceiver<ClientMessage>,
+        mpsc::Receiver<()>,
+    ) {
         let (message_tx, message_rx) = mpsc::unbounded_channel();
         let (shutdown_tx, shutdown_rx) = mpsc::channel(1);
 
@@ -110,7 +110,9 @@ impl ClientConnection {
 
         let read_task = tokio::spawn(async move {
             if let Ok(mut stream_guard) = stream_clone.try_lock() {
-                let peer_addr = stream_guard.peer_addr().map_or_else(|_| "unknown".to_string(), |a| a.to_string());
+                let peer_addr = stream_guard
+                    .peer_addr()
+                    .map_or_else(|_| "unknown".to_string(), |a| a.to_string());
                 let (mut read_stream, _) = split(&mut *stream_guard);
                 let mut buffer = [0u8; 8192];
                 loop {
@@ -127,7 +129,8 @@ impl ClientConnection {
                             let format = LLSDFormat::Binary;
                             match LLSDMessage::from_bytes(&buffer[..n], format) {
                                 Ok(msg) => {
-                                    if message_tx_clone.send(ClientMessage::Incoming(msg)).is_err() {
+                                    if message_tx_clone.send(ClientMessage::Incoming(msg)).is_err()
+                                    {
                                         warn!("Failed to send incoming message for processing");
                                         break;
                                     }
@@ -147,7 +150,7 @@ impl ClientConnection {
                 error!("Could not get lock on TcpStream for reading");
             }
         });
-        
+
         let write_stream_clone = self.stream.clone();
         let process_task = self.process_messages(message_rx, write_stream_clone);
 
@@ -173,18 +176,25 @@ impl ClientConnection {
             while let Some(message) = message_rx.recv().await {
                 match message {
                     ClientMessage::Incoming(msg) => {
-                        let response = self.llsd_handler.handle_message(
-                            msg, 
-                            self.session.clone(), 
-                            self.security_manager.clone(), 
-                            self.session_manager.clone(),
-                            self.region_manager.clone(),
-                            self.state_manager.clone(),
-                            self.asset_manager.clone(),
-                            self.user_account_database.clone()
-                        ).await;
+                        let response = self
+                            .llsd_handler
+                            .handle_message(
+                                msg,
+                                self.session.clone(),
+                                self.security_manager.clone(),
+                                self.session_manager.clone(),
+                                self.region_manager.clone(),
+                                self.state_manager.clone(),
+                                self.asset_manager.clone(),
+                                self.user_account_database.clone(),
+                            )
+                            .await;
                         if let Ok(Some(response_msg)) = response {
-                            if self.message_tx.send(ClientMessage::Outgoing(response_msg)).is_err() {
+                            if self
+                                .message_tx
+                                .send(ClientMessage::Outgoing(response_msg))
+                                .is_err()
+                            {
                                 warn!("Failed to queue outgoing message");
                             }
                         }
@@ -229,7 +239,11 @@ impl ClientConnection {
         self.session_manager.remove_session(&session_id).await;
 
         // Remove avatar from region if logged in
-        if let Err(e) = self.region_manager.remove_avatar(&agent_id.to_string()).await {
+        if let Err(e) = self
+            .region_manager
+            .remove_avatar(&agent_id.to_string())
+            .await
+        {
             warn!("Failed to remove avatar {} from region: {}", agent_id, e);
         }
 
@@ -242,13 +256,13 @@ impl ClientConnection {
     /// Gracefully shuts down the client connection
     pub async fn shutdown(&self) -> Result<(), Box<dyn std::error::Error>> {
         info!("Initiating graceful shutdown for client {}", self.addr);
-        
+
         // Send shutdown message to the message processor
         self.message_tx.send(ClientMessage::Shutdown)?;
-        
+
         // Send shutdown signal
         self.shutdown_tx.send(()).await?;
-        
+
         Ok(())
     }
 }
@@ -278,7 +292,11 @@ impl ClientManager {
     }
 
     /// Adds a new client to the manager.
-    pub async fn add_client(&self, client_id: Uuid, message_tx: mpsc::UnboundedSender<ClientMessage>) {
+    pub async fn add_client(
+        &self,
+        client_id: Uuid,
+        message_tx: mpsc::UnboundedSender<ClientMessage>,
+    ) {
         self.clients.write().await.insert(client_id, message_tx);
     }
 
@@ -306,4 +324,4 @@ impl ClientManager {
     pub async fn get_client_sessions(&self) -> Vec<Session> {
         self.session_manager.get_all_sessions().await
     }
-} 
+}

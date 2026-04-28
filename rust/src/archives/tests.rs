@@ -61,7 +61,10 @@ mod tests {
             let path1 = "assets/550e8400-e29b-41d4-a716-446655440000_texture.jp2";
             let result1 = extract_asset_uuid_from_path(path1);
             assert!(result1.is_some());
-            assert_eq!(result1.unwrap().to_string(), "550e8400-e29b-41d4-a716-446655440000");
+            assert_eq!(
+                result1.unwrap().to_string(),
+                "550e8400-e29b-41d4-a716-446655440000"
+            );
 
             let path2 = "assets/invalid_texture.jp2";
             let result2 = extract_asset_uuid_from_path(path2);
@@ -133,7 +136,9 @@ mod tests {
 
             let job_id = manager.create_job(job_type).await;
             manager.start_job(&job_id).await;
-            manager.update_progress(&job_id, 0.5, Some("Loading objects...".to_string())).await;
+            manager
+                .update_progress(&job_id, 0.5, Some("Loading objects...".to_string()))
+                .await;
 
             let job = manager.get_job(&job_id).await.unwrap();
             assert!((job.progress - 0.5).abs() < f32::EPSILON);
@@ -185,7 +190,9 @@ mod tests {
 
             let job_id = manager.create_job(job_type).await;
             manager.start_job(&job_id).await;
-            manager.fail_job(&job_id, "File not found".to_string()).await;
+            manager
+                .fail_job(&job_id, "File not found".to_string())
+                .await;
 
             let job = manager.get_job(&job_id).await.unwrap();
             assert!(matches!(job.status, JobStatus::Failed));
@@ -225,11 +232,16 @@ mod tests {
 
             let job_id = manager.create_job(job_type).await;
             manager.start_job(&job_id).await;
-            manager.complete_job(&job_id, JobResult::IarLoad {
-                assets_loaded: 10,
-                folders_created: 5,
-                items_created: 20,
-            }).await;
+            manager
+                .complete_job(
+                    &job_id,
+                    JobResult::IarLoad {
+                        assets_loaded: 10,
+                        folders_created: 5,
+                        items_created: 20,
+                    },
+                )
+                .await;
 
             let cancelled = manager.cancel_job(&job_id).await;
             assert!(!cancelled);

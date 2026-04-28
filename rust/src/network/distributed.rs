@@ -1,18 +1,18 @@
 //! Distributed region management for multi-server OpenSim grids
 
-use std::{collections::HashMap, sync::Arc, time::Duration, net::SocketAddr};
 use anyhow::{anyhow, Result};
 use serde::{Deserialize, Serialize};
-use tokio::sync::{RwLock, mpsc};
-use tracing::{info, warn, error};
+use std::{collections::HashMap, net::SocketAddr, sync::Arc, time::Duration};
+use tokio::sync::{mpsc, RwLock};
+use tracing::{error, info, warn};
 use uuid::Uuid;
 
 use crate::{
-    region::{RegionId, RegionManager, RegionConfig},
     network::{
         inter_region::{InterRegionManager, InterRegionMessageType},
         llsd::LLSDValue,
     },
+    region::{RegionConfig, RegionId, RegionManager},
     state::StateManager,
 };
 
@@ -145,7 +145,7 @@ impl DistributedRegionManager {
         capacity: RegionCapacity,
     ) -> Self {
         let (message_tx, message_rx) = mpsc::unbounded_channel();
-        
+
         let local_server_info = RegionServerInfo {
             server_id: Uuid::new_v4().to_string(),
             server_name,
@@ -190,7 +190,11 @@ impl DistributedRegionManager {
         }
 
         // Take the receiver out of the option
-        let mut message_rx = self.message_rx.write().await.take()
+        let mut message_rx = self
+            .message_rx
+            .write()
+            .await
+            .take()
             .ok_or_else(|| anyhow!("Distributed region manager already started"))?;
 
         // Start message processing loop
@@ -227,34 +231,48 @@ impl DistributedRegionManager {
 
     /// Register a new server in the grid
     pub async fn register_server(&self, server_info: RegionServerInfo) -> Result<()> {
-        info!("Registering server: {} ({})", server_info.server_name, server_info.server_id);
+        info!(
+            "Registering server: {} ({})",
+            server_info.server_name, server_info.server_id
+        );
 
-        self.servers.write().await.insert(server_info.server_id.clone(), server_info.clone());
+        self.servers
+            .write()
+            .await
+            .insert(server_info.server_id.clone(), server_info.clone());
 
         // Register the server with inter-region communication
-        self.inter_region_manager.register_region(
-            RegionId(server_info.server_id.parse::<u64>().unwrap_or(0)),
-            server_info.server_name.clone(),
-            server_info.endpoint.to_string(),
-        ).await?;
+        self.inter_region_manager
+            .register_region(
+                RegionId(server_info.server_id.parse::<u64>().unwrap_or(0)),
+                server_info.server_name.clone(),
+                server_info.endpoint.to_string(),
+            )
+            .await?;
 
         info!("Server {} registered successfully", server_info.server_name);
         Ok(())
     }
 
     /// Request creation of a new region
-    pub async fn request_region_creation(
-        &self,
-        request: RegionCreationRequest,
-    ) -> Result<String> {
+    pub async fn request_region_creation(&self, request: RegionCreationRequest) -> Result<String> {
         let request_id = Uuid::new_v4().to_string();
         info!("Processing region creation request {}", request_id);
 
         // Store the request
-        self.pending_requests.write().await.insert(request_id.clone(), request.clone());
+        self.pending_requests
+            .write()
+            .await
+            .insert(request_id.clone(), request.clone());
 
         // Send message to process the request
-        if let Err(e) = self.message_tx.send(DistributedMessage::RegionCreationRequest(request_id.clone(), request)) {
+        if let Err(e) = self
+            .message_tx
+            .send(DistributedMessage::RegionCreationRequest(
+                request_id.clone(),
+                request,
+            ))
+        {
             error!("Failed to queue region creation request: {}", e);
             return Err(anyhow!("Failed to queue region creation request"));
         }
@@ -287,9 +305,14 @@ impl DistributedRegionManager {
                     .values()
                     .filter(|s| s.status == ServerStatus::Online)
                     .filter(|s| s.capacity.current_regions < s.capacity.max_regions)
-                    .min_by(|a, b| a.load_metrics.cpu_usage.partial_cmp(&b.load_metrics.cpu_usage).unwrap())
+                    .min_by(|a, b| {
+                        a.load_metrics
+                            .cpu_usage
+                            .partial_cmp(&b.load_metrics.cpu_usage)
+                            .unwrap()
+                    })
                     .ok_or_else(|| anyhow!("No available servers"))?;
-                
+
                 Ok(best_server.server_id.clone())
             }
             PlacementStrategy::MostCapacity => {
@@ -298,11 +321,15 @@ impl DistributedRegionManager {
                     .filter(|s| s.status == ServerStatus::Online)
                     .max_by_key(|s| s.capacity.max_regions - s.capacity.current_regions)
                     .ok_or_else(|| anyhow!("No available servers"))?;
-                
+
                 Ok(best_server.server_id.clone())
             }
             PlacementStrategy::Specific(server_id) => {
-                if servers.get(server_id).map(|s| s.status == ServerStatus::Online).unwrap_or(false) {
+                if servers
+                    .get(server_id)
+                    .map(|s| s.status == ServerStatus::Online)
+                    .unwrap_or(false)
+                {
                     Ok(server_id.clone())
                 } else {
                     Err(anyhow!("Specified server {} not available", server_id))
@@ -317,7 +344,11 @@ impl DistributedRegionManager {
     }
 
     /// Process a region creation request
-    async fn process_region_creation(&self, request_id: String, request: RegionCreationRequest) -> Result<()> {
+    async fn process_region_creation(
+        &self,
+        request_id: String,
+        request: RegionCreationRequest,
+    ) -> Result<()> {
         info!("Processing region creation request {}", request_id);
 
         // Find the best server for this region
@@ -325,13 +356,17 @@ impl DistributedRegionManager {
             Ok(server_id) => server_id,
             Err(e) => {
                 error!("Failed to find suitable server: {}", e);
-                self.send_creation_result(request_id, RegionCreationResult {
-                    success: false,
-                    region_id: None,
-                    server_id: None,
-                    error_message: Some(format!("No suitable server found: {}", e)),
-                    estimated_startup_time: None,
-                }).await?;
+                self.send_creation_result(
+                    request_id,
+                    RegionCreationResult {
+                        success: false,
+                        region_id: None,
+                        server_id: None,
+                        error_message: Some(format!("No suitable server found: {}", e)),
+                        estimated_startup_time: None,
+                    },
+                )
+                .await?;
                 return Ok(());
             }
         };
@@ -343,36 +378,51 @@ impl DistributedRegionManager {
             match self.create_region_locally(request.region_config).await {
                 Ok(region_id) => {
                     info!("Created region {} locally", region_id);
-                    self.send_creation_result(request_id, RegionCreationResult {
-                        success: true,
-                        region_id: Some(region_id),
-                        server_id: Some(target_server),
-                        error_message: None,
-                        estimated_startup_time: Some(Duration::from_secs(30)),
-                    }).await?;
+                    self.send_creation_result(
+                        request_id,
+                        RegionCreationResult {
+                            success: true,
+                            region_id: Some(region_id),
+                            server_id: Some(target_server),
+                            error_message: None,
+                            estimated_startup_time: Some(Duration::from_secs(30)),
+                        },
+                    )
+                    .await?;
                 }
                 Err(e) => {
                     error!("Failed to create region locally: {}", e);
-                    self.send_creation_result(request_id, RegionCreationResult {
-                        success: false,
-                        region_id: None,
-                        server_id: Some(target_server),
-                        error_message: Some(format!("Local creation failed: {}", e)),
-                        estimated_startup_time: None,
-                    }).await?;
+                    self.send_creation_result(
+                        request_id,
+                        RegionCreationResult {
+                            success: false,
+                            region_id: None,
+                            server_id: Some(target_server),
+                            error_message: Some(format!("Local creation failed: {}", e)),
+                            estimated_startup_time: None,
+                        },
+                    )
+                    .await?;
                 }
             }
         } else {
             // Send request to remote server
-            if let Err(e) = self.send_remote_creation_request(&target_server, request_id.clone(), request).await {
+            if let Err(e) = self
+                .send_remote_creation_request(&target_server, request_id.clone(), request)
+                .await
+            {
                 error!("Failed to send remote creation request: {}", e);
-                self.send_creation_result(request_id, RegionCreationResult {
-                    success: false,
-                    region_id: None,
-                    server_id: Some(target_server),
-                    error_message: Some(format!("Remote request failed: {}", e)),
-                    estimated_startup_time: None,
-                }).await?;
+                self.send_creation_result(
+                    request_id,
+                    RegionCreationResult {
+                        success: false,
+                        region_id: None,
+                        server_id: Some(target_server),
+                        error_message: Some(format!("Remote request failed: {}", e)),
+                        estimated_startup_time: None,
+                    },
+                )
+                .await?;
             }
         }
 
@@ -382,8 +432,9 @@ impl DistributedRegionManager {
     /// Create a region on the local server
     async fn create_region_locally(&self, config: RegionConfig) -> Result<RegionId> {
         let region_id = RegionId(rand::random());
-        
-        let _region = self.local_region_manager
+
+        let _region = self
+            .local_region_manager
             .create_region(region_id, config)
             .await
             .map_err(|e| anyhow!("Failed to create region: {}", e))?;
@@ -398,7 +449,10 @@ impl DistributedRegionManager {
         // Update region to server mapping
         {
             let local_server_id = self.local_server_info.read().await.server_id.clone();
-            self.region_to_server.write().await.insert(region_id, local_server_id);
+            self.region_to_server
+                .write()
+                .await
+                .insert(region_id, local_server_id);
         }
 
         Ok(region_id)
@@ -414,11 +468,26 @@ impl DistributedRegionManager {
         let payload = LLSDValue::Map({
             let mut map = HashMap::new();
             map.insert("request_id".to_string(), LLSDValue::String(request_id));
-            map.insert("region_name".to_string(), LLSDValue::String(request.region_config.name.clone()));
-            map.insert("region_size_x".to_string(), LLSDValue::Integer(request.region_config.size.0 as i32));
-            map.insert("region_size_y".to_string(), LLSDValue::Integer(request.region_config.size.1 as i32));
-            map.insert("max_entities".to_string(), LLSDValue::Integer(request.region_config.max_entities as i32));
-            map.insert("requester".to_string(), LLSDValue::String(request.requester));
+            map.insert(
+                "region_name".to_string(),
+                LLSDValue::String(request.region_config.name.clone()),
+            );
+            map.insert(
+                "region_size_x".to_string(),
+                LLSDValue::Integer(request.region_config.size.0 as i32),
+            );
+            map.insert(
+                "region_size_y".to_string(),
+                LLSDValue::Integer(request.region_config.size.1 as i32),
+            );
+            map.insert(
+                "max_entities".to_string(),
+                LLSDValue::Integer(request.region_config.max_entities as i32),
+            );
+            map.insert(
+                "requester".to_string(),
+                LLSDValue::String(request.requester),
+            );
             map
         });
 
@@ -435,8 +504,15 @@ impl DistributedRegionManager {
     }
 
     /// Send a region creation result
-    async fn send_creation_result(&self, request_id: String, result: RegionCreationResult) -> Result<()> {
-        info!("Sending creation result for request {}: success={}", request_id, result.success);
+    async fn send_creation_result(
+        &self,
+        request_id: String,
+        result: RegionCreationResult,
+    ) -> Result<()> {
+        info!(
+            "Sending creation result for request {}: success={}",
+            request_id, result.success
+        );
 
         // Remove from pending requests
         self.pending_requests.write().await.remove(&request_id);
@@ -472,17 +548,30 @@ impl DistributedRegionManager {
 
     /// Handle server heartbeat
     async fn handle_server_heartbeat(&self, server_info: RegionServerInfo) -> Result<()> {
-        self.servers.write().await.insert(server_info.server_id.clone(), server_info);
+        self.servers
+            .write()
+            .await
+            .insert(server_info.server_id.clone(), server_info);
         Ok(())
     }
 
     /// Handle region creation result
-    async fn handle_creation_result(&self, request_id: String, result: RegionCreationResult) -> Result<()> {
-        info!("Received creation result for request {}: success={}", request_id, result.success);
-        
+    async fn handle_creation_result(
+        &self,
+        request_id: String,
+        result: RegionCreationResult,
+    ) -> Result<()> {
+        info!(
+            "Received creation result for request {}: success={}",
+            request_id, result.success
+        );
+
         if let Some(region_id) = result.region_id {
             if let Some(server_id) = result.server_id {
-                self.region_to_server.write().await.insert(region_id, server_id);
+                self.region_to_server
+                    .write()
+                    .await
+                    .insert(region_id, server_id);
             }
         }
 
@@ -507,7 +596,10 @@ impl DistributedRegionManager {
 
             // In a real implementation, this would trigger region migration
             for region_id in affected_regions {
-                warn!("Region {} needs migration due to server shutdown", region_id);
+                warn!(
+                    "Region {} needs migration due to server shutdown",
+                    region_id
+                );
             }
         }
 
@@ -529,7 +621,8 @@ impl DistributedRegionManager {
             }
 
             let cpu_load = server_info.load_metrics.cpu_usage;
-            let region_utilization = server_info.capacity.current_regions as f32 / server_info.capacity.max_regions as f32;
+            let region_utilization = server_info.capacity.current_regions as f32
+                / server_info.capacity.max_regions as f32;
 
             if cpu_load > 80.0 || region_utilization > 0.9 {
                 overloaded_servers.push(server_id.clone());
@@ -566,24 +659,49 @@ impl DistributedRegionManager {
 
             // Send heartbeat via inter-region communication
             let local_info = self.local_server_info.read().await.clone();
-            
+
             let payload = LLSDValue::Map({
                 let mut map = HashMap::new();
-                map.insert("server_id".to_string(), LLSDValue::String(local_info.server_id));
-                map.insert("server_name".to_string(), LLSDValue::String(local_info.server_name));
-                map.insert("status".to_string(), LLSDValue::String(format!("{:?}", local_info.status)));
-                map.insert("cpu_usage".to_string(), LLSDValue::Real(local_info.load_metrics.cpu_usage as f64));
-                map.insert("memory_usage".to_string(), LLSDValue::Real(local_info.load_metrics.memory_usage as f64));
-                map.insert("current_regions".to_string(), LLSDValue::Integer(local_info.capacity.current_regions as i32));
-                map.insert("max_regions".to_string(), LLSDValue::Integer(local_info.capacity.max_regions as i32));
+                map.insert(
+                    "server_id".to_string(),
+                    LLSDValue::String(local_info.server_id),
+                );
+                map.insert(
+                    "server_name".to_string(),
+                    LLSDValue::String(local_info.server_name),
+                );
+                map.insert(
+                    "status".to_string(),
+                    LLSDValue::String(format!("{:?}", local_info.status)),
+                );
+                map.insert(
+                    "cpu_usage".to_string(),
+                    LLSDValue::Real(local_info.load_metrics.cpu_usage as f64),
+                );
+                map.insert(
+                    "memory_usage".to_string(),
+                    LLSDValue::Real(local_info.load_metrics.memory_usage as f64),
+                );
+                map.insert(
+                    "current_regions".to_string(),
+                    LLSDValue::Integer(local_info.capacity.current_regions as i32),
+                );
+                map.insert(
+                    "max_regions".to_string(),
+                    LLSDValue::Integer(local_info.capacity.max_regions as i32),
+                );
                 map
             });
 
-            if let Err(e) = self.inter_region_manager.broadcast_message(
-                InterRegionMessageType::StatusUpdate,
-                payload,
-                crate::network::inter_region::MessagePriority::Low,
-            ).await {
+            if let Err(e) = self
+                .inter_region_manager
+                .broadcast_message(
+                    InterRegionMessageType::StatusUpdate,
+                    payload,
+                    crate::network::inter_region::MessagePriority::Low,
+                )
+                .await
+            {
                 error!("Failed to send heartbeat: {}", e);
             }
         }
@@ -592,7 +710,7 @@ impl DistributedRegionManager {
     /// Update local server metrics
     async fn update_local_metrics(&self) {
         let mut local_info = self.local_server_info.write().await;
-        
+
         // In a real implementation, these would be actual system metrics
         local_info.load_metrics.cpu_usage = rand::random::<f32>() * 100.0;
         local_info.load_metrics.memory_usage = rand::random::<f32>() * 100.0;
@@ -627,17 +745,22 @@ impl DistributedRegionManager {
             for (server_id, server_info) in servers.iter_mut() {
                 let time_since_heartbeat = current_time.saturating_sub(server_info.last_heartbeat);
 
-                if time_since_heartbeat > 180 { // 3 minutes
+                if time_since_heartbeat > 180 {
+                    // 3 minutes
                     if server_info.status != ServerStatus::Offline {
                         warn!("Server {} appears to be offline", server_id);
                         server_info.status = ServerStatus::Offline;
-                        
+
                         // Queue shutdown message
-                        if let Err(e) = self.message_tx.send(DistributedMessage::ServerShutdown(server_id.clone())) {
+                        if let Err(e) = self
+                            .message_tx
+                            .send(DistributedMessage::ServerShutdown(server_id.clone()))
+                        {
                             error!("Failed to queue server shutdown message: {}", e);
                         }
                     }
-                } else if time_since_heartbeat > 90 { // 1.5 minutes
+                } else if time_since_heartbeat > 90 {
+                    // 1.5 minutes
                     if server_info.status == ServerStatus::Online {
                         warn!("Server {} connection degraded", server_id);
                         server_info.status = ServerStatus::Degraded;
@@ -660,7 +783,7 @@ impl DistributedRegionManager {
 impl Clone for DistributedRegionManager {
     fn clone(&self) -> Self {
         let (message_tx, _) = mpsc::unbounded_channel();
-        
+
         Self {
             local_region_manager: self.local_region_manager.clone(),
             inter_region_manager: self.inter_region_manager.clone(),
@@ -702,18 +825,18 @@ impl Clone for DistributedRegionManager {
 #[cfg(test)]
 mod tests {
     use super::*;
-    use crate::{
-        ffi::physics::PhysicsBridge,
-        region::terrain::TerrainConfig,
-    };
+    use crate::{ffi::physics::PhysicsBridge, region::terrain::TerrainConfig};
 
     #[tokio::test]
     async fn test_distributed_region_manager_creation() -> Result<()> {
         let physics_bridge = Arc::new(PhysicsBridge::new()?);
         let state_manager = Arc::new(StateManager::new()?);
         let region_manager = Arc::new(RegionManager::new(physics_bridge, state_manager.clone()));
-        let inter_region_manager = Arc::new(InterRegionManager::new(region_manager.clone(), state_manager.clone()));
-        
+        let inter_region_manager = Arc::new(InterRegionManager::new(
+            region_manager.clone(),
+            state_manager.clone(),
+        ));
+
         let capacity = RegionCapacity {
             max_regions: 10,
             current_regions: 0,
@@ -744,8 +867,11 @@ mod tests {
         let physics_bridge = Arc::new(PhysicsBridge::new()?);
         let state_manager = Arc::new(StateManager::new()?);
         let region_manager = Arc::new(RegionManager::new(physics_bridge, state_manager.clone()));
-        let inter_region_manager = Arc::new(InterRegionManager::new(region_manager.clone(), state_manager.clone()));
-        
+        let inter_region_manager = Arc::new(InterRegionManager::new(
+            region_manager.clone(),
+            state_manager.clone(),
+        ));
+
         let capacity = RegionCapacity {
             max_regions: 10,
             current_regions: 0,

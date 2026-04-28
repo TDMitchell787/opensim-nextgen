@@ -5,28 +5,28 @@
 //!
 //! Based on OpenSim's AvatarFactoryModule.cs
 
+use crate::database::multi_backend::DatabaseConnection;
 use std::collections::{HashMap, HashSet};
 use std::sync::Arc;
-use tokio::sync::{RwLock, mpsc};
-use uuid::Uuid;
-use tracing::{debug, info, warn};
 use std::time::{Duration, Instant};
-use crate::database::multi_backend::DatabaseConnection;
+use tokio::sync::{mpsc, RwLock};
+use tracing::{debug, info, warn};
+use uuid::Uuid;
 
 /// Baked texture face indices as defined in OpenSim/LibreMetaverse
 /// These are the texture faces that contain baked avatar textures
 pub const BAKE_INDICES: [usize; 11] = [
-    8,   // TEX_HEAD_BAKED
-    9,   // TEX_UPPER_BAKED
-    10,  // TEX_LOWER_BAKED
-    11,  // TEX_EYES_BAKED
-    19,  // TEX_SKIRT_BAKED
-    20,  // TEX_HAIR_BAKED
-    40,  // TEX_LEFT_ARM_BAKED
-    41,  // TEX_LEFT_LEG_BAKED
-    42,  // TEX_AUX1_BAKED
-    43,  // TEX_AUX2_BAKED
-    44,  // TEX_AUX3_BAKED
+    8,  // TEX_HEAD_BAKED
+    9,  // TEX_UPPER_BAKED
+    10, // TEX_LOWER_BAKED
+    11, // TEX_EYES_BAKED
+    19, // TEX_SKIRT_BAKED
+    20, // TEX_HAIR_BAKED
+    40, // TEX_LEFT_ARM_BAKED
+    41, // TEX_LEFT_LEG_BAKED
+    42, // TEX_AUX1_BAKED
+    43, // TEX_AUX2_BAKED
+    44, // TEX_AUX3_BAKED
 ];
 
 /// Number of bake indices for protocol version 7+
@@ -59,14 +59,20 @@ pub fn parse_texture_entry_uuids(raw: &[u8]) -> Vec<(usize, Uuid)> {
 
         let mut face_bits: u64 = 0;
         loop {
-            if pos >= raw.len() { return result; }
+            if pos >= raw.len() {
+                return result;
+            }
             let b = raw[pos];
             face_bits = (face_bits << 7) | (b as u64 & 0x7F);
             pos += 1;
-            if b & 0x80 == 0 { break; }
+            if b & 0x80 == 0 {
+                break;
+            }
         }
 
-        if pos + 16 > raw.len() { return result; }
+        if pos + 16 > raw.len() {
+            return result;
+        }
         if let Ok(uuid) = Uuid::from_slice(&raw[pos..pos + 16]) {
             for bit in 0..45u32 {
                 if face_bits & (1u64 << bit) != 0 {
@@ -98,7 +104,10 @@ impl WearableCacheItem {
     }
 
     pub fn with_cache_and_texture(cache_id: Uuid, texture_id: Uuid) -> Self {
-        Self { cache_id, texture_id }
+        Self {
+            cache_id,
+            texture_id,
+        }
     }
 
     pub fn with_texture(texture_id: Uuid) -> Self {
@@ -197,9 +206,9 @@ pub struct AppearanceSaveRequest {
 /// Priority levels for appearance saves
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub enum SavePriority {
-    Immediate,  // Save right away (logout, crash recovery)
-    Normal,     // Normal save (periodic, appearance change)
-    Deferred,   // Can be delayed (minor changes)
+    Immediate, // Save right away (logout, crash recovery)
+    Normal,    // Normal save (periodic, appearance change)
+    Deferred,  // Can be delayed (minor changes)
 }
 
 /// Avatar Factory - manages baked texture cache and validation
@@ -287,7 +296,8 @@ impl AvatarFactory {
     pub fn take_dirty_saves(&self, max_age: Duration) -> Vec<Uuid> {
         let now = Instant::now();
         let mut dirty = self.dirty_save.write();
-        let ready: Vec<Uuid> = dirty.iter()
+        let ready: Vec<Uuid> = dirty
+            .iter()
             .filter(|(_, ts)| now.duration_since(**ts) >= max_age)
             .map(|(id, _)| *id)
             .collect();
@@ -300,7 +310,8 @@ impl AvatarFactory {
     pub fn take_dirty_sends(&self, max_age: Duration) -> Vec<Uuid> {
         let now = Instant::now();
         let mut dirty = self.dirty_send.write();
-        let ready: Vec<Uuid> = dirty.iter()
+        let ready: Vec<Uuid> = dirty
+            .iter()
             .filter(|(_, ts)| now.duration_since(**ts) >= max_age)
             .map(|(id, _)| *id)
             .collect();
@@ -337,18 +348,36 @@ impl AvatarFactory {
 
             match request.priority {
                 SavePriority::Immediate => {
-                    info!("[AVATAR_FACTORY] Processing immediate save for {}", agent_id);
-                    Self::save_appearance_to_db(&appearance_cache, agent_id, db_connection.as_deref()).await;
+                    info!(
+                        "[AVATAR_FACTORY] Processing immediate save for {}",
+                        agent_id
+                    );
+                    Self::save_appearance_to_db(
+                        &appearance_cache,
+                        agent_id,
+                        db_connection.as_deref(),
+                    )
+                    .await;
                 }
                 SavePriority::Normal => {
                     tokio::time::sleep(Duration::from_millis(250)).await;
                     debug!("[AVATAR_FACTORY] Processing normal save for {}", agent_id);
-                    Self::save_appearance_to_db(&appearance_cache, agent_id, db_connection.as_deref()).await;
+                    Self::save_appearance_to_db(
+                        &appearance_cache,
+                        agent_id,
+                        db_connection.as_deref(),
+                    )
+                    .await;
                 }
                 SavePriority::Deferred => {
                     tokio::time::sleep(Duration::from_secs(2)).await;
                     debug!("[AVATAR_FACTORY] Processing deferred save for {}", agent_id);
-                    Self::save_appearance_to_db(&appearance_cache, agent_id, db_connection.as_deref()).await;
+                    Self::save_appearance_to_db(
+                        &appearance_cache,
+                        agent_id,
+                        db_connection.as_deref(),
+                    )
+                    .await;
                 }
             }
         }
@@ -366,7 +395,10 @@ impl AvatarFactory {
         let appearance = match cache.get(&agent_id) {
             Some(a) => a,
             None => {
-                warn!("[AVATAR_FACTORY] No appearance data to save for {}", agent_id);
+                warn!(
+                    "[AVATAR_FACTORY] No appearance data to save for {}",
+                    agent_id
+                );
                 return;
             }
         };
@@ -374,7 +406,10 @@ impl AvatarFactory {
         let db = match db {
             Some(d) => d,
             None => {
-                info!("[AVATAR_FACTORY] No DB connection, skipping save for {}", agent_id);
+                info!(
+                    "[AVATAR_FACTORY] No DB connection, skipping save for {}",
+                    agent_id
+                );
                 return;
             }
         };
@@ -393,7 +428,11 @@ impl AvatarFactory {
             }
             let hex: String = raw_te.iter().map(|b| format!("{:02x}", b)).collect();
             entries.push(("RawTextureEntry".to_string(), hex));
-            info!("[AVATAR_FACTORY] Saving with parsed raw TE ({} face overrides, {} raw bytes)", parsed_uuids.len(), raw_te.len());
+            info!(
+                "[AVATAR_FACTORY] Saving with parsed raw TE ({} face overrides, {} raw bytes)",
+                parsed_uuids.len(),
+                raw_te.len()
+            );
         } else {
             for (idx, tex_id) in appearance.texture_ids.iter().enumerate() {
                 if !tex_id.is_nil() && *tex_id != default_uuid {
@@ -403,14 +442,21 @@ impl AvatarFactory {
         }
 
         if !appearance.visual_params.is_empty() {
-            let hex: String = appearance.visual_params.iter().map(|b| format!("{:02x}", b)).collect();
+            let hex: String = appearance
+                .visual_params
+                .iter()
+                .map(|b| format!("{:02x}", b))
+                .collect();
             entries.push(("VisualParams".to_string(), hex));
         }
 
         for &bake_idx in &BAKE_INDICES {
             if bake_idx < appearance.wearable_cache.len() {
                 let item = &appearance.wearable_cache[bake_idx];
-                if !item.cache_id.is_nil() && !item.texture_id.is_nil() && item.texture_id != default_uuid {
+                if !item.cache_id.is_nil()
+                    && !item.texture_id.is_nil()
+                    && item.texture_id != default_uuid
+                {
                     entries.push((
                         format!("WearableCache {}", bake_idx),
                         format!("{}|{}", item.cache_id, item.texture_id),
@@ -420,7 +466,10 @@ impl AvatarFactory {
         }
 
         if entries.is_empty() {
-            debug!("[AVATAR_FACTORY] No meaningful appearance data to save for {}", agent_id);
+            debug!(
+                "[AVATAR_FACTORY] No meaningful appearance data to save for {}",
+                agent_id
+            );
             return;
         }
 
@@ -433,18 +482,23 @@ impl AvatarFactory {
                 {
                     warn!("[AVATAR_FACTORY] Failed to clear old textures for {}: {}", agent_id, e);
                 }
-                if let Err(e) = sqlx::query("DELETE FROM avatars WHERE principalid = $1::uuid AND name = 'VisualParams'")
-                    .bind(&agent_id_str)
-                    .execute(pool)
-                    .await
+                if let Err(e) = sqlx::query(
+                    "DELETE FROM avatars WHERE principalid = $1::uuid AND name = 'VisualParams'",
+                )
+                .bind(&agent_id_str)
+                .execute(pool)
+                .await
                 {
-                    warn!("[AVATAR_FACTORY] Failed to clear old visual params for {}: {}", agent_id, e);
+                    warn!(
+                        "[AVATAR_FACTORY] Failed to clear old visual params for {}: {}",
+                        agent_id, e
+                    );
                 }
 
                 let mut saved = 0;
                 for (name, value) in &entries {
                     if let Err(e) = sqlx::query(
-                        "INSERT INTO avatars (principalid, name, value) VALUES ($1::uuid, $2, $3)"
+                        "INSERT INTO avatars (principalid, name, value) VALUES ($1::uuid, $2, $3)",
                     )
                     .bind(&agent_id_str)
                     .bind(name)
@@ -452,12 +506,20 @@ impl AvatarFactory {
                     .execute(pool)
                     .await
                     {
-                        warn!("[AVATAR_FACTORY] Failed to save {} for {}: {}", name, agent_id, e);
+                        warn!(
+                            "[AVATAR_FACTORY] Failed to save {} for {}: {}",
+                            name, agent_id, e
+                        );
                     } else {
                         saved += 1;
                     }
                 }
-                info!("[AVATAR_FACTORY] Saved {}/{} appearance entries for {}", saved, entries.len(), agent_id);
+                info!(
+                    "[AVATAR_FACTORY] Saved {}/{} appearance entries for {}",
+                    saved,
+                    entries.len(),
+                    agent_id
+                );
             }
             DatabaseConnection::MySQL(pool) => {
                 if let Err(e) = sqlx::query("DELETE FROM Avatars WHERE PrincipalID = ? AND (Name LIKE 'Texture %' OR Name = 'RawTextureEntry' OR Name LIKE 'WearableCache %')")
@@ -467,18 +529,23 @@ impl AvatarFactory {
                 {
                     warn!("[AVATAR_FACTORY] Failed to clear old textures for {}: {}", agent_id, e);
                 }
-                if let Err(e) = sqlx::query("DELETE FROM Avatars WHERE PrincipalID = ? AND Name = 'VisualParams'")
-                    .bind(&agent_id_str)
-                    .execute(pool)
-                    .await
+                if let Err(e) = sqlx::query(
+                    "DELETE FROM Avatars WHERE PrincipalID = ? AND Name = 'VisualParams'",
+                )
+                .bind(&agent_id_str)
+                .execute(pool)
+                .await
                 {
-                    warn!("[AVATAR_FACTORY] Failed to clear old visual params for {}: {}", agent_id, e);
+                    warn!(
+                        "[AVATAR_FACTORY] Failed to clear old visual params for {}: {}",
+                        agent_id, e
+                    );
                 }
 
                 let mut saved = 0;
                 for (name, value) in &entries {
                     if let Err(e) = sqlx::query(
-                        "INSERT INTO Avatars (PrincipalID, Name, Value) VALUES (?, ?, ?)"
+                        "INSERT INTO Avatars (PrincipalID, Name, Value) VALUES (?, ?, ?)",
                     )
                     .bind(&agent_id_str)
                     .bind(name)
@@ -486,12 +553,20 @@ impl AvatarFactory {
                     .execute(pool)
                     .await
                     {
-                        warn!("[AVATAR_FACTORY] Failed to save {} for {}: {}", name, agent_id, e);
+                        warn!(
+                            "[AVATAR_FACTORY] Failed to save {} for {}: {}",
+                            name, agent_id, e
+                        );
                     } else {
                         saved += 1;
                     }
                 }
-                info!("[AVATAR_FACTORY] Saved {}/{} appearance entries for {}", saved, entries.len(), agent_id);
+                info!(
+                    "[AVATAR_FACTORY] Saved {}/{} appearance entries for {}",
+                    saved,
+                    entries.len(),
+                    agent_id
+                );
             }
         }
     }
@@ -504,16 +579,22 @@ impl AvatarFactory {
         }
         let appearance = AgentAppearanceData::new(agent_id);
         cache.insert(agent_id, appearance.clone());
-        info!("[AVATAR_FACTORY] Created NEW appearance data for agent {}", agent_id);
+        info!(
+            "[AVATAR_FACTORY] Created NEW appearance data for agent {}",
+            agent_id
+        );
         appearance
     }
 
-    pub async fn create_appearance_with_ruth_defaults(&self, agent_id: Uuid) -> AgentAppearanceData {
+    pub async fn create_appearance_with_ruth_defaults(
+        &self,
+        agent_id: Uuid,
+    ) -> AgentAppearanceData {
         let mut appearance = AgentAppearanceData::new(agent_id);
 
         let ruth_bakes: [(usize, &str); 5] = [
-            (8,  "5a9f4a74-30f2-821c-b88d-70499d3e7183"), // Head
-            (9,  "ae2de45c-d252-50b8-5c6e-19f39ce79317"), // Upper
+            (8, "5a9f4a74-30f2-821c-b88d-70499d3e7183"),  // Head
+            (9, "ae2de45c-d252-50b8-5c6e-19f39ce79317"),  // Upper
             (10, "24daea5f-0539-cfcf-047f-fbc40b2786ba"), // Lower
             (11, "52cc6bb6-2ee5-e632-d3ad-50197b1dcb8a"), // Eyes
             (20, "09aac1fb-6bce-0bee-7d44-caac6dbb6c63"), // Hair
@@ -541,7 +622,10 @@ impl AvatarFactory {
             }
         }
 
-        info!("[AVATAR_FACTORY] Created appearance with Ruth baked defaults for agent {}", agent_id);
+        info!(
+            "[AVATAR_FACTORY] Created appearance with Ruth baked defaults for agent {}",
+            agent_id
+        );
         appearance
     }
 
@@ -552,7 +636,9 @@ impl AvatarFactory {
         visual_params: Vec<u8>,
     ) {
         let mut cache = self.appearance_cache.write().await;
-        let appearance = cache.entry(agent_id).or_insert_with(|| AgentAppearanceData::new(agent_id));
+        let appearance = cache
+            .entry(agent_id)
+            .or_insert_with(|| AgentAppearanceData::new(agent_id));
 
         for &(idx, tex_id) in texture_entries {
             appearance.set_baked_texture(idx, tex_id);
@@ -563,7 +649,11 @@ impl AvatarFactory {
         appearance.is_validated = true;
         appearance.needs_rebake = false;
 
-        info!("[AVATAR_FACTORY] Loaded DB appearance for agent {} ({} textures)", agent_id, texture_entries.len());
+        info!(
+            "[AVATAR_FACTORY] Loaded DB appearance for agent {} ({} textures)",
+            agent_id,
+            texture_entries.len()
+        );
     }
 
     pub async fn set_visual_params(&self, agent_id: Uuid, visual_params: Vec<u8>) {
@@ -642,7 +732,11 @@ impl AvatarFactory {
         let default_uuid = Uuid::parse_str(DEFAULT_AVATAR_TEXTURE).unwrap_or(Uuid::nil());
 
         for &face_index in &BAKE_INDICES {
-            let texture_id = appearance.texture_ids.get(face_index).copied().unwrap_or(Uuid::nil());
+            let texture_id = appearance
+                .texture_ids
+                .get(face_index)
+                .copied()
+                .unwrap_or(Uuid::nil());
             let cache_item = appearance.wearable_cache.get_mut(face_index);
 
             // Check if texture is default or nil (needs rebake)
@@ -695,18 +789,17 @@ impl AvatarFactory {
 
         info!(
             "[AVATAR_FACTORY] Validated baked textures for {}: {}/{} cached, needs_rebake={}",
-            agent_id, hits, BAKE_INDICES.len(), appearance.needs_rebake
+            agent_id,
+            hits,
+            BAKE_INDICES.len(),
+            appearance.needs_rebake
         );
 
         all_valid
     }
 
     /// Update baked texture from viewer's AgentSetAppearance
-    pub async fn set_baked_textures(
-        &self,
-        agent_id: Uuid,
-        texture_entries: &[(usize, Uuid)],
-    ) {
+    pub async fn set_baked_textures(&self, agent_id: Uuid, texture_entries: &[(usize, Uuid)]) {
         let mut cache = self.appearance_cache.write().await;
 
         let appearance = match cache.get_mut(&agent_id) {
@@ -731,7 +824,8 @@ impl AvatarFactory {
 
         info!(
             "[AVATAR_FACTORY] Updated {} baked textures for agent {}, needs_rebake=false",
-            texture_entries.len(), agent_id
+            texture_entries.len(),
+            agent_id
         );
     }
 
@@ -754,13 +848,23 @@ impl AvatarFactory {
         let default_uuid = Uuid::parse_str(DEFAULT_AVATAR_TEXTURE).unwrap_or(Uuid::nil());
 
         for &(tex_idx, cache_id) in viewer_cache_items {
-            if tex_idx >= appearance.wearable_cache.len() { continue; }
-            let tex_id = baked_texture_ids.iter()
+            if tex_idx >= appearance.wearable_cache.len() {
+                continue;
+            }
+            let tex_id = baked_texture_ids
+                .iter()
                 .find(|(idx, _)| *idx == tex_idx)
                 .map(|(_, id)| *id)
-                .unwrap_or(appearance.texture_ids.get(tex_idx).copied().unwrap_or(default_uuid));
+                .unwrap_or(
+                    appearance
+                        .texture_ids
+                        .get(tex_idx)
+                        .copied()
+                        .unwrap_or(default_uuid),
+                );
 
-            appearance.wearable_cache[tex_idx] = WearableCacheItem::with_cache_and_texture(cache_id, tex_id);
+            appearance.wearable_cache[tex_idx] =
+                WearableCacheItem::with_cache_and_texture(cache_id, tex_id);
 
             if !tex_id.is_nil() && tex_id != default_uuid {
                 appearance.texture_ids[tex_idx] = tex_id;
@@ -775,15 +879,22 @@ impl AvatarFactory {
     // Bug 15 fix: Added fallback — if cache_id doesn't match but we have a valid baked texture,
     // return it anyway and store viewer's cache_id for future exact matches.
     // This prevents the infinite rebake loop caused by all-miss AgentCachedTextureResponse.
-    pub async fn get_cached_texture_for_index(&self, agent_id: Uuid, texture_index: usize, viewer_cache_id: Uuid) -> Uuid {
+    pub async fn get_cached_texture_for_index(
+        &self,
+        agent_id: Uuid,
+        texture_index: usize,
+        viewer_cache_id: Uuid,
+    ) -> Uuid {
         let mut cache = self.appearance_cache.write().await;
         if let Some(appearance) = cache.get_mut(&agent_id) {
             let default_uuid = Uuid::parse_str(DEFAULT_AVATAR_TEXTURE).unwrap_or(Uuid::nil());
 
             if texture_index < appearance.wearable_cache.len() {
                 let item = &appearance.wearable_cache[texture_index];
-                debug!("[CACHE] face[{}]: stored_cache_id={}, viewer_cache_id={}, texture_id={}",
-                      texture_index, item.cache_id, viewer_cache_id, item.texture_id);
+                debug!(
+                    "[CACHE] face[{}]: stored_cache_id={}, viewer_cache_id={}, texture_id={}",
+                    texture_index, item.cache_id, viewer_cache_id, item.texture_id
+                );
                 if !item.cache_id.is_nil() && item.cache_id == viewer_cache_id {
                     if !item.texture_id.is_nil() && item.texture_id != default_uuid {
                         return item.texture_id;
@@ -791,22 +902,34 @@ impl AvatarFactory {
                 }
             }
 
-            info!("[CACHE] MISS face[{}]: CacheId mismatch (viewer={}, stored={})",
-                  texture_index, viewer_cache_id,
-                  if texture_index < appearance.wearable_cache.len() {
-                      appearance.wearable_cache[texture_index].cache_id.to_string()
-                  } else { "none".to_string() });
+            info!(
+                "[CACHE] MISS face[{}]: CacheId mismatch (viewer={}, stored={})",
+                texture_index,
+                viewer_cache_id,
+                if texture_index < appearance.wearable_cache.len() {
+                    appearance.wearable_cache[texture_index]
+                        .cache_id
+                        .to_string()
+                } else {
+                    "none".to_string()
+                }
+            );
         }
         Uuid::nil()
     }
 
     /// Queue appearance save with normal priority
     pub async fn queue_appearance_save(&self, agent_id: Uuid) {
-        self.queue_appearance_save_with_priority(agent_id, SavePriority::Normal).await;
+        self.queue_appearance_save_with_priority(agent_id, SavePriority::Normal)
+            .await;
     }
 
     /// Queue appearance save with specified priority
-    pub async fn queue_appearance_save_with_priority(&self, agent_id: Uuid, priority: SavePriority) {
+    pub async fn queue_appearance_save_with_priority(
+        &self,
+        agent_id: Uuid,
+        priority: SavePriority,
+    ) {
         // Check if we have a queue
         if let Some(tx) = &self.save_queue_tx {
             // Check for duplicate saves (debounce)
@@ -816,8 +939,13 @@ impl AvatarFactory {
 
                 if let Some(last_queued) = pending.get(&agent_id) {
                     // Don't queue if we queued recently (unless immediate)
-                    if priority != SavePriority::Immediate && now.duration_since(*last_queued) < Duration::from_secs(1) {
-                        debug!("[AVATAR_FACTORY] Skipping duplicate save for {} (debounced)", agent_id);
+                    if priority != SavePriority::Immediate
+                        && now.duration_since(*last_queued) < Duration::from_secs(1)
+                    {
+                        debug!(
+                            "[AVATAR_FACTORY] Skipping duplicate save for {} (debounced)",
+                            agent_id
+                        );
                         false
                     } else {
                         pending.insert(agent_id, now);
@@ -832,20 +960,35 @@ impl AvatarFactory {
             if should_queue {
                 let request = AppearanceSaveRequest { agent_id, priority };
                 if let Err(e) = tx.send(request).await {
-                    warn!("[AVATAR_FACTORY] Failed to queue appearance save for {}: {}", agent_id, e);
+                    warn!(
+                        "[AVATAR_FACTORY] Failed to queue appearance save for {}: {}",
+                        agent_id, e
+                    );
                 } else {
-                    info!("[AVATAR_FACTORY] Queued {:?} appearance save for {}", priority, agent_id);
+                    info!(
+                        "[AVATAR_FACTORY] Queued {:?} appearance save for {}",
+                        priority, agent_id
+                    );
                 }
             }
         } else {
-            info!("[AVATAR_FACTORY] Saving appearance for agent {} (sync mode)", agent_id);
-            Self::save_appearance_to_db(&self.appearance_cache, agent_id, self.db_connection.as_deref()).await;
+            info!(
+                "[AVATAR_FACTORY] Saving appearance for agent {} (sync mode)",
+                agent_id
+            );
+            Self::save_appearance_to_db(
+                &self.appearance_cache,
+                agent_id,
+                self.db_connection.as_deref(),
+            )
+            .await;
         }
     }
 
     pub async fn force_save(&self, agent_id: Uuid) {
         self.flush_dirty_for_agent(agent_id);
-        self.queue_appearance_save_with_priority(agent_id, SavePriority::Immediate).await;
+        self.queue_appearance_save_with_priority(agent_id, SavePriority::Immediate)
+            .await;
     }
 
     /// Cache an asset texture
@@ -866,7 +1009,10 @@ impl AvatarFactory {
         let mut cache = self.appearance_cache.write().await;
         cache.remove(&agent_id);
         self.clear_first_bake(agent_id);
-        info!("[AVATAR_FACTORY] Cleared appearance data for agent {}", agent_id);
+        info!(
+            "[AVATAR_FACTORY] Cleared appearance data for agent {}",
+            agent_id
+        );
     }
 
     /// Get the texture IDs for AvatarAppearance message
@@ -947,9 +1093,13 @@ pub fn get_bakes_bytes(raw_texture_entry: &[u8]) -> Vec<u8> {
             loop {
                 let mut byte = (face_bits & 0x7F) as u8;
                 face_bits >>= 7;
-                if face_bits > 0 { byte |= 0x80; }
+                if face_bits > 0 {
+                    byte |= 0x80;
+                }
                 te.push(byte);
-                if face_bits == 0 { break; }
+                if face_bits == 0 {
+                    break;
+                }
             }
             te.extend_from_slice(tex_id.as_bytes());
         }
@@ -973,9 +1123,12 @@ pub fn get_bakes_bytes(raw_texture_entry: &[u8]) -> Vec<u8> {
         te.push(0);
         te.extend_from_slice(&0i16.to_le_bytes()); // Rotation
         te.push(0);
-        te.push(0); te.push(0); // Material
-        te.push(0); te.push(0); // Media
-        te.push(0); te.push(0); // Glow
+        te.push(0);
+        te.push(0); // Material
+        te.push(0);
+        te.push(0); // Media
+        te.push(0);
+        te.push(0); // Glow
         te.extend_from_slice(&[0u8; 16]); // MaterialID
         te.push(0);
     }
@@ -984,19 +1137,27 @@ pub fn get_bakes_bytes(raw_texture_entry: &[u8]) -> Vec<u8> {
 }
 
 fn find_color_section_start(raw: &[u8]) -> usize {
-    if raw.len() < 16 { return raw.len(); }
+    if raw.len() < 16 {
+        return raw.len();
+    }
     let mut pos = 16;
     while pos < raw.len() {
         if raw[pos] == 0 {
             return pos + 1;
         }
         loop {
-            if pos >= raw.len() { return raw.len(); }
+            if pos >= raw.len() {
+                return raw.len();
+            }
             let b = raw[pos];
             pos += 1;
-            if b & 0x80 == 0 { break; }
+            if b & 0x80 == 0 {
+                break;
+            }
         }
-        if pos + 16 > raw.len() { return raw.len(); }
+        if pos + 16 > raw.len() {
+            return raw.len();
+        }
         pos += 16;
     }
     raw.len()
@@ -1073,7 +1234,9 @@ mod tests {
         factory.create_appearance(agent_id).await;
 
         let texture_id = Uuid::new_v4();
-        factory.set_baked_textures(agent_id, &[(8, texture_id)]).await;
+        factory
+            .set_baked_textures(agent_id, &[(8, texture_id)])
+            .await;
 
         let appearance = factory.get_appearance(agent_id).await.unwrap();
         assert_eq!(appearance.texture_ids[8], texture_id);
@@ -1082,8 +1245,8 @@ mod tests {
     #[tokio::test]
     async fn test_bake_indices() {
         assert_eq!(BAKE_INDICES.len(), 11);
-        assert_eq!(BAKE_INDICES[0], 8);  // TEX_HEAD_BAKED
-        assert_eq!(BAKE_INDICES[1], 9);  // TEX_UPPER_BAKED
+        assert_eq!(BAKE_INDICES[0], 8); // TEX_HEAD_BAKED
+        assert_eq!(BAKE_INDICES[1], 9); // TEX_UPPER_BAKED
         assert_eq!(BAKE_INDICES[2], 10); // TEX_LOWER_BAKED
         assert_eq!(BAKE_INDICES[3], 11); // TEX_EYES_BAKED
         assert_eq!(BAKE_INDICES[4], 19); // TEX_SKIRT_BAKED

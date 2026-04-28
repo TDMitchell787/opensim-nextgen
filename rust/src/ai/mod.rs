@@ -3,49 +3,49 @@
 // Using ELEGANT ARCHIVE SOLUTION methodology
 
 use crate::avatar::AdvancedAvatarManager;
-use crate::monitoring::metrics::MetricsCollector;
 use crate::database::DatabaseManager;
+use crate::monitoring::metrics::MetricsCollector;
+use serde::{Deserialize, Serialize};
 use std::sync::Arc;
 use tokio::sync::RwLock;
-use serde::{Deserialize, Serialize};
 use uuid::Uuid;
 
-pub mod avatar_intelligence;
-pub mod performance_ml;
-pub mod npc_behavior;
-pub mod content_generation;
-pub mod predictive_analytics;
-pub mod pattern_repository;
-pub mod content_creation;
-pub mod oar_analyzer;
-pub mod eads_learning;
-pub mod content_validator;
-pub mod user_feedback;
-pub mod performance_profiling;
-pub mod style_transfer;
-pub mod collaborative_filtering;
-pub mod ml_integration;
-pub mod npc_dialogue;
-pub mod npc_avatar;
 pub mod action_planner;
-pub mod npc_roster;
-pub mod behavior_config;
-pub mod behaviors;
-pub mod movement_controller;
-pub mod behavior_engine;
-pub mod script_templates;
-pub mod build_session;
-pub mod npc_memory;
-pub mod galadriel;
-pub mod skill_modules;
+pub mod avatar_intelligence;
 pub mod badge_communicator;
+pub mod behavior_config;
+pub mod behavior_engine;
+pub mod behaviors;
+pub mod build_session;
 pub mod cinematography;
-pub mod vehicle_scripts;
-pub mod vehicle_recipes;
-pub mod vehicle_builder;
-pub mod skill_engine;
-pub mod skill_defs;
+pub mod collaborative_filtering;
+pub mod content_creation;
+pub mod content_generation;
+pub mod content_validator;
+pub mod eads_learning;
+pub mod galadriel;
 pub mod image_to_build;
+pub mod ml_integration;
+pub mod movement_controller;
+pub mod npc_avatar;
+pub mod npc_behavior;
+pub mod npc_dialogue;
+pub mod npc_memory;
+pub mod npc_roster;
+pub mod oar_analyzer;
+pub mod pattern_repository;
+pub mod performance_ml;
+pub mod performance_profiling;
+pub mod predictive_analytics;
+pub mod script_templates;
+pub mod skill_defs;
+pub mod skill_engine;
+pub mod skill_modules;
+pub mod style_transfer;
+pub mod user_feedback;
+pub mod vehicle_builder;
+pub mod vehicle_recipes;
+pub mod vehicle_scripts;
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct AIConfig {
@@ -113,7 +113,10 @@ impl AIManager {
         Ok(Arc::new(manager))
     }
 
-    async fn initialize_engines(&mut self, avatar_manager: Arc<AdvancedAvatarManager>) -> Result<(), AIError> {
+    async fn initialize_engines(
+        &mut self,
+        avatar_manager: Arc<AdvancedAvatarManager>,
+    ) -> Result<(), AIError> {
         // Initialize Avatar Intelligence Engine
         if self.config.avatar_intelligence_enabled {
             self.avatar_intelligence = Some(
@@ -121,39 +124,37 @@ impl AIManager {
                     avatar_manager.clone(),
                     self.metrics.clone(),
                     self.db.clone(),
-                ).await?
+                )
+                .await?,
             );
         }
 
         // Initialize Performance ML Engine
         if self.config.performance_ml_enabled {
-            let ml_engine = performance_ml::PerformanceMLEngine::new(
-                self.metrics.clone(),
-                self.db.clone(),
-            ).await?;
-            
+            let ml_engine =
+                performance_ml::PerformanceMLEngine::new(self.metrics.clone(), self.db.clone())
+                    .await?;
+
             // Start background tasks
             let ml_engine_for_tasks = ml_engine.clone();
             tokio::spawn(async move {
                 ml_engine_for_tasks.start_background_tasks().await;
             });
-            
+
             self.performance_ml = Some(ml_engine);
         }
 
         // Initialize NPC Behavior Engine
         if self.config.npc_behavior_enabled {
-            let npc_engine = npc_behavior::NPCBehaviorEngine::new(
-                self.metrics.clone(),
-                self.db.clone(),
-            ).await?;
-            
+            let npc_engine =
+                npc_behavior::NPCBehaviorEngine::new(self.metrics.clone(), self.db.clone()).await?;
+
             // Start behavior updates
             let npc_engine_for_updates = npc_engine.clone();
             tokio::spawn(async move {
                 npc_engine_for_updates.start_behavior_updates().await;
             });
-            
+
             self.npc_behavior = Some(npc_engine);
         }
 
@@ -163,7 +164,8 @@ impl AIManager {
                 content_generation::ContentGenerationEngine::new(
                     self.metrics.clone(),
                     self.db.clone(),
-                ).await?
+                )
+                .await?,
             );
         }
 
@@ -173,7 +175,8 @@ impl AIManager {
                 predictive_analytics::PredictiveAnalyticsEngine::new(
                     self.metrics.clone(),
                     self.db.clone(),
-                ).await?
+                )
+                .await?,
             );
         }
 
@@ -183,61 +186,100 @@ impl AIManager {
     pub async fn get_ai_health_status(&self) -> AIHealthStatus {
         AIHealthStatus {
             overall_healthy: self.config.enabled,
-            avatar_intelligence_status: self.avatar_intelligence.as_ref()
+            avatar_intelligence_status: self
+                .avatar_intelligence
+                .as_ref()
                 .map(|engine| engine.is_healthy())
                 .unwrap_or(false),
-            performance_ml_status: self.performance_ml.as_ref()
+            performance_ml_status: self
+                .performance_ml
+                .as_ref()
                 .map(|engine| engine.is_healthy())
                 .unwrap_or(false),
-            npc_behavior_status: self.npc_behavior.as_ref()
+            npc_behavior_status: self
+                .npc_behavior
+                .as_ref()
                 .map(|engine| engine.is_healthy())
                 .unwrap_or(false),
-            content_generation_status: self.content_generation.as_ref()
+            content_generation_status: self
+                .content_generation
+                .as_ref()
                 .map(|engine| engine.is_healthy())
                 .unwrap_or(false),
-            predictive_analytics_status: self.predictive_analytics.as_ref()
+            predictive_analytics_status: self
+                .predictive_analytics
+                .as_ref()
                 .map(|engine| engine.is_healthy())
                 .unwrap_or(false),
         }
     }
 
-    pub async fn process_avatar_ai_interaction(&self, avatar_id: Uuid, interaction_data: &str) -> Result<AIResponse, AIError> {
+    pub async fn process_avatar_ai_interaction(
+        &self,
+        avatar_id: Uuid,
+        interaction_data: &str,
+    ) -> Result<AIResponse, AIError> {
         if let Some(engine) = &self.avatar_intelligence {
-            engine.process_interaction(avatar_id, interaction_data).await
+            engine
+                .process_interaction(avatar_id, interaction_data)
+                .await
         } else {
-            Err(AIError::EngineNotAvailable("Avatar Intelligence Engine not initialized".to_string()))
+            Err(AIError::EngineNotAvailable(
+                "Avatar Intelligence Engine not initialized".to_string(),
+            ))
         }
     }
 
-    pub async fn get_performance_recommendations(&self) -> Result<Vec<PerformanceRecommendation>, AIError> {
+    pub async fn get_performance_recommendations(
+        &self,
+    ) -> Result<Vec<PerformanceRecommendation>, AIError> {
         if let Some(engine) = &self.performance_ml {
             engine.get_recommendations().await
         } else {
-            Err(AIError::EngineNotAvailable("Performance ML Engine not initialized".to_string()))
+            Err(AIError::EngineNotAvailable(
+                "Performance ML Engine not initialized".to_string(),
+            ))
         }
     }
 
-    pub async fn generate_npc_behavior(&self, npc_id: Uuid, context: &NPCContext) -> Result<NPCBehaviorPlan, AIError> {
+    pub async fn generate_npc_behavior(
+        &self,
+        npc_id: Uuid,
+        context: &NPCContext,
+    ) -> Result<NPCBehaviorPlan, AIError> {
         if let Some(engine) = &self.npc_behavior {
             engine.generate_behavior(npc_id, context).await
         } else {
-            Err(AIError::EngineNotAvailable("NPC Behavior Engine not initialized".to_string()))
+            Err(AIError::EngineNotAvailable(
+                "NPC Behavior Engine not initialized".to_string(),
+            ))
         }
     }
 
-    pub async fn generate_content(&self, content_type: ContentType, parameters: ContentParameters) -> Result<GeneratedContent, AIError> {
+    pub async fn generate_content(
+        &self,
+        content_type: ContentType,
+        parameters: ContentParameters,
+    ) -> Result<GeneratedContent, AIError> {
         if let Some(engine) = &self.content_generation {
             engine.generate_content(content_type, parameters).await
         } else {
-            Err(AIError::EngineNotAvailable("Content Generation Engine not initialized".to_string()))
+            Err(AIError::EngineNotAvailable(
+                "Content Generation Engine not initialized".to_string(),
+            ))
         }
     }
 
-    pub async fn predict_user_behavior(&self, user_id: Uuid) -> Result<UserBehaviorPrediction, AIError> {
+    pub async fn predict_user_behavior(
+        &self,
+        user_id: Uuid,
+    ) -> Result<UserBehaviorPrediction, AIError> {
         if let Some(engine) = &self.predictive_analytics {
             engine.predict_user_behavior(user_id).await
         } else {
-            Err(AIError::EngineNotAvailable("Predictive Analytics Engine not initialized".to_string()))
+            Err(AIError::EngineNotAvailable(
+                "Predictive Analytics Engine not initialized".to_string(),
+            ))
         }
     }
 }

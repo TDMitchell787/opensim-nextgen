@@ -1,6 +1,6 @@
 use axum::extract::State;
+use axum::http::{header, StatusCode};
 use axum::response::IntoResponse;
-use axum::http::{StatusCode, header};
 use tracing::{info, warn};
 use uuid::Uuid;
 
@@ -37,12 +37,18 @@ pub async fn handle_authorization(
         region_id = params.get("RegionID").cloned().unwrap_or_default();
     }
 
-    info!("[AUTHORIZATION] check: user={} ({} {}), region={}", user_id, first_name, last_name, region_id);
+    info!(
+        "[AUTHORIZATION] check: user={} ({} {}), region={}",
+        user_id, first_name, last_name, region_id
+    );
 
     let uid = Uuid::parse_str(&user_id).unwrap_or_default();
     let rid = Uuid::parse_str(&region_id).unwrap_or_default();
 
-    match svc.is_authorized_for_region(uid, &first_name, &last_name, rid).await {
+    match svc
+        .is_authorized_for_region(uid, &first_name, &last_name, rid)
+        .await
+    {
         Ok((authorized, message)) => authorization_response(authorized, &message),
         Err(e) => {
             warn!("[AUTHORIZATION] Error: {}", e);

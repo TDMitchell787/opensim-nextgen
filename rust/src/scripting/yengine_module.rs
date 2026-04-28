@@ -5,21 +5,21 @@ use std::sync::Arc;
 use anyhow::Result;
 use async_trait::async_trait;
 use parking_lot::RwLock;
-use tracing::{info, warn, debug};
+use tracing::{debug, info, warn};
 use uuid::Uuid;
 
-use crate::modules::traits::{ModuleConfig, RegionModule, SceneContext, SharedRegionModule};
 use crate::modules::events::{EventBus, SceneEvent};
 use crate::modules::services::ServiceRegistry;
+use crate::modules::traits::{ModuleConfig, RegionModule, SceneContext, SharedRegionModule};
 
-use super::executor::tree_walk::TreeWalkExecutor;
 use super::executor::bytecode::BytecodeExecutor;
 use super::executor::cranelift_jit::CraneliftExecutor;
+use super::executor::tree_walk::TreeWalkExecutor;
 use super::executor::{CompiledScript, ExecutionResult, ScriptExecutor, ScriptInstance};
-use super::state_machine::{ScriptStateMachine, ScriptEvent, ScriptEventType};
 use super::listen_manager::ListenManager;
-use super::timer_manager::TimerManager;
 use super::sensor_manager::SensorManager;
+use super::state_machine::{ScriptEvent, ScriptEventType, ScriptStateMachine};
+use super::timer_manager::TimerManager;
 use super::LSLValue;
 
 #[derive(Debug, Clone, PartialEq)]
@@ -97,17 +97,14 @@ impl YEngineModule {
     pub fn initialize_default(&mut self) {
         self.executor = Some(Arc::new(TreeWalkExecutor::new()));
         self.timer_manager = Arc::new(RwLock::new(
-            TimerManager::new().with_min_interval(self.config.min_timer_interval)
+            TimerManager::new().with_min_interval(self.config.min_timer_interval),
         ));
     }
 
-    pub fn rez_script(
-        &self,
-        script_id: Uuid,
-        source: &str,
-        start_param: i32,
-    ) -> Result<()> {
-        let executor = self.executor.as_ref()
+    pub fn rez_script(&self, script_id: Uuid, source: &str, start_param: i32) -> Result<()> {
+        let executor = self
+            .executor
+            .as_ref()
             .ok_or_else(|| anyhow::anyhow!("No executor configured"))?;
 
         let compiled = executor.compile(source, script_id)?;
@@ -158,7 +155,9 @@ impl YEngineModule {
     }
 
     pub fn reset_script(&self, script_id: Uuid) -> Result<()> {
-        let executor = self.executor.as_ref()
+        let executor = self
+            .executor
+            .as_ref()
             .ok_or_else(|| anyhow::anyhow!("No executor configured"))?;
 
         let mut scripts = self.scripts.write();
@@ -190,7 +189,9 @@ impl YEngineModule {
     }
 
     pub fn get_script_running(&self, script_id: Uuid) -> bool {
-        self.scripts.read().get(&script_id)
+        self.scripts
+            .read()
+            .get(&script_id)
             .map(|sm| sm.is_running())
             .unwrap_or(false)
     }
@@ -210,7 +211,9 @@ impl YEngineModule {
     }
 
     pub fn grant_permissions(&self, script_id: Uuid, perms: u32, granter: Uuid) {
-        self.granted_perms.write().insert(script_id, (perms, granter));
+        self.granted_perms
+            .write()
+            .insert(script_id, (perms, granter));
         let mut scripts = self.scripts.write();
         if let Some(sm) = scripts.get_mut(&script_id) {
             sm.instance.context.granted_perms = perms;
@@ -219,7 +222,11 @@ impl YEngineModule {
     }
 
     pub fn get_granted_perms(&self, script_id: Uuid) -> (u32, Uuid) {
-        self.granted_perms.read().get(&script_id).copied().unwrap_or((0, Uuid::nil()))
+        self.granted_perms
+            .read()
+            .get(&script_id)
+            .copied()
+            .unwrap_or((0, Uuid::nil()))
     }
 
     pub fn update_sitting_avatar(&self, script_ids: &[Uuid], avatar_id: Uuid) {
@@ -248,7 +255,12 @@ impl YEngineModule {
         }
     }
 
-    pub fn post_event_to_scripts(&self, script_ids: &[Uuid], event_type: ScriptEventType, args: Vec<LSLValue>) {
+    pub fn post_event_to_scripts(
+        &self,
+        script_ids: &[Uuid],
+        event_type: ScriptEventType,
+        args: Vec<LSLValue>,
+    ) {
         let mut scripts = self.scripts.write();
         for sid in script_ids {
             if let Some(sm) = scripts.get_mut(sid) {
@@ -260,7 +272,13 @@ impl YEngineModule {
         }
     }
 
-    pub fn post_event_to_scripts_with_detect(&self, script_ids: &[Uuid], event_type: ScriptEventType, args: Vec<LSLValue>, detect: Vec<super::executor::DetectInfo>) {
+    pub fn post_event_to_scripts_with_detect(
+        &self,
+        script_ids: &[Uuid],
+        event_type: ScriptEventType,
+        args: Vec<LSLValue>,
+        detect: Vec<super::executor::DetectInfo>,
+    ) {
         let mut scripts = self.scripts.write();
         for sid in script_ids {
             if let Some(sm) = scripts.get_mut(sid) {
@@ -305,11 +323,21 @@ impl YEngineModule {
         let mut scripts = self.scripts.write();
         let script_ids: Vec<Uuid> = scripts.keys().copied().collect();
         let perms_snapshot = self.granted_perms.read().clone();
-        let has_pending: Vec<_> = script_ids.iter().filter(|id| {
-            scripts.get(id).map_or(false, |sm| sm.event_queue_len() > 0 || !sm.instance.pending_actions.is_empty())
-        }).cloned().collect();
+        let has_pending: Vec<_> = script_ids
+            .iter()
+            .filter(|id| {
+                scripts.get(id).map_or(false, |sm| {
+                    sm.event_queue_len() > 0 || !sm.instance.pending_actions.is_empty()
+                })
+            })
+            .cloned()
+            .collect();
         if !has_pending.is_empty() {
-            info!("[PROCESS] {} scripts with pending events/actions: {:?}", has_pending.len(), has_pending);
+            info!(
+                "[PROCESS] {} scripts with pending events/actions: {:?}",
+                has_pending.len(),
+                has_pending
+            );
         }
         for script_id in script_ids {
             if let Some(sm) = scripts.get_mut(&script_id) {
@@ -328,10 +356,18 @@ impl YEngineModule {
                                 self.timer_manager.write().stop_timer(script_id);
                             }
                         }
-                        super::executor::ScriptAction::Listen { channel, name, id, msg } => {
+                        super::executor::ScriptAction::Listen {
+                            channel,
+                            name,
+                            id,
+                            msg,
+                        } => {
                             self.listen_manager.write().add_listener(
-                                script_id, *channel, name,
-                                uuid::Uuid::parse_str(id).unwrap_or_default(), msg,
+                                script_id,
+                                *channel,
+                                name,
+                                uuid::Uuid::parse_str(id).unwrap_or_default(),
+                                msg,
                             );
                         }
                         _ => {
@@ -344,13 +380,7 @@ impl YEngineModule {
         all_actions
     }
 
-    pub fn deliver_chat(
-        &self,
-        channel: i32,
-        sender_name: &str,
-        sender_id: Uuid,
-        message: &str,
-    ) {
+    pub fn deliver_chat(&self, channel: i32, sender_name: &str, sender_id: Uuid, message: &str) {
         let listeners = {
             let mgr = self.listen_manager.read();
             mgr.get_matching_listeners(channel, sender_name, sender_id, message)
@@ -380,7 +410,11 @@ impl YEngineModule {
     }
 
     pub fn running_script_count(&self) -> usize {
-        self.scripts.read().values().filter(|sm| sm.is_running()).count()
+        self.scripts
+            .read()
+            .values()
+            .filter(|sm| sm.is_running())
+            .count()
     }
 
     pub fn listen_manager(&self) -> Arc<RwLock<ListenManager>> {
@@ -413,23 +447,28 @@ impl RegionModule for YEngineModule {
             return Ok(());
         }
 
-        self.config.backend = ExecutionBackend::from_str(
-            &config.get_or("ExecutionBackend", "TreeWalk")
-        );
-        self.config.max_scripts_per_region = config.get_or("MaxScriptsPerRegion", "10000")
-            .parse().unwrap_or(10000);
-        self.config.default_heap_limit = config.get_or("DefaultHeapLimit", "65536")
-            .parse().unwrap_or(65536);
-        self.config.event_queue_size = config.get_or("EventQueueSize", "50")
-            .parse().unwrap_or(50);
-        self.config.timeslice_ms = config.get_or("TimesliceMs", "5")
-            .parse().unwrap_or(5);
+        self.config.backend =
+            ExecutionBackend::from_str(&config.get_or("ExecutionBackend", "TreeWalk"));
+        self.config.max_scripts_per_region = config
+            .get_or("MaxScriptsPerRegion", "10000")
+            .parse()
+            .unwrap_or(10000);
+        self.config.default_heap_limit = config
+            .get_or("DefaultHeapLimit", "65536")
+            .parse()
+            .unwrap_or(65536);
+        self.config.event_queue_size = config.get_or("EventQueueSize", "50").parse().unwrap_or(50);
+        self.config.timeslice_ms = config.get_or("TimesliceMs", "5").parse().unwrap_or(5);
         self.config.enable_ossl = config.get_bool("EnableOSSL", true);
         self.config.ossl_threat_level = config.get_or("OSSLThreatLevel", "VeryLow");
-        self.config.save_state_interval = config.get_or("SaveStateInterval", "300")
-            .parse().unwrap_or(300);
-        self.config.min_timer_interval = config.get_or("MinTimerInterval", "0.5")
-            .parse().unwrap_or(0.5);
+        self.config.save_state_interval = config
+            .get_or("SaveStateInterval", "300")
+            .parse()
+            .unwrap_or(300);
+        self.config.min_timer_interval = config
+            .get_or("MinTimerInterval", "0.5")
+            .parse()
+            .unwrap_or(0.5);
 
         let executor: Arc<dyn ScriptExecutor> = match self.config.backend {
             ExecutionBackend::TreeWalk => Arc::new(TreeWalkExecutor::new()),
@@ -445,7 +484,7 @@ impl RegionModule for YEngineModule {
 
         self.executor = Some(executor);
         self.timer_manager = Arc::new(RwLock::new(
-            TimerManager::new().with_min_interval(self.config.min_timer_interval)
+            TimerManager::new().with_min_interval(self.config.min_timer_interval),
         ));
 
         info!(
@@ -461,23 +500,34 @@ impl RegionModule for YEngineModule {
 
     async fn add_region(&mut self, scene: &SceneContext) -> Result<()> {
         self.region_uuid = Some(scene.region_uuid);
-        info!("YEngine added to region {} ({})", scene.region_name, scene.region_uuid);
+        info!(
+            "YEngine added to region {} ({})",
+            scene.region_name, scene.region_uuid
+        );
         Ok(())
     }
 
     async fn remove_region(&mut self, scene: &SceneContext) -> Result<()> {
         let script_count = self.script_count();
         if script_count > 0 {
-            info!("YEngine removing {} scripts from region {}", script_count, scene.region_name);
+            info!(
+                "YEngine removing {} scripts from region {}",
+                script_count, scene.region_name
+            );
             self.scripts.write().clear();
-            self.listen_manager.write().remove_all_for_script(Uuid::nil());
+            self.listen_manager
+                .write()
+                .remove_all_for_script(Uuid::nil());
         }
         self.region_uuid = None;
         Ok(())
     }
 
     async fn region_loaded(&mut self, scene: &SceneContext) -> Result<()> {
-        info!("YEngine region loaded: {} - ready for scripts", scene.region_name);
+        info!(
+            "YEngine region loaded: {} - ready for scripts",
+            scene.region_name
+        );
         Ok(())
     }
 
@@ -525,7 +575,10 @@ default
 
         let scripts = module.scripts.read();
         let sm = scripts.get(&script_id).unwrap();
-        assert_eq!(sm.instance.global_vars.get("count"), Some(&LSLValue::Integer(1)));
+        assert_eq!(
+            sm.instance.global_vars.get("count"),
+            Some(&LSLValue::Integer(1))
+        );
     }
 
     #[test]
@@ -597,7 +650,10 @@ default
         module.rez_script(script_id, source, 0).unwrap();
         module.process_scripts();
 
-        module.listen_manager.write().add_listener(script_id, 0, "", Uuid::nil(), "");
+        module
+            .listen_manager
+            .write()
+            .add_listener(script_id, 0, "", Uuid::nil(), "");
 
         module.deliver_chat(0, "Test User", Uuid::new_v4(), "Hello");
 
@@ -605,7 +661,10 @@ default
 
         let scripts = module.scripts.read();
         let sm = scripts.get(&script_id).unwrap();
-        assert_eq!(sm.instance.global_vars.get("heard"), Some(&LSLValue::Integer(1)));
+        assert_eq!(
+            sm.instance.global_vars.get("heard"),
+            Some(&LSLValue::Integer(1))
+        );
     }
 
     #[test]

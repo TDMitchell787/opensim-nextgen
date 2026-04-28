@@ -26,7 +26,10 @@ pub struct TransferRequest {
 impl TransferRequest {
     pub fn parse(data: &[u8]) -> Result<Self> {
         if data.len() < 36 {
-            return Err(anyhow!("TransferRequest data too short: {} bytes", data.len()));
+            return Err(anyhow!(
+                "TransferRequest data too short: {} bytes",
+                data.len()
+            ));
         }
 
         let mut cursor = std::io::Cursor::new(data);
@@ -145,8 +148,10 @@ mod tests {
         let mut data = Vec::new();
 
         // TransferID
-        data.extend_from_slice(&[0x12, 0x34, 0x56, 0x78, 0x9a, 0xbc, 0xde, 0xf0,
-                                  0x11, 0x22, 0x33, 0x44, 0x55, 0x66, 0x77, 0x88]);
+        data.extend_from_slice(&[
+            0x12, 0x34, 0x56, 0x78, 0x9a, 0xbc, 0xde, 0xf0, 0x11, 0x22, 0x33, 0x44, 0x55, 0x66,
+            0x77, 0x88,
+        ]);
 
         // ChannelType (2 = asset)
         data.extend_from_slice(&2i32.to_le_bytes());
@@ -161,8 +166,10 @@ mod tests {
         data.extend_from_slice(&20u16.to_le_bytes());
 
         // Params: Asset UUID
-        data.extend_from_slice(&[0xaa, 0xbb, 0xcc, 0xdd, 0xee, 0xff, 0x00, 0x11,
-                                  0x22, 0x33, 0x44, 0x55, 0x66, 0x77, 0x88, 0x99]);
+        data.extend_from_slice(&[
+            0xaa, 0xbb, 0xcc, 0xdd, 0xee, 0xff, 0x00, 0x11, 0x22, 0x33, 0x44, 0x55, 0x66, 0x77,
+            0x88, 0x99,
+        ]);
 
         // Params: Asset Type (0 = texture)
         data.extend_from_slice(&0i32.to_le_bytes());

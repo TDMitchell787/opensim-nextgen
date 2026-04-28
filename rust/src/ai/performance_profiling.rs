@@ -1,11 +1,11 @@
-use crate::monitoring::metrics::MetricsCollector;
-use crate::database::DatabaseManager;
 use super::{AIError, PerformanceRecommendation};
-use std::sync::Arc;
-use std::collections::HashMap;
-use tokio::sync::RwLock;
-use serde::{Deserialize, Serialize};
+use crate::database::DatabaseManager;
+use crate::monitoring::metrics::MetricsCollector;
 use chrono::{DateTime, Utc};
+use serde::{Deserialize, Serialize};
+use std::collections::HashMap;
+use std::sync::Arc;
+use tokio::sync::RwLock;
 use uuid::Uuid;
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
@@ -160,7 +160,10 @@ impl PerformanceRecommendationTracker {
     }
 
     pub async fn capture_metrics_snapshot(&self) -> Result<MetricsSnapshot, AIError> {
-        let current = self.metrics.get_current_metrics().await
+        let current = self
+            .metrics
+            .get_current_metrics()
+            .await
             .map_err(|e| AIError::InferenceFailed(format!("Failed to get metrics: {}", e)))?;
 
         Ok(MetricsSnapshot {
@@ -196,14 +199,20 @@ impl PerformanceRecommendationTracker {
             effectiveness: None,
         };
 
-        self.tracked_recommendations.write().await.insert(recommendation_id, tracked);
+        self.tracked_recommendations
+            .write()
+            .await
+            .insert(recommendation_id, tracked);
 
         self.persist_recommendation(recommendation_id).await?;
 
         Ok(recommendation_id)
     }
 
-    pub async fn mark_recommendation_applied(&self, recommendation_id: Uuid) -> Result<(), AIError> {
+    pub async fn mark_recommendation_applied(
+        &self,
+        recommendation_id: Uuid,
+    ) -> Result<(), AIError> {
         let mut recommendations = self.tracked_recommendations.write().await;
 
         if let Some(tracked) = recommendations.get_mut(&recommendation_id) {
@@ -226,11 +235,9 @@ impl PerformanceRecommendationTracker {
 
         let mut recommendations = self.tracked_recommendations.write().await;
 
-        let tracked = recommendations.get_mut(&recommendation_id)
-            .ok_or_else(|| AIError::ConfigurationError(format!(
-                "Recommendation {} not found",
-                recommendation_id
-            )))?;
+        let tracked = recommendations.get_mut(&recommendation_id).ok_or_else(|| {
+            AIError::ConfigurationError(format!("Recommendation {} not found", recommendation_id))
+        })?;
 
         tracked.after_snapshot = Some(after_snapshot.clone());
         tracked.measured_at = Some(Utc::now());
@@ -239,7 +246,8 @@ impl PerformanceRecommendationTracker {
 
         let cpu_change = after_snapshot.cpu_usage - before.cpu_usage;
         let memory_change = after_snapshot.memory_usage as i64 - before.memory_usage as i64;
-        let response_time_change = after_snapshot.avg_response_time_ms - before.avg_response_time_ms;
+        let response_time_change =
+            after_snapshot.avg_response_time_ms - before.avg_response_time_ms;
         let error_rate_change = after_snapshot.error_rate - before.error_rate;
         let cache_hit_change = after_snapshot.cache_hit_rate - before.cache_hit_rate;
 
@@ -329,11 +337,11 @@ impl PerformanceRecommendationTracker {
         let error_score = (-error_rate_change * 100.0).max(-1.0).min(1.0);
         let cache_score = (cache_hit_change * 10.0).max(-1.0).min(1.0);
 
-        (cpu_score * weights.0) +
-        (memory_score * weights.1) +
-        (response_score * weights.2) +
-        (error_score * weights.3) +
-        (cache_score * weights.4)
+        (cpu_score * weights.0)
+            + (memory_score * weights.1)
+            + (response_score * weights.2)
+            + (error_score * weights.3)
+            + (cache_score * weights.4)
     }
 
     fn generate_effectiveness_analysis(
@@ -360,21 +368,39 @@ impl PerformanceRecommendationTracker {
         }
 
         if response_time_change < -10.0 {
-            analysis.push(format!("Response time improved by {:.1}%", -response_time_change));
+            analysis.push(format!(
+                "Response time improved by {:.1}%",
+                -response_time_change
+            ));
         } else if response_time_change > 10.0 {
-            analysis.push(format!("Response time degraded by {:.1}%", response_time_change));
+            analysis.push(format!(
+                "Response time degraded by {:.1}%",
+                response_time_change
+            ));
         }
 
         if error_rate_change < -0.01 {
-            analysis.push(format!("Error rate reduced by {:.2}%", -error_rate_change * 100.0));
+            analysis.push(format!(
+                "Error rate reduced by {:.2}%",
+                -error_rate_change * 100.0
+            ));
         } else if error_rate_change > 0.01 {
-            analysis.push(format!("Error rate increased by {:.2}%", error_rate_change * 100.0));
+            analysis.push(format!(
+                "Error rate increased by {:.2}%",
+                error_rate_change * 100.0
+            ));
         }
 
         if cache_hit_change > 0.05 {
-            analysis.push(format!("Cache hit rate improved by {:.1}%", cache_hit_change * 100.0));
+            analysis.push(format!(
+                "Cache hit rate improved by {:.1}%",
+                cache_hit_change * 100.0
+            ));
         } else if cache_hit_change < -0.05 {
-            analysis.push(format!("Cache hit rate degraded by {:.1}%", -cache_hit_change * 100.0));
+            analysis.push(format!(
+                "Cache hit rate degraded by {:.1}%",
+                -cache_hit_change * 100.0
+            ));
         }
 
         if analysis.is_empty() {
@@ -403,15 +429,19 @@ impl PerformanceRecommendationTracker {
 
         let stability_factor = 0.8;
 
-        (time_factor * 0.5 + stability_factor * 0.5).min(1.0).max(0.0)
+        (time_factor * 0.5 + stability_factor * 0.5)
+            .min(1.0)
+            .max(0.0)
     }
 
     pub async fn get_effective_recommendations(&self) -> Vec<TrackedRecommendation> {
         let recommendations = self.tracked_recommendations.read().await;
 
-        recommendations.values()
+        recommendations
+            .values()
             .filter(|r| {
-                r.effectiveness.as_ref()
+                r.effectiveness
+                    .as_ref()
                     .map(|e| e.was_effective)
                     .unwrap_or(false)
             })
@@ -422,11 +452,14 @@ impl PerformanceRecommendationTracker {
     pub async fn get_ineffective_recommendations(&self) -> Vec<TrackedRecommendation> {
         let recommendations = self.tracked_recommendations.read().await;
 
-        recommendations.values()
+        recommendations
+            .values()
             .filter(|r| {
-                r.effectiveness.as_ref()
+                r.effectiveness
+                    .as_ref()
                     .map(|e| !e.was_effective)
-                    .unwrap_or(false) && r.was_applied
+                    .unwrap_or(false)
+                    && r.was_applied
             })
             .cloned()
             .collect()
@@ -436,11 +469,15 @@ impl PerformanceRecommendationTracker {
         let recommendations = self.tracked_recommendations.read().await;
 
         let total = recommendations.len();
-        let applied: Vec<_> = recommendations.values()
-            .filter(|r| r.was_applied)
-            .collect();
-        let effective: Vec<_> = applied.iter()
-            .filter(|r| r.effectiveness.as_ref().map(|e| e.was_effective).unwrap_or(false))
+        let applied: Vec<_> = recommendations.values().filter(|r| r.was_applied).collect();
+        let effective: Vec<_> = applied
+            .iter()
+            .filter(|r| {
+                r.effectiveness
+                    .as_ref()
+                    .map(|e| e.was_effective)
+                    .unwrap_or(false)
+            })
             .collect();
 
         let effectiveness_rate = if !applied.is_empty() {
@@ -453,15 +490,18 @@ impl PerformanceRecommendationTracker {
 
         for rec in recommendations.values() {
             let category = &rec.recommendation.category;
-            let entry = category_breakdown.entry(category.clone()).or_insert(CategoryEffectiveness {
-                category: category.clone(),
-                total_issued: 0,
-                total_applied: 0,
-                total_effective: 0,
-                avg_effectiveness_score: 0.0,
-                avg_cpu_improvement: 0.0,
-                avg_response_time_improvement: 0.0,
-            });
+            let entry =
+                category_breakdown
+                    .entry(category.clone())
+                    .or_insert(CategoryEffectiveness {
+                        category: category.clone(),
+                        total_issued: 0,
+                        total_applied: 0,
+                        total_effective: 0,
+                        avg_effectiveness_score: 0.0,
+                        avg_cpu_improvement: 0.0,
+                        avg_response_time_improvement: 0.0,
+                    });
 
             entry.total_issued += 1;
             if rec.was_applied {
@@ -485,21 +525,41 @@ impl PerformanceRecommendationTracker {
             }
         }
 
-        let mut top_effective: Vec<_> = recommendations.values()
-            .filter(|r| r.effectiveness.as_ref().map(|e| e.was_effective).unwrap_or(false))
+        let mut top_effective: Vec<_> = recommendations
+            .values()
+            .filter(|r| {
+                r.effectiveness
+                    .as_ref()
+                    .map(|e| e.was_effective)
+                    .unwrap_or(false)
+            })
             .cloned()
             .collect();
         top_effective.sort_by(|a, b| {
-            let score_a = a.effectiveness.as_ref().map(|e| e.overall_effectiveness_score).unwrap_or(0.0);
-            let score_b = b.effectiveness.as_ref().map(|e| e.overall_effectiveness_score).unwrap_or(0.0);
-            score_b.partial_cmp(&score_a).unwrap_or(std::cmp::Ordering::Equal)
+            let score_a = a
+                .effectiveness
+                .as_ref()
+                .map(|e| e.overall_effectiveness_score)
+                .unwrap_or(0.0);
+            let score_b = b
+                .effectiveness
+                .as_ref()
+                .map(|e| e.overall_effectiveness_score)
+                .unwrap_or(0.0);
+            score_b
+                .partial_cmp(&score_a)
+                .unwrap_or(std::cmp::Ordering::Equal)
         });
         top_effective.truncate(10);
 
-        let ineffective: Vec<_> = recommendations.values()
+        let ineffective: Vec<_> = recommendations
+            .values()
             .filter(|r| {
-                r.was_applied &&
-                r.effectiveness.as_ref().map(|e| !e.was_effective).unwrap_or(false)
+                r.was_applied
+                    && r.effectiveness
+                        .as_ref()
+                        .map(|e| !e.was_effective)
+                        .unwrap_or(false)
             })
             .cloned()
             .collect();
@@ -524,7 +584,9 @@ impl PerformanceRecommendationTracker {
         metric_to_track: String,
     ) -> Result<Uuid, AIError> {
         if !self.config.enable_ab_testing {
-            return Err(AIError::ConfigurationError("A/B testing is disabled".to_string()));
+            return Err(AIError::ConfigurationError(
+                "A/B testing is disabled".to_string(),
+            ));
         }
 
         let experiment_id = Uuid::new_v4();
@@ -543,7 +605,10 @@ impl PerformanceRecommendationTracker {
             results: None,
         };
 
-        self.experiments.write().await.insert(experiment_id, experiment);
+        self.experiments
+            .write()
+            .await
+            .insert(experiment_id, experiment);
 
         Ok(experiment_id)
     }
@@ -556,14 +621,16 @@ impl PerformanceRecommendationTracker {
     ) -> Result<(), AIError> {
         let mut experiments = self.experiments.write().await;
 
-        let experiment = experiments.get_mut(&experiment_id)
-            .ok_or_else(|| AIError::ConfigurationError(format!(
-                "Experiment {} not found",
-                experiment_id
-            )))?;
+        let experiment = experiments.get_mut(&experiment_id).ok_or_else(|| {
+            AIError::ConfigurationError(format!("Experiment {} not found", experiment_id))
+        })?;
 
-        if experiment.status != ExperimentStatus::Pending && experiment.status != ExperimentStatus::Running {
-            return Err(AIError::ConfigurationError("Experiment is not active".to_string()));
+        if experiment.status != ExperimentStatus::Pending
+            && experiment.status != ExperimentStatus::Running
+        {
+            return Err(AIError::ConfigurationError(
+                "Experiment is not active".to_string(),
+            ));
         }
 
         if is_treatment {
@@ -591,11 +658,9 @@ impl PerformanceRecommendationTracker {
     ) -> Result<ABExperimentResults, AIError> {
         let mut experiments = self.experiments.write().await;
 
-        let experiment = experiments.get_mut(&experiment_id)
-            .ok_or_else(|| AIError::ConfigurationError(format!(
-                "Experiment {} not found",
-                experiment_id
-            )))?;
+        let experiment = experiments.get_mut(&experiment_id).ok_or_else(|| {
+            AIError::ConfigurationError(format!("Experiment {} not found", experiment_id))
+        })?;
 
         let control_avg = if control_metrics.is_empty() {
             0.0
@@ -615,19 +680,26 @@ impl PerformanceRecommendationTracker {
             0.0
         };
 
-        let statistical_significance = self.calculate_statistical_significance(
-            &control_metrics,
-            &treatment_metrics,
-        );
+        let statistical_significance =
+            self.calculate_statistical_significance(&control_metrics, &treatment_metrics);
 
         let conclusion = if statistical_significance > 0.95 {
             if improvement > 0.0 {
-                format!("Treatment shows {:.1}% improvement with high confidence", improvement)
+                format!(
+                    "Treatment shows {:.1}% improvement with high confidence",
+                    improvement
+                )
             } else {
-                format!("Treatment shows {:.1}% degradation with high confidence", -improvement)
+                format!(
+                    "Treatment shows {:.1}% degradation with high confidence",
+                    -improvement
+                )
             }
         } else if statistical_significance > 0.80 {
-            format!("Results suggest {:.1}% change but need more data", improvement)
+            format!(
+                "Results suggest {:.1}% change but need more data",
+                improvement
+            )
         } else {
             "Insufficient data for conclusive results".to_string()
         };
@@ -657,16 +729,21 @@ impl PerformanceRecommendationTracker {
         let control_mean: f64 = control.iter().sum::<f64>() / control.len() as f64;
         let treatment_mean: f64 = treatment.iter().sum::<f64>() / treatment.len() as f64;
 
-        let control_variance: f64 = control.iter()
+        let control_variance: f64 = control
+            .iter()
             .map(|x| (x - control_mean).powi(2))
-            .sum::<f64>() / (control.len() - 1) as f64;
+            .sum::<f64>()
+            / (control.len() - 1) as f64;
 
-        let treatment_variance: f64 = treatment.iter()
+        let treatment_variance: f64 = treatment
+            .iter()
             .map(|x| (x - treatment_mean).powi(2))
-            .sum::<f64>() / (treatment.len() - 1) as f64;
+            .sum::<f64>()
+            / (treatment.len() - 1) as f64;
 
-        let pooled_se = ((control_variance / control.len() as f64) +
-                        (treatment_variance / treatment.len() as f64)).sqrt();
+        let pooled_se = ((control_variance / control.len() as f64)
+            + (treatment_variance / treatment.len() as f64))
+            .sqrt();
 
         if pooled_se == 0.0 {
             return 0.0;
@@ -686,9 +763,9 @@ impl PerformanceRecommendationTracker {
         tokio::spawn({
             let tracker = self.clone();
             async move {
-                let mut interval = tokio::time::interval(
-                    tokio::time::Duration::from_secs(tracker.config.measurement_delay_seconds)
-                );
+                let mut interval = tokio::time::interval(tokio::time::Duration::from_secs(
+                    tracker.config.measurement_delay_seconds,
+                ));
                 loop {
                     interval.tick().await;
                     if let Err(e) = tracker.measure_pending_recommendations().await {
@@ -702,13 +779,17 @@ impl PerformanceRecommendationTracker {
     async fn measure_pending_recommendations(&self) -> Result<(), AIError> {
         let recommendation_ids: Vec<Uuid> = {
             let recommendations = self.tracked_recommendations.read().await;
-            recommendations.iter()
+            recommendations
+                .iter()
                 .filter(|(_, r)| {
-                    r.was_applied &&
-                    r.after_snapshot.is_none() &&
-                    r.applied_at.map(|t| {
-                        (Utc::now() - t).num_seconds() >= self.config.measurement_delay_seconds as i64
-                    }).unwrap_or(false)
+                    r.was_applied
+                        && r.after_snapshot.is_none()
+                        && r.applied_at
+                            .map(|t| {
+                                (Utc::now() - t).num_seconds()
+                                    >= self.config.measurement_delay_seconds as i64
+                            })
+                            .unwrap_or(false)
                 })
                 .map(|(id, _)| *id)
                 .collect()

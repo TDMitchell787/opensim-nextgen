@@ -86,7 +86,10 @@ mod tests {
 
         assert_eq!(serialized.len(), 68);
 
-        assert_eq!(i32::from_le_bytes([serialized[0], serialized[1], serialized[2], serialized[3]]), 45000);
+        assert_eq!(
+            i32::from_le_bytes([serialized[0], serialized[1], serialized[2], serialized[3]]),
+            45000
+        );
     }
 
     #[test]

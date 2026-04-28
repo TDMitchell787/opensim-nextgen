@@ -18,10 +18,18 @@ pub trait VoiceHandler: Send + Sync + 'static {
 
     fn voice_enabled(&self) -> bool;
 
-    fn fs_handle_prelogin(&self) -> Option<String> { None }
-    fn fs_handle_signin(&self, _userid: &str, _pwd: &str) -> Option<String> { None }
-    fn fs_handle_buddy(&self, _auth_token: &str) -> Option<String> { None }
-    fn fs_handle_watcher(&self, _auth_token: &str) -> Option<String> { None }
+    fn fs_handle_prelogin(&self) -> Option<String> {
+        None
+    }
+    fn fs_handle_signin(&self, _userid: &str, _pwd: &str) -> Option<String> {
+        None
+    }
+    fn fs_handle_buddy(&self, _auth_token: &str) -> Option<String> {
+        None
+    }
+    fn fs_handle_watcher(&self, _auth_token: &str) -> Option<String> {
+        None
+    }
 }
 
 pub trait IVoiceModule: Send + Sync + 'static {

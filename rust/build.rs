@@ -10,7 +10,7 @@ fn main() {
             PathBuf::from("target/build")
         }
     };
-    
+
     let lib_dir = PathBuf::from("../zig/zig-out/lib");
 
     // Copy the physics library to the output directory
@@ -45,4 +45,4 @@ fn main() {
     println!("cargo:rerun-if-changed=../zig/src/physics/engines/ubode.zig");
     println!("cargo:rerun-if-changed=../zig/src/physics/engines/bullet.zig");
     println!("cargo:rerun-if-changed=../shared/ffi/physics.h");
-} 
+}

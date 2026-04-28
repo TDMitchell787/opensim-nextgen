@@ -3,17 +3,17 @@
 //! Provides comprehensive security services including rate limiting, IP filtering,
 //! intrusion detection, authentication, and security policy enforcement.
 
-use std::collections::HashMap;
-use std::net::IpAddr;
-use std::sync::Arc;
-use std::sync::atomic::{AtomicU64, AtomicBool, Ordering};
-use std::time::{Duration, Instant, SystemTime};
 use anyhow::{anyhow, Result};
 use dashmap::DashMap;
 use serde::{Deserialize, Serialize};
-use sha2::{Sha256, Digest};
+use sha2::{Digest, Sha256};
+use std::collections::HashMap;
+use std::net::IpAddr;
+use std::sync::atomic::{AtomicBool, AtomicU64, Ordering};
+use std::sync::Arc;
+use std::time::{Duration, Instant, SystemTime};
 use tokio::sync::RwLock;
-use tracing::{debug, info, warn, error};
+use tracing::{debug, error, info, warn};
 use uuid::Uuid;
 
 use crate::database::{DatabaseConnection, UserAccountDatabase};
@@ -74,7 +74,9 @@ impl Default for SecurityConfig {
             max_udp_packets_per_second: 500,
             circuit_failure_lockout: 3,
             max_udp_packets_per_minute: std::env::var("OPENSIM_UDP_RATE_LIMIT")
-                .ok().and_then(|v| v.parse().ok()).unwrap_or(30000),
+                .ok()
+                .and_then(|v| v.parse().ok())
+                .unwrap_or(30000),
         }
     }
 }
@@ -311,7 +313,10 @@ impl SecurityManager {
     }
 
     /// Create security manager with database connection
-    pub async fn with_database(config: SecurityConfig, connection: Arc<DatabaseConnection>) -> Result<Self> {
+    pub async fn with_database(
+        config: SecurityConfig,
+        connection: Arc<DatabaseConnection>,
+    ) -> Result<Self> {
         let user_database = Arc::new(UserAccountDatabase::new(connection.clone()).await?);
 
         let manager = Self {
@@ -342,7 +347,7 @@ impl SecurityManager {
         info!("SecurityManager initialized with database connection");
         Ok(manager)
     }
-    
+
     /// Check if a request is allowed from the given IP
     pub async fn check_request_allowed(&self, ip: IpAddr) -> Result<bool> {
         // Update total requests counter
@@ -350,68 +355,68 @@ impl SecurityManager {
             let mut stats = self.security_stats.write().await;
             stats.total_requests += 1;
         }
-        
+
         // Check IP lockout
         if self.is_ip_locked(ip).await? {
             let mut stats = self.security_stats.write().await;
             stats.blocked_requests += 1;
             return Ok(false);
         }
-        
+
         // Check IP filtering
         if self.config.enable_ip_filtering && !self.is_ip_allowed(ip).await? {
             let mut stats = self.security_stats.write().await;
             stats.blocked_requests += 1;
             return Ok(false);
         }
-        
+
         // Check rate limiting
         if self.config.enable_rate_limiting && !self.check_rate_limit(ip).await? {
             let mut stats = self.security_stats.write().await;
             stats.rate_limited_requests += 1;
             return Ok(false);
         }
-        
+
         Ok(true)
     }
-    
+
     /// Check if IP is locked out
     pub async fn is_ip_locked(&self, ip: IpAddr) -> Result<bool> {
         let lockouts = self.ip_lockouts.read().await;
-        
+
         if let Some(lockout) = lockouts.get(&ip) {
             let now = SystemTime::now();
             if now < lockout.lockout_expires {
                 return Ok(true);
             }
         }
-        
+
         Ok(false)
     }
-    
+
     /// Check if IP is allowed (whitelist/blacklist)
     pub async fn is_ip_allowed(&self, ip: IpAddr) -> Result<bool> {
         let ip_str = ip.to_string();
-        
+
         // Check blacklist first
         if self.config.ip_blacklist.contains(&ip_str) {
             return Ok(false);
         }
-        
+
         // If whitelist is not empty, check if IP is whitelisted
         if !self.config.ip_whitelist.is_empty() {
             return Ok(self.config.ip_whitelist.contains(&ip_str));
         }
-        
+
         // If no whitelist, allow by default (unless blacklisted)
         Ok(true)
     }
-    
+
     /// Check rate limit for IP
     pub async fn check_rate_limit(&self, ip: IpAddr) -> Result<bool> {
         let now = Instant::now();
         let mut rate_limits = self.rate_limits.write().await;
-        
+
         let rate_info = rate_limits.entry(ip).or_insert(RateLimitInfo {
             ip,
             requests_per_minute: 0,
@@ -422,18 +427,18 @@ impl SecurityManager {
             is_rate_limited: false,
             rate_limit_expires: None,
         });
-        
+
         // Reset counters if time windows have passed
         if now > rate_info.minute_reset_time {
             rate_info.requests_per_minute = 0;
             rate_info.minute_reset_time = now + Duration::from_secs(60);
         }
-        
+
         if now > rate_info.hour_reset_time {
             rate_info.requests_per_hour = 0;
             rate_info.hour_reset_time = now + Duration::from_secs(3600);
         }
-        
+
         // Check if rate limit has expired
         if let Some(expires) = rate_info.rate_limit_expires {
             if now > expires {
@@ -441,42 +446,64 @@ impl SecurityManager {
                 rate_info.rate_limit_expires = None;
             }
         }
-        
+
         // Check current rate limits
         if rate_info.requests_per_minute >= self.config.max_requests_per_minute {
             rate_info.is_rate_limited = true;
             rate_info.rate_limit_expires = Some(rate_info.minute_reset_time);
-            
+
             // Log rate limit violation
-            warn!("Rate limit exceeded for IP {}: {} requests per minute", ip, rate_info.requests_per_minute);
-            
+            warn!(
+                "Rate limit exceeded for IP {}: {} requests per minute",
+                ip, rate_info.requests_per_minute
+            );
+
             // Detect as potential threat
-            self.detect_threat(ip, ThreatType::RateLimitExceeded, ThreatSeverity::Medium,
-                             format!("IP {} exceeded rate limit: {} requests per minute", ip, rate_info.requests_per_minute)).await?;
-            
+            self.detect_threat(
+                ip,
+                ThreatType::RateLimitExceeded,
+                ThreatSeverity::Medium,
+                format!(
+                    "IP {} exceeded rate limit: {} requests per minute",
+                    ip, rate_info.requests_per_minute
+                ),
+            )
+            .await?;
+
             return Ok(false);
         }
-        
+
         if rate_info.requests_per_hour >= self.config.max_requests_per_hour {
             rate_info.is_rate_limited = true;
             rate_info.rate_limit_expires = Some(rate_info.hour_reset_time);
-            
-            warn!("Hourly rate limit exceeded for IP {}: {} requests per hour", ip, rate_info.requests_per_hour);
-            
-            self.detect_threat(ip, ThreatType::RateLimitExceeded, ThreatSeverity::High,
-                             format!("IP {} exceeded hourly rate limit: {} requests per hour", ip, rate_info.requests_per_hour)).await?;
-            
+
+            warn!(
+                "Hourly rate limit exceeded for IP {}: {} requests per hour",
+                ip, rate_info.requests_per_hour
+            );
+
+            self.detect_threat(
+                ip,
+                ThreatType::RateLimitExceeded,
+                ThreatSeverity::High,
+                format!(
+                    "IP {} exceeded hourly rate limit: {} requests per hour",
+                    ip, rate_info.requests_per_hour
+                ),
+            )
+            .await?;
+
             return Ok(false);
         }
-        
+
         // Update counters
         rate_info.requests_per_minute += 1;
         rate_info.requests_per_hour += 1;
         rate_info.last_request_time = now;
-        
+
         Ok(true)
     }
-    
+
     /// Authenticate a user with username and password
     pub async fn authenticate(&self, username: &str, password: &str) -> Result<String> {
         if username.is_empty() || password.is_empty() {
@@ -490,14 +517,23 @@ impl SecurityManager {
                     let first_name = parts[0];
                     let last_name = parts[1];
 
-                    match user_db.authenticate_user_opensim(first_name, last_name, password).await {
+                    match user_db
+                        .authenticate_user_opensim(first_name, last_name, password)
+                        .await
+                    {
                         Ok(Some(user)) => {
                             let token = self.generate_auth_token(&user.id);
-                            debug!("Authenticated user {} {} via database", first_name, last_name);
+                            debug!(
+                                "Authenticated user {} {} via database",
+                                first_name, last_name
+                            );
                             return Ok(token);
                         }
                         Ok(None) => {
-                            debug!("Authentication failed for {} {}: invalid credentials", first_name, last_name);
+                            debug!(
+                                "Authentication failed for {} {}: invalid credentials",
+                                first_name, last_name
+                            );
                             return Err(anyhow!("Invalid username or password"));
                         }
                         Err(e) => {
@@ -514,7 +550,10 @@ impl SecurityManager {
                     return Ok(token);
                 }
                 Ok(None) => {
-                    debug!("Authentication failed for {}: invalid credentials", username);
+                    debug!(
+                        "Authentication failed for {}: invalid credentials",
+                        username
+                    );
                     return Err(anyhow!("Invalid username or password"));
                 }
                 Err(e) => {
@@ -524,7 +563,10 @@ impl SecurityManager {
         }
 
         if let Some(ref db_conn) = self.db_connection {
-            match self.authenticate_via_direct_query(db_conn, username, password).await {
+            match self
+                .authenticate_via_direct_query(db_conn, username, password)
+                .await
+            {
                 Ok(token) => return Ok(token),
                 Err(e) => {
                     debug!("Direct database authentication failed: {}", e);
@@ -638,10 +680,15 @@ impl SecurityManager {
     }
 
     /// Record a failed authentication attempt
-    pub async fn record_failed_auth(&self, ip: IpAddr, user_id: Option<Uuid>, reason: String) -> Result<()> {
+    pub async fn record_failed_auth(
+        &self,
+        ip: IpAddr,
+        user_id: Option<Uuid>,
+        reason: String,
+    ) -> Result<()> {
         let now = SystemTime::now();
         let mut failed_attempts = self.failed_auth_attempts.write().await;
-        
+
         let attempts = failed_attempts.entry(ip).or_insert_with(Vec::new);
         attempts.push(FailedAuthAttempt {
             ip,
@@ -649,36 +696,55 @@ impl SecurityManager {
             attempt_time: now,
             failure_reason: reason.clone(),
         });
-        
+
         // Clean up old attempts (older than 1 hour)
         let cutoff_time = now - Duration::from_secs(3600);
         attempts.retain(|attempt| attempt.attempt_time > cutoff_time);
-        
+
         // Check if we need to lock the IP
         if attempts.len() >= self.config.max_failed_auth_attempts as usize {
-            self.lock_ip(ip, format!("Too many failed authentication attempts: {}", attempts.len())).await?;
-            
+            self.lock_ip(
+                ip,
+                format!(
+                    "Too many failed authentication attempts: {}",
+                    attempts.len()
+                ),
+            )
+            .await?;
+
             // Clear attempts after locking
             attempts.clear();
-            
+
             // Detect as brute force attack
-            self.detect_threat(ip, ThreatType::BruteForceAttack, ThreatSeverity::High,
-                             format!("Brute force attack detected from IP {}: {} failed attempts", ip, attempts.len())).await?;
+            self.detect_threat(
+                ip,
+                ThreatType::BruteForceAttack,
+                ThreatSeverity::High,
+                format!(
+                    "Brute force attack detected from IP {}: {} failed attempts",
+                    ip,
+                    attempts.len()
+                ),
+            )
+            .await?;
         }
-        
+
         // Update statistics
         let mut stats = self.security_stats.write().await;
         stats.failed_auth_attempts += 1;
-        
-        info!("Recorded failed authentication attempt from IP {}: {}", ip, reason);
+
+        info!(
+            "Recorded failed authentication attempt from IP {}: {}",
+            ip, reason
+        );
         Ok(())
     }
-    
+
     /// Lock an IP address
     pub async fn lock_ip(&self, ip: IpAddr, reason: String) -> Result<()> {
         let now = SystemTime::now();
         let lockout_expires = now + Duration::from_secs(self.config.lockout_duration_seconds);
-        
+
         let lockout = IpLockout {
             ip,
             locked_at: now,
@@ -686,39 +752,47 @@ impl SecurityManager {
             failed_attempts: 0,
             reason: reason.clone(),
         };
-        
+
         let mut lockouts = self.ip_lockouts.write().await;
         lockouts.insert(ip, lockout);
-        
+
         // Update statistics
         let mut stats = self.security_stats.write().await;
         stats.locked_ips += 1;
-        
-        warn!("Locked IP {} for {} seconds: {}", ip, self.config.lockout_duration_seconds, reason);
+
+        warn!(
+            "Locked IP {} for {} seconds: {}",
+            ip, self.config.lockout_duration_seconds, reason
+        );
         Ok(())
     }
-    
+
     /// Unlock an IP address
     pub async fn unlock_ip(&self, ip: IpAddr) -> Result<bool> {
         let mut lockouts = self.ip_lockouts.write().await;
-        
+
         if lockouts.remove(&ip).is_some() {
             let mut stats = self.security_stats.write().await;
             stats.locked_ips = stats.locked_ips.saturating_sub(1);
-            
+
             info!("Unlocked IP {}", ip);
             Ok(true)
         } else {
             Ok(false)
         }
     }
-    
+
     /// Create a new security session
-    pub async fn create_session(&self, user_id: Uuid, ip: IpAddr, permissions: Vec<String>) -> Result<Uuid> {
+    pub async fn create_session(
+        &self,
+        user_id: Uuid,
+        ip: IpAddr,
+        permissions: Vec<String>,
+    ) -> Result<Uuid> {
         let session_id = Uuid::new_v4();
         let now = SystemTime::now();
         let expires_at = now + Duration::from_secs(self.config.session_timeout_seconds);
-        
+
         let session = SecuritySession {
             session_id,
             user_id,
@@ -729,63 +803,72 @@ impl SecurityManager {
             permissions,
             is_active: true,
         };
-        
+
         let mut sessions = self.security_sessions.write().await;
         sessions.insert(session_id, session);
-        
+
         // Update statistics
         let mut stats = self.security_stats.write().await;
         stats.active_sessions += 1;
-        
-        debug!("Created security session {} for user {} from IP {}", session_id, user_id, ip);
+
+        debug!(
+            "Created security session {} for user {} from IP {}",
+            session_id, user_id, ip
+        );
         Ok(session_id)
     }
-    
+
     /// Validate a security session
     pub async fn validate_session(&self, session_id: &Uuid) -> Result<bool> {
         let mut sessions = self.security_sessions.write().await;
-        
+
         if let Some(session) = sessions.get_mut(session_id) {
             let now = SystemTime::now();
-            
+
             // Check if session has expired
             if now > session.expires_at {
                 session.is_active = false;
                 return Ok(false);
             }
-            
+
             // Update last activity
             session.last_activity = now;
-            
+
             Ok(session.is_active)
         } else {
             Ok(false)
         }
     }
-    
+
     /// Invalidate a security session
     pub async fn invalidate_session(&self, session_id: &Uuid) -> Result<bool> {
         let mut sessions = self.security_sessions.write().await;
-        
+
         if let Some(session) = sessions.get_mut(session_id) {
             session.is_active = false;
-            
+
             // Update statistics
             let mut stats = self.security_stats.write().await;
             stats.active_sessions = stats.active_sessions.saturating_sub(1);
-            
+
             debug!("Invalidated security session {}", session_id);
             Ok(true)
         } else {
             Ok(false)
         }
     }
-    
+
     /// Detect a security threat
-    pub async fn detect_threat(&self, ip: IpAddr, threat_type: ThreatType, severity: ThreatSeverity, description: String) -> Result<()> {
+    pub async fn detect_threat(
+        &self,
+        ip: IpAddr,
+        threat_type: ThreatType,
+        severity: ThreatSeverity,
+        description: String,
+    ) -> Result<()> {
         let threat_id = Uuid::new_v4();
         let now = SystemTime::now();
-        
+
         let threat = SecurityThreat {
             threat_id,
             ip,
@@ -796,49 +879,65 @@ impl SecurityManager {
             mitigation_action: None,
             resolved: false,
         };
-        
+
         let mut threats = self.detected_threats.write().await;
         threats.push(threat);
-        
+
         // Update statistics
         let mut stats = self.security_stats.write().await;
         stats.detected_threats += 1;
-        
+
         // Auto-mitigation if enabled
         if self.config.enable_auto_mitigation {
             let mitigation_action = self.determine_mitigation_action(&threat_type, &severity);
             self.apply_mitigation(ip, &mitigation_action).await?;
-            
+
             // Update the threat with mitigation action
             if let Some(threat) = threats.last_mut() {
                 threat.mitigation_action = Some(mitigation_action);
             }
-            
+
             stats.mitigated_threats += 1;
         }
-        
-        error!("Security threat detected: {:?} from IP {} - {}", threat_type, ip, description);
+
+        error!(
+            "Security threat detected: {:?} from IP {} - {}",
+            threat_type, ip, description
+        );
         Ok(())
     }
-    
+
     /// Determine appropriate mitigation action for a threat
-    fn determine_mitigation_action(&self, threat_type: &ThreatType, severity: &ThreatSeverity) -> MitigationAction {
+    fn determine_mitigation_action(
+        &self,
+        threat_type: &ThreatType,
+        severity: &ThreatSeverity,
+    ) -> MitigationAction {
         match (threat_type, severity) {
-            (ThreatType::BruteForceAttack, ThreatSeverity::High | ThreatSeverity::Critical) => MitigationAction::Block,
+            (ThreatType::BruteForceAttack, ThreatSeverity::High | ThreatSeverity::Critical) => {
+                MitigationAction::Block
+            }
             (ThreatType::DenialOfService, _) => MitigationAction::Block,
-            (ThreatType::RateLimitExceeded, ThreatSeverity::High | ThreatSeverity::Critical) => MitigationAction::RateLimit,
-            (ThreatType::UnauthorizedAccess, ThreatSeverity::High | ThreatSeverity::Critical) => MitigationAction::Block,
+            (ThreatType::RateLimitExceeded, ThreatSeverity::High | ThreatSeverity::Critical) => {
+                MitigationAction::RateLimit
+            }
+            (ThreatType::UnauthorizedAccess, ThreatSeverity::High | ThreatSeverity::Critical) => {
+                MitigationAction::Block
+            }
             (ThreatType::DataExfiltration, _) => MitigationAction::Block,
-            (ThreatType::SQLInjection | ThreatType::XSSAttempt | ThreatType::PathTraversal, _) => MitigationAction::Block,
+            (ThreatType::SQLInjection | ThreatType::XSSAttempt | ThreatType::PathTraversal, _) => {
+                MitigationAction::Block
+            }
             _ => MitigationAction::Monitor,
         }
     }
-    
+
     /// Apply mitigation action
     async fn apply_mitigation(&self, ip: IpAddr, action: &MitigationAction) -> Result<()> {
         match action {
             MitigationAction::Block => {
-                self.lock_ip(ip, "Automatic threat mitigation".to_string()).await?;
+                self.lock_ip(ip, "Automatic threat mitigation".to_string())
+                    .await?;
                 info!("Applied mitigation: Blocked IP {}", ip);
             }
             MitigationAction::RateLimit => {
@@ -853,32 +952,33 @@ impl SecurityManager {
             }
             MitigationAction::Quarantine => {
                 // For now, treat quarantine as a block
-                self.lock_ip(ip, "Quarantine - threat mitigation".to_string()).await?;
+                self.lock_ip(ip, "Quarantine - threat mitigation".to_string())
+                    .await?;
                 info!("Applied mitigation: Quarantined IP {}", ip);
             }
         }
-        
+
         Ok(())
     }
-    
+
     /// Get security statistics
     pub async fn get_security_stats(&self) -> SecurityStats {
         let stats = self.security_stats.read().await;
         stats.clone()
     }
-    
+
     /// Get active security sessions
     pub async fn get_active_sessions(&self) -> Vec<SecuritySession> {
         let sessions = self.security_sessions.read().await;
         sessions.values().filter(|s| s.is_active).cloned().collect()
     }
-    
+
     /// Get detected threats
     pub async fn get_detected_threats(&self) -> Vec<SecurityThreat> {
         let threats = self.detected_threats.read().await;
         threats.clone()
     }
-    
+
     /// Fast-path check for UDP packets — lock-free, sub-microsecond.
     /// Returns true if the packet should be processed, false if dropped.
     pub fn check_udp_packet_allowed(&self, ip: IpAddr) -> bool {
@@ -906,7 +1006,8 @@ impl SecurityManager {
             .unwrap_or_default()
             .as_secs();
 
-        let counter = self.udp_counters
+        let counter = self
+            .udp_counters
             .entry(ip)
             .or_insert_with(|| UdpIpCounter::new(now_secs));
 
@@ -928,9 +1029,12 @@ impl SecurityManager {
         if pps > self.config.max_udp_packets_per_second as u64 {
             self.total_udp_dropped.fetch_add(1, Ordering::Relaxed);
             if !counter.is_blocked.swap(true, Ordering::Relaxed) {
-                warn!("[SECURITY] UDP rate limit: {} sent {} pps (limit {})",
-                      ip, pps, self.config.max_udp_packets_per_second);
-                self.udp_blocked_ips.insert(ip, Instant::now() + Duration::from_secs(10));
+                warn!(
+                    "[SECURITY] UDP rate limit: {} sent {} pps (limit {})",
+                    ip, pps, self.config.max_udp_packets_per_second
+                );
+                self.udp_blocked_ips
+                    .insert(ip, Instant::now() + Duration::from_secs(10));
             }
             return false;
         }
@@ -938,9 +1042,12 @@ impl SecurityManager {
         if ppm > self.config.max_udp_packets_per_minute as u64 {
             self.total_udp_dropped.fetch_add(1, Ordering::Relaxed);
             if !counter.is_blocked.swap(true, Ordering::Relaxed) {
-                warn!("[SECURITY] UDP minute rate limit: {} sent {} ppm (limit {})",
-                      ip, ppm, self.config.max_udp_packets_per_minute);
-                self.udp_blocked_ips.insert(ip, Instant::now() + Duration::from_secs(60));
+                warn!(
+                    "[SECURITY] UDP minute rate limit: {} sent {} ppm (limit {})",
+                    ip, ppm, self.config.max_udp_packets_per_minute
+                );
+                self.udp_blocked_ips
+                    .insert(ip, Instant::now() + Duration::from_secs(60));
             }
             return false;
         }
@@ -959,14 +1066,19 @@ impl SecurityManager {
             .unwrap_or_default()
             .as_secs();
 
-        let counter = self.udp_counters
+        let counter = self
+            .udp_counters
             .entry(ip)
             .or_insert_with(|| UdpIpCounter::new(now_secs));
 
         let failures = counter.circuit_failures.fetch_add(1, Ordering::Relaxed) + 1;
         if failures >= self.config.circuit_failure_lockout as u64 {
-            warn!("[SECURITY] Circuit brute-force: {} had {} failures, blocking for 5 min", ip, failures);
-            self.udp_blocked_ips.insert(ip, Instant::now() + Duration::from_secs(300));
+            warn!(
+                "[SECURITY] Circuit brute-force: {} had {} failures, blocking for 5 min",
+                ip, failures
+            );
+            self.udp_blocked_ips
+                .insert(ip, Instant::now() + Duration::from_secs(300));
             counter.circuit_failures.store(0, Ordering::Relaxed);
         }
     }
@@ -983,7 +1095,8 @@ impl SecurityManager {
 
     /// Add an IP to the blacklist (runtime)
     pub fn add_to_blacklist(&self, ip: IpAddr) {
-        self.udp_blocked_ips.insert(ip, Instant::now() + Duration::from_secs(86400));
+        self.udp_blocked_ips
+            .insert(ip, Instant::now() + Duration::from_secs(86400));
         warn!("[SECURITY] Manually blacklisted IP {} for 24h", ip);
     }
 
@@ -994,7 +1107,8 @@ impl SecurityManager {
 
     /// Get list of currently locked/blocked IPs
     pub fn get_blocked_ip_list(&self) -> Vec<(IpAddr, Instant)> {
-        self.udp_blocked_ips.iter()
+        self.udp_blocked_ips
+            .iter()
             .map(|entry| (*entry.key(), *entry.value()))
             .collect()
     }
@@ -1008,16 +1122,15 @@ impl SecurityManager {
             .duration_since(SystemTime::UNIX_EPOCH)
             .unwrap_or_default()
             .as_secs();
-        self.udp_counters.retain(|_, counter| {
-            now_secs - counter.minute_epoch.load(Ordering::Relaxed) < 300
-        });
+        self.udp_counters
+            .retain(|_, counter| now_secs - counter.minute_epoch.load(Ordering::Relaxed) < 300);
     }
 
     /// Clean up expired sessions and lockouts
     pub async fn cleanup_expired_data(&self) -> Result<()> {
         let now = SystemTime::now();
         let mut cleanup_count = 0;
-        
+
         // Clean up expired sessions
         {
             let mut sessions = self.security_sessions.write().await;
@@ -1031,7 +1144,7 @@ impl SecurityManager {
             });
             cleanup_count += initial_count - sessions.len();
         }
-        
+
         // Clean up expired lockouts
         {
             let mut lockouts = self.ip_lockouts.write().await;
@@ -1039,69 +1152,69 @@ impl SecurityManager {
             lockouts.retain(|_, lockout| now < lockout.lockout_expires);
             cleanup_count += initial_count - lockouts.len();
         }
-        
+
         // Clean up old failed attempts
         {
             let mut failed_attempts = self.failed_auth_attempts.write().await;
             let cutoff_time = now - Duration::from_secs(3600); // 1 hour
-            
+
             for attempts in failed_attempts.values_mut() {
                 let initial_count = attempts.len();
                 attempts.retain(|attempt| attempt.attempt_time > cutoff_time);
                 cleanup_count += initial_count - attempts.len();
             }
-            
+
             // Remove empty entries
             failed_attempts.retain(|_, attempts| !attempts.is_empty());
         }
-        
+
         if cleanup_count > 0 {
             debug!("Cleaned up {} expired security records", cleanup_count);
         }
-        
+
         Ok(())
     }
-    
+
     /// Start automatic cleanup task
     pub async fn start_cleanup_task(&self) -> Result<()> {
         let rate_limits = self.rate_limits.clone();
         let security_sessions = self.security_sessions.clone();
         let failed_auth_attempts = self.failed_auth_attempts.clone();
         let ip_lockouts = self.ip_lockouts.clone();
-        
+
         tokio::spawn(async move {
             let mut interval = tokio::time::interval(Duration::from_secs(300)); // 5 minutes
-            
+
             loop {
                 interval.tick().await;
-                
+
                 let now = SystemTime::now();
                 let now_instant = Instant::now();
-                
+
                 // Clean up expired sessions
                 {
                     let mut sessions = security_sessions.write().await;
                     sessions.retain(|_, session| now <= session.expires_at);
                 }
-                
+
                 // Clean up expired lockouts
                 {
                     let mut lockouts = ip_lockouts.write().await;
                     lockouts.retain(|_, lockout| now < lockout.lockout_expires);
                 }
-                
+
                 // Clean up old failed attempts
                 {
                     let mut failed_attempts = failed_auth_attempts.write().await;
                     let cutoff_time = now - Duration::from_secs(3600);
-                    
+
                     for attempts in failed_attempts.values_mut() {
                         attempts.retain(|attempt| attempt.attempt_time > cutoff_time);
                     }
-                    
+
                     failed_attempts.retain(|_, attempts| !attempts.is_empty());
                 }
-                
+
                 // Clean up old rate limit entries
                 {
                     let mut rate_limits = rate_limits.write().await;
@@ -1112,7 +1225,7 @@ impl SecurityManager {
                 }
             }
         });
-        
+
         info!("Started automatic security cleanup task");
         Ok(())
     }
@@ -1122,71 +1235,77 @@ impl SecurityManager {
 mod tests {
     use super::*;
     use std::net::Ipv4Addr;
-    
+
     #[tokio::test]
     async fn test_security_manager_creation() {
         let manager = SecurityManager::new().unwrap();
         let stats = manager.get_security_stats().await;
-        
+
         assert_eq!(stats.total_requests, 0);
         assert_eq!(stats.blocked_requests, 0);
         assert_eq!(stats.active_sessions, 0);
     }
-    
+
     #[tokio::test]
     async fn test_rate_limiting() {
         let mut config = SecurityConfig::default();
         config.max_requests_per_minute = 2;
-        
+
         let manager = SecurityManager::with_config(config).unwrap();
         let ip = IpAddr::V4(Ipv4Addr::new(192, 168, 1, 100));
-        
+
         // First two requests should be allowed
         assert!(manager.check_rate_limit(ip).await.unwrap());
         assert!(manager.check_rate_limit(ip).await.unwrap());
-        
+
         // Third request should be rate limited
         assert!(!manager.check_rate_limit(ip).await.unwrap());
     }
-    
+
     #[tokio::test]
     async fn test_session_management() {
         let manager = SecurityManager::new().unwrap();
         let user_id = Uuid::new_v4();
         let ip = IpAddr::V4(Ipv4Addr::new(127, 0, 0, 1));
         let permissions = vec!["read".to_string(), "write".to_string()];
-        
+
         // Create session
-        let session_id = manager.create_session(user_id, ip, permissions).await.unwrap();
-        
+        let session_id = manager
+            .create_session(user_id, ip, permissions)
+            .await
+            .unwrap();
+
         // Validate session
         assert!(manager.validate_session(&session_id).await.unwrap());
-        
+
         // Invalidate session
         assert!(manager.invalidate_session(&session_id).await.unwrap());
-        
+
         // Session should no longer be valid
         assert!(!manager.validate_session(&session_id).await.unwrap());
     }
-    
+
     #[tokio::test]
     async fn test_ip_locking() {
         let manager = SecurityManager::new().unwrap();
         let ip = IpAddr::V4(Ipv4Addr::new(10, 0, 0, 1));
-        
+
         // IP should not be locked initially
         assert!(!manager.is_ip_locked(ip).await.unwrap());
-        
+
         // Lock the IP
-        manager.lock_ip(ip, "Test lockout".to_string()).await.unwrap();
-        
+        manager
+            .lock_ip(ip, "Test lockout".to_string())
+            .await
+            .unwrap();
+
         // IP should now be locked
         assert!(manager.is_ip_locked(ip).await.unwrap());
-        
+
         // Unlock the IP
         assert!(manager.unlock_ip(ip).await.unwrap());
-        
+
         // IP should no longer be locked
         assert!(!manager.is_ip_locked(ip).await.unwrap());
     }
-} 
+}

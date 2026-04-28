@@ -2,16 +2,16 @@
 // Machine learning-driven avatar personality simulation and conversational AI
 // Using ELEGANT ARCHIVE SOLUTION methodology
 
-use crate::avatar::AdvancedAvatarManager;
-use crate::monitoring::metrics::MetricsCollector;
-use crate::database::DatabaseManager;
 use super::{AIError, AIResponse};
-use std::sync::Arc;
-use std::collections::HashMap;
-use tokio::sync::RwLock;
-use serde::{Deserialize, Serialize};
-use uuid::Uuid;
+use crate::avatar::AdvancedAvatarManager;
+use crate::database::DatabaseManager;
+use crate::monitoring::metrics::MetricsCollector;
 use chrono::{DateTime, Utc};
+use serde::{Deserialize, Serialize};
+use std::collections::HashMap;
+use std::sync::Arc;
+use tokio::sync::RwLock;
+use uuid::Uuid;
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct PersonalityTraits {
@@ -88,7 +88,11 @@ impl AvatarIntelligenceEngine {
         Ok(Arc::new(engine))
     }
 
-    pub async fn process_interaction(&self, avatar_id: Uuid, interaction_data: &str) -> Result<AIResponse, AIError> {
+    pub async fn process_interaction(
+        &self,
+        avatar_id: Uuid,
+        interaction_data: &str,
+    ) -> Result<AIResponse, AIError> {
         let start_time = std::time::Instant::now();
 
         // Get or create avatar profile
@@ -98,13 +102,20 @@ impl AvatarIntelligenceEngine {
         let nlp_result = self.nlp_processor.process_text(interaction_data).await?;
 
         // Analyze emotional content
-        let emotion_analysis = self.emotion_analyzer.analyze_emotion(interaction_data, &profile.emotional_state).await?;
+        let emotion_analysis = self
+            .emotion_analyzer
+            .analyze_emotion(interaction_data, &profile.emotional_state)
+            .await?;
 
         // Update emotional state based on interaction
-        profile.emotional_state = self.update_emotional_state(&profile.emotional_state, &emotion_analysis).await?;
+        profile.emotional_state = self
+            .update_emotional_state(&profile.emotional_state, &emotion_analysis)
+            .await?;
 
         // Generate contextually appropriate response
-        let response = self.generate_response(&profile, &nlp_result, &emotion_analysis).await?;
+        let response = self
+            .generate_response(&profile, &nlp_result, &emotion_analysis)
+            .await?;
 
         // Store conversation memory
         let memory = ConversationMemory {
@@ -125,7 +136,9 @@ impl AvatarIntelligenceEngine {
         let processing_time = start_time.elapsed().as_millis() as u64;
 
         // Record metrics
-        self.metrics.record_ai_interaction(avatar_id, processing_time).await;
+        self.metrics
+            .record_ai_interaction(avatar_id, processing_time)
+            .await;
 
         Ok(AIResponse {
             response_text: response.text,
@@ -141,9 +154,12 @@ impl AvatarIntelligenceEngine {
         true // Simplified health check
     }
 
-    async fn get_or_create_avatar_profile(&self, avatar_id: Uuid) -> Result<AvatarProfile, AIError> {
+    async fn get_or_create_avatar_profile(
+        &self,
+        avatar_id: Uuid,
+    ) -> Result<AvatarProfile, AIError> {
         let profiles = self.avatar_profiles.read().await;
-        
+
         if let Some(profile) = profiles.get(&avatar_id) {
             Ok(profile.clone())
         } else {
@@ -185,26 +201,44 @@ impl AvatarIntelligenceEngine {
         Ok(profile)
     }
 
-    async fn update_emotional_state(&self, current_state: &EmotionalState, emotion_analysis: &EmotionAnalysis) -> Result<EmotionalState, AIError> {
+    async fn update_emotional_state(
+        &self,
+        current_state: &EmotionalState,
+        emotion_analysis: &EmotionAnalysis,
+    ) -> Result<EmotionalState, AIError> {
         let decay_factor = 0.9; // Emotions decay over time
         let influence_factor = 0.3; // How much new emotions influence current state
 
         Ok(EmotionalState {
-            happiness: (current_state.happiness * decay_factor) + (emotion_analysis.happiness * influence_factor),
-            sadness: (current_state.sadness * decay_factor) + (emotion_analysis.sadness * influence_factor),
-            anger: (current_state.anger * decay_factor) + (emotion_analysis.anger * influence_factor),
+            happiness: (current_state.happiness * decay_factor)
+                + (emotion_analysis.happiness * influence_factor),
+            sadness: (current_state.sadness * decay_factor)
+                + (emotion_analysis.sadness * influence_factor),
+            anger: (current_state.anger * decay_factor)
+                + (emotion_analysis.anger * influence_factor),
             fear: (current_state.fear * decay_factor) + (emotion_analysis.fear * influence_factor),
-            surprise: (current_state.surprise * decay_factor) + (emotion_analysis.surprise * influence_factor),
-            disgust: (current_state.disgust * decay_factor) + (emotion_analysis.disgust * influence_factor),
+            surprise: (current_state.surprise * decay_factor)
+                + (emotion_analysis.surprise * influence_factor),
+            disgust: (current_state.disgust * decay_factor)
+                + (emotion_analysis.disgust * influence_factor),
             last_updated: Utc::now(),
         })
     }
 
-    async fn generate_response(&self, profile: &AvatarProfile, nlp_result: &NLPResult, emotion_analysis: &EmotionAnalysis) -> Result<GeneratedResponse, AIError> {
+    async fn generate_response(
+        &self,
+        profile: &AvatarProfile,
+        nlp_result: &NLPResult,
+        emotion_analysis: &EmotionAnalysis,
+    ) -> Result<GeneratedResponse, AIError> {
         // Generate response based on personality, emotional state, and conversation context
-        let response_text = self.generate_personality_based_response(profile, nlp_result).await?;
+        let response_text = self
+            .generate_personality_based_response(profile, nlp_result)
+            .await?;
         let confidence = self.calculate_response_confidence(profile, nlp_result);
-        let suggested_actions = self.generate_suggested_actions(profile, emotion_analysis).await?;
+        let suggested_actions = self
+            .generate_suggested_actions(profile, emotion_analysis)
+            .await?;
 
         Ok(GeneratedResponse {
             text: response_text,
@@ -213,7 +247,11 @@ impl AvatarIntelligenceEngine {
         })
     }
 
-    async fn generate_personality_based_response(&self, profile: &AvatarProfile, nlp_result: &NLPResult) -> Result<String, AIError> {
+    async fn generate_personality_based_response(
+        &self,
+        profile: &AvatarProfile,
+        nlp_result: &NLPResult,
+    ) -> Result<String, AIError> {
         // Generate response based on Big Five personality traits
         let base_response = format!("I understand you're talking about {}.", nlp_result.topic);
 
@@ -228,15 +266,27 @@ impl AvatarIntelligenceEngine {
         Ok(format!("{}{}", base_response, personality_modifier))
     }
 
-    fn calculate_response_confidence(&self, profile: &AvatarProfile, nlp_result: &NLPResult) -> f32 {
+    fn calculate_response_confidence(
+        &self,
+        profile: &AvatarProfile,
+        nlp_result: &NLPResult,
+    ) -> f32 {
         // Calculate confidence based on conversation history similarity and personality alignment
         let base_confidence = 0.7f32;
-        let history_boost = if profile.conversation_history.len() > 5 { 0.2f32 } else { 0.0f32 };
-        
+        let history_boost = if profile.conversation_history.len() > 5 {
+            0.2f32
+        } else {
+            0.0f32
+        };
+
         (base_confidence + history_boost).min(1.0f32)
     }
 
-    async fn generate_suggested_actions(&self, profile: &AvatarProfile, emotion_analysis: &EmotionAnalysis) -> Result<Vec<String>, AIError> {
+    async fn generate_suggested_actions(
+        &self,
+        profile: &AvatarProfile,
+        emotion_analysis: &EmotionAnalysis,
+    ) -> Result<Vec<String>, AIError> {
         let mut actions = Vec::new();
 
         if emotion_analysis.happiness > 0.7 {
@@ -260,12 +310,20 @@ impl AvatarIntelligenceEngine {
     fn calculate_importance(&self, nlp_result: &NLPResult) -> f32 {
         // Calculate importance based on emotional intensity, topic relevance, etc.
         let emotional_weight = nlp_result.sentiment.abs() * 0.5;
-        let topic_weight = if nlp_result.entities.len() > 2 { 0.3 } else { 0.1 };
-        
+        let topic_weight = if nlp_result.entities.len() > 2 {
+            0.3
+        } else {
+            0.1
+        };
+
         (emotional_weight + topic_weight).min(1.0)
     }
 
-    async fn update_avatar_profile(&self, avatar_id: Uuid, profile: AvatarProfile) -> Result<(), AIError> {
+    async fn update_avatar_profile(
+        &self,
+        avatar_id: Uuid,
+        profile: AvatarProfile,
+    ) -> Result<(), AIError> {
         // Update in-memory cache
         let mut profiles = self.avatar_profiles.write().await;
         profiles.insert(avatar_id, profile.clone());
@@ -327,8 +385,8 @@ impl PersonalityModel {
 
     async fn generate_personality(&self) -> Result<PersonalityTraits, AIError> {
         // Generate randomized but realistic personality traits
-        use rand::{Rng, SeedableRng};
         use rand::rngs::StdRng;
+        use rand::{Rng, SeedableRng};
         let mut rng = StdRng::from_entropy();
 
         Ok(PersonalityTraits {
@@ -360,7 +418,11 @@ impl EmotionAnalyzer {
         Ok(Self)
     }
 
-    async fn analyze_emotion(&self, text: &str, current_state: &EmotionalState) -> Result<EmotionAnalysis, AIError> {
+    async fn analyze_emotion(
+        &self,
+        text: &str,
+        current_state: &EmotionalState,
+    ) -> Result<EmotionAnalysis, AIError> {
         // Simplified emotion analysis - in production, this would use actual sentiment analysis models
         let mut analysis = EmotionAnalysis {
             happiness: 0.4,
@@ -382,7 +444,10 @@ impl EmotionAnalyzer {
             ("disgust", analysis.disgust),
         ];
 
-        if let Some((emotion, _)) = emotions.iter().max_by(|a, b| a.1.partial_cmp(&b.1).unwrap()) {
+        if let Some((emotion, _)) = emotions
+            .iter()
+            .max_by(|a, b| a.1.partial_cmp(&b.1).unwrap())
+        {
             analysis.dominant_emotion = emotion.to_string();
         }
 

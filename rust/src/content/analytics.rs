@@ -2,14 +2,14 @@
 //!
 //! Provides content usage analytics, performance tracking, and insights.
 
+use super::{ContentAnalytics, ContentPerformanceMetrics, ContentResult, ContentRevenueData};
+use chrono::{DateTime, Duration, Utc};
+use serde::{Deserialize, Serialize};
 use std::collections::HashMap;
 use std::sync::Arc;
 use tokio::sync::RwLock;
-use uuid::Uuid;
-use chrono::{DateTime, Utc, Duration};
-use serde::{Deserialize, Serialize};
 use tracing::{debug, info};
-use super::{ContentResult, ContentAnalytics, ContentPerformanceMetrics, ContentRevenueData};
+use uuid::Uuid;
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct AnalyticsEvent {
@@ -152,7 +152,9 @@ impl ContentAnalyticsManager {
 
         {
             let mut stats = self.content_stats.write().await;
-            let content_stat = stats.entry(content_id).or_insert_with(ContentStats::default);
+            let content_stat = stats
+                .entry(content_id)
+                .or_insert_with(ContentStats::default);
 
             if content_stat.first_event.is_none() {
                 content_stat.first_event = Some(timestamp);
@@ -215,7 +217,10 @@ impl ContentAnalyticsManager {
             }
         }
 
-        debug!("Recorded analytics event for content {}: {:?}", content_id, event.event_type);
+        debug!(
+            "Recorded analytics event for content {}: {:?}",
+            content_id, event.event_type
+        );
         Ok(())
     }
 
@@ -224,90 +229,96 @@ impl ContentAnalyticsManager {
 
         let content_stat = stats.get(&content_id);
 
-        let (total_downloads, unique_users, average_rating, usage_by_region, performance_metrics, revenue_data) =
-            if let Some(stat) = content_stat {
-                let avg_rating = if stat.ratings.is_empty() {
-                    0.0
-                } else {
-                    stat.ratings.iter().sum::<f32>() / stat.ratings.len() as f32
-                };
-
-                let avg_load_time = if stat.load_times.is_empty() {
-                    0.0
-                } else {
-                    stat.load_times.iter().sum::<f32>() / stat.load_times.len() as f32
-                };
-
-                let avg_render_time = if stat.render_times.is_empty() {
-                    0.0
-                } else {
-                    stat.render_times.iter().sum::<f32>() / stat.render_times.len() as f32
-                };
-
-                let render_performance = if avg_render_time > 0.0 {
-                    (1.0 / avg_render_time * 60.0).min(100.0)
-                } else {
-                    100.0
-                };
-
-                let total_cache_ops = stat.cache_hits + stat.cache_misses;
-                let cache_hit_ratio = if total_cache_ops > 0 {
-                    stat.cache_hits as f32 / total_cache_ops as f32
-                } else {
-                    1.0
-                };
-
-                let total_ops = stat.downloads + stat.views + stat.uses;
-                let error_rate = if total_ops > 0 {
-                    stat.errors as f32 / total_ops as f32
-                } else {
-                    0.0
-                };
-
-                let perf_metrics = ContentPerformanceMetrics {
-                    load_time_avg: avg_load_time,
-                    render_performance,
-                    memory_usage: (stat.downloads * 1024) as u64,
-                    cache_hit_ratio,
-                    error_rate,
-                };
-
-                let rev_data = if stat.revenue > 0.0 {
-                    Some(ContentRevenueData {
-                        total_revenue: stat.revenue,
-                        currency: "L$".to_string(),
-                        sales_count: stat.purchases as u32,
-                        refund_count: 0,
-                        revenue_by_period: HashMap::new(),
-                    })
-                } else {
-                    None
-                };
-
-                (
-                    stat.downloads,
-                    stat.unique_users.len() as u32,
-                    avg_rating,
-                    stat.usage_by_region.clone(),
-                    perf_metrics,
-                    rev_data,
-                )
+        let (
+            total_downloads,
+            unique_users,
+            average_rating,
+            usage_by_region,
+            performance_metrics,
+            revenue_data,
+        ) = if let Some(stat) = content_stat {
+            let avg_rating = if stat.ratings.is_empty() {
+                0.0
             } else {
-                (
-                    0,
-                    0,
-                    0.0,
-                    HashMap::new(),
-                    ContentPerformanceMetrics {
-                        load_time_avg: 0.0,
-                        render_performance: 100.0,
-                        memory_usage: 0,
-                        cache_hit_ratio: 1.0,
-                        error_rate: 0.0,
-                    },
-                    None,
-                )
+                stat.ratings.iter().sum::<f32>() / stat.ratings.len() as f32
             };
+
+            let avg_load_time = if stat.load_times.is_empty() {
+                0.0
+            } else {
+                stat.load_times.iter().sum::<f32>() / stat.load_times.len() as f32
+            };
+
+            let avg_render_time = if stat.render_times.is_empty() {
+                0.0
+            } else {
+                stat.render_times.iter().sum::<f32>() / stat.render_times.len() as f32
+            };
+
+            let render_performance = if avg_render_time > 0.0 {
+                (1.0 / avg_render_time * 60.0).min(100.0)
+            } else {
+                100.0
+            };
+
+            let total_cache_ops = stat.cache_hits + stat.cache_misses;
+            let cache_hit_ratio = if total_cache_ops > 0 {
+                stat.cache_hits as f32 / total_cache_ops as f32
+            } else {
+                1.0
+            };
+
+            let total_ops = stat.downloads + stat.views + stat.uses;
+            let error_rate = if total_ops > 0 {
+                stat.errors as f32 / total_ops as f32
+            } else {
+                0.0
+            };
+
+            let perf_metrics = ContentPerformanceMetrics {
+                load_time_avg: avg_load_time,
+                render_performance,
+                memory_usage: (stat.downloads * 1024) as u64,
+                cache_hit_ratio,
+                error_rate,
+            };
+
+            let rev_data = if stat.revenue > 0.0 {
+                Some(ContentRevenueData {
+                    total_revenue: stat.revenue,
+                    currency: "L$".to_string(),
+                    sales_count: stat.purchases as u32,
+                    refund_count: 0,
+                    revenue_by_period: HashMap::new(),
+                })
+            } else {
+                None
+            };
+
+            (
+                stat.downloads,
+                stat.unique_users.len() as u32,
+                avg_rating,
+                stat.usage_by_region.clone(),
+                perf_metrics,
+                rev_data,
+            )
+        } else {
+            (
+                0,
+                0,
+                0.0,
+                HashMap::new(),
+                ContentPerformanceMetrics {
+                    load_time_avg: 0.0,
+                    render_performance: 100.0,
+                    memory_usage: 0,
+                    cache_hit_ratio: 1.0,
+                    error_rate: 0.0,
+                },
+                None,
+            )
+        };
 
         Ok(ContentAnalytics {
             content_id,
@@ -323,25 +334,38 @@ impl ContentAnalyticsManager {
     pub async fn query_events(&self, query: AnalyticsQuery) -> ContentResult<Vec<AnalyticsEvent>> {
         let events = self.events.read().await;
 
-        let filtered: Vec<AnalyticsEvent> = events.iter()
+        let filtered: Vec<AnalyticsEvent> = events
+            .iter()
             .filter(|e| {
                 if let Some(cid) = query.content_id {
-                    if e.content_id != cid { return false; }
+                    if e.content_id != cid {
+                        return false;
+                    }
                 }
                 if let Some(uid) = query.user_id {
-                    if e.user_id != Some(uid) { return false; }
+                    if e.user_id != Some(uid) {
+                        return false;
+                    }
                 }
                 if let Some(rid) = query.region_id {
-                    if e.region_id != Some(rid) { return false; }
+                    if e.region_id != Some(rid) {
+                        return false;
+                    }
                 }
                 if let Some(ref types) = query.event_types {
-                    if !types.contains(&e.event_type) { return false; }
+                    if !types.contains(&e.event_type) {
+                        return false;
+                    }
                 }
                 if let Some(start) = query.start_time {
-                    if e.timestamp < start { return false; }
+                    if e.timestamp < start {
+                        return false;
+                    }
                 }
                 if let Some(end) = query.end_time {
-                    if e.timestamp > end { return false; }
+                    if e.timestamp > end {
+                        return false;
+                    }
                 }
                 true
             })
@@ -358,10 +382,15 @@ impl ContentAnalyticsManager {
         Ok(result)
     }
 
-    pub async fn get_summary(&self, start_time: DateTime<Utc>, end_time: DateTime<Utc>) -> ContentResult<AnalyticsSummary> {
+    pub async fn get_summary(
+        &self,
+        start_time: DateTime<Utc>,
+        end_time: DateTime<Utc>,
+    ) -> ContentResult<AnalyticsSummary> {
         let events = self.events.read().await;
 
-        let filtered: Vec<&AnalyticsEvent> = events.iter()
+        let filtered: Vec<&AnalyticsEvent> = events
+            .iter()
             .filter(|e| e.timestamp >= start_time && e.timestamp <= end_time)
             .collect();
 
@@ -398,7 +427,11 @@ impl ContentAnalyticsManager {
         })
     }
 
-    pub async fn get_trending_content(&self, duration: Duration, limit: usize) -> ContentResult<Vec<(Uuid, u64)>> {
+    pub async fn get_trending_content(
+        &self,
+        duration: Duration,
+        limit: usize,
+    ) -> ContentResult<Vec<(Uuid, u64)>> {
         let end_time = Utc::now();
         let start_time = end_time - duration;
 
@@ -440,7 +473,11 @@ impl ContentAnalyticsManager {
             }
         }
 
-        debug!("User {} has activity on {} content items", user_id, activity.len());
+        debug!(
+            "User {} has activity on {} content items",
+            user_id,
+            activity.len()
+        );
         Ok(activity)
     }
 
@@ -455,7 +492,11 @@ impl ContentAnalyticsManager {
             }
         }
 
-        debug!("Region {} has {} content items tracked", region_id, region_content.len());
+        debug!(
+            "Region {} has {} content items tracked",
+            region_id,
+            region_content.len()
+        );
         Ok(region_content)
     }
 
@@ -470,11 +511,15 @@ impl ContentAnalyticsManager {
         Ok(removed)
     }
 
-    pub async fn export_events(&self, content_id: Option<Uuid>) -> ContentResult<Vec<AnalyticsEvent>> {
+    pub async fn export_events(
+        &self,
+        content_id: Option<Uuid>,
+    ) -> ContentResult<Vec<AnalyticsEvent>> {
         let events = self.events.read().await;
 
         let result: Vec<AnalyticsEvent> = if let Some(cid) = content_id {
-            events.iter()
+            events
+                .iter()
                 .filter(|e| e.content_id == cid)
                 .cloned()
                 .collect()

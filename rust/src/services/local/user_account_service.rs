@@ -12,8 +12,8 @@ use std::sync::Arc;
 use tracing::{debug, info};
 use uuid::Uuid;
 
-use crate::services::traits::{UserAccountServiceTrait, UserAccount};
 use crate::database::multi_backend::DatabaseConnection;
+use crate::services::traits::{UserAccount, UserAccountServiceTrait};
 
 pub struct LocalUserAccountService {
     connection: Arc<DatabaseConnection>,
@@ -28,7 +28,9 @@ impl LocalUserAccountService {
     fn get_pg_pool(&self) -> Result<&sqlx::PgPool> {
         match self.connection.as_ref() {
             DatabaseConnection::PostgreSQL(pool) => Ok(pool),
-            _ => Err(anyhow!("LocalUserAccountService requires PostgreSQL connection")),
+            _ => Err(anyhow!(
+                "LocalUserAccountService requires PostgreSQL connection"
+            )),
         }
     }
 }
@@ -36,7 +38,10 @@ impl LocalUserAccountService {
 #[async_trait]
 impl UserAccountServiceTrait for LocalUserAccountService {
     async fn get_user_account(&self, scope_id: Uuid, user_id: Uuid) -> Result<Option<UserAccount>> {
-        debug!("Getting user account by ID: {} (scope: {})", user_id, scope_id);
+        debug!(
+            "Getting user account by ID: {} (scope: {})",
+            user_id, scope_id
+        );
 
         let pool = self.get_pg_pool()?;
         let row = sqlx::query(
@@ -61,8 +66,16 @@ impl UserAccountServiceTrait for LocalUserAccountService {
         }
     }
 
-    async fn get_user_account_by_name(&self, scope_id: Uuid, first: &str, last: &str) -> Result<Option<UserAccount>> {
-        debug!("Getting user account by name: {} {} (scope: {})", first, last, scope_id);
+    async fn get_user_account_by_name(
+        &self,
+        scope_id: Uuid,
+        first: &str,
+        last: &str,
+    ) -> Result<Option<UserAccount>> {
+        debug!(
+            "Getting user account by name: {} {} (scope: {})",
+            first, last, scope_id
+        );
 
         let pool = self.get_pg_pool()?;
         let row = sqlx::query(
@@ -88,8 +101,15 @@ impl UserAccountServiceTrait for LocalUserAccountService {
         }
     }
 
-    async fn get_user_account_by_email(&self, scope_id: Uuid, email: &str) -> Result<Option<UserAccount>> {
-        debug!("Getting user account by email: {} (scope: {})", email, scope_id);
+    async fn get_user_account_by_email(
+        &self,
+        scope_id: Uuid,
+        email: &str,
+    ) -> Result<Option<UserAccount>> {
+        debug!(
+            "Getting user account by email: {} (scope: {})",
+            email, scope_id
+        );
 
         let pool = self.get_pg_pool()?;
         let row = sqlx::query(
@@ -115,7 +135,10 @@ impl UserAccountServiceTrait for LocalUserAccountService {
     }
 
     async fn store_user_account(&self, data: &UserAccount) -> Result<bool> {
-        info!("Storing user account: {} {} ({})", data.first_name, data.last_name, data.principal_id);
+        info!(
+            "Storing user account: {} {} ({})",
+            data.first_name, data.last_name, data.principal_id
+        );
 
         let service_urls = self.serialize_service_urls(&data.service_urls);
 
@@ -135,7 +158,7 @@ impl UserAccountServiceTrait for LocalUserAccountService {
                 userlevel = EXCLUDED.userlevel,
                 userflags = EXCLUDED.userflags,
                 usertitle = EXCLUDED.usertitle
-            "#
+            "#,
         )
         .bind(data.principal_id)
         .bind(data.scope_id)
@@ -151,7 +174,10 @@ impl UserAccountServiceTrait for LocalUserAccountService {
         .await
         .map_err(|e| anyhow!("Failed to store user account: {}", e))?;
 
-        info!("Stored user account: {} {}", data.first_name, data.last_name);
+        info!(
+            "Stored user account: {} {}",
+            data.first_name, data.last_name
+        );
         Ok(true)
     }
 

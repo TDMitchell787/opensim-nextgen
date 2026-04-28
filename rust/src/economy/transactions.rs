@@ -1,5 +1,5 @@
 //! Transaction Processing Engine for OpenSim Next
-//! 
+//!
 //! Provides secure, atomic transaction processing with fraud detection,
 //! rate limiting, and comprehensive audit trails.
 
@@ -9,9 +9,9 @@ use anyhow::Result;
 use sqlx::Row;
 use std::collections::HashMap;
 use std::sync::Arc;
-use tokio::sync::{RwLock, Mutex};
+use tokio::sync::{Mutex, RwLock};
 use tokio::time::{Duration, Instant};
-use tracing::{debug, info, warn, error};
+use tracing::{debug, error, info, warn};
 use uuid::Uuid;
 
 /// Transaction processing engine
@@ -147,9 +147,15 @@ impl TransactionProcessor {
     }
 
     /// Process a transaction
-    pub async fn process_transaction(&self, request: TransactionRequest) -> EconomyResult<TransactionResult> {
+    pub async fn process_transaction(
+        &self,
+        request: TransactionRequest,
+    ) -> EconomyResult<TransactionResult> {
         let start_time = Instant::now();
-        info!("Processing transaction: {:?} {} {}", request.transaction_type, request.amount, request.currency_code);
+        info!(
+            "Processing transaction: {:?} {} {}",
+            request.transaction_type, request.amount, request.currency_code
+        );
 
         // Validate request
         self.validate_transaction_request(&request).await?;
@@ -172,13 +178,20 @@ impl TransactionProcessor {
         };
 
         let processing_time = start_time.elapsed();
-        info!("Transaction processed successfully in {}ms", processing_time.as_millis());
+        info!(
+            "Transaction processed successfully in {}ms",
+            processing_time.as_millis()
+        );
 
         Ok(result)
     }
 
     /// Execute transaction atomically
-    async fn execute_transaction(&self, request: TransactionRequest, start_time: Instant) -> EconomyResult<TransactionResult> {
+    async fn execute_transaction(
+        &self,
+        request: TransactionRequest,
+        start_time: Instant,
+    ) -> EconomyResult<TransactionResult> {
         let transaction_id = Uuid::new_v4();
 
         // Create transaction record
@@ -220,10 +233,10 @@ impl TransactionProcessor {
                 // Mark transaction as completed
                 transaction.status = TransactionStatus::Completed;
                 transaction.processed_at = Some(chrono::Utc::now());
-                
+
                 // Save final transaction state
                 self.save_transaction(&transaction).await?;
-                
+
                 // Update transaction in result
                 tx_result.transaction = transaction;
                 tx_result.processing_time_ms = start_time.elapsed().as_millis() as u64;
@@ -237,10 +250,10 @@ impl TransactionProcessor {
                 // Mark transaction as failed
                 transaction.status = TransactionStatus::Failed;
                 transaction.processed_at = Some(chrono::Utc::now());
-                
+
                 // Save failed transaction for audit
                 self.save_transaction(&transaction).await?;
-                
+
                 // Remove from active transactions
                 self.remove_active_transaction(transaction_id).await;
 
@@ -251,14 +264,22 @@ impl TransactionProcessor {
     }
 
     /// Process transfer transaction
-    async fn process_transfer(&self, transaction: &Transaction) -> EconomyResult<TransactionResult> {
-        let from_user = transaction.from_user_id.ok_or_else(|| EconomyError::TransactionFailed {
-            reason: "Transfer requires from_user_id".to_string(),
-        })?;
+    async fn process_transfer(
+        &self,
+        transaction: &Transaction,
+    ) -> EconomyResult<TransactionResult> {
+        let from_user =
+            transaction
+                .from_user_id
+                .ok_or_else(|| EconomyError::TransactionFailed {
+                    reason: "Transfer requires from_user_id".to_string(),
+                })?;
 
-        let to_user = transaction.to_user_id.ok_or_else(|| EconomyError::TransactionFailed {
-            reason: "Transfer requires to_user_id".to_string(),
-        })?;
+        let to_user = transaction
+            .to_user_id
+            .ok_or_else(|| EconomyError::TransactionFailed {
+                reason: "Transfer requires to_user_id".to_string(),
+            })?;
 
         if from_user == to_user {
             return Err(EconomyError::TransactionFailed {
@@ -270,20 +291,29 @@ impl TransactionProcessor {
         let total_amount = transaction.amount + transaction.fee;
 
         // Subtract from sender (including fees)
-        let from_balance = self.currency_system.subtract_currency(
-            from_user,
-            &transaction.currency_code,
-            total_amount,
-            format!("Transfer to user {}: {}", to_user, transaction.description),
-        ).await?;
+        let from_balance = self
+            .currency_system
+            .subtract_currency(
+                from_user,
+                &transaction.currency_code,
+                total_amount,
+                format!("Transfer to user {}: {}", to_user, transaction.description),
+            )
+            .await?;
 
         // Add to receiver (excluding fees)
-        let to_balance = self.currency_system.add_currency(
-            to_user,
-            &transaction.currency_code,
-            transaction.amount,
-            format!("Transfer from user {}: {}", from_user, transaction.description),
-        ).await?;
+        let to_balance = self
+            .currency_system
+            .add_currency(
+                to_user,
+                &transaction.currency_code,
+                transaction.amount,
+                format!(
+                    "Transfer from user {}: {}",
+                    from_user, transaction.description
+                ),
+            )
+            .await?;
 
         Ok(TransactionResult {
             transaction: transaction.clone(),
@@ -295,25 +325,35 @@ impl TransactionProcessor {
     }
 
     /// Process purchase transaction
-    async fn process_purchase(&self, transaction: &Transaction) -> EconomyResult<TransactionResult> {
-        let buyer_id = transaction.from_user_id.ok_or_else(|| EconomyError::TransactionFailed {
-            reason: "Purchase requires from_user_id (buyer)".to_string(),
-        })?;
+    async fn process_purchase(
+        &self,
+        transaction: &Transaction,
+    ) -> EconomyResult<TransactionResult> {
+        let buyer_id = transaction
+            .from_user_id
+            .ok_or_else(|| EconomyError::TransactionFailed {
+                reason: "Purchase requires from_user_id (buyer)".to_string(),
+            })?;
 
-        let seller_id = transaction.to_user_id.ok_or_else(|| EconomyError::TransactionFailed {
-            reason: "Purchase requires to_user_id (seller)".to_string(),
-        })?;
+        let seller_id = transaction
+            .to_user_id
+            .ok_or_else(|| EconomyError::TransactionFailed {
+                reason: "Purchase requires to_user_id (seller)".to_string(),
+            })?;
 
         // Calculate total cost including fees
         let total_cost = transaction.amount + transaction.fee;
 
         // Subtract from buyer
-        let buyer_balance = self.currency_system.subtract_currency(
-            buyer_id,
-            &transaction.currency_code,
-            total_cost,
-            format!("Purchase: {}", transaction.description),
-        ).await?;
+        let buyer_balance = self
+            .currency_system
+            .subtract_currency(
+                buyer_id,
+                &transaction.currency_code,
+                total_cost,
+                format!("Purchase: {}", transaction.description),
+            )
+            .await?;
 
         // Calculate seller amount (purchase amount minus commission)
         let commission_rate = self.config.marketplace_config.commission_rate;
@@ -321,12 +361,15 @@ impl TransactionProcessor {
         let seller_amount = transaction.amount - commission;
 
         // Add to seller (minus commission)
-        let seller_balance = self.currency_system.add_currency(
-            seller_id,
-            &transaction.currency_code,
-            seller_amount,
-            format!("Sale: {}", transaction.description),
-        ).await?;
+        let seller_balance = self
+            .currency_system
+            .add_currency(
+                seller_id,
+                &transaction.currency_code,
+                seller_amount,
+                format!("Sale: {}", transaction.description),
+            )
+            .await?;
 
         Ok(TransactionResult {
             transaction: transaction.clone(),
@@ -339,17 +382,22 @@ impl TransactionProcessor {
 
     /// Process deposit transaction
     async fn process_deposit(&self, transaction: &Transaction) -> EconomyResult<TransactionResult> {
-        let user_id = transaction.to_user_id.ok_or_else(|| EconomyError::TransactionFailed {
-            reason: "Deposit requires to_user_id".to_string(),
-        })?;
+        let user_id = transaction
+            .to_user_id
+            .ok_or_else(|| EconomyError::TransactionFailed {
+                reason: "Deposit requires to_user_id".to_string(),
+            })?;
 
         // Add currency to user account
-        let balance = self.currency_system.add_currency(
-            user_id,
-            &transaction.currency_code,
-            transaction.amount,
-            format!("Deposit: {}", transaction.description),
-        ).await?;
+        let balance = self
+            .currency_system
+            .add_currency(
+                user_id,
+                &transaction.currency_code,
+                transaction.amount,
+                format!("Deposit: {}", transaction.description),
+            )
+            .await?;
 
         Ok(TransactionResult {
             transaction: transaction.clone(),
@@ -361,21 +409,29 @@ impl TransactionProcessor {
     }
 
     /// Process withdrawal transaction
-    async fn process_withdrawal(&self, transaction: &Transaction) -> EconomyResult<TransactionResult> {
-        let user_id = transaction.from_user_id.ok_or_else(|| EconomyError::TransactionFailed {
-            reason: "Withdrawal requires from_user_id".to_string(),
-        })?;
+    async fn process_withdrawal(
+        &self,
+        transaction: &Transaction,
+    ) -> EconomyResult<TransactionResult> {
+        let user_id = transaction
+            .from_user_id
+            .ok_or_else(|| EconomyError::TransactionFailed {
+                reason: "Withdrawal requires from_user_id".to_string(),
+            })?;
 
         // Calculate total amount including fees
         let total_amount = transaction.amount + transaction.fee;
 
         // Subtract from user account
-        let balance = self.currency_system.subtract_currency(
-            user_id,
-            &transaction.currency_code,
-            total_amount,
-            format!("Withdrawal: {}", transaction.description),
-        ).await?;
+        let balance = self
+            .currency_system
+            .subtract_currency(
+                user_id,
+                &transaction.currency_code,
+                total_amount,
+                format!("Withdrawal: {}", transaction.description),
+            )
+            .await?;
 
         Ok(TransactionResult {
             transaction: transaction.clone(),
@@ -387,24 +443,33 @@ impl TransactionProcessor {
     }
 
     /// Process currency exchange transaction
-    async fn process_exchange(&self, transaction: &Transaction) -> EconomyResult<TransactionResult> {
-        let user_id = transaction.from_user_id.ok_or_else(|| EconomyError::TransactionFailed {
-            reason: "Exchange requires from_user_id".to_string(),
-        })?;
-
-        // Parse target currency from metadata
-        let to_currency = transaction.metadata.get("to_currency")
+    async fn process_exchange(
+        &self,
+        transaction: &Transaction,
+    ) -> EconomyResult<TransactionResult> {
+        let user_id = transaction
+            .from_user_id
             .ok_or_else(|| EconomyError::TransactionFailed {
-                reason: "Exchange requires to_currency in metadata".to_string(),
+                reason: "Exchange requires from_user_id".to_string(),
             })?;
 
+        // Parse target currency from metadata
+        let to_currency = transaction.metadata.get("to_currency").ok_or_else(|| {
+            EconomyError::TransactionFailed {
+                reason: "Exchange requires to_currency in metadata".to_string(),
+            }
+        })?;
+
         // Perform currency conversion
-        let (from_balance, to_balance) = self.currency_system.convert_currency(
-            user_id,
-            &transaction.currency_code,
-            to_currency,
-            transaction.amount,
-        ).await?;
+        let (from_balance, to_balance) = self
+            .currency_system
+            .convert_currency(
+                user_id,
+                &transaction.currency_code,
+                to_currency,
+                transaction.amount,
+            )
+            .await?;
 
         Ok(TransactionResult {
             transaction: transaction.clone(),
@@ -417,17 +482,22 @@ impl TransactionProcessor {
 
     /// Process refund transaction
     async fn process_refund(&self, transaction: &Transaction) -> EconomyResult<TransactionResult> {
-        let user_id = transaction.to_user_id.ok_or_else(|| EconomyError::TransactionFailed {
-            reason: "Refund requires to_user_id".to_string(),
-        })?;
+        let user_id = transaction
+            .to_user_id
+            .ok_or_else(|| EconomyError::TransactionFailed {
+                reason: "Refund requires to_user_id".to_string(),
+            })?;
 
         // Add refund amount to user account (no fees on refunds)
-        let balance = self.currency_system.add_currency(
-            user_id,
-            &transaction.currency_code,
-            transaction.amount,
-            format!("Refund: {}", transaction.description),
-        ).await?;
+        let balance = self
+            .currency_system
+            .add_currency(
+                user_id,
+                &transaction.currency_code,
+                transaction.amount,
+                format!("Refund: {}", transaction.description),
+            )
+            .await?;
 
         Ok(TransactionResult {
             transaction: transaction.clone(),
@@ -439,26 +509,35 @@ impl TransactionProcessor {
     }
 
     /// Process generic transaction
-    async fn process_generic_transaction(&self, transaction: &Transaction) -> EconomyResult<TransactionResult> {
+    async fn process_generic_transaction(
+        &self,
+        transaction: &Transaction,
+    ) -> EconomyResult<TransactionResult> {
         // For system transactions, rewards, penalties, etc.
         match (transaction.from_user_id, transaction.to_user_id) {
             (Some(from_user), Some(to_user)) => {
                 // Transfer-like transaction
                 let total_amount = transaction.amount + transaction.fee;
-                
-                let from_balance = self.currency_system.subtract_currency(
-                    from_user,
-                    &transaction.currency_code,
-                    total_amount,
-                    transaction.description.clone(),
-                ).await?;
 
-                let to_balance = self.currency_system.add_currency(
-                    to_user,
-                    &transaction.currency_code,
-                    transaction.amount,
-                    transaction.description.clone(),
-                ).await?;
+                let from_balance = self
+                    .currency_system
+                    .subtract_currency(
+                        from_user,
+                        &transaction.currency_code,
+                        total_amount,
+                        transaction.description.clone(),
+                    )
+                    .await?;
+
+                let to_balance = self
+                    .currency_system
+                    .add_currency(
+                        to_user,
+                        &transaction.currency_code,
+                        transaction.amount,
+                        transaction.description.clone(),
+                    )
+                    .await?;
 
                 Ok(TransactionResult {
                     transaction: transaction.clone(),
@@ -471,13 +550,16 @@ impl TransactionProcessor {
             (Some(from_user), None) => {
                 // Debit transaction
                 let total_amount = transaction.amount + transaction.fee;
-                
-                let balance = self.currency_system.subtract_currency(
-                    from_user,
-                    &transaction.currency_code,
-                    total_amount,
-                    transaction.description.clone(),
-                ).await?;
+
+                let balance = self
+                    .currency_system
+                    .subtract_currency(
+                        from_user,
+                        &transaction.currency_code,
+                        total_amount,
+                        transaction.description.clone(),
+                    )
+                    .await?;
 
                 Ok(TransactionResult {
                     transaction: transaction.clone(),
@@ -489,12 +571,15 @@ impl TransactionProcessor {
             }
             (None, Some(to_user)) => {
                 // Credit transaction
-                let balance = self.currency_system.add_currency(
-                    to_user,
-                    &transaction.currency_code,
-                    transaction.amount,
-                    transaction.description.clone(),
-                ).await?;
+                let balance = self
+                    .currency_system
+                    .add_currency(
+                        to_user,
+                        &transaction.currency_code,
+                        transaction.amount,
+                        transaction.description.clone(),
+                    )
+                    .await?;
 
                 Ok(TransactionResult {
                     transaction: transaction.clone(),
@@ -504,11 +589,9 @@ impl TransactionProcessor {
                     processing_time_ms: 0,
                 })
             }
-            (None, None) => {
-                Err(EconomyError::TransactionFailed {
-                    reason: "Transaction must specify at least one user".to_string(),
-                })
-            }
+            (None, None) => Err(EconomyError::TransactionFailed {
+                reason: "Transaction must specify at least one user".to_string(),
+            }),
         }
     }
 
@@ -563,7 +646,11 @@ impl TransactionProcessor {
             transactions.push(Self::row_to_transaction(&row)?);
         }
 
-        debug!("Retrieved {} transactions for user {}", transactions.len(), user_id);
+        debug!(
+            "Retrieved {} transactions for user {}",
+            transactions.len(),
+            user_id
+        );
         Ok(transactions)
     }
 
@@ -593,8 +680,16 @@ impl TransactionProcessor {
         let status_str: String = row.try_get("status")?;
         let metadata_val: serde_json::Value = row.try_get("metadata").unwrap_or_default();
 
-        let from_user_id = if from_user == Uuid::nil() { None } else { Some(from_user) };
-        let to_user_id = if to_user == Uuid::nil() { None } else { Some(to_user) };
+        let from_user_id = if from_user == Uuid::nil() {
+            None
+        } else {
+            Some(from_user)
+        };
+        let to_user_id = if to_user == Uuid::nil() {
+            None
+        } else {
+            Some(to_user)
+        };
 
         let transaction_type = match tx_type_str.as_str() {
             "Transfer" => TransactionType::Transfer,
@@ -625,7 +720,8 @@ impl TransactionProcessor {
             _ => TransactionStatus::Pending,
         };
 
-        let metadata: HashMap<String, String> = if let serde_json::Value::Object(map) = metadata_val {
+        let metadata: HashMap<String, String> = if let serde_json::Value::Object(map) = metadata_val
+        {
             map.into_iter()
                 .filter_map(|(k, v)| v.as_str().map(|s| (k, s.to_string())))
                 .collect()
@@ -651,7 +747,11 @@ impl TransactionProcessor {
     }
 
     /// Cancel pending transaction
-    pub async fn cancel_transaction(&self, transaction_id: Uuid, reason: String) -> EconomyResult<()> {
+    pub async fn cancel_transaction(
+        &self,
+        transaction_id: Uuid,
+        reason: String,
+    ) -> EconomyResult<()> {
         info!("Cancelling transaction {}: {}", transaction_id, reason);
 
         // Check if transaction is active and cancellable
@@ -661,7 +761,7 @@ impl TransactionProcessor {
 
             // Load and update transaction in database
             // Implementation would update transaction status
-            
+
             info!("Transaction {} cancelled successfully", transaction_id);
             Ok(())
         } else {
@@ -673,7 +773,10 @@ impl TransactionProcessor {
 
     // Private helper methods
 
-    async fn validate_transaction_request(&self, request: &TransactionRequest) -> EconomyResult<()> {
+    async fn validate_transaction_request(
+        &self,
+        request: &TransactionRequest,
+    ) -> EconomyResult<()> {
         // Basic validation
         if request.amount <= 0 {
             return Err(EconomyError::TransactionFailed {
@@ -689,16 +792,24 @@ impl TransactionProcessor {
 
         if request.amount < self.config.transaction_limits.minimum_transaction {
             return Err(EconomyError::TransactionFailed {
-                reason: format!("Amount below minimum {}", self.config.transaction_limits.minimum_transaction),
+                reason: format!(
+                    "Amount below minimum {}",
+                    self.config.transaction_limits.minimum_transaction
+                ),
             });
         }
 
         // Validate currency
-        self.currency_system.get_currency_definition(&request.currency_code).await?;
+        self.currency_system
+            .get_currency_definition(&request.currency_code)
+            .await?;
 
         // Validate user requirements based on transaction type
         match request.transaction_type {
-            TransactionType::Transfer | TransactionType::Purchase | TransactionType::Withdrawal | TransactionType::Exchange => {
+            TransactionType::Transfer
+            | TransactionType::Purchase
+            | TransactionType::Withdrawal
+            | TransactionType::Exchange => {
                 if request.from_user_id.is_none() {
                     return Err(EconomyError::TransactionFailed {
                         reason: "Transaction type requires from_user_id".to_string(),
@@ -716,13 +827,15 @@ impl TransactionProcessor {
         let now = Instant::now();
         let today = chrono::Utc::now().date_naive();
 
-        let user_limit = rate_limiter.entry(user_id).or_insert_with(|| UserRateLimit {
-            user_id,
-            transactions_this_minute: 0,
-            last_reset: now,
-            daily_volume: 0,
-            daily_reset: chrono::Utc::now(),
-        });
+        let user_limit = rate_limiter
+            .entry(user_id)
+            .or_insert_with(|| UserRateLimit {
+                user_id,
+                transactions_this_minute: 0,
+                last_reset: now,
+                daily_volume: 0,
+                daily_reset: chrono::Utc::now(),
+            });
 
         // Reset minute counter if needed
         if now.duration_since(user_limit.last_reset) >= Duration::from_secs(60) {
@@ -737,7 +850,9 @@ impl TransactionProcessor {
         }
 
         // Check rate limits
-        if user_limit.transactions_this_minute >= self.config.transaction_limits.rate_limit_per_minute {
+        if user_limit.transactions_this_minute
+            >= self.config.transaction_limits.rate_limit_per_minute
+        {
             return Err(EconomyError::TransactionLimitExceeded {
                 limit: self.config.transaction_limits.rate_limit_per_minute as i64,
             });
@@ -795,7 +910,8 @@ impl TransactionProcessor {
 
         // Acquire locks for all users
         for user_id in user_ids {
-            let lock = locks_map.entry(user_id)
+            let lock = locks_map
+                .entry(user_id)
                 .or_insert_with(|| Arc::new(Mutex::new(())))
                 .clone();
             user_locks.push(lock);
@@ -836,7 +952,10 @@ impl TransactionProcessor {
     }
 
     async fn save_transaction(&self, transaction: &Transaction) -> EconomyResult<()> {
-        debug!("Saving transaction {} to database", transaction.transaction_id);
+        debug!(
+            "Saving transaction {} to database",
+            transaction.transaction_id
+        );
 
         let from_user = transaction.from_user_id.unwrap_or(Uuid::nil());
         let to_user = transaction.to_user_id.unwrap_or(Uuid::nil());
@@ -867,7 +986,10 @@ impl TransactionProcessor {
         .execute(self.database.legacy_pool()?)
         .await?;
 
-        debug!("Transaction {} saved successfully", transaction.transaction_id);
+        debug!(
+            "Transaction {} saved successfully",
+            transaction.transaction_id
+        );
         Ok(())
     }
 }

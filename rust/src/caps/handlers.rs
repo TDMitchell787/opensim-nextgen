@@ -1,35 +1,36 @@
-use std::collections::HashMap;
 use axum::{
-    extract::{Path, Query, State},
-    response::{Json, IntoResponse, Response},
-    http::{StatusCode, header},
     body::Bytes,
+    extract::{Path, Query, State},
+    http::{header, StatusCode},
+    response::{IntoResponse, Json, Response},
 };
-use serde_json::{json, Value};
-use tracing::{info, warn, error};
 use serde::Deserialize;
+use serde_json::{json, Value};
+use std::collections::HashMap;
+use tracing::{error, info, warn};
 
 use super::{CapsHandlerState, PendingUpload};
 
 // Helper function to convert capabilities HashMap to proper LLSD XML format
 // This follows the Second Life LLSD XML specification:
 // <llsd><map><key>CapName</key><string>url</string>...</map></llsd>
-fn capabilities_to_llsd_xml(capabilities: &HashMap<String, String>) -> Result<Response, StatusCode> {
+fn capabilities_to_llsd_xml(
+    capabilities: &HashMap<String, String>,
+) -> Result<Response, StatusCode> {
     // Build XML manually to ensure correct format
     let mut xml = String::from("<?xml version=\"1.0\" encoding=\"UTF-8\"?>\n<llsd><map>");
 
     for (key, value) in capabilities {
-        xml.push_str(&format!(
-            "<key>{}</key><string>{}</string>",
-            key, value
-        ));
+        xml.push_str(&format!("<key>{}</key><string>{}</string>", key, value));
     }
 
     xml.push_str("</map></llsd>");
 
     // Debug: Log the first 500 chars of the XML response
-    info!("🔗 [DEBUG] LLSD XML Response (first 500 chars): {}",
-          xml.chars().take(500).collect::<String>());
+    info!(
+        "🔗 [DEBUG] LLSD XML Response (first 500 chars): {}",
+        xml.chars().take(500).collect::<String>()
+    );
 
     Ok(Response::builder()
         .status(StatusCode::OK)
@@ -59,20 +60,20 @@ fn is_uuid_string(s: &str) -> bool {
 
 fn get_asset_content_type(asset_type: i32) -> &'static str {
     match asset_type {
-        0 => "image/x-j2c",           // Texture
-        1 => "audio/x-wav",           // Sound
+        0 => "image/x-j2c",                    // Texture
+        1 => "audio/x-wav",                    // Sound
         2 => "application/vnd.ll.callingcard", // CallingCard
         3 => "application/vnd.ll.landmark",    // Landmark
         5 => "application/vnd.ll.clothing",    // Clothing
         6 => "application/vnd.ll.primitive",   // Object
-        7 => "text/plain",            // Notecard
-        10 => "text/plain",           // LSLText
-        12 => "image/tga",            // TextureTGA
+        7 => "text/plain",                     // Notecard
+        10 => "text/plain",                    // LSLText
+        12 => "image/tga",                     // TextureTGA
         13 => "application/vnd.ll.bodypart",   // Bodypart
-        14 => "image/tga",            // ImageTGA
-        15 => "image/jpeg",           // ImageJPEG
+        14 => "image/tga",                     // ImageTGA
+        15 => "image/jpeg",                    // ImageJPEG
         16 => "application/x-lsl-bytecode",    // LSLBytecode
-        17 => "audio/x-wav",          // SoundWAV
+        17 => "audio/x-wav",                   // SoundWAV
         20 => "application/vnd.ll.animation",  // Animation
         21 => "application/vnd.ll.gesture",    // Gesture
         49 => "application/vnd.ll.mesh",       // Mesh
@@ -120,7 +121,7 @@ fn json_to_llsd_xml(value: &Value) -> String {
             } else {
                 format!("<real>{}</real>", n)
             }
-        },
+        }
         Value::String(s) => {
             if s.starts_with("b64:") {
                 format!("<binary encoding=\"base64\">{}</binary>", &s[4..])
@@ -129,7 +130,7 @@ fn json_to_llsd_xml(value: &Value) -> String {
             } else {
                 format!("<string>{}</string>", xml_escape(s))
             }
-        },
+        }
         Value::Array(arr) => {
             let mut xml = String::from("<array>");
             for item in arr {
@@ -137,7 +138,7 @@ fn json_to_llsd_xml(value: &Value) -> String {
             }
             xml.push_str("</array>");
             xml
-        },
+        }
         Value::Object(map) => {
             let mut xml = String::from("<map>");
             for (key, val) in map {
@@ -153,11 +154,17 @@ fn json_to_llsd_xml(value: &Value) -> String {
 // Helper function to wrap JSON response in proper LLSD XML envelope
 pub fn json_response_to_llsd_xml(json_value: Value) -> Result<Response, StatusCode> {
     let llsd_body = json_to_llsd_xml(&json_value);
-    let xml = format!("<?xml version=\"1.0\" encoding=\"UTF-8\"?>\n<llsd>{}</llsd>", llsd_body);
+    let xml = format!(
+        "<?xml version=\"1.0\" encoding=\"UTF-8\"?>\n<llsd>{}</llsd>",
+        llsd_body
+    );
 
     // Debug: Log LLSD XML for EventQueue responses (contains Handle)
     if xml.contains("EnableSimulator") || xml.contains("TeleportFinish") {
-        info!("📡 [DEBUG] EventQueue LLSD XML (first 800 chars): {}", xml.chars().take(800).collect::<String>());
+        info!(
+            "📡 [DEBUG] EventQueue LLSD XML (first 800 chars): {}",
+            xml.chars().take(800).collect::<String>()
+        );
     }
 
     Ok(Response::builder()
@@ -175,14 +182,21 @@ pub async fn handle_seed_capability(
     info!("🔗 GET Seed capability request for session: {}", session_id);
 
     // Update session activity
-    state.caps_manager.update_session_activity(&session_id).await;
+    state
+        .caps_manager
+        .update_session_activity(&session_id)
+        .await;
 
     // Get capabilities for this session
     match state.caps_manager.get_capabilities(&session_id).await {
         Some(capabilities) => {
-            info!("🔗 Returning {} capabilities for session: {} (LLSD XML)", capabilities.len(), session_id);
+            info!(
+                "🔗 Returning {} capabilities for session: {} (LLSD XML)",
+                capabilities.len(),
+                session_id
+            );
             capabilities_to_llsd_xml(&capabilities)
-        },
+        }
         None => {
             warn!("🔗 Session not found: {}", session_id);
             Err(StatusCode::NOT_FOUND)
@@ -196,35 +210,55 @@ pub async fn handle_seed_capability_post(
     State(state): State<CapsHandlerState>,
     body: Bytes,
 ) -> Result<Response, StatusCode> {
-    info!("🔗 POST Seed capability request for session: {}", session_id);
+    info!(
+        "🔗 POST Seed capability request for session: {}",
+        session_id
+    );
 
     // Parse the LLSD XML to get requested capabilities
     let body_str = String::from_utf8_lossy(&body);
-    info!("🔗 Viewer requested capabilities (first 200 chars): {}",
-          body_str.chars().take(200).collect::<String>());
+    info!(
+        "🔗 Viewer requested capabilities (first 200 chars): {}",
+        body_str.chars().take(200).collect::<String>()
+    );
 
     // Update session activity
-    state.caps_manager.update_session_activity(&session_id).await;
+    state
+        .caps_manager
+        .update_session_activity(&session_id)
+        .await;
 
     // Get capabilities for this session
     match state.caps_manager.get_capabilities(&session_id).await {
         Some(capabilities) => {
-            info!("🔗 Returning {} capabilities for POST request, session: {} (LLSD XML)", capabilities.len(), session_id);
+            info!(
+                "🔗 Returning {} capabilities for POST request, session: {} (LLSD XML)",
+                capabilities.len(),
+                session_id
+            );
             info!("🔗 CAPABILITIES BEING RETURNED:");
             for (name, url) in capabilities.iter() {
                 info!("🔗   {} -> {}", name, url);
             }
 
-            if let Some((ready, circuit_code, agent_id)) = state.caps_manager.mark_sent_seeds(&session_id).await {
-                info!("🌱 [Phase 80] SentSeeds flag set for session {} (OpenSim SentSeeds timing)", session_id);
+            if let Some((ready, circuit_code, agent_id)) =
+                state.caps_manager.mark_sent_seeds(&session_id).await
+            {
+                info!(
+                    "🌱 [Phase 80] SentSeeds flag set for session {} (OpenSim SentSeeds timing)",
+                    session_id
+                );
                 if ready {
                     info!("🚀 [Phase 80] Both SentSeeds + RegionHandshakeReply received! Ready to send initial data after 500ms delay");
-                    info!("🚀 [Phase 80] circuit_code={}, agent_id={}", circuit_code, agent_id);
+                    info!(
+                        "🚀 [Phase 80] circuit_code={}, agent_id={}",
+                        circuit_code, agent_id
+                    );
                 }
             }
 
             capabilities_to_llsd_xml(&capabilities)
-        },
+        }
         None => {
             warn!("🔗 Session not found: {}", session_id);
             Err(StatusCode::NOT_FOUND)
@@ -240,7 +274,10 @@ pub async fn handle_get_texture(
 ) -> Result<Response, StatusCode> {
     use crate::opensim_compatibility::library_assets::get_global_library_manager;
 
-    state.caps_manager.update_session_activity(&session_id).await;
+    state
+        .caps_manager
+        .update_session_activity(&session_id)
+        .await;
 
     let texture_id = match params.get("texture_id") {
         Some(id_str) => match uuid::Uuid::parse_str(id_str) {
@@ -257,14 +294,15 @@ pub async fn handle_get_texture(
     };
 
     let fetch_result = if let Some(ref fetcher) = state.asset_fetcher {
-        fetcher.fetch_asset_data_typed_pg(&texture_id.to_string(), Some(0), &state.db_pool).await
+        fetcher
+            .fetch_asset_data_typed_pg(&texture_id.to_string(), Some(0), &state.db_pool)
+            .await
     } else {
-        let row: Result<Option<Vec<u8>>, sqlx::Error> = sqlx::query_scalar(
-            "SELECT data FROM assets WHERE id = $1 AND assettype = 0"
-        )
-        .bind(texture_id)
-        .fetch_optional(&*state.db_pool)
-        .await;
+        let row: Result<Option<Vec<u8>>, sqlx::Error> =
+            sqlx::query_scalar("SELECT data FROM assets WHERE id = $1 AND assettype = 0")
+                .bind(texture_id)
+                .fetch_optional(&*state.db_pool)
+                .await;
         row.map_err(|e| anyhow::anyhow!("{}", e))
     };
 
@@ -273,7 +311,12 @@ pub async fn handle_get_texture(
             let j2c = crate::asset::jpeg2000::ensure_j2c_codestream(&data);
             let j2c_len = j2c.len();
             let serving_data = if j2c_len != data.len() {
-                info!("[GETTEXTURE] Serving {} ({} bytes, extracted J2C from {} bytes)", texture_id, j2c_len, data.len());
+                info!(
+                    "[GETTEXTURE] Serving {} ({} bytes, extracted J2C from {} bytes)",
+                    texture_id,
+                    j2c_len,
+                    data.len()
+                );
                 j2c.to_vec()
             } else {
                 info!("[GETTEXTURE] Serving {} ({} bytes)", texture_id, data.len());
@@ -284,8 +327,8 @@ pub async fn handle_get_texture(
                 .header("Content-Type", "image/x-j2c")
                 .body(axum::body::Body::from(serving_data))
                 .unwrap());
-        },
-        Ok(_) => {},
+        }
+        Ok(_) => {}
         Err(e) => {
             warn!("GetTexture: fetch error for {}: {}", texture_id, e);
         }
@@ -295,8 +338,16 @@ pub async fn handle_get_texture(
         let manager = library_manager.read().await;
         if let Some(data) = manager.get_asset_data(&texture_id) {
             let j2c = crate::asset::jpeg2000::ensure_j2c_codestream(&data);
-            let serving_data = if j2c.len() != data.len() { j2c.to_vec() } else { data };
-            info!("[GETTEXTURE] Serving {} from library ({} bytes)", texture_id, serving_data.len());
+            let serving_data = if j2c.len() != data.len() {
+                j2c.to_vec()
+            } else {
+                data
+            };
+            info!(
+                "[GETTEXTURE] Serving {} from library ({} bytes)",
+                texture_id,
+                serving_data.len()
+            );
             return Ok(Response::builder()
                 .status(200)
                 .header("Content-Type", "image/x-j2c")
@@ -307,8 +358,16 @@ pub async fn handle_get_texture(
 
     if let Some(data) = state.caps_manager.get_baked_texture(&texture_id) {
         let j2c = crate::asset::jpeg2000::ensure_j2c_codestream(&data);
-        let serving_data = if j2c.len() != data.len() { j2c.to_vec() } else { data };
-        info!("[GETTEXTURE] Serving {} from baked cache ({} bytes)", texture_id, serving_data.len());
+        let serving_data = if j2c.len() != data.len() {
+            j2c.to_vec()
+        } else {
+            data
+        };
+        info!(
+            "[GETTEXTURE] Serving {} from baked cache ({} bytes)",
+            texture_id,
+            serving_data.len()
+        );
         return Ok(Response::builder()
             .status(200)
             .header("Content-Type", "image/x-j2c")
@@ -335,15 +394,27 @@ pub async fn handle_fetch_inventory2(
     use uuid::Uuid;
 
     let body_str = String::from_utf8_lossy(&body);
-    info!("📦 FetchInventory2 request for session: {}, body: {}", session_id, body_str);
+    info!(
+        "📦 FetchInventory2 request for session: {}, body: {}",
+        session_id, body_str
+    );
 
-    state.caps_manager.update_session_activity(&session_id).await;
+    state
+        .caps_manager
+        .update_session_activity(&session_id)
+        .await;
 
     let session = state.caps_manager.get_session(&session_id).await;
-    let agent_id = session.map(|s| s.agent_id.clone()).unwrap_or_else(|| session_id.clone());
+    let agent_id = session
+        .map(|s| s.agent_id.clone())
+        .unwrap_or_else(|| session_id.clone());
 
     let item_ids = parse_fetch_inventory2_items(&body_str);
-    info!("📦 FetchInventory2: parsed {} item_ids: {:?}", item_ids.len(), item_ids);
+    info!(
+        "📦 FetchInventory2: parsed {} item_ids: {:?}",
+        item_ids.len(),
+        item_ids
+    );
 
     let null_uuid = "00000000-0000-0000-0000-000000000000";
     let mut items_response: Vec<Value> = Vec::new();
@@ -363,7 +434,7 @@ pub async fn handle_fetch_inventory2(
                 inventorybasepermissions, inventorycurrentpermissions,
                 inventoryeveryonepermissions, inventorygrouppermissions, inventorynextpermissions,
                 groupid, saleprice, saletype, creationdate
-            FROM inventoryitems WHERE inventoryid = $1"#
+            FROM inventoryitems WHERE inventoryid = $1"#,
         )
         .bind(item_uuid)
         .fetch_optional(state.db_pool.as_ref())
@@ -376,15 +447,18 @@ pub async fn handle_fetch_inventory2(
                 let asset_id: Uuid = row.try_get("assetid").unwrap_or(Uuid::nil());
                 let name: String = row.try_get("inventoryname").unwrap_or_default();
                 let desc: String = row.try_get("inventorydescription").unwrap_or_default();
-                let asset_type: i32 = row.try_get::<i64, _>("assettype")
+                let asset_type: i32 = row
+                    .try_get::<i64, _>("assettype")
                     .map(|v| v as i32)
                     .or_else(|_| row.try_get::<i32, _>("assettype"))
                     .unwrap_or(0);
-                let inv_type: i32 = row.try_get::<i64, _>("invtype")
+                let inv_type: i32 = row
+                    .try_get::<i64, _>("invtype")
                     .map(|v| v as i32)
                     .or_else(|_| row.try_get::<i32, _>("invtype"))
                     .unwrap_or(0);
-                let flags: i32 = row.try_get::<i64, _>("flags")
+                let flags: i32 = row
+                    .try_get::<i64, _>("flags")
                     .map(|v| v as i32)
                     .or_else(|_| row.try_get::<i32, _>("flags"))
                     .unwrap_or(0);
@@ -400,7 +474,10 @@ pub async fn handle_fetch_inventory2(
                 let sale_type: i32 = row.try_get("saletype").unwrap_or(0);
                 let creation_date: i32 = row.try_get("creationdate").unwrap_or(0);
 
-                info!("📦 FetchInventory2: found item {} ({}) from DATABASE", name, item_id);
+                info!(
+                    "📦 FetchInventory2: found item {} ({}) from DATABASE",
+                    name, item_id
+                );
                 items_response.push(json!({
                     "parent_id": parent_id.to_string(),
                     "asset_id": asset_id.to_string(),
@@ -429,10 +506,16 @@ pub async fn handle_fetch_inventory2(
                 }));
             }
             Ok(None) => {
-                warn!("📦 FetchInventory2: item {} not found in DATABASE", item_id_str);
+                warn!(
+                    "📦 FetchInventory2: item {} not found in DATABASE",
+                    item_id_str
+                );
             }
             Err(e) => {
-                warn!("📦 FetchInventory2: database error for item {}: {}", item_id_str, e);
+                warn!(
+                    "📦 FetchInventory2: database error for item {}: {}",
+                    item_id_str, e
+                );
             }
         }
     }
@@ -442,7 +525,11 @@ pub async fn handle_fetch_inventory2(
         "items": items_response
     });
 
-    info!("📦 FetchInventory2: returning {} items from DATABASE for session: {}", items_response.len(), session_id);
+    info!(
+        "📦 FetchInventory2: returning {} items from DATABASE for session: {}",
+        items_response.len(),
+        session_id
+    );
     json_response_to_llsd_xml(response)
 }
 
@@ -451,7 +538,8 @@ fn parse_fetch_inventory2_items(body: &str) -> Vec<String> {
     let mut item_ids = Vec::new();
 
     // Parse item_id from LLSD XML - can be <uuid> or <string>
-    let item_regex = regex::Regex::new(r"<key>item_id</key>\s*<(?:uuid|string)>([^<]+)</(?:uuid|string)>").ok();
+    let item_regex =
+        regex::Regex::new(r"<key>item_id</key>\s*<(?:uuid|string)>([^<]+)</(?:uuid|string)>").ok();
 
     if let Some(re) = item_regex {
         for cap in re.captures_iter(body) {
@@ -473,12 +561,20 @@ pub async fn handle_fetch_inventory_descendents2(
     use sqlx::Row;
     use uuid::Uuid;
 
-    info!("📁 FetchInventoryDescendents2 request for session: {}", session_id);
+    info!(
+        "📁 FetchInventoryDescendents2 request for session: {}",
+        session_id
+    );
 
-    state.caps_manager.update_session_activity(&session_id).await;
+    state
+        .caps_manager
+        .update_session_activity(&session_id)
+        .await;
 
     let session = state.caps_manager.get_session(&session_id).await;
-    let agent_id_str = session.map(|s| s.agent_id.clone()).unwrap_or_else(|| session_id.clone());
+    let agent_id_str = session
+        .map(|s| s.agent_id.clone())
+        .unwrap_or_else(|| session_id.clone());
 
     let agent_uuid = Uuid::parse_str(&agent_id_str).unwrap_or(Uuid::nil());
 
@@ -497,7 +593,7 @@ pub async fn handle_fetch_inventory_descendents2(
         let null_uuid = "00000000-0000-0000-0000-000000000000";
         if folder_id_str == null_uuid {
             let root_result = sqlx::query(
-                "SELECT folderid FROM inventoryfolders WHERE agentid = $1 AND type = 8 LIMIT 1"
+                "SELECT folderid FROM inventoryfolders WHERE agentid = $1 AND type = 8 LIMIT 1",
             )
             .bind(agent_uuid)
             .fetch_optional(state.db_pool.as_ref())
@@ -506,20 +602,22 @@ pub async fn handle_fetch_inventory_descendents2(
             if let Ok(Some(row)) = root_result {
                 let root_id: Uuid = row.try_get("folderid").unwrap_or(Uuid::nil());
                 folder_id_str = root_id.to_string();
-                info!("📁 Null UUID request - using root folder from DB: {}", folder_id_str);
+                info!(
+                    "📁 Null UUID request - using root folder from DB: {}",
+                    folder_id_str
+                );
             }
         }
 
         let folder_uuid = Uuid::parse_str(&folder_id_str).unwrap_or(Uuid::nil());
 
-        let folder_version: i32 = sqlx::query_scalar(
-            "SELECT version FROM inventoryfolders WHERE folderid = $1"
-        )
-        .bind(folder_uuid)
-        .fetch_optional(state.db_pool.as_ref())
-        .await
-        .unwrap_or(None)
-        .unwrap_or(1);
+        let folder_version: i32 =
+            sqlx::query_scalar("SELECT version FROM inventoryfolders WHERE folderid = $1")
+                .bind(folder_uuid)
+                .fetch_optional(state.db_pool.as_ref())
+                .await
+                .unwrap_or(None)
+                .unwrap_or(1);
 
         let subfolders_result = sqlx::query(
             "SELECT folderid, parentfolderid, foldername, type, version FROM inventoryfolders WHERE parentfolderid = $1"
@@ -556,13 +654,27 @@ pub async fn handle_fetch_inventory_descendents2(
                     let b_system = b.0 >= 0;
                     let a_hash = a.1.starts_with('#');
                     let b_hash = b.1.starts_with('#');
-                    let a_group = if a_system { 0 } else if a_hash { 2 } else { 1 };
-                    let b_group = if b_system { 0 } else if b_hash { 2 } else { 1 };
-                    a_group.cmp(&b_group).then_with(|| a.1.to_lowercase().cmp(&b.1.to_lowercase()))
+                    let a_group = if a_system {
+                        0
+                    } else if a_hash {
+                        2
+                    } else {
+                        1
+                    };
+                    let b_group = if b_system {
+                        0
+                    } else if b_hash {
+                        2
+                    } else {
+                        1
+                    };
+                    a_group
+                        .cmp(&b_group)
+                        .then_with(|| a.1.to_lowercase().cmp(&b.1.to_lowercase()))
                 });
 
                 cats.into_iter().map(|(_, _, v)| v).collect()
-            },
+            }
             Err(e) => {
                 warn!("📁 Failed to query subfolders: {}", e);
                 Vec::new()
@@ -575,7 +687,7 @@ pub async fn handle_fetch_inventory_descendents2(
                 inventorybasepermissions, inventorycurrentpermissions,
                 inventoryeveryonepermissions, inventorygrouppermissions, inventorynextpermissions,
                 groupid, saleprice, saletype, creationdate
-            FROM inventoryitems WHERE parentfolderid = $1"#
+            FROM inventoryitems WHERE parentfolderid = $1"#,
         )
         .bind(folder_uuid)
         .fetch_all(state.db_pool.as_ref())
@@ -647,8 +759,12 @@ pub async fn handle_fetch_inventory_descendents2(
 
         let descendents = items.len() + categories.len();
 
-        info!("📁 Found {} items and {} subfolders in folder {} from DATABASE",
-              items.len(), categories.len(), folder_id_str);
+        info!(
+            "📁 Found {} items and {} subfolders in folder {} from DATABASE",
+            items.len(),
+            categories.len(),
+            folder_id_str
+        );
 
         folder_responses.push(json!({
             "folder_id": folder_id_str,
@@ -665,7 +781,11 @@ pub async fn handle_fetch_inventory_descendents2(
         "folders": folder_responses
     });
 
-    info!("📁 Returning inventory contents from DATABASE for session: {} ({} folders)", session_id, folder_responses.len());
+    info!(
+        "📁 Returning inventory contents from DATABASE for session: {} ({} folders)",
+        session_id,
+        folder_responses.len()
+    );
     json_response_to_llsd_xml(response)
 }
 
@@ -710,23 +830,33 @@ fn parse_fetch_inventory_request(body: &str) -> Vec<FolderRequest> {
     // Parse folder_id and owner_id from LLSD XML
     // folder_id can be either <uuid> or <string> tag
     // Format: <key>folder_id</key><uuid>...</uuid> OR <key>folder_id</key><string>...</string>
-    let folder_regex = regex::Regex::new(r"<key>folder_id</key>\s*<(?:uuid|string)>([^<]+)</(?:uuid|string)>").ok();
-    let owner_regex = regex::Regex::new(r"<key>owner_id</key>\s*<(?:uuid|string)>([^<]+)</(?:uuid|string)>").ok();
+    let folder_regex =
+        regex::Regex::new(r"<key>folder_id</key>\s*<(?:uuid|string)>([^<]+)</(?:uuid|string)>")
+            .ok();
+    let owner_regex =
+        regex::Regex::new(r"<key>owner_id</key>\s*<(?:uuid|string)>([^<]+)</(?:uuid|string)>").ok();
 
     if let (Some(folder_re), Some(owner_re)) = (folder_regex, owner_regex) {
         // Find all folder blocks
-        let folder_ids: Vec<&str> = folder_re.captures_iter(body)
+        let folder_ids: Vec<&str> = folder_re
+            .captures_iter(body)
             .filter_map(|cap| cap.get(1).map(|m| m.as_str()))
             .collect();
 
-        let owner_ids: Vec<&str> = owner_re.captures_iter(body)
+        let owner_ids: Vec<&str> = owner_re
+            .captures_iter(body)
             .filter_map(|cap| cap.get(1).map(|m| m.as_str()))
             .collect();
 
-        info!("📁 Parsed folder_ids: {:?}, owner_ids: {:?}", folder_ids, owner_ids);
+        info!(
+            "📁 Parsed folder_ids: {:?}, owner_ids: {:?}",
+            folder_ids, owner_ids
+        );
 
         for (i, folder_id) in folder_ids.iter().enumerate() {
-            let owner_id = owner_ids.get(i).unwrap_or(&"00000000-0000-0000-0000-000000000000");
+            let owner_id = owner_ids
+                .get(i)
+                .unwrap_or(&"00000000-0000-0000-0000-000000000000");
             requests.push(FolderRequest {
                 folder_id: folder_id.to_string(),
                 owner_id: owner_id.to_string(),
@@ -784,11 +914,24 @@ fn generate_user_inventory(agent_id: &str) -> UserInventoryData {
 
     // Add other system folders - MUST use same names as InventoryFolderType::default_name()
     let system_folders = [
-        ("Textures", 0), ("Sounds", 1), ("Calling Cards", 2), ("Landmarks", 3),
-        ("Objects", 6), ("Notecards", 7), ("Scripts", 10), ("Trash", 14),
-        ("Photo Album", 15), ("Lost And Found", 16), ("Animations", 20),
-        ("Gestures", 21), ("Favorites", 23), ("Current Outfit", 46),
-        ("My Outfits", 48), ("Received Items", 50), ("Settings", 56), ("Materials", 57),
+        ("Textures", 0),
+        ("Sounds", 1),
+        ("Calling Cards", 2),
+        ("Landmarks", 3),
+        ("Objects", 6),
+        ("Notecards", 7),
+        ("Scripts", 10),
+        ("Trash", 14),
+        ("Photo Album", 15),
+        ("Lost And Found", 16),
+        ("Animations", 20),
+        ("Gestures", 21),
+        ("Favorites", 23),
+        ("Current Outfit", 46),
+        ("My Outfits", 48),
+        ("Received Items", 50),
+        ("Settings", 56),
+        ("Materials", 57),
     ];
 
     for (name, folder_type_val) in system_folders {
@@ -862,9 +1005,9 @@ fn generate_user_inventory(agent_id: &str) -> UserInventoryData {
         asset_id: "00000000-38f9-1111-024e-222222111110".to_string(),
         name: "Default Shirt".to_string(),
         description: "Default Shirt wearable".to_string(),
-        asset_type: 5,  // Clothing
-        inv_type: 18,   // Wearable
-        flags: 4,       // Shirt type
+        asset_type: 5, // Clothing
+        inv_type: 18,  // Wearable
+        flags: 4,      // Shirt type
         creator_id: agent_id.to_string(),
         owner_id: agent_id.to_string(),
     });
@@ -875,9 +1018,9 @@ fn generate_user_inventory(agent_id: &str) -> UserInventoryData {
         asset_id: "00000000-38f9-1111-024e-222222111120".to_string(),
         name: "Default Pants".to_string(),
         description: "Default Pants wearable".to_string(),
-        asset_type: 5,  // Clothing
-        inv_type: 18,   // Wearable
-        flags: 5,       // Pants type
+        asset_type: 5, // Clothing
+        inv_type: 18,  // Wearable
+        flags: 5,      // Pants type
         creator_id: agent_id.to_string(),
         owner_id: agent_id.to_string(),
     });
@@ -888,9 +1031,9 @@ fn generate_user_inventory(agent_id: &str) -> UserInventoryData {
         asset_id: "00000000-38f9-1111-024e-222222111130".to_string(),
         name: "Default Shoes".to_string(),
         description: "Default Shoes wearable".to_string(),
-        asset_type: 5,  // Clothing
-        inv_type: 18,   // Wearable
-        flags: 6,       // Shoes type (wearable type 6)
+        asset_type: 5, // Clothing
+        inv_type: 18,  // Wearable
+        flags: 6,      // Shoes type (wearable type 6)
         creator_id: agent_id.to_string(),
         owner_id: agent_id.to_string(),
     });
@@ -1006,20 +1149,26 @@ pub async fn handle_update_avatar_appearance(
     State(state): State<CapsHandlerState>,
     body: Bytes,
 ) -> Result<Response, StatusCode> {
-    info!("👤 UpdateAvatarAppearance request for session: {}", session_id);
-    
+    info!(
+        "👤 UpdateAvatarAppearance request for session: {}",
+        session_id
+    );
+
     // Update session activity
-    state.caps_manager.update_session_activity(&session_id).await;
-    
+    state
+        .caps_manager
+        .update_session_activity(&session_id)
+        .await;
+
     let body_str = String::from_utf8_lossy(&body);
     info!("👤 Appearance update: {}", body_str);
-    
+
     // Return success response
     let response = json!({
         "success": true,
         "agent_id": session_id
     });
-    
+
     info!("👤 Avatar appearance updated for session: {}", session_id);
     json_response_to_llsd_xml(response)
 }
@@ -1031,18 +1180,21 @@ pub async fn handle_viewer_stats(
     body: Bytes,
 ) -> Result<Response, StatusCode> {
     info!("📊 ViewerStats request for session: {}", session_id);
-    
+
     // Update session activity
-    state.caps_manager.update_session_activity(&session_id).await;
-    
+    state
+        .caps_manager
+        .update_session_activity(&session_id)
+        .await;
+
     let body_str = String::from_utf8_lossy(&body);
     info!("📊 Viewer stats: {}", body_str);
-    
+
     // Return acknowledgment
     let response = json!({
         "success": true
     });
-    
+
     json_response_to_llsd_xml(response)
 }
 
@@ -1052,18 +1204,24 @@ pub async fn handle_update_agent_information(
     State(state): State<CapsHandlerState>,
     body: Bytes,
 ) -> Result<Response, StatusCode> {
-    info!("ℹ️ UpdateAgentInformation request for session: {}", session_id);
-    
+    info!(
+        "ℹ️ UpdateAgentInformation request for session: {}",
+        session_id
+    );
+
     // Update session activity
-    state.caps_manager.update_session_activity(&session_id).await;
-    
+    state
+        .caps_manager
+        .update_session_activity(&session_id)
+        .await;
+
     let body_str = String::from_utf8_lossy(&body);
     info!("ℹ️ Agent info update: {}", body_str);
-    
+
     let response = json!({
         "success": true
     });
-    
+
     json_response_to_llsd_xml(response)
 }
 
@@ -1074,14 +1232,17 @@ pub async fn handle_update_agent_language(
     body: Bytes,
 ) -> Result<Response, StatusCode> {
     info!("🔧 UpdateAgentLanguage request for session: {}", session_id);
-    
-    state.caps_manager.update_session_activity(&session_id).await;
-    
+
+    state
+        .caps_manager
+        .update_session_activity(&session_id)
+        .await;
+
     if !body.is_empty() {
         let body_str = String::from_utf8_lossy(&body);
         info!("🔧 UpdateAgentLanguage body: {}", body_str);
     }
-    
+
     json_response_to_llsd_xml(json!({"success": true, "capability": "UpdateAgentLanguage"}))
 }
 
@@ -1092,7 +1253,10 @@ pub async fn handle_agent_preferences_get(
 ) -> Result<Response, StatusCode> {
     info!("[CAPS] AgentPreferences GET for session: {}", session_id);
 
-    state.caps_manager.update_session_activity(&session_id).await;
+    state
+        .caps_manager
+        .update_session_activity(&session_id)
+        .await;
 
     let agent_id = match state.caps_manager.get_session(&session_id).await {
         Some(s) => uuid::Uuid::parse_str(&s.agent_id).unwrap_or_default(),
@@ -1103,7 +1267,7 @@ pub async fn handle_agent_preferences_get(
     let row = sqlx::query(
         "SELECT principalid, accessprefs, hoverheight, language, \
          languageispublic, permeveryone, permgroup, permnextowner \
-         FROM agentprefs WHERE principalid = $1"
+         FROM agentprefs WHERE principalid = $1",
     )
     .bind(agent_id)
     .fetch_optional(pool)
@@ -1113,9 +1277,13 @@ pub async fn handle_agent_preferences_get(
     match row {
         Some(r) => {
             use sqlx::Row;
-            let access: String = r.try_get::<String, _>("accessprefs").unwrap_or_else(|_| "M".to_string());
+            let access: String = r
+                .try_get::<String, _>("accessprefs")
+                .unwrap_or_else(|_| "M".to_string());
             let hover: f32 = r.try_get("hoverheight").unwrap_or(0.0);
-            let lang: String = r.try_get::<String, _>("language").unwrap_or_else(|_| "en-us".to_string());
+            let lang: String = r
+                .try_get::<String, _>("language")
+                .unwrap_or_else(|_| "en-us".to_string());
             let lang_pub: i32 = r.try_get("languageispublic").unwrap_or(1);
             let pe: i32 = r.try_get("permeveryone").unwrap_or(0);
             let pg: i32 = r.try_get("permgroup").unwrap_or(0);
@@ -1134,7 +1302,12 @@ pub async fn handle_agent_preferences_get(
                  <key>language</key><string>{}</string>\
                  <key>language_is_public</key><boolean>{}</boolean>\
                  </map></llsd>",
-                access.trim(), pe, pg, pno, hover, lang.trim(),
+                access.trim(),
+                pe,
+                pg,
+                pno,
+                hover,
+                lang.trim(),
                 if lang_pub != 0 { "true" } else { "false" }
             );
 
@@ -1174,7 +1347,10 @@ pub async fn handle_agent_preferences_post(
 ) -> Result<Response, StatusCode> {
     info!("[CAPS] AgentPreferences POST for session: {}", session_id);
 
-    state.caps_manager.update_session_activity(&session_id).await;
+    state
+        .caps_manager
+        .update_session_activity(&session_id)
+        .await;
 
     let agent_id = match state.caps_manager.get_session(&session_id).await {
         Some(s) => uuid::Uuid::parse_str(&s.agent_id).unwrap_or_default(),
@@ -1221,7 +1397,7 @@ pub async fn handle_agent_preferences_post(
              VALUES ($1, $2, $3, $4, $5, $6, $7, $8) \
              ON CONFLICT (principalid) DO UPDATE SET \
              accessprefs = $2, hoverheight = $3, language = $4, \
-             languageispublic = $5, permeveryone = $6, permgroup = $7, permnextowner = $8"
+             languageispublic = $5, permeveryone = $6, permgroup = $7, permnextowner = $8",
         )
         .bind(agent_id)
         .bind(&access)
@@ -1234,7 +1410,10 @@ pub async fn handle_agent_preferences_post(
         .execute(pool)
         .await;
 
-        info!("[CAPS] AgentPreferences stored for {} lang={}", agent_id, lang);
+        info!(
+            "[CAPS] AgentPreferences stored for {} lang={}",
+            agent_id, lang
+        );
     }
 
     json_response_to_llsd_xml(json!({"status": "success"}))
@@ -1275,9 +1454,12 @@ pub async fn handle_home_location_get(
     State(state): State<CapsHandlerState>,
 ) -> Result<Response, StatusCode> {
     info!("🔧 HomeLocation GET request for session: {}", session_id);
-    
-    state.caps_manager.update_session_activity(&session_id).await;
-    
+
+    state
+        .caps_manager
+        .update_session_activity(&session_id)
+        .await;
+
     json_response_to_llsd_xml(json!({"success": true, "capability": "HomeLocation"}))
 }
 
@@ -1288,7 +1470,10 @@ pub async fn handle_home_location_post(
 ) -> Result<Response, StatusCode> {
     info!("🏠 HomeLocation POST request for session: {}", session_id);
 
-    state.caps_manager.update_session_activity(&session_id).await;
+    state
+        .caps_manager
+        .update_session_activity(&session_id)
+        .await;
 
     let session = match state.caps_manager.get_session(&session_id).await {
         Some(s) => s,
@@ -1307,7 +1492,10 @@ pub async fn handle_home_location_post(
         .flatten()
         .map(|(r,)| r)
         .unwrap_or_default();
-        warn!("🏠 HomeLocation: session.region_uuid empty, fallback to DB: {}", fallback);
+        warn!(
+            "🏠 HomeLocation: session.region_uuid empty, fallback to DB: {}",
+            fallback
+        );
         fallback
     };
 
@@ -1348,7 +1536,11 @@ pub async fn handle_home_location_post(
     let lp_start = hl_xml.find("<key>LocationPos</key>");
     let (px, py, pz) = if let Some(lps) = lp_start {
         let lp_xml = &hl_xml[lps..];
-        (extract_real_from(lp_xml, "X"), extract_real_from(lp_xml, "Y"), extract_real_from(lp_xml, "Z"))
+        (
+            extract_real_from(lp_xml, "X"),
+            extract_real_from(lp_xml, "Y"),
+            extract_real_from(lp_xml, "Z"),
+        )
     } else {
         (128.0, 128.0, 25.0)
     };
@@ -1356,7 +1548,11 @@ pub async fn handle_home_location_post(
     let la_start = hl_xml.find("<key>LocationLookAt</key>");
     let (lx, ly, lz) = if let Some(las) = la_start {
         let la_xml = &hl_xml[las..];
-        (extract_real_from(la_xml, "X"), extract_real_from(la_xml, "Y"), extract_real_from(la_xml, "Z"))
+        (
+            extract_real_from(la_xml, "X"),
+            extract_real_from(la_xml, "Y"),
+            extract_real_from(la_xml, "Z"),
+        )
     } else {
         (1.0, 0.0, 0.0)
     };
@@ -1364,7 +1560,10 @@ pub async fn handle_home_location_post(
     let pos_str = format!("<{},{},{}>", px, py, pz);
     let look_str = format!("<{},{},{}>", lx, ly, lz);
 
-    info!("🏠 SetHome agent={} region={} pos={} look={}", agent_id, region_uuid, pos_str, look_str);
+    info!(
+        "🏠 SetHome agent={} region={} pos={} look={}",
+        agent_id, region_uuid, pos_str, look_str
+    );
 
     let region_uuid_parsed = uuid::Uuid::parse_str(&region_uuid).unwrap_or_default();
     let result = sqlx::query(
@@ -1409,9 +1608,15 @@ pub async fn handle_get_display_names(
     axum::extract::RawQuery(raw_query): axum::extract::RawQuery,
     State(state): State<CapsHandlerState>,
 ) -> Result<Response, StatusCode> {
-    info!("[DISPLAYNAMES] GetDisplayNames request for session: {}, raw_query: {:?}", session_id, raw_query);
+    info!(
+        "[DISPLAYNAMES] GetDisplayNames request for session: {}, raw_query: {:?}",
+        session_id, raw_query
+    );
 
-    state.caps_manager.update_session_activity(&session_id).await;
+    state
+        .caps_manager
+        .update_session_activity(&session_id)
+        .await;
 
     let mut agent_ids: Vec<uuid::Uuid> = Vec::new();
     if let Some(query_str) = &raw_query {
@@ -1431,7 +1636,10 @@ pub async fn handle_get_display_names(
         }
     }
 
-    info!("[DISPLAYNAMES] Parsed {} agent IDs from query", agent_ids.len());
+    info!(
+        "[DISPLAYNAMES] Parsed {} agent IDs from query",
+        agent_ids.len()
+    );
 
     let galadriel_id = crate::ai::galadriel::GALADRIEL_AGENT_ID;
     let mut agents_xml = String::new();
@@ -1452,12 +1660,15 @@ pub async fn handle_get_display_names(
                 </map>"#,
                 agent_id, username, display_name
             ));
-            info!("[DISPLAYNAMES] Returning Galadriel display name for {}", agent_id);
+            info!(
+                "[DISPLAYNAMES] Returning Galadriel display name for {}",
+                agent_id
+            );
             continue;
         }
 
         let result = sqlx::query_as::<_, (String, String)>(
-            "SELECT firstname, lastname FROM useraccounts WHERE principalid = $1::uuid"
+            "SELECT firstname, lastname FROM useraccounts WHERE principalid = $1::uuid",
         )
         .bind(agent_id.to_string())
         .fetch_optional(state.db_pool.as_ref())
@@ -1468,10 +1679,16 @@ pub async fn handle_get_display_names(
             _ => {
                 let roster = crate::ai::npc_roster::default_roster();
                 if let Some(npc) = roster.iter().find(|n| n.agent_id == *agent_id) {
-                    info!("[DISPLAYNAMES] NPC {} found in roster: {} {}", agent_id, npc.first_name, npc.last_name);
+                    info!(
+                        "[DISPLAYNAMES] NPC {} found in roster: {} {}",
+                        agent_id, npc.first_name, npc.last_name
+                    );
                     (npc.first_name.clone(), npc.last_name.clone())
                 } else {
-                    info!("[DISPLAYNAMES] User {} not found in database or roster", agent_id);
+                    info!(
+                        "[DISPLAYNAMES] User {} not found in database or roster",
+                        agent_id
+                    );
                     ("Unknown".to_string(), "User".to_string())
                 }
             }
@@ -1493,7 +1710,10 @@ pub async fn handle_get_display_names(
             agent_id, username, display_name, first_name, last_name
         ));
 
-        info!("[DISPLAYNAMES] Returning display name for {}: {} {}", agent_id, first_name, last_name);
+        info!(
+            "[DISPLAYNAMES] Returning display name for {}: {} {}",
+            agent_id, first_name, last_name
+        );
     }
 
     let xml = format!(
@@ -1505,7 +1725,11 @@ pub async fn handle_get_display_names(
         agents_xml
     );
 
-    info!("[DISPLAYNAMES] Returning LLSD response ({} bytes) for {} agents", xml.len(), agent_ids.len());
+    info!(
+        "[DISPLAYNAMES] Returning LLSD response ({} bytes) for {} agents",
+        xml.len(),
+        agent_ids.len()
+    );
 
     Ok(Response::builder()
         .status(StatusCode::OK)
@@ -1520,14 +1744,17 @@ pub async fn handle_set_display_name(
     body: Bytes,
 ) -> Result<Response, StatusCode> {
     info!("🔧 SetDisplayName request for session: {}", session_id);
-    
-    state.caps_manager.update_session_activity(&session_id).await;
-    
+
+    state
+        .caps_manager
+        .update_session_activity(&session_id)
+        .await;
+
     if !body.is_empty() {
         let body_str = String::from_utf8_lossy(&body);
         info!("🔧 SetDisplayName body: {}", body_str);
     }
-    
+
     json_response_to_llsd_xml(json!({"success": true, "capability": "SetDisplayName"}))
 }
 
@@ -1538,9 +1765,15 @@ pub async fn handle_create_inventory_category(
     State(state): State<CapsHandlerState>,
     body: Bytes,
 ) -> Result<Response, StatusCode> {
-    info!("📁 CreateInventoryCategory request for session: {}", session_id);
+    info!(
+        "📁 CreateInventoryCategory request for session: {}",
+        session_id
+    );
 
-    state.caps_manager.update_session_activity(&session_id).await;
+    state
+        .caps_manager
+        .update_session_activity(&session_id)
+        .await;
 
     let body_str = String::from_utf8_lossy(&body);
     info!("📁 CreateInventoryCategory body: {}", body_str);
@@ -1581,7 +1814,7 @@ pub async fn handle_create_inventory_category(
         r#"SELECT folderid FROM inventoryfolders
            WHERE agentid = $1 AND parentfolderid = $2
              AND foldername = $3 AND type = $4
-           LIMIT 1"#
+           LIMIT 1"#,
     )
     .bind(agent_uuid)
     .bind(parent_uuid)
@@ -1732,7 +1965,9 @@ fn extract_llsd_u32(xml: &str, key: &str) -> Option<u32> {
                     use base64::Engine;
                     if let Ok(bytes) = base64::engine::general_purpose::STANDARD.decode(b64) {
                         if bytes.len() >= 4 {
-                            return Some(u32::from_be_bytes([bytes[0], bytes[1], bytes[2], bytes[3]]));
+                            return Some(u32::from_be_bytes([
+                                bytes[0], bytes[1], bytes[2], bytes[3],
+                            ]));
                         }
                     }
                 }
@@ -1755,9 +1990,15 @@ pub async fn handle_new_file_agent_inventory(
     State(state): State<CapsHandlerState>,
     body: Bytes,
 ) -> Result<Response, StatusCode> {
-    info!("🔧 NewFileAgentInventory request for session: {}", session_id);
+    info!(
+        "🔧 NewFileAgentInventory request for session: {}",
+        session_id
+    );
 
-    state.caps_manager.update_session_activity(&session_id).await;
+    state
+        .caps_manager
+        .update_session_activity(&session_id)
+        .await;
 
     let body_str = String::from_utf8_lossy(&body);
     info!("🔧 NewFileAgentInventory body: {}", body_str);
@@ -1769,25 +2010,33 @@ pub async fn handle_new_file_agent_inventory(
     let inventory_type = extract_llsd_string(&body_str, "inventory_type").unwrap_or_default();
 
     let uploader_uuid = uuid::Uuid::new_v4().to_string();
-    let uploader_url = format!("{}/cap/{}/NewFileAgentInventoryUpload/{}",
-        state.caps_manager.base_url, session_id, uploader_uuid);
+    let uploader_url = format!(
+        "{}/cap/{}/NewFileAgentInventoryUpload/{}",
+        state.caps_manager.base_url, session_id, uploader_uuid
+    );
 
     {
         let mut sessions = state.caps_manager.sessions.write().await;
         if let Some(session) = sessions.get_mut(&session_id) {
-            session.pending_uploads.insert(uploader_uuid.clone(), PendingUpload {
-                name,
-                description,
-                asset_type,
-                inventory_type,
-                folder_id,
-                task_id: None,
-                is_script_running: false,
-            });
+            session.pending_uploads.insert(
+                uploader_uuid.clone(),
+                PendingUpload {
+                    name,
+                    description,
+                    asset_type,
+                    inventory_type,
+                    folder_id,
+                    task_id: None,
+                    is_script_running: false,
+                },
+            );
         }
     }
 
-    info!("🔧 NewFileAgentInventory: returning uploader URL: {}", uploader_url);
+    info!(
+        "🔧 NewFileAgentInventory: returning uploader URL: {}",
+        uploader_url
+    );
 
     json_response_to_llsd_xml(json!({
         "uploader": uploader_url,
@@ -1808,10 +2057,17 @@ pub async fn handle_new_file_agent_inventory_upload(
     State(state): State<CapsHandlerState>,
     body: Bytes,
 ) -> Result<Response, StatusCode> {
-    info!("🔧 NewFileAgentInventoryUpload data received: session={}, uploader={} ({} bytes)",
-        session_id, uploader_id, body.len());
+    info!(
+        "🔧 NewFileAgentInventoryUpload data received: session={}, uploader={} ({} bytes)",
+        session_id,
+        uploader_id,
+        body.len()
+    );
 
-    state.caps_manager.update_session_activity(&session_id).await;
+    state
+        .caps_manager
+        .update_session_activity(&session_id)
+        .await;
 
     let (agent_id_str, pending) = {
         let mut sessions = state.caps_manager.sessions.write().await;
@@ -1828,7 +2084,8 @@ pub async fn handle_new_file_agent_inventory_upload(
         }
     };
 
-    let agent_uuid = uuid::Uuid::parse_str(&agent_id_str).map_err(|_| StatusCode::INTERNAL_SERVER_ERROR)?;
+    let agent_uuid =
+        uuid::Uuid::parse_str(&agent_id_str).map_err(|_| StatusCode::INTERNAL_SERVER_ERROR)?;
     let new_asset_id = uuid::Uuid::new_v4();
     let new_item_id = uuid::Uuid::new_v4();
     let folder_uuid = uuid::Uuid::parse_str(&pending.folder_id).unwrap_or(uuid::Uuid::nil());
@@ -1921,9 +2178,15 @@ pub async fn handle_new_file_agent_inventory_upload(
             Ok(header) => {
                 let has_physics = header.physics_convex.is_some();
                 let has_high = header.high_lod.is_some();
-                info!("[MESH-UPLOAD] asset={} physics_convex={} high_lod={}", new_asset_id, has_physics, has_high);
+                info!(
+                    "[MESH-UPLOAD] asset={} physics_convex={} high_lod={}",
+                    new_asset_id, has_physics, has_high
+                );
                 if !has_physics {
-                    warn!("[MESH-UPLOAD] Mesh {} missing physics_convex block", new_asset_id);
+                    warn!(
+                        "[MESH-UPLOAD] Mesh {} missing physics_convex block",
+                        new_asset_id
+                    );
                 }
                 if let Some(ref pc) = header.physics_convex {
                     match crate::mesh::parser::extract_physics_convex(&body, &header) {
@@ -1932,18 +2195,27 @@ pub async fn handle_new_file_agent_inventory_upload(
                                 convex.hull_count(), convex.total_vertices(), pc.offset, pc.size);
                         }
                         Err(e) => {
-                            warn!("[MESH-UPLOAD] physics_convex parse failed for {}: {}", new_asset_id, e);
+                            warn!(
+                                "[MESH-UPLOAD] physics_convex parse failed for {}: {}",
+                                new_asset_id, e
+                            );
                         }
                     }
                 }
             }
             Err(e) => {
-                warn!("[MESH-UPLOAD] Mesh header parse failed for {}: {}", new_asset_id, e);
+                warn!(
+                    "[MESH-UPLOAD] Mesh header parse failed for {}: {}",
+                    new_asset_id, e
+                );
             }
         }
     }
 
-    info!("NewFileAgentInventory complete: asset={} item={} name={}", new_asset_id, new_item_id, pending.name);
+    info!(
+        "NewFileAgentInventory complete: asset={} item={} name={}",
+        new_asset_id, new_item_id, pending.name
+    );
 
     json_response_to_llsd_xml(json!({
         "new_asset": new_asset_id.to_string(),
@@ -1958,9 +2230,15 @@ pub async fn handle_update_notecard_agent_inventory(
     body: Bytes,
 ) -> Result<Response, StatusCode> {
     let body_str = String::from_utf8_lossy(&body);
-    info!("[NOTECARD-SAVE] Stage-1 request: session={} body={}", session_id, body_str);
+    info!(
+        "[NOTECARD-SAVE] Stage-1 request: session={} body={}",
+        session_id, body_str
+    );
 
-    state.caps_manager.update_session_activity(&session_id).await;
+    state
+        .caps_manager
+        .update_session_activity(&session_id)
+        .await;
 
     let item_id = extract_llsd_uuid(&body_str, "item_id")
         .or_else(|| extract_llsd_string(&body_str, "item_id"))
@@ -1976,15 +2254,18 @@ pub async fn handle_update_notecard_agent_inventory(
     let session_found = {
         let mut sessions = state.caps_manager.sessions.write().await;
         if let Some(session) = sessions.get_mut(&session_id) {
-            session.pending_uploads.insert(uploader_id.clone(), PendingUpload {
-                name: item_id.clone(),
-                description: String::new(),
-                asset_type: "notecard".to_string(),
-                inventory_type: "notecard".to_string(),
-                folder_id: String::new(),
-                task_id: None,
-                is_script_running: false,
-            });
+            session.pending_uploads.insert(
+                uploader_id.clone(),
+                PendingUpload {
+                    name: item_id.clone(),
+                    description: String::new(),
+                    asset_type: "notecard".to_string(),
+                    inventory_type: "notecard".to_string(),
+                    folder_id: String::new(),
+                    task_id: None,
+                    is_script_running: false,
+                },
+            );
             true
         } else {
             false
@@ -1992,17 +2273,26 @@ pub async fn handle_update_notecard_agent_inventory(
     };
 
     if !session_found {
-        warn!("[NOTECARD-SAVE] Stage-1: session {} NOT FOUND in caps_manager", session_id);
+        warn!(
+            "[NOTECARD-SAVE] Stage-1: session {} NOT FOUND in caps_manager",
+            session_id
+        );
     }
 
-    let uploader_url = format!("{}/cap/{}/NotecardUpload/{}", state.caps_manager.base_url, session_id, uploader_id);
+    let uploader_url = format!(
+        "{}/cap/{}/NotecardUpload/{}",
+        state.caps_manager.base_url, session_id, uploader_id
+    );
 
     let response_json = json!({
         "state": "upload",
         "uploader": uploader_url
     });
     let llsd_body = json_to_llsd_xml(&response_json);
-    let xml = format!("<?xml version=\"1.0\" encoding=\"UTF-8\"?>\n<llsd>{}</llsd>", llsd_body);
+    let xml = format!(
+        "<?xml version=\"1.0\" encoding=\"UTF-8\"?>\n<llsd>{}</llsd>",
+        llsd_body
+    );
     info!("[NOTECARD-SAVE] Stage-1 response XML: {}", xml);
 
     Ok(Response::builder()
@@ -2017,8 +2307,12 @@ pub async fn handle_notecard_upload(
     State(state): State<CapsHandlerState>,
     body: Bytes,
 ) -> Result<Response, StatusCode> {
-    info!("[NOTECARD-SAVE] Stage-2 CALLED: session={}, uploader={}, body_len={}",
-        session_id, uploader_id, body.len());
+    info!(
+        "[NOTECARD-SAVE] Stage-2 CALLED: session={}, uploader={}, body_len={}",
+        session_id,
+        uploader_id,
+        body.len()
+    );
 
     if body.is_empty() {
         warn!("[NOTECARD-SAVE] Stage-2: EMPTY body received!");
@@ -2027,7 +2321,10 @@ pub async fn handle_notecard_upload(
         info!("[NOTECARD-SAVE] Stage-2: body preview: {}", preview);
     }
 
-    state.caps_manager.update_session_activity(&session_id).await;
+    state
+        .caps_manager
+        .update_session_activity(&session_id)
+        .await;
 
     let (agent_id_str, pending) = {
         let mut sessions = state.caps_manager.sessions.write().await;
@@ -2042,7 +2339,10 @@ pub async fn handle_notecard_upload(
     let pending = match pending {
         Some(p) => p,
         None => {
-            warn!("[NOTECARD-SAVE] Stage-2: No pending upload for uploader={} session={}", uploader_id, session_id);
+            warn!(
+                "[NOTECARD-SAVE] Stage-2: No pending upload for uploader={} session={}",
+                uploader_id, session_id
+            );
             return Err(StatusCode::NOT_FOUND);
         }
     };
@@ -2050,13 +2350,18 @@ pub async fn handle_notecard_upload(
     let item_id_str = &pending.name;
     let item_uuid = uuid::Uuid::parse_str(item_id_str).unwrap_or(uuid::Uuid::nil());
     let agent_uuid = uuid::Uuid::parse_str(&agent_id_str).map_err(|_| {
-        error!("[NOTECARD-SAVE] Stage-2: invalid agent_id: {}", agent_id_str);
+        error!(
+            "[NOTECARD-SAVE] Stage-2: invalid agent_id: {}",
+            agent_id_str
+        );
         StatusCode::INTERNAL_SERVER_ERROR
     })?;
     let new_asset_id = uuid::Uuid::new_v4();
 
-    info!("[NOTECARD-SAVE] Stage-2: saving asset {} for item {} (agent={})",
-        new_asset_id, item_uuid, agent_uuid);
+    info!(
+        "[NOTECARD-SAVE] Stage-2: saving asset {} for item {} (agent={})",
+        new_asset_id, item_uuid, agent_uuid
+    );
 
     let asset_result = sqlx::query(
         r#"INSERT INTO assets (id, name, description, assettype, local, temporary, create_time, access_time, data, creatorid, asset_flags)
@@ -2072,7 +2377,10 @@ pub async fn handle_notecard_upload(
     .await;
 
     match &asset_result {
-        Ok(r) => info!("[NOTECARD-SAVE] Stage-2: asset INSERT OK, rows_affected={}", r.rows_affected()),
+        Ok(r) => info!(
+            "[NOTECARD-SAVE] Stage-2: asset INSERT OK, rows_affected={}",
+            r.rows_affected()
+        ),
         Err(e) => {
             error!("[NOTECARD-SAVE] Stage-2: asset INSERT FAILED: {}", e);
             return Err(StatusCode::INTERNAL_SERVER_ERROR);
@@ -2080,23 +2388,28 @@ pub async fn handle_notecard_upload(
     }
 
     if !item_uuid.is_nil() {
-        let update_result = sqlx::query(
-            "UPDATE inventoryitems SET assetid = $1 WHERE inventoryid = $2"
-        )
-        .bind(new_asset_id)
-        .bind(item_uuid)
-        .execute(&*state.db_pool)
-        .await;
+        let update_result =
+            sqlx::query("UPDATE inventoryitems SET assetid = $1 WHERE inventoryid = $2")
+                .bind(new_asset_id)
+                .bind(item_uuid)
+                .execute(&*state.db_pool)
+                .await;
 
         match &update_result {
-            Ok(r) => info!("[NOTECARD-SAVE] Stage-2: inventory UPDATE OK, rows_affected={}", r.rows_affected()),
+            Ok(r) => info!(
+                "[NOTECARD-SAVE] Stage-2: inventory UPDATE OK, rows_affected={}",
+                r.rows_affected()
+            ),
             Err(e) => warn!("[NOTECARD-SAVE] Stage-2: inventory UPDATE FAILED: {}", e),
         }
     } else {
         warn!("[NOTECARD-SAVE] Stage-2: item_uuid is nil, skipping inventory update");
     }
 
-    info!("[NOTECARD-SAVE] Stage-2 COMPLETE: new_asset={} item={}", new_asset_id, item_uuid);
+    info!(
+        "[NOTECARD-SAVE] Stage-2 COMPLETE: new_asset={} item={}",
+        new_asset_id, item_uuid
+    );
 
     json_response_to_llsd_xml(json!({
         "new_asset": new_asset_id.to_string(),
@@ -2112,43 +2425,60 @@ pub async fn handle_update_script_agent_inventory(
     body: Bytes,
 ) -> Result<Response, StatusCode> {
     let body_str = String::from_utf8_lossy(&body);
-    info!("[SCRIPT-SAVE] Stage-1 request: session={} body={}", session_id, body_str);
+    info!(
+        "[SCRIPT-SAVE] Stage-1 request: session={} body={}",
+        session_id, body_str
+    );
 
-    state.caps_manager.update_session_activity(&session_id).await;
+    state
+        .caps_manager
+        .update_session_activity(&session_id)
+        .await;
 
     let item_id = extract_llsd_uuid(&body_str, "item_id")
         .or_else(|| extract_llsd_string(&body_str, "item_id"))
         .unwrap_or_default();
-    let target = extract_llsd_string(&body_str, "target")
-        .unwrap_or_else(|| "mono".to_string());
+    let target = extract_llsd_string(&body_str, "target").unwrap_or_else(|| "mono".to_string());
 
-    info!("[SCRIPT-SAVE] Stage-1: item_id={}, target={}", item_id, target);
+    info!(
+        "[SCRIPT-SAVE] Stage-1: item_id={}, target={}",
+        item_id, target
+    );
 
     let uploader_id = uuid::Uuid::new_v4().to_string();
 
     {
         let mut sessions = state.caps_manager.sessions.write().await;
         if let Some(session) = sessions.get_mut(&session_id) {
-            session.pending_uploads.insert(uploader_id.clone(), PendingUpload {
-                name: item_id.clone(),
-                description: String::new(),
-                asset_type: "lsltext".to_string(),
-                inventory_type: "script".to_string(),
-                folder_id: String::new(),
-                task_id: None,
-                is_script_running: false,
-            });
+            session.pending_uploads.insert(
+                uploader_id.clone(),
+                PendingUpload {
+                    name: item_id.clone(),
+                    description: String::new(),
+                    asset_type: "lsltext".to_string(),
+                    inventory_type: "script".to_string(),
+                    folder_id: String::new(),
+                    task_id: None,
+                    is_script_running: false,
+                },
+            );
         }
     }
 
-    let uploader_url = format!("{}/cap/{}/ScriptUpload/{}", state.caps_manager.base_url, session_id, uploader_id);
+    let uploader_url = format!(
+        "{}/cap/{}/ScriptUpload/{}",
+        state.caps_manager.base_url, session_id, uploader_id
+    );
 
     let response_json = json!({
         "state": "upload",
         "uploader": uploader_url
     });
     let llsd_body = json_to_llsd_xml(&response_json);
-    let xml = format!("<?xml version=\"1.0\" encoding=\"UTF-8\"?>\n<llsd>{}</llsd>", llsd_body);
+    let xml = format!(
+        "<?xml version=\"1.0\" encoding=\"UTF-8\"?>\n<llsd>{}</llsd>",
+        llsd_body
+    );
     info!("[SCRIPT-SAVE] Stage-1 response XML: {}", xml);
 
     Ok(Response::builder()
@@ -2163,10 +2493,17 @@ pub async fn handle_script_upload(
     State(state): State<CapsHandlerState>,
     body: Bytes,
 ) -> Result<Response, StatusCode> {
-    info!("[SCRIPT-SAVE] Stage-2 CALLED: session={}, uploader={}, body_len={}",
-        session_id, uploader_id, body.len());
+    info!(
+        "[SCRIPT-SAVE] Stage-2 CALLED: session={}, uploader={}, body_len={}",
+        session_id,
+        uploader_id,
+        body.len()
+    );
 
-    state.caps_manager.update_session_activity(&session_id).await;
+    state
+        .caps_manager
+        .update_session_activity(&session_id)
+        .await;
 
     let (agent_id_str, pending) = {
         let mut sessions = state.caps_manager.sessions.write().await;
@@ -2181,18 +2518,24 @@ pub async fn handle_script_upload(
     let pending = match pending {
         Some(p) => p,
         None => {
-            warn!("[SCRIPT-SAVE] Stage-2: No pending upload for uploader={}", uploader_id);
+            warn!(
+                "[SCRIPT-SAVE] Stage-2: No pending upload for uploader={}",
+                uploader_id
+            );
             return Err(StatusCode::NOT_FOUND);
         }
     };
 
     let item_id_str = &pending.name;
     let item_uuid = uuid::Uuid::parse_str(item_id_str).unwrap_or(uuid::Uuid::nil());
-    let agent_uuid = uuid::Uuid::parse_str(&agent_id_str).map_err(|_| StatusCode::INTERNAL_SERVER_ERROR)?;
+    let agent_uuid =
+        uuid::Uuid::parse_str(&agent_id_str).map_err(|_| StatusCode::INTERNAL_SERVER_ERROR)?;
     let new_asset_id = uuid::Uuid::new_v4();
 
-    info!("[SCRIPT-SAVE] Stage-2: saving asset {} for item {} (agent={})",
-        new_asset_id, item_uuid, agent_uuid);
+    info!(
+        "[SCRIPT-SAVE] Stage-2: saving asset {} for item {} (agent={})",
+        new_asset_id, item_uuid, agent_uuid
+    );
 
     let asset_result = sqlx::query(
         r#"INSERT INTO assets (id, name, description, assettype, local, temporary, create_time, access_time, data, creatorid, asset_flags)
@@ -2208,7 +2551,10 @@ pub async fn handle_script_upload(
     .await;
 
     match &asset_result {
-        Ok(r) => info!("[SCRIPT-SAVE] Stage-2: asset INSERT OK, rows_affected={}", r.rows_affected()),
+        Ok(r) => info!(
+            "[SCRIPT-SAVE] Stage-2: asset INSERT OK, rows_affected={}",
+            r.rows_affected()
+        ),
         Err(e) => {
             error!("[SCRIPT-SAVE] Stage-2: asset INSERT FAILED: {}", e);
             return Err(StatusCode::INTERNAL_SERVER_ERROR);
@@ -2216,21 +2562,26 @@ pub async fn handle_script_upload(
     }
 
     if !item_uuid.is_nil() {
-        let update_result = sqlx::query(
-            "UPDATE inventoryitems SET assetid = $1 WHERE inventoryid = $2"
-        )
-        .bind(new_asset_id)
-        .bind(item_uuid)
-        .execute(&*state.db_pool)
-        .await;
+        let update_result =
+            sqlx::query("UPDATE inventoryitems SET assetid = $1 WHERE inventoryid = $2")
+                .bind(new_asset_id)
+                .bind(item_uuid)
+                .execute(&*state.db_pool)
+                .await;
 
         match &update_result {
-            Ok(r) => info!("[SCRIPT-SAVE] Stage-2: inventory UPDATE OK, rows_affected={}", r.rows_affected()),
+            Ok(r) => info!(
+                "[SCRIPT-SAVE] Stage-2: inventory UPDATE OK, rows_affected={}",
+                r.rows_affected()
+            ),
             Err(e) => warn!("[SCRIPT-SAVE] Stage-2: inventory UPDATE FAILED: {}", e),
         }
     }
 
-    info!("[SCRIPT-SAVE] Stage-2 COMPLETE: new_asset={} item={}", new_asset_id, item_uuid);
+    info!(
+        "[SCRIPT-SAVE] Stage-2 COMPLETE: new_asset={} item={}",
+        new_asset_id, item_uuid
+    );
 
     json_response_to_llsd_xml(json!({
         "new_asset": new_asset_id.to_string(),
@@ -2246,9 +2597,15 @@ pub async fn handle_update_script_task_inventory(
     body: Bytes,
 ) -> Result<Response, StatusCode> {
     let body_str = String::from_utf8_lossy(&body);
-    info!("[SCRIPT-TASK] Stage-1 request: session={} body={}", session_id, body_str);
+    info!(
+        "[SCRIPT-TASK] Stage-1 request: session={} body={}",
+        session_id, body_str
+    );
 
-    state.caps_manager.update_session_activity(&session_id).await;
+    state
+        .caps_manager
+        .update_session_activity(&session_id)
+        .await;
 
     let item_id = extract_llsd_uuid(&body_str, "item_id")
         .or_else(|| extract_llsd_string(&body_str, "item_id"))
@@ -2260,33 +2617,45 @@ pub async fn handle_update_script_task_inventory(
         .map(|s| s == "true" || s == "1")
         .unwrap_or(true);
 
-    info!("[SCRIPT-TASK] Stage-1: item_id={}, task_id={}, running={}", item_id, task_id, is_script_running);
+    info!(
+        "[SCRIPT-TASK] Stage-1: item_id={}, task_id={}, running={}",
+        item_id, task_id, is_script_running
+    );
 
     let uploader_id = uuid::Uuid::new_v4().to_string();
 
     {
         let mut sessions = state.caps_manager.sessions.write().await;
         if let Some(session) = sessions.get_mut(&session_id) {
-            session.pending_uploads.insert(uploader_id.clone(), PendingUpload {
-                name: item_id.clone(),
-                description: String::new(),
-                asset_type: "lsltext".to_string(),
-                inventory_type: "script".to_string(),
-                folder_id: String::new(),
-                task_id: Some(task_id),
-                is_script_running,
-            });
+            session.pending_uploads.insert(
+                uploader_id.clone(),
+                PendingUpload {
+                    name: item_id.clone(),
+                    description: String::new(),
+                    asset_type: "lsltext".to_string(),
+                    inventory_type: "script".to_string(),
+                    folder_id: String::new(),
+                    task_id: Some(task_id),
+                    is_script_running,
+                },
+            );
         }
     }
 
-    let uploader_url = format!("{}/cap/{}/ScriptTaskUpload/{}", state.caps_manager.base_url, session_id, uploader_id);
+    let uploader_url = format!(
+        "{}/cap/{}/ScriptTaskUpload/{}",
+        state.caps_manager.base_url, session_id, uploader_id
+    );
 
     let response_json = json!({
         "state": "upload",
         "uploader": uploader_url
     });
     let llsd_body = json_to_llsd_xml(&response_json);
-    let xml = format!("<?xml version=\"1.0\" encoding=\"UTF-8\"?>\n<llsd>{}</llsd>", llsd_body);
+    let xml = format!(
+        "<?xml version=\"1.0\" encoding=\"UTF-8\"?>\n<llsd>{}</llsd>",
+        llsd_body
+    );
     info!("[SCRIPT-TASK] Stage-1 response: uploader={}", uploader_url);
 
     Ok(Response::builder()
@@ -2302,9 +2671,15 @@ pub async fn handle_update_notecard_task_inventory(
     body: Bytes,
 ) -> Result<Response, StatusCode> {
     let body_str = String::from_utf8_lossy(&body);
-    info!("[NOTECARD-TASK] Stage-1 request: session={} body={}", session_id, body_str);
+    info!(
+        "[NOTECARD-TASK] Stage-1 request: session={} body={}",
+        session_id, body_str
+    );
 
-    state.caps_manager.update_session_activity(&session_id).await;
+    state
+        .caps_manager
+        .update_session_activity(&session_id)
+        .await;
 
     let item_id = extract_llsd_uuid(&body_str, "item_id")
         .or_else(|| extract_llsd_string(&body_str, "item_id"))
@@ -2313,33 +2688,45 @@ pub async fn handle_update_notecard_task_inventory(
         .or_else(|| extract_llsd_string(&body_str, "task_id"))
         .unwrap_or_default();
 
-    info!("[NOTECARD-TASK] Stage-1: item_id={}, task_id={}", item_id, task_id);
+    info!(
+        "[NOTECARD-TASK] Stage-1: item_id={}, task_id={}",
+        item_id, task_id
+    );
 
     let uploader_id = uuid::Uuid::new_v4().to_string();
 
     {
         let mut sessions = state.caps_manager.sessions.write().await;
         if let Some(session) = sessions.get_mut(&session_id) {
-            session.pending_uploads.insert(uploader_id.clone(), PendingUpload {
-                name: item_id.clone(),
-                description: String::new(),
-                asset_type: "notecard".to_string(),
-                inventory_type: "notecard".to_string(),
-                folder_id: String::new(),
-                task_id: Some(task_id),
-                is_script_running: false,
-            });
+            session.pending_uploads.insert(
+                uploader_id.clone(),
+                PendingUpload {
+                    name: item_id.clone(),
+                    description: String::new(),
+                    asset_type: "notecard".to_string(),
+                    inventory_type: "notecard".to_string(),
+                    folder_id: String::new(),
+                    task_id: Some(task_id),
+                    is_script_running: false,
+                },
+            );
         }
     }
 
-    let uploader_url = format!("{}/cap/{}/ScriptTaskUpload/{}", state.caps_manager.base_url, session_id, uploader_id);
+    let uploader_url = format!(
+        "{}/cap/{}/ScriptTaskUpload/{}",
+        state.caps_manager.base_url, session_id, uploader_id
+    );
 
     let response_json = json!({
         "state": "upload",
         "uploader": uploader_url
     });
     let llsd_body = json_to_llsd_xml(&response_json);
-    let xml = format!("<?xml version=\"1.0\" encoding=\"UTF-8\"?>\n<llsd>{}</llsd>", llsd_body);
+    let xml = format!(
+        "<?xml version=\"1.0\" encoding=\"UTF-8\"?>\n<llsd>{}</llsd>",
+        llsd_body
+    );
 
     Ok(Response::builder()
         .status(StatusCode::OK)
@@ -2353,10 +2740,17 @@ pub async fn handle_script_task_upload(
     State(state): State<CapsHandlerState>,
     body: Bytes,
 ) -> Result<Response, StatusCode> {
-    info!("[SCRIPT-TASK] Stage-2 CALLED: session={}, uploader={}, body_len={}",
-        session_id, uploader_id, body.len());
+    info!(
+        "[SCRIPT-TASK] Stage-2 CALLED: session={}, uploader={}, body_len={}",
+        session_id,
+        uploader_id,
+        body.len()
+    );
 
-    state.caps_manager.update_session_activity(&session_id).await;
+    state
+        .caps_manager
+        .update_session_activity(&session_id)
+        .await;
 
     let pending = {
         let mut sessions = state.caps_manager.sessions.write().await;
@@ -2370,22 +2764,29 @@ pub async fn handle_script_task_upload(
     let pending = match pending {
         Some(p) => p,
         None => {
-            warn!("[SCRIPT-TASK] Stage-2: No pending upload for uploader={}", uploader_id);
+            warn!(
+                "[SCRIPT-TASK] Stage-2: No pending upload for uploader={}",
+                uploader_id
+            );
             return Err(StatusCode::NOT_FOUND);
         }
     };
 
     let item_id_str = &pending.name;
     let item_uuid = uuid::Uuid::parse_str(item_id_str).unwrap_or(uuid::Uuid::nil());
-    let task_uuid = pending.task_id.as_deref()
+    let task_uuid = pending
+        .task_id
+        .as_deref()
         .and_then(|s| uuid::Uuid::parse_str(s).ok())
         .unwrap_or(uuid::Uuid::nil());
     let new_asset_id = uuid::Uuid::new_v4();
     let is_notecard = pending.asset_type == "notecard";
     let asset_type_int: i32 = if is_notecard { 7 } else { 10 };
 
-    info!("[SCRIPT-TASK] Stage-2: saving asset {} for item {} in prim {} (type={})",
-        new_asset_id, item_uuid, task_uuid, pending.asset_type);
+    info!(
+        "[SCRIPT-TASK] Stage-2: saving asset {} for item {} in prim {} (type={})",
+        new_asset_id, item_uuid, task_uuid, pending.asset_type
+    );
 
     let asset_result = sqlx::query(
         r#"INSERT INTO assets (id, name, description, assettype, local, temporary, create_time, access_time, data, creatorid, asset_flags)
@@ -2402,7 +2803,10 @@ pub async fn handle_script_task_upload(
     .await;
 
     match &asset_result {
-        Ok(r) => info!("[SCRIPT-TASK] Stage-2: asset INSERT OK, rows_affected={}", r.rows_affected()),
+        Ok(r) => info!(
+            "[SCRIPT-TASK] Stage-2: asset INSERT OK, rows_affected={}",
+            r.rows_affected()
+        ),
         Err(e) => {
             error!("[SCRIPT-TASK] Stage-2: asset INSERT FAILED: {}", e);
             return Err(StatusCode::INTERNAL_SERVER_ERROR);
@@ -2410,22 +2814,27 @@ pub async fn handle_script_task_upload(
     }
 
     if !item_uuid.is_nil() && !task_uuid.is_nil() {
-        let update_result = sqlx::query(
-            "UPDATE primitems SET assetid = $1 WHERE itemid = $2 AND primid = $3"
-        )
-        .bind(new_asset_id)
-        .bind(item_uuid)
-        .bind(task_uuid)
-        .execute(&*state.db_pool)
-        .await;
+        let update_result =
+            sqlx::query("UPDATE primitems SET assetid = $1 WHERE itemid = $2 AND primid = $3")
+                .bind(new_asset_id)
+                .bind(item_uuid)
+                .bind(task_uuid)
+                .execute(&*state.db_pool)
+                .await;
 
         match &update_result {
-            Ok(r) => info!("[SCRIPT-TASK] Stage-2: primitems UPDATE OK, rows_affected={}", r.rows_affected()),
+            Ok(r) => info!(
+                "[SCRIPT-TASK] Stage-2: primitems UPDATE OK, rows_affected={}",
+                r.rows_affected()
+            ),
             Err(e) => warn!("[SCRIPT-TASK] Stage-2: primitems UPDATE FAILED: {}", e),
         }
     }
 
-    info!("[SCRIPT-TASK] Stage-2 COMPLETE: new_asset={} item={} prim={}", new_asset_id, item_uuid, task_uuid);
+    info!(
+        "[SCRIPT-TASK] Stage-2 COMPLETE: new_asset={} item={} prim={}",
+        new_asset_id, item_uuid, task_uuid
+    );
 
     if asset_type_int == 10 {
         let script_id = uuid::Uuid::new_v5(&task_uuid, item_uuid.as_bytes());
@@ -2442,23 +2851,41 @@ pub async fn handle_script_task_upload(
                             let mut link_scales = Vec::new();
                             let mut link_count = 1i32;
                             if group_id != uuid::Uuid::nil() {
-                                let siblings: Vec<_> = objects.values()
+                                let siblings: Vec<_> = objects
+                                    .values()
                                     .filter(|s| s.scene_group_id == group_id)
                                     .collect();
                                 link_count = siblings.len() as i32;
                                 for s in &siblings {
                                     link_names.push((s.link_number, s.name.clone()));
-                                    link_scales.push((s.link_number,
-                                        crate::scripting::LSLVector::new(s.scale[0], s.scale[1], s.scale[2])));
+                                    link_scales.push((
+                                        s.link_number,
+                                        crate::scripting::LSLVector::new(
+                                            s.scale[0], s.scale[1], s.scale[2],
+                                        ),
+                                    ));
                                 }
                             }
                             let ctx = crate::scripting::executor::ObjectContext {
                                 object_id: obj.uuid,
                                 owner_id: obj.owner_id,
                                 object_name: obj.name.clone(),
-                                position: crate::scripting::LSLVector::new(obj.position[0], obj.position[1], obj.position[2]),
-                                rotation: crate::scripting::LSLRotation::new(obj.rotation[0], obj.rotation[1], obj.rotation[2], obj.rotation[3]),
-                                scale: crate::scripting::LSLVector::new(obj.scale[0], obj.scale[1], obj.scale[2]),
+                                position: crate::scripting::LSLVector::new(
+                                    obj.position[0],
+                                    obj.position[1],
+                                    obj.position[2],
+                                ),
+                                rotation: crate::scripting::LSLRotation::new(
+                                    obj.rotation[0],
+                                    obj.rotation[1],
+                                    obj.rotation[2],
+                                    obj.rotation[3],
+                                ),
+                                scale: crate::scripting::LSLVector::new(
+                                    obj.scale[0],
+                                    obj.scale[1],
+                                    obj.scale[2],
+                                ),
                                 velocity: crate::scripting::LSLVector::zero(),
                                 region_name: String::new(),
                                 detect_params: Vec::new(),
@@ -2481,7 +2908,10 @@ pub async fn handle_script_task_upload(
                     }
                     info!("[SCRIPT-TASK] Script compiled and started in YEngine: script_id={} item={} prim={}", script_id, item_uuid, task_uuid);
                 }
-                Err(e) => warn!("[SCRIPT-TASK] Failed to start script in YEngine: {} (script_id={})", e, script_id),
+                Err(e) => warn!(
+                    "[SCRIPT-TASK] Failed to start script in YEngine: {} (script_id={})",
+                    e, script_id
+                ),
             }
         }
         if let Some(ref scene_objects) = state.scene_objects {
@@ -2489,7 +2919,10 @@ pub async fn handle_script_task_upload(
             if let Some(obj) = objects.values_mut().find(|o| o.uuid == task_uuid) {
                 if !obj.script_items.contains(&script_id) {
                     obj.script_items.push(script_id);
-                    info!("[SCRIPT-TASK] Added script {} to prim {} script_items cache (item={})", script_id, task_uuid, item_uuid);
+                    info!(
+                        "[SCRIPT-TASK] Added script {} to prim {} script_items cache (item={})",
+                        script_id, task_uuid, item_uuid
+                    );
                 }
             }
         }
@@ -2508,7 +2941,10 @@ pub async fn handle_parcel_properties_update(
     State(state): State<CapsHandlerState>,
     body: Bytes,
 ) -> Result<Response, StatusCode> {
-    state.caps_manager.update_session_activity(&session_id).await;
+    state
+        .caps_manager
+        .update_session_activity(&session_id)
+        .await;
 
     if body.is_empty() {
         return Ok(Response::builder()
@@ -2518,7 +2954,11 @@ pub async fn handle_parcel_properties_update(
     }
 
     let body_str = String::from_utf8_lossy(&body);
-    info!("[PARCEL] ParcelPropertiesUpdate CAPS for session {}: {} bytes", session_id, body.len());
+    info!(
+        "[PARCEL] ParcelPropertiesUpdate CAPS for session {}: {} bytes",
+        session_id,
+        body.len()
+    );
 
     let local_id = match extract_llsd_integer(&body_str, "local_id") {
         Some(id) => id,
@@ -2550,7 +2990,8 @@ pub async fn handle_parcel_properties_update(
 
     let region_uuid_str = if let Some(ref parcels_lock) = state.parcels {
         let parcels = parcels_lock.read();
-        parcels.iter()
+        parcels
+            .iter()
             .find(|p| p.local_id == local_id)
             .map(|p| p.region_uuid.to_string())
     } else {
@@ -2594,16 +3035,29 @@ pub async fn handle_parcel_properties_update(
     .await;
 
     match &result {
-        Ok(r) => info!("[PARCEL] CAPS updated parcel local_id={} in DB ({} rows)", local_id, r.rows_affected()),
-        Err(e) => warn!("[PARCEL] CAPS failed to update parcel local_id={}: {}", local_id, e),
+        Ok(r) => info!(
+            "[PARCEL] CAPS updated parcel local_id={} in DB ({} rows)",
+            local_id,
+            r.rows_affected()
+        ),
+        Err(e) => warn!(
+            "[PARCEL] CAPS failed to update parcel local_id={}: {}",
+            local_id, e
+        ),
     }
 
     if let Some(ref parcels_lock) = state.parcels {
         let mut parcels = parcels_lock.write();
         if let Some(p) = parcels.iter_mut().find(|p| p.local_id == local_id) {
-            if !name.is_empty() { p.name = name.clone(); }
-            if !description.is_empty() { p.description = description.clone(); }
-            if !music_url.is_empty() { p.music_url = music_url.clone(); }
+            if !name.is_empty() {
+                p.name = name.clone();
+            }
+            if !description.is_empty() {
+                p.description = description.clone();
+            }
+            if !music_url.is_empty() {
+                p.music_url = music_url.clone();
+            }
             p.flags = parcel_flags;
             p.sale_price = sale_price;
             p.landing_point = user_location;
@@ -2628,7 +3082,10 @@ pub async fn handle_map_layer(
 ) -> Result<Response, StatusCode> {
     info!("[MAP] MapLayer CAPS request for session: {}", session_id);
 
-    state.caps_manager.update_session_activity(&session_id).await;
+    state
+        .caps_manager
+        .update_session_activity(&session_id)
+        .await;
 
     json_response_to_llsd_xml(json!({
         "AgentData": {"Flags": 0},
@@ -2648,15 +3105,23 @@ pub async fn handle_simulator_features(
 ) -> Result<Response, StatusCode> {
     info!("🔧 SimulatorFeatures request for session: {}", session_id);
 
-    state.caps_manager.update_session_activity(&session_id).await;
+    state
+        .caps_manager
+        .update_session_activity(&session_id)
+        .await;
 
     let login_port = std::env::var("OPENSIM_LOGIN_PORT").unwrap_or_else(|_| "9000".to_string());
     let sys_ip = crate::config::login::resolve_system_ip();
     let default_base = format!("http://{}:{}", sys_ip, login_port);
-    let grid_name = std::env::var("OPENSIM_GRID_NAME").unwrap_or_else(|_| "OpenSim Next".to_string()).trim_matches('"').to_string();
+    let grid_name = std::env::var("OPENSIM_GRID_NAME")
+        .unwrap_or_else(|_| "OpenSim Next".to_string())
+        .trim_matches('"')
+        .to_string();
     let grid_url = std::env::var("OPENSIM_GATEKEEPER_URI").unwrap_or_else(|_| default_base.clone());
-    let map_url = std::env::var("OPENSIM_MAP_SERVER_URL").unwrap_or_else(|_| format!("{}/", default_base));
-    let search_url = std::env::var("OPENSIM_SEARCH_URL").unwrap_or_else(|_| format!("{}/search", default_base));
+    let map_url =
+        std::env::var("OPENSIM_MAP_SERVER_URL").unwrap_or_else(|_| format!("{}/", default_base));
+    let search_url =
+        std::env::var("OPENSIM_SEARCH_URL").unwrap_or_else(|_| format!("{}/search", default_base));
     let home_uri = std::env::var("OPENSIM_HOME_URI").unwrap_or_else(|_| default_base.clone());
     let currency_base = format!("{}/currency.php", home_uri.trim_end_matches('/'));
     let dest_guide = std::env::var("OPENSIM_DESTINATION_GUIDE_URL").unwrap_or_default();
@@ -2705,7 +3170,10 @@ pub async fn handle_simulator_features(
         }
     });
 
-    info!("🔧 SimulatorFeatures returning full feature set for session: {}", session_id);
+    info!(
+        "🔧 SimulatorFeatures returning full feature set for session: {}",
+        session_id
+    );
     json_response_to_llsd_xml(features)
 }
 
@@ -2714,7 +3182,10 @@ pub async fn handle_simulator_features_post(
     State(state): State<CapsHandlerState>,
     _body: Bytes,
 ) -> Result<Response, StatusCode> {
-    info!("🔧 SimulatorFeatures POST request for session: {} (forwarding to GET handler)", session_id);
+    info!(
+        "🔧 SimulatorFeatures POST request for session: {} (forwarding to GET handler)",
+        session_id
+    );
     handle_simulator_features(Path(session_id), State(state)).await
 }
 
@@ -2723,10 +3194,16 @@ pub async fn handle_environment_settings_get(
     Path(session_id): Path<String>,
     State(state): State<CapsHandlerState>,
 ) -> Result<Response, StatusCode> {
-    info!("🌍 EnvironmentSettings GET request for session: {}", session_id);
-    
-    state.caps_manager.update_session_activity(&session_id).await;
-    
+    info!(
+        "🌍 EnvironmentSettings GET request for session: {}",
+        session_id
+    );
+
+    state
+        .caps_manager
+        .update_session_activity(&session_id)
+        .await;
+
     // Return default environment settings with the known UUID
     let environment_response = json!({
         "success": true,
@@ -2768,8 +3245,11 @@ pub async fn handle_environment_settings_get(
             }
         }
     });
-    
-    info!("🌍 Returning default environment settings for session: {} (LLSD XML)", session_id);
+
+    info!(
+        "🌍 Returning default environment settings for session: {} (LLSD XML)",
+        session_id
+    );
     json_response_to_llsd_xml(environment_response)
 }
 
@@ -2778,15 +3258,21 @@ pub async fn handle_environment_settings_post(
     State(state): State<CapsHandlerState>,
     body: Bytes,
 ) -> Result<Response, StatusCode> {
-    info!("🌍 EnvironmentSettings POST request for session: {}", session_id);
-    
-    state.caps_manager.update_session_activity(&session_id).await;
-    
+    info!(
+        "🌍 EnvironmentSettings POST request for session: {}",
+        session_id
+    );
+
+    state
+        .caps_manager
+        .update_session_activity(&session_id)
+        .await;
+
     if !body.is_empty() {
         let body_str = String::from_utf8_lossy(&body);
         info!("🌍 EnvironmentSettings update: {}", body_str);
     }
-    
+
     json_response_to_llsd_xml(json!({
         "success": true,
         "capability": "EnvironmentSettings",
@@ -2799,9 +3285,12 @@ pub async fn handle_ext_environment_get(
     State(state): State<CapsHandlerState>,
 ) -> Result<Response, StatusCode> {
     info!("🌍 ExtEnvironment GET request for session: {}", session_id);
-    
-    state.caps_manager.update_session_activity(&session_id).await;
-    
+
+    state
+        .caps_manager
+        .update_session_activity(&session_id)
+        .await;
+
     // Return extended environment data
     let ext_environment_response = json!({
         "success": true,
@@ -2823,8 +3312,11 @@ pub async fn handle_ext_environment_get(
             }
         }
     });
-    
-    info!("🌍 Returning extended environment data for session: {} (LLSD XML)", session_id);
+
+    info!(
+        "🌍 Returning extended environment data for session: {} (LLSD XML)",
+        session_id
+    );
     json_response_to_llsd_xml(ext_environment_response)
 }
 
@@ -2835,7 +3327,10 @@ pub async fn handle_ext_environment_post(
 ) -> Result<Response, StatusCode> {
     info!("🌍 ExtEnvironment POST request for session: {}", session_id);
 
-    state.caps_manager.update_session_activity(&session_id).await;
+    state
+        .caps_manager
+        .update_session_activity(&session_id)
+        .await;
 
     if !body.is_empty() {
         let body_str = String::from_utf8_lossy(&body);
@@ -2854,13 +3349,22 @@ pub async fn handle_upload_baked_texture(
     State(state): State<CapsHandlerState>,
     body: Bytes,
 ) -> Result<Response, StatusCode> {
-    info!("🎨 UploadBakedTexture POST request for session: {} ({} bytes)", session_id, body.len());
+    info!(
+        "🎨 UploadBakedTexture POST request for session: {} ({} bytes)",
+        session_id,
+        body.len()
+    );
 
-    state.caps_manager.update_session_activity(&session_id).await;
+    state
+        .caps_manager
+        .update_session_activity(&session_id)
+        .await;
 
     let uploader_uuid = uuid::Uuid::new_v4().to_string();
-    let uploader_url = format!("{}/cap/{}/BakedTextureUpload/{}",
-        state.caps_manager.base_url, session_id, uploader_uuid);
+    let uploader_url = format!(
+        "{}/cap/{}/BakedTextureUpload/{}",
+        state.caps_manager.base_url, session_id, uploader_uuid
+    );
 
     info!("🎨 Created baked texture uploader URL: {}", uploader_url);
 
@@ -2877,14 +3381,23 @@ pub async fn handle_baked_texture_data(
     State(state): State<CapsHandlerState>,
     body: Bytes,
 ) -> Result<Response, StatusCode> {
-    state.caps_manager.update_session_activity(&session_id).await;
+    state
+        .caps_manager
+        .update_session_activity(&session_id)
+        .await;
 
     let new_asset_id = uuid::Uuid::new_v4();
 
     let min_bake_size = crate::avatar::factory::MIN_BAKE_TEXTURE_SIZE;
     if !body.is_empty() {
-        state.caps_manager.store_baked_texture(new_asset_id, body.to_vec());
-        info!("Baked texture {} stored in memory cache ({} bytes)", new_asset_id, body.len());
+        state
+            .caps_manager
+            .store_baked_texture(new_asset_id, body.to_vec());
+        info!(
+            "Baked texture {} stored in memory cache ({} bytes)",
+            new_asset_id,
+            body.len()
+        );
 
         if body.len() >= min_bake_size {
             let texture_data = body.to_vec();
@@ -2912,11 +3425,18 @@ pub async fn handle_baked_texture_data(
                 }
             });
         } else {
-            info!("Baked texture {} too small ({} bytes < {}) — memory-only, not persisting to DB",
-                  new_asset_id, body.len(), min_bake_size);
+            info!(
+                "Baked texture {} too small ({} bytes < {}) — memory-only, not persisting to DB",
+                new_asset_id,
+                body.len(),
+                min_bake_size
+            );
         }
     } else {
-        warn!("🎨 Empty baked texture upload received for session: {}", session_id);
+        warn!(
+            "🎨 Empty baked texture upload received for session: {}",
+            session_id
+        );
     }
 
     if body.len() >= min_bake_size {
@@ -2946,7 +3466,10 @@ pub async fn handle_get_mesh(
 ) -> Result<Response, StatusCode> {
     use crate::opensim_compatibility::library_assets::get_global_library_manager;
 
-    state.caps_manager.update_session_activity(&session_id).await;
+    state
+        .caps_manager
+        .update_session_activity(&session_id)
+        .await;
 
     let mesh_id = match params.get("mesh_id") {
         Some(id) => id.clone(),
@@ -2966,14 +3489,15 @@ pub async fn handle_get_mesh(
 
     let data: Option<Vec<u8>> = {
         let fetch_result = if let Some(ref fetcher) = state.asset_fetcher {
-            fetcher.fetch_asset_data_typed_pg(&mesh_uuid.to_string(), Some(49), &state.db_pool).await
+            fetcher
+                .fetch_asset_data_typed_pg(&mesh_uuid.to_string(), Some(49), &state.db_pool)
+                .await
         } else {
-            let row: Result<Option<Vec<u8>>, sqlx::Error> = sqlx::query_scalar(
-                "SELECT data FROM assets WHERE id = $1 AND assettype = 49"
-            )
-            .bind(mesh_uuid)
-            .fetch_optional(&*state.db_pool)
-            .await;
+            let row: Result<Option<Vec<u8>>, sqlx::Error> =
+                sqlx::query_scalar("SELECT data FROM assets WHERE id = $1 AND assettype = 49")
+                    .bind(mesh_uuid)
+                    .fetch_optional(&*state.db_pool)
+                    .await;
             row.map_err(|e| anyhow::anyhow!("{}", e))
         };
 
@@ -3016,17 +3540,30 @@ pub async fn handle_get_mesh(
                 let end = if parts[1].is_empty() {
                     total_len - 1
                 } else {
-                    parts[1].parse::<usize>().unwrap_or(total_len - 1).min(total_len - 1)
+                    parts[1]
+                        .parse::<usize>()
+                        .unwrap_or(total_len - 1)
+                        .min(total_len - 1)
                 };
 
                 if start < total_len && start <= end {
                     let slice = &data[start..=end];
-                    info!("GetMesh RANGE: {} bytes={}-{} total={} serving={} first_byte=0x{:02x}",
-                        mesh_id, start, end, total_len, slice.len(), first_byte);
+                    info!(
+                        "GetMesh RANGE: {} bytes={}-{} total={} serving={} first_byte=0x{:02x}",
+                        mesh_id,
+                        start,
+                        end,
+                        total_len,
+                        slice.len(),
+                        first_byte
+                    );
                     return Ok(Response::builder()
                         .status(206)
                         .header("Content-Type", "application/vnd.ll.mesh")
-                        .header("Content-Range", format!("bytes {}-{}/{}", start, end, total_len))
+                        .header(
+                            "Content-Range",
+                            format!("bytes {}-{}/{}", start, end, total_len),
+                        )
                         .header("Content-Length", slice.len().to_string())
                         .header("Accept-Ranges", "bytes")
                         .body(axum::body::Body::from(slice.to_vec()))
@@ -3036,7 +3573,10 @@ pub async fn handle_get_mesh(
         }
     }
 
-    info!("GetMesh FULL: {} total={} first_byte=0x{:02x}", mesh_id, total_len, first_byte);
+    info!(
+        "GetMesh FULL: {} total={} first_byte=0x{:02x}",
+        mesh_id, total_len, first_byte
+    );
     Ok(Response::builder()
         .status(200)
         .header("Content-Type", "application/vnd.ll.mesh")
@@ -3052,10 +3592,11 @@ pub async fn handle_viewer_asset(
     State(state): State<CapsHandlerState>,
     headers: axum::http::HeaderMap,
 ) -> Result<Response, StatusCode> {
-    use crate::opensim_compatibility::library_assets::get_global_library_manager;
     use crate::opensim_compatibility::avatar_data::get_body_part_data_by_uuid;
+    use crate::opensim_compatibility::library_assets::get_global_library_manager;
 
-    let range_request = headers.get("Range")
+    let range_request = headers
+        .get("Range")
         .and_then(|v| v.to_str().ok())
         .and_then(|s| s.strip_prefix("bytes="))
         .and_then(|range_str| {
@@ -3064,10 +3605,14 @@ pub async fn handle_viewer_asset(
                 let start = parts[0].parse::<usize>().ok()?;
                 let end_str = parts[1];
                 Some((start, end_str.to_string()))
-            } else { None }
+            } else {
+                None
+            }
         });
 
-    let range_debug = range_request.as_ref().map(|(s, e)| format!("bytes={}-{}", s, e));
+    let range_debug = range_request
+        .as_ref()
+        .map(|(s, e)| format!("bytes={}-{}", s, e));
     let build_range_response = |data: Vec<u8>, content_type: &str| -> Response {
         let total_len = data.len();
         let first_byte = if data.is_empty() { 0u8 } else { data[0] };
@@ -3075,16 +3620,30 @@ pub async fn handle_viewer_asset(
             let end = if end_str.is_empty() {
                 total_len.saturating_sub(1)
             } else {
-                end_str.parse::<usize>().unwrap_or(total_len - 1).min(total_len.saturating_sub(1))
+                end_str
+                    .parse::<usize>()
+                    .unwrap_or(total_len - 1)
+                    .min(total_len.saturating_sub(1))
             };
             if start < total_len && start <= end {
                 let slice = data[start..=end].to_vec();
-                info!("📦 RANGE {}: {}-{}/{} serving={} first=0x{:02x} ct={}",
-                    content_type, start, end, total_len, slice.len(), first_byte, content_type);
+                info!(
+                    "📦 RANGE {}: {}-{}/{} serving={} first=0x{:02x} ct={}",
+                    content_type,
+                    start,
+                    end,
+                    total_len,
+                    slice.len(),
+                    first_byte,
+                    content_type
+                );
                 return Response::builder()
                     .status(StatusCode::PARTIAL_CONTENT)
                     .header("Content-Type", content_type)
-                    .header("Content-Range", format!("bytes {}-{}/{}", start, end, total_len))
+                    .header(
+                        "Content-Range",
+                        format!("bytes {}-{}/{}", start, end, total_len),
+                    )
                     .header("Content-Length", slice.len().to_string())
                     .header("Accept-Ranges", "bytes")
                     .body(axum::body::Body::from(slice))
@@ -3092,7 +3651,10 @@ pub async fn handle_viewer_asset(
                     .into_response();
             }
         }
-        info!("📦 FULL {}: total={} first=0x{:02x} ct={}", content_type, total_len, first_byte, content_type);
+        info!(
+            "📦 FULL {}: total={} first=0x{:02x} ct={}",
+            content_type, total_len, first_byte, content_type
+        );
         Response::builder()
             .status(StatusCode::OK)
             .header("Content-Type", content_type)
@@ -3103,32 +3665,38 @@ pub async fn handle_viewer_asset(
             .into_response()
     };
 
-    info!("📦 ViewerAsset request for session: {} with params: {:?}", session_id, params);
+    info!(
+        "📦 ViewerAsset request for session: {} with params: {:?}",
+        session_id, params
+    );
 
-    state.caps_manager.update_session_activity(&session_id).await;
+    state
+        .caps_manager
+        .update_session_activity(&session_id)
+        .await;
 
     let query_param_names = [
-        "texture_id",      // AssetType.Texture (0)
-        "sound_id",        // AssetType.Sound (1)
-        "callcard_id",     // AssetType.CallingCard (2)
-        "landmark_id",     // AssetType.Landmark (3)
-        "clothing_id",     // AssetType.Clothing (5)
-        "object_id",       // AssetType.Object (6)
-        "notecard_id",     // AssetType.Notecard (7)
-        "script_id",       // AssetType.LSLText (10)
-        "lsltext_id",      // AssetType.LSLText (10)
-        "txtr_tga_id",     // AssetType.TextureTGA (12)
-        "bodypart_id",     // AssetType.Bodypart (13)
-        "img_tga_id",      // AssetType.ImageTGA (14)
-        "jpeg_id",         // AssetType.ImageJPEG (15)
-        "lslbyte_id",      // AssetType.LSLBytecode (16)
-        "snd_wav_id",      // AssetType.SoundWAV (17)
-        "animatn_id",      // AssetType.Animation (20)
-        "gesture_id",      // AssetType.Gesture (21)
-        "mesh_id",         // AssetType.Mesh (49)
-        "settings_id",     // AssetType.Settings (56)
-        "material_id",     // AssetType.Material (57)
-        "asset_id",        // Generic fallback
+        "texture_id",  // AssetType.Texture (0)
+        "sound_id",    // AssetType.Sound (1)
+        "callcard_id", // AssetType.CallingCard (2)
+        "landmark_id", // AssetType.Landmark (3)
+        "clothing_id", // AssetType.Clothing (5)
+        "object_id",   // AssetType.Object (6)
+        "notecard_id", // AssetType.Notecard (7)
+        "script_id",   // AssetType.LSLText (10)
+        "lsltext_id",  // AssetType.LSLText (10)
+        "txtr_tga_id", // AssetType.TextureTGA (12)
+        "bodypart_id", // AssetType.Bodypart (13)
+        "img_tga_id",  // AssetType.ImageTGA (14)
+        "jpeg_id",     // AssetType.ImageJPEG (15)
+        "lslbyte_id",  // AssetType.LSLBytecode (16)
+        "snd_wav_id",  // AssetType.SoundWAV (17)
+        "animatn_id",  // AssetType.Animation (20)
+        "gesture_id",  // AssetType.Gesture (21)
+        "mesh_id",     // AssetType.Mesh (49)
+        "settings_id", // AssetType.Settings (56)
+        "material_id", // AssetType.Material (57)
+        "asset_id",    // Generic fallback
     ];
 
     let mut asset_id_str: Option<&String> = None;
@@ -3147,14 +3715,20 @@ pub async fn handle_viewer_asset(
             Ok(uuid) => {
                 info!("📦 ViewerAsset: Found {} = {}", param_used, uuid);
                 uuid
-            },
+            }
             Err(_) => {
-                warn!("📦 ViewerAsset: Invalid asset UUID in {}: {}", param_used, id_str);
+                warn!(
+                    "📦 ViewerAsset: Invalid asset UUID in {}: {}",
+                    param_used, id_str
+                );
                 return Err(StatusCode::BAD_REQUEST);
             }
         },
         None => {
-            warn!("📦 ViewerAsset: No recognized asset parameter provided. Params: {:?}", params.keys().collect::<Vec<_>>());
+            warn!(
+                "📦 ViewerAsset: No recognized asset parameter provided. Params: {:?}",
+                params.keys().collect::<Vec<_>>()
+            );
             return Err(StatusCode::BAD_REQUEST);
         }
     };
@@ -3165,20 +3739,24 @@ pub async fn handle_viewer_asset(
         asset_type: i32,
     }
 
-    let result: Result<Option<AssetRow>, sqlx::Error> = sqlx::query_as(
-        "SELECT data, assettype as asset_type FROM assets WHERE id = $1"
-    )
-    .bind(asset_id)
-    .fetch_optional(&*state.db_pool)
-    .await;
+    let result: Result<Option<AssetRow>, sqlx::Error> =
+        sqlx::query_as("SELECT data, assettype as asset_type FROM assets WHERE id = $1")
+            .bind(asset_id)
+            .fetch_optional(&*state.db_pool)
+            .await;
 
     match result {
         Ok(Some(row)) if !row.data.is_empty() => {
             let content_type = get_asset_content_type(row.asset_type);
-            info!("📦 Serving asset {} from database (type={}, {} bytes)", asset_id, row.asset_type, row.data.len());
+            info!(
+                "📦 Serving asset {} from database (type={}, {} bytes)",
+                asset_id,
+                row.asset_type,
+                row.data.len()
+            );
             return Ok(build_range_response(row.data, content_type));
-        },
-        Ok(_) => {},
+        }
+        Ok(_) => {}
         Err(e) => {
             warn!("📦 Database error for asset {}: {}", asset_id, e);
         }
@@ -3189,19 +3767,32 @@ pub async fn handle_viewer_asset(
         if let Some(asset) = manager.get_asset(&asset_id) {
             if let Some(data) = manager.get_asset_data(&asset_id) {
                 let content_type = get_asset_content_type(asset.asset_type as i32);
-                info!("📦 Serving asset {} from library (type={}, {} bytes)", asset_id, asset.asset_type, data.len());
+                info!(
+                    "📦 Serving asset {} from library (type={}, {} bytes)",
+                    asset_id,
+                    asset.asset_type,
+                    data.len()
+                );
                 return Ok(build_range_response(data, content_type));
             }
         }
     }
 
     if let Some(data) = get_body_part_data_by_uuid(&asset_id).await {
-        info!("📦 Serving body part asset {} ({} bytes)", asset_id, data.len());
+        info!(
+            "📦 Serving body part asset {} ({} bytes)",
+            asset_id,
+            data.len()
+        );
         return Ok(build_range_response(data, "application/vnd.ll.bodypart"));
     }
 
     if let Some(data) = state.caps_manager.get_baked_texture(&asset_id) {
-        info!("📦 Serving texture {} from baked texture cache ({} bytes)", asset_id, data.len());
+        info!(
+            "📦 Serving texture {} from baked texture cache ({} bytes)",
+            asset_id,
+            data.len()
+        );
         return Ok(build_range_response(data, "image/x-j2c"));
     }
 
@@ -3215,7 +3806,10 @@ pub async fn handle_mesh_upload_flag(
 ) -> Result<Response, StatusCode> {
     info!("🔷 MeshUploadFlag request for session: {}", session_id);
 
-    state.caps_manager.update_session_activity(&session_id).await;
+    state
+        .caps_manager
+        .update_session_activity(&session_id)
+        .await;
 
     let mesh_upload_response = json!({
         "mesh_upload_status": "valid",
@@ -3239,9 +3833,15 @@ pub async fn handle_fetch_lib_descendents2(
     use crate::opensim_compatibility::library_assets::get_global_library_manager;
     use uuid::Uuid;
 
-    info!("📚 FetchLibDescendents2 request for session: {}", session_id);
+    info!(
+        "📚 FetchLibDescendents2 request for session: {}",
+        session_id
+    );
 
-    state.caps_manager.update_session_activity(&session_id).await;
+    state
+        .caps_manager
+        .update_session_activity(&session_id)
+        .await;
 
     // Parse folder requests from LLSD XML body
     let folder_requests = parse_fetch_inventory_request(&body);
@@ -3270,7 +3870,10 @@ pub async fn handle_fetch_lib_descendents2(
         let folder_id = match Uuid::parse_str(&req.folder_id) {
             Ok(id) => id,
             Err(_) => {
-                warn!("📚 FetchLibDescendents2: Invalid folder UUID: {}", req.folder_id);
+                warn!(
+                    "📚 FetchLibDescendents2: Invalid folder UUID: {}",
+                    req.folder_id
+                );
                 continue;
             }
         };
@@ -3280,54 +3883,64 @@ pub async fn handle_fetch_lib_descendents2(
         // Get folder descendants from library manager
         if let Some((subfolders, items)) = manager.get_folder_descendants(&folder_id) {
             // Build categories (subfolders) array
-            let categories: Vec<Value> = subfolders.iter().map(|f| {
-                json!({
-                    "category_id": f.folder_id.to_string(),
-                    "parent_id": if f.parent_folder_id.is_nil() {
-                        manager.get_library_root_folder_id().to_string()
-                    } else {
-                        f.parent_folder_id.to_string()
-                    },
-                    "name": f.name,
-                    "type_default": f.folder_type,
-                    "version": 1
+            let categories: Vec<Value> = subfolders
+                .iter()
+                .map(|f| {
+                    json!({
+                        "category_id": f.folder_id.to_string(),
+                        "parent_id": if f.parent_folder_id.is_nil() {
+                            manager.get_library_root_folder_id().to_string()
+                        } else {
+                            f.parent_folder_id.to_string()
+                        },
+                        "name": f.name,
+                        "type_default": f.folder_type,
+                        "version": 1
+                    })
                 })
-            }).collect();
+                .collect();
 
             // Build items array
-            let items_list: Vec<Value> = items.iter().map(|i| {
-                json!({
-                    "parent_id": i.folder_id.to_string(),
-                    "asset_id": i.asset_id.to_string(),
-                    "item_id": i.inventory_id.to_string(),
-                    "permissions": {
-                        "creator_id": lib_owner_id.clone(),
-                        "owner_id": lib_owner_id.clone(),
-                        "group_id": "00000000-0000-0000-0000-000000000000",
-                        "last_owner_id": lib_owner_id.clone(),
-                        "base_mask": 581639,      // Full perms for library items
-                        "owner_mask": 581639,
-                        "group_mask": 0,
-                        "everyone_mask": 581639,
-                        "next_owner_mask": 581639
-                    },
-                    "type": i.asset_type,
-                    "inv_type": i.inventory_type,
-                    "flags": i.flags,
-                    "name": i.name,
-                    "desc": i.description,
-                    "created_at": 0,
-                    "sale_info": {
-                        "sale_price": 0,
-                        "sale_type": 0
-                    }
+            let items_list: Vec<Value> = items
+                .iter()
+                .map(|i| {
+                    json!({
+                        "parent_id": i.folder_id.to_string(),
+                        "asset_id": i.asset_id.to_string(),
+                        "item_id": i.inventory_id.to_string(),
+                        "permissions": {
+                            "creator_id": lib_owner_id.clone(),
+                            "owner_id": lib_owner_id.clone(),
+                            "group_id": "00000000-0000-0000-0000-000000000000",
+                            "last_owner_id": lib_owner_id.clone(),
+                            "base_mask": 581639,      // Full perms for library items
+                            "owner_mask": 581639,
+                            "group_mask": 0,
+                            "everyone_mask": 581639,
+                            "next_owner_mask": 581639
+                        },
+                        "type": i.asset_type,
+                        "inv_type": i.inventory_type,
+                        "flags": i.flags,
+                        "name": i.name,
+                        "desc": i.description,
+                        "created_at": 0,
+                        "sale_info": {
+                            "sale_price": 0,
+                            "sale_type": 0
+                        }
+                    })
                 })
-            }).collect();
+                .collect();
 
             let descendents = categories.len() + items_list.len();
 
-            info!("📚 FetchLibDescendents2: Found {} categories, {} items for folder {}",
-                  categories.len(), items_list.len(), folder_id);
+            info!(
+                "📚 FetchLibDescendents2: Found {} categories, {} items for folder {}",
+                categories.len(),
+                items_list.len(),
+                folder_id
+            );
 
             folder_responses.push(json!({
                 "folder_id": folder_id.to_string(),
@@ -3339,7 +3952,10 @@ pub async fn handle_fetch_lib_descendents2(
                 "items": items_list
             }));
         } else {
-            warn!("📚 FetchLibDescendents2: Folder {} not found in library", folder_id);
+            warn!(
+                "📚 FetchLibDescendents2: Folder {} not found in library",
+                folder_id
+            );
         }
     }
 
@@ -3347,7 +3963,10 @@ pub async fn handle_fetch_lib_descendents2(
         "folders": folder_responses
     });
 
-    info!("📚 FetchLibDescendents2: Returning {} folder responses", folder_responses.len());
+    info!(
+        "📚 FetchLibDescendents2: Returning {} folder responses",
+        folder_responses.len()
+    );
     json_response_to_llsd_xml(response)
 }
 
@@ -3362,7 +3981,10 @@ pub async fn handle_fetch_lib2(
 
     info!("📚 FetchLib2 request for session: {}", session_id);
 
-    state.caps_manager.update_session_activity(&session_id).await;
+    state
+        .caps_manager
+        .update_session_activity(&session_id)
+        .await;
 
     // Parse item IDs from LLSD XML body (reuse FetchInventory2 parser)
     let item_ids = parse_fetch_inventory2_items(&body);
@@ -3397,7 +4019,10 @@ pub async fn handle_fetch_lib2(
         };
 
         if let Some(item) = manager.get_item(&item_id) {
-            info!("📚 FetchLib2: Found library item {} ({})", item.name, item_id);
+            info!(
+                "📚 FetchLib2: Found library item {} ({})",
+                item.name, item_id
+            );
 
             items_response.push(json!({
                 "parent_id": item.folder_id.to_string(),
@@ -3443,13 +4068,22 @@ pub async fn handle_provision_voice_account(
     State(state): State<CapsHandlerState>,
     body: String,
 ) -> Result<Response, StatusCode> {
-    info!("[Voice] ProvisionVoiceAccountRequest for session: {}", session_id);
-    state.caps_manager.update_session_activity(&session_id).await;
+    info!(
+        "[Voice] ProvisionVoiceAccountRequest for session: {}",
+        session_id
+    );
+    state
+        .caps_manager
+        .update_session_activity(&session_id)
+        .await;
 
-    let session = state.caps_manager.get_session(&session_id).await
+    let session = state
+        .caps_manager
+        .get_session(&session_id)
+        .await
         .ok_or(StatusCode::NOT_FOUND)?;
-    let agent_id = uuid::Uuid::parse_str(&session.agent_id)
-        .map_err(|_| StatusCode::INTERNAL_SERVER_ERROR)?;
+    let agent_id =
+        uuid::Uuid::parse_str(&session.agent_id).map_err(|_| StatusCode::INTERNAL_SERVER_ERROR)?;
 
     if body.contains("voice_server_type") && !body.contains("vivox") {
         let xml = "<llsd><undef /></llsd>";
@@ -3457,7 +4091,8 @@ pub async fn handle_provision_voice_account(
             StatusCode::OK,
             [(header::CONTENT_TYPE, "application/xml")],
             xml.to_string(),
-        ).into_response());
+        )
+            .into_response());
     }
 
     let voice = match &state.voice_module {
@@ -3468,21 +4103,22 @@ pub async fn handle_provision_voice_account(
                 StatusCode::OK,
                 [(header::CONTENT_TYPE, "application/xml")],
                 xml.to_string(),
-            ).into_response());
+            )
+                .into_response());
         }
     };
 
-    let xml = voice.provision_voice_account(agent_id)
-        .unwrap_or_else(|e| {
-            warn!("[Voice] Provision failed: {}", e);
-            "<llsd><undef /></llsd>".to_string()
-        });
+    let xml = voice.provision_voice_account(agent_id).unwrap_or_else(|e| {
+        warn!("[Voice] Provision failed: {}", e);
+        "<llsd><undef /></llsd>".to_string()
+    });
 
     Ok((
         StatusCode::OK,
         [(header::CONTENT_TYPE, "application/xml")],
         xml,
-    ).into_response())
+    )
+        .into_response())
 }
 
 pub async fn handle_parcel_voice_info(
@@ -3491,12 +4127,18 @@ pub async fn handle_parcel_voice_info(
     body: String,
 ) -> Result<Response, StatusCode> {
     info!("[Voice] ParcelVoiceInfoRequest for session: {}", session_id);
-    state.caps_manager.update_session_activity(&session_id).await;
+    state
+        .caps_manager
+        .update_session_activity(&session_id)
+        .await;
 
-    let session = state.caps_manager.get_session(&session_id).await
+    let session = state
+        .caps_manager
+        .get_session(&session_id)
+        .await
         .ok_or(StatusCode::NOT_FOUND)?;
-    let agent_id = uuid::Uuid::parse_str(&session.agent_id)
-        .map_err(|_| StatusCode::INTERNAL_SERVER_ERROR)?;
+    let agent_id =
+        uuid::Uuid::parse_str(&session.agent_id).map_err(|_| StatusCode::INTERNAL_SERVER_ERROR)?;
 
     let voice = match &state.voice_module {
         Some(v) if v.voice_enabled() => v,
@@ -3506,36 +4148,54 @@ pub async fn handle_parcel_voice_info(
                 StatusCode::OK,
                 [(header::CONTENT_TYPE, "application/xml")],
                 xml.to_string(),
-            ).into_response());
+            )
+                .into_response());
         }
     };
 
-    let (parcel_flags, parcel_uuid, parcel_local_id, parcel_name, region_name, region_uuid, estate_allow_voice) =
-        match get_parcel_info_for_agent(&state.db_pool, agent_id).await {
-            Some(info) => info,
-            None => {
-                let xml = "<llsd><undef /></llsd>";
-                return Ok((
-                    StatusCode::OK,
-                    [(header::CONTENT_TYPE, "application/xml")],
-                    xml.to_string(),
-                ).into_response());
-            }
-        };
+    let (
+        parcel_flags,
+        parcel_uuid,
+        parcel_local_id,
+        parcel_name,
+        region_name,
+        region_uuid,
+        estate_allow_voice,
+    ) = match get_parcel_info_for_agent(&state.db_pool, agent_id).await {
+        Some(info) => info,
+        None => {
+            let xml = "<llsd><undef /></llsd>";
+            return Ok((
+                StatusCode::OK,
+                [(header::CONTENT_TYPE, "application/xml")],
+                xml.to_string(),
+            )
+                .into_response());
+        }
+    };
 
-    let xml = voice.parcel_voice_info(
-        agent_id, parcel_flags, parcel_uuid, parcel_local_id,
-        &parcel_name, &region_name, region_uuid, estate_allow_voice,
-    ).unwrap_or_else(|e| {
-        warn!("[Voice] ParcelVoiceInfo failed: {}", e);
-        "<llsd><undef /></llsd>".to_string()
-    });
+    let xml = voice
+        .parcel_voice_info(
+            agent_id,
+            parcel_flags,
+            parcel_uuid,
+            parcel_local_id,
+            &parcel_name,
+            &region_name,
+            region_uuid,
+            estate_allow_voice,
+        )
+        .unwrap_or_else(|e| {
+            warn!("[Voice] ParcelVoiceInfo failed: {}", e);
+            "<llsd><undef /></llsd>".to_string()
+        });
 
     Ok((
         StatusCode::OK,
         [(header::CONTENT_TYPE, "application/xml")],
         xml,
-    ).into_response())
+    )
+        .into_response())
 }
 
 async fn get_parcel_info_for_agent(
@@ -3555,29 +4215,37 @@ async fn get_parcel_info_for_agent(
     let parcel_flags = row.3 as u32;
     let region_uuid = uuid::Uuid::parse_str(&row.4).unwrap_or(uuid::Uuid::nil());
 
-    let region_name = sqlx::query_scalar::<_, String>(
-        "SELECT \"regionName\" FROM regions WHERE uuid = $1"
-    )
-    .bind(region_uuid.to_string())
-    .fetch_optional(db_pool)
-    .await
-    .ok()
-    .flatten()
-    .unwrap_or_else(|| "Region".to_string());
+    let region_name =
+        sqlx::query_scalar::<_, String>("SELECT \"regionName\" FROM regions WHERE uuid = $1")
+            .bind(region_uuid.to_string())
+            .fetch_optional(db_pool)
+            .await
+            .ok()
+            .flatten()
+            .unwrap_or_else(|| "Region".to_string());
 
     let estate_allow_voice = sqlx::query_scalar::<_, i32>(
         "SELECT \"EstateSettings\".\"AllowVoice\" FROM estate_map \
          JOIN \"EstateSettings\" ON estate_map.\"EstateID\" = \"EstateSettings\".\"EstateID\" \
-         WHERE estate_map.\"RegionID\" = $1 LIMIT 1"
+         WHERE estate_map.\"RegionID\" = $1 LIMIT 1",
     )
     .bind(region_uuid.to_string())
     .fetch_optional(db_pool)
     .await
     .ok()
     .flatten()
-    .unwrap_or(1) != 0;
+    .unwrap_or(1)
+        != 0;
 
-    Some((parcel_flags, parcel_uuid, parcel_local_id, parcel_name, region_name, region_uuid, estate_allow_voice))
+    Some((
+        parcel_flags,
+        parcel_uuid,
+        parcel_local_id,
+        parcel_name,
+        region_name,
+        region_uuid,
+        estate_allow_voice,
+    ))
 }
 
 pub async fn handle_freeswitch_prelogin(
@@ -3585,10 +4253,20 @@ pub async fn handle_freeswitch_prelogin(
 ) -> Result<Response, StatusCode> {
     if let Some(ref voice) = state.voice_module {
         if let Some(xml) = voice.fs_handle_prelogin() {
-            return Ok((StatusCode::OK, [(header::CONTENT_TYPE, "application/xml")], xml).into_response());
+            return Ok((
+                StatusCode::OK,
+                [(header::CONTENT_TYPE, "application/xml")],
+                xml,
+            )
+                .into_response());
         }
     }
-    Ok((StatusCode::OK, [(header::CONTENT_TYPE, "application/xml")], "<VCConfiguration/>".to_string()).into_response())
+    Ok((
+        StatusCode::OK,
+        [(header::CONTENT_TYPE, "application/xml")],
+        "<VCConfiguration/>".to_string(),
+    )
+        .into_response())
 }
 
 pub async fn handle_freeswitch_signin(
@@ -3601,10 +4279,20 @@ pub async fn handle_freeswitch_signin(
 
     if let Some(ref voice) = state.voice_module {
         if let Some(xml) = voice.fs_handle_signin(&userid, &pwd) {
-            return Ok((StatusCode::OK, [(header::CONTENT_TYPE, "application/xml")], xml).into_response());
+            return Ok((
+                StatusCode::OK,
+                [(header::CONTENT_TYPE, "application/xml")],
+                xml,
+            )
+                .into_response());
         }
     }
-    Ok((StatusCode::OK, [(header::CONTENT_TYPE, "application/xml")], "<response><level0><status>FAIL</status></level0></response>".to_string()).into_response())
+    Ok((
+        StatusCode::OK,
+        [(header::CONTENT_TYPE, "application/xml")],
+        "<response><level0><status>FAIL</status></level0></response>".to_string(),
+    )
+        .into_response())
 }
 
 pub async fn handle_freeswitch_buddy(
@@ -3616,10 +4304,20 @@ pub async fn handle_freeswitch_buddy(
 
     if let Some(ref voice) = state.voice_module {
         if let Some(xml) = voice.fs_handle_buddy(&auth_token) {
-            return Ok((StatusCode::OK, [(header::CONTENT_TYPE, "application/xml")], xml).into_response());
+            return Ok((
+                StatusCode::OK,
+                [(header::CONTENT_TYPE, "application/xml")],
+                xml,
+            )
+                .into_response());
         }
     }
-    Ok((StatusCode::OK, [(header::CONTENT_TYPE, "application/xml")], "<response><level0><status>OK</status><body/></level0></response>".to_string()).into_response())
+    Ok((
+        StatusCode::OK,
+        [(header::CONTENT_TYPE, "application/xml")],
+        "<response><level0><status>OK</status><body/></level0></response>".to_string(),
+    )
+        .into_response())
 }
 
 pub async fn handle_freeswitch_watcher(
@@ -3631,10 +4329,20 @@ pub async fn handle_freeswitch_watcher(
 
     if let Some(ref voice) = state.voice_module {
         if let Some(xml) = voice.fs_handle_watcher(&auth_token) {
-            return Ok((StatusCode::OK, [(header::CONTENT_TYPE, "application/xml")], xml).into_response());
+            return Ok((
+                StatusCode::OK,
+                [(header::CONTENT_TYPE, "application/xml")],
+                xml,
+            )
+                .into_response());
         }
     }
-    Ok((StatusCode::OK, [(header::CONTENT_TYPE, "application/xml")], "<response><level0><status>OK</status><body/></level0></response>".to_string()).into_response())
+    Ok((
+        StatusCode::OK,
+        [(header::CONTENT_TYPE, "application/xml")],
+        "<response><level0><status>OK</status><body/></level0></response>".to_string(),
+    )
+        .into_response())
 }
 
 fn parse_form_params(body: &str) -> HashMap<String, String> {
@@ -3672,7 +4380,10 @@ pub async fn handle_get_object_cost(
 ) -> Result<Response, StatusCode> {
     use sqlx::Row;
 
-    state.caps_manager.update_session_activity(&session_id).await;
+    state
+        .caps_manager
+        .update_session_activity(&session_id)
+        .await;
 
     let body_str = String::from_utf8_lossy(&body);
     let object_ids = parse_llsd_uuid_array(&body_str);
@@ -3689,23 +4400,29 @@ pub async fn handle_get_object_cost(
             Err(_) => continue,
         };
 
-        let part_count: i64 = sqlx::query_scalar(
-            "SELECT COUNT(*) FROM prims WHERE scenegroupid = $1"
-        )
-        .bind(obj_uuid)
-        .fetch_one(&*state.db_pool)
-        .await
-        .unwrap_or(0);
+        let part_count: i64 =
+            sqlx::query_scalar("SELECT COUNT(*) FROM prims WHERE scenegroupid = $1")
+                .bind(obj_uuid)
+                .fetch_one(&*state.db_pool)
+                .await
+                .unwrap_or(0);
 
-        let count = if part_count > 0 { part_count as f64 } else { 1.0 };
+        let count = if part_count > 0 {
+            part_count as f64
+        } else {
+            1.0
+        };
 
-        result_map.insert(obj_id_str.clone(), json!({
-            "linked_set_resource_cost": count,
-            "resource_cost": 1.0,
-            "physics_cost": 1.0,
-            "linked_set_physics_cost": count,
-            "resource_limiting_type": "legacy"
-        }));
+        result_map.insert(
+            obj_id_str.clone(),
+            json!({
+                "linked_set_resource_cost": count,
+                "resource_cost": 1.0,
+                "physics_cost": 1.0,
+                "linked_set_physics_cost": count,
+                "resource_limiting_type": "legacy"
+            }),
+        );
     }
 
     json_response_to_llsd_xml(Value::Object(result_map))
@@ -3716,7 +4433,10 @@ pub async fn handle_get_object_physics_data(
     State(state): State<CapsHandlerState>,
     body: Bytes,
 ) -> Result<Response, StatusCode> {
-    state.caps_manager.update_session_activity(&session_id).await;
+    state
+        .caps_manager
+        .update_session_activity(&session_id)
+        .await;
 
     let body_str = String::from_utf8_lossy(&body);
     let object_ids = parse_llsd_uuid_array(&body_str);
@@ -3732,21 +4452,33 @@ pub async fn handle_get_object_physics_data(
         let (shape_type, density, friction, restitution, gravity_mod) =
             if let Some(ref scene_objects) = state.scene_objects {
                 let objects = scene_objects.read();
-                objects.values()
+                objects
+                    .values()
                     .find(|o| o.uuid == obj_uuid)
-                    .map(|o| (o.physics_shape_type, o.density, o.friction, o.restitution, o.gravity_modifier))
+                    .map(|o| {
+                        (
+                            o.physics_shape_type,
+                            o.density,
+                            o.friction,
+                            o.restitution,
+                            o.gravity_modifier,
+                        )
+                    })
                     .unwrap_or((0, 1000.0, 0.6, 0.5, 1.0))
             } else {
                 (0, 1000.0, 0.6, 0.5, 1.0)
             };
 
-        result_map.insert(obj_id_str.clone(), json!({
-            "PhysicsShapeType": shape_type,
-            "Density": density,
-            "Friction": friction,
-            "Restitution": restitution,
-            "GravityMultiplier": gravity_mod
-        }));
+        result_map.insert(
+            obj_id_str.clone(),
+            json!({
+                "PhysicsShapeType": shape_type,
+                "Density": density,
+                "Friction": friction,
+                "Restitution": restitution,
+                "GravityMultiplier": gravity_mod
+            }),
+        );
     }
 
     json_response_to_llsd_xml(Value::Object(result_map))
@@ -3759,7 +4491,10 @@ pub async fn handle_resource_cost_selected(
 ) -> Result<Response, StatusCode> {
     use sqlx::Row;
 
-    state.caps_manager.update_session_activity(&session_id).await;
+    state
+        .caps_manager
+        .update_session_activity(&session_id)
+        .await;
 
     let body_str = String::from_utf8_lossy(&body);
     let object_ids = parse_llsd_uuid_array(&body_str);
@@ -3774,15 +4509,18 @@ pub async fn handle_resource_cost_selected(
             Err(_) => continue,
         };
 
-        let part_count: i64 = sqlx::query_scalar(
-            "SELECT COUNT(*) FROM prims WHERE scenegroupid = $1"
-        )
-        .bind(obj_uuid)
-        .fetch_one(&*state.db_pool)
-        .await
-        .unwrap_or(1);
+        let part_count: i64 =
+            sqlx::query_scalar("SELECT COUNT(*) FROM prims WHERE scenegroupid = $1")
+                .bind(obj_uuid)
+                .fetch_one(&*state.db_pool)
+                .await
+                .unwrap_or(1);
 
-        let count = if part_count > 0 { part_count as f64 } else { 1.0 };
+        let count = if part_count > 0 {
+            part_count as f64
+        } else {
+            1.0
+        };
         total_physics += count;
         total_streaming += count;
         total_simulation += count * 0.5;
@@ -3803,7 +4541,10 @@ pub async fn handle_agent_profile(
     State(state): State<CapsHandlerState>,
 ) -> Result<Response, StatusCode> {
     let agent_id_str = params.get("agent_id").map(|s| s.as_str()).unwrap_or("");
-    info!("[CAPS] AgentProfile GET for agent={} session={}", agent_id_str, session_id);
+    info!(
+        "[CAPS] AgentProfile GET for agent={} session={}",
+        agent_id_str, session_id
+    );
     let agent_id = uuid::Uuid::parse_str(agent_id_str).unwrap_or_default();
     let mut about_text = String::new();
     let mut fl_about = String::new();
@@ -3886,15 +4627,22 @@ pub async fn handle_render_materials_post(
     State(state): State<CapsHandlerState>,
     body: Bytes,
 ) -> Result<Response, StatusCode> {
+    use base64::Engine;
     use flate2::write::ZlibEncoder;
     use flate2::Compression;
     use std::io::Write;
-    use base64::Engine;
 
-    state.caps_manager.update_session_activity(&session_id).await;
+    state
+        .caps_manager
+        .update_session_activity(&session_id)
+        .await;
 
     let body_str = String::from_utf8_lossy(&body);
-    info!("[CAPS] RenderMaterials POST session={} body_len={}", session_id, body_str.len());
+    info!(
+        "[CAPS] RenderMaterials POST session={} body_len={}",
+        session_id,
+        body_str.len()
+    );
 
     let requested_ids = parse_llsd_uuid_array(&body_str);
 
@@ -3915,15 +4663,21 @@ pub async fn handle_render_materials_post(
             Err(_) => continue,
         };
         let mat_result = if let Some(ref fetcher) = state.asset_fetcher {
-            fetcher.fetch_asset_data_typed_pg(&mat_uuid.to_string(), Some(57), &state.db_pool).await.ok().flatten()
-        } else {
-            sqlx::query_as::<_, (Vec<u8>,)>("SELECT data FROM assets WHERE id = $1::uuid AND assettype = 57")
-                .bind(mat_uuid)
-                .fetch_optional(state.db_pool.as_ref())
+            fetcher
+                .fetch_asset_data_typed_pg(&mat_uuid.to_string(), Some(57), &state.db_pool)
                 .await
                 .ok()
                 .flatten()
-                .map(|(d,)| d)
+        } else {
+            sqlx::query_as::<_, (Vec<u8>,)>(
+                "SELECT data FROM assets WHERE id = $1::uuid AND assettype = 57",
+            )
+            .bind(mat_uuid)
+            .fetch_optional(state.db_pool.as_ref())
+            .await
+            .ok()
+            .flatten()
+            .map(|(d,)| d)
         };
         {
             if let Some(data) = mat_result {
@@ -3939,9 +4693,16 @@ pub async fn handle_render_materials_post(
     }
     llsd_inner.push_str("</array>");
 
-    info!("[CAPS] RenderMaterials POST: found {}/{} requested materials", found, requested_ids.len());
+    info!(
+        "[CAPS] RenderMaterials POST: found {}/{} requested materials",
+        found,
+        requested_ids.len()
+    );
 
-    let llsd_xml = format!("<?xml version=\"1.0\" encoding=\"UTF-8\"?><llsd>{}</llsd>", llsd_inner);
+    let llsd_xml = format!(
+        "<?xml version=\"1.0\" encoding=\"UTF-8\"?><llsd>{}</llsd>",
+        llsd_inner
+    );
 
     let mut encoder = ZlibEncoder::new(Vec::new(), Compression::default());
     let _ = encoder.write_all(llsd_xml.as_bytes());
@@ -4006,33 +4767,37 @@ pub async fn handle_land_resources(
     let region_id = std::env::var("OPENSIM_REGION_UUID").unwrap_or_default();
     let mut parcels = Vec::new();
     if !region_id.is_empty() {
-    if let Ok(rows) = sqlx::query(
-        r#"SELECT locallandid, name, area, uuid FROM land WHERE regionuuid = $1::uuid"#
-    )
-    .bind(&region_id)
-    .fetch_all(pool)
-    .await {
-        for row in &rows {
-            let local_id: i32 = row.get("locallandid");
-            let name: String = row.get("name");
-            let area: i32 = row.get("area");
-            let parcel_id: String = row.try_get("uuid").unwrap_or_default();
-            parcels.push(json!({
-                "LocalID": local_id,
-                "Name": name,
-                "Area": area,
-                "ParcelID": parcel_id,
-                "Scripts": 0,
-                "ScriptMemory": 0,
-                "ScriptURLs": 0,
-                "Objects": 0,
-                "Prims": 0
-            }));
+        if let Ok(rows) = sqlx::query(
+            r#"SELECT locallandid, name, area, uuid FROM land WHERE regionuuid = $1::uuid"#,
+        )
+        .bind(&region_id)
+        .fetch_all(pool)
+        .await
+        {
+            for row in &rows {
+                let local_id: i32 = row.get("locallandid");
+                let name: String = row.get("name");
+                let area: i32 = row.get("area");
+                let parcel_id: String = row.try_get("uuid").unwrap_or_default();
+                parcels.push(json!({
+                    "LocalID": local_id,
+                    "Name": name,
+                    "Area": area,
+                    "ParcelID": parcel_id,
+                    "Scripts": 0,
+                    "ScriptMemory": 0,
+                    "ScriptURLs": 0,
+                    "Objects": 0,
+                    "Prims": 0
+                }));
+            }
         }
     }
-    }
 
-    let total_area: i64 = parcels.iter().map(|p| p["Area"].as_i64().unwrap_or(0)).sum();
+    let total_area: i64 = parcels
+        .iter()
+        .map(|p| p["Area"].as_i64().unwrap_or(0))
+        .sum();
 
     json_response_to_llsd_xml(json!({
         "ScriptResourceSummary": {
@@ -4058,7 +4823,11 @@ pub async fn handle_script_resource_summary(
     State(_state): State<CapsHandlerState>,
     body: Bytes,
 ) -> Result<Response, StatusCode> {
-    info!("[CAPS] ScriptResourceSummary POST session={} ({} bytes)", session_id, body.len());
+    info!(
+        "[CAPS] ScriptResourceSummary POST session={} ({} bytes)",
+        session_id,
+        body.len()
+    );
 
     json_response_to_llsd_xml(json!({
         "summary": {
@@ -4079,7 +4848,11 @@ pub async fn handle_script_resource_details(
     State(_state): State<CapsHandlerState>,
     body: Bytes,
 ) -> Result<Response, StatusCode> {
-    info!("[CAPS] ScriptResourceDetails POST session={} ({} bytes)", session_id, body.len());
+    info!(
+        "[CAPS] ScriptResourceDetails POST session={} ({} bytes)",
+        session_id,
+        body.len()
+    );
 
     json_response_to_llsd_xml(json!({
         "parcels": []
@@ -4092,7 +4865,10 @@ pub async fn handle_avatar_picker_search(
     State(state): State<CapsHandlerState>,
 ) -> Result<Response, StatusCode> {
     let query = params.get("names").map(|s| s.as_str()).unwrap_or("");
-    info!("[CAPS] AvatarPickerSearch query='{}' session={}", query, session_id);
+    info!(
+        "[CAPS] AvatarPickerSearch query='{}' session={}",
+        query, session_id
+    );
     let mut agents = Vec::new();
     if !query.is_empty() {
         let pool = &*state.db_pool;
@@ -4156,7 +4932,10 @@ pub async fn handle_copy_inventory_from_notecard(
     State(_state): State<CapsHandlerState>,
     _body: Bytes,
 ) -> Result<Response, StatusCode> {
-    info!("[CAPS] CopyInventoryFromNotecard POST session={}", session_id);
+    info!(
+        "[CAPS] CopyInventoryFromNotecard POST session={}",
+        session_id
+    );
     json_response_to_llsd_xml(json!({"result": "success"}))
 }
 
@@ -4165,7 +4944,10 @@ pub async fn handle_update_gesture_agent_inventory(
     State(_state): State<CapsHandlerState>,
     _body: Bytes,
 ) -> Result<Response, StatusCode> {
-    info!("[CAPS] UpdateGestureAgentInventory POST session={}", session_id);
+    info!(
+        "[CAPS] UpdateGestureAgentInventory POST session={}",
+        session_id
+    );
     json_response_to_llsd_xml(json!({"result": "success"}))
 }
 
@@ -4174,7 +4956,10 @@ pub async fn handle_update_gesture_task_inventory(
     State(_state): State<CapsHandlerState>,
     _body: Bytes,
 ) -> Result<Response, StatusCode> {
-    info!("[CAPS] UpdateGestureTaskInventory POST session={}", session_id);
+    info!(
+        "[CAPS] UpdateGestureTaskInventory POST session={}",
+        session_id
+    );
     json_response_to_llsd_xml(json!({"result": "success"}))
 }
 
@@ -4193,10 +4978,17 @@ pub async fn handle_modify_material_params(
     State(state): State<CapsHandlerState>,
     body: Bytes,
 ) -> Result<Response, StatusCode> {
-    state.caps_manager.update_session_activity(&session_id).await;
+    state
+        .caps_manager
+        .update_session_activity(&session_id)
+        .await;
 
     let body_str = String::from_utf8_lossy(&body);
-    info!("[CAPS] ModifyMaterialParams POST session={} body_len={}", session_id, body_str.len());
+    info!(
+        "[CAPS] ModifyMaterialParams POST session={} body_len={}",
+        session_id,
+        body_str.len()
+    );
 
     let scene_objects = match &state.scene_objects {
         Some(so) => so.clone(),
@@ -4249,7 +5041,10 @@ pub async fn handle_modify_material_params(
     let object_uuid = match uuid::Uuid::parse_str(&object_uuid_str) {
         Ok(u) => u,
         Err(_) => {
-            warn!("[CAPS] ModifyMaterialParams: invalid object_id '{}'", object_uuid_str);
+            warn!(
+                "[CAPS] ModifyMaterialParams: invalid object_id '{}'",
+                object_uuid_str
+            );
             return json_response_to_llsd_xml(json!({"error": "invalid object_id"}));
         }
     };
@@ -4259,7 +5054,12 @@ pub async fn handle_modify_material_params(
         return json_response_to_llsd_xml(json!({"error": "missing side"}));
     }
 
-    info!("[CAPS] ModifyMaterialParams: object={} side={} gltf_len={}", object_uuid, side, gltf_json.len());
+    info!(
+        "[CAPS] ModifyMaterialParams: object={} side={} gltf_len={}",
+        object_uuid,
+        side,
+        gltf_json.len()
+    );
 
     let mut found_local_id = None;
     let mut updated_overrides: Vec<(u8, String)> = Vec::new();
@@ -4273,7 +5073,11 @@ pub async fn handle_modify_material_params(
                 if gltf_json.is_empty() {
                     obj.mat_overrides.retain(|&(idx, _)| idx != side as u8);
                 } else {
-                    if let Some(entry) = obj.mat_overrides.iter_mut().find(|(idx, _)| *idx == side as u8) {
+                    if let Some(entry) = obj
+                        .mat_overrides
+                        .iter_mut()
+                        .find(|(idx, _)| *idx == side as u8)
+                    {
                         entry.1 = gltf_json.clone();
                     } else {
                         obj.mat_overrides.push((side as u8, gltf_json.clone()));
@@ -4286,7 +5090,10 @@ pub async fn handle_modify_material_params(
     }
 
     if found_local_id.is_none() {
-        warn!("[CAPS] ModifyMaterialParams: object {} not found in scene", object_uuid);
+        warn!(
+            "[CAPS] ModifyMaterialParams: object {} not found in scene",
+            object_uuid
+        );
         return json_response_to_llsd_xml(json!({"error": "object not found"}));
     }
 
@@ -4300,9 +5107,16 @@ pub async fn handle_modify_material_params(
             .execute(db_pool.as_ref())
             .await
         {
-            warn!("[CAPS] ModifyMaterialParams: DB persist failed for {}: {}", obj_uuid, e);
+            warn!(
+                "[CAPS] ModifyMaterialParams: DB persist failed for {}: {}",
+                obj_uuid, e
+            );
         } else {
-            info!("[CAPS] ModifyMaterialParams: persisted {} bytes for object {}", bin.len(), obj_uuid);
+            info!(
+                "[CAPS] ModifyMaterialParams: persisted {} bytes for object {}",
+                bin.len(),
+                obj_uuid
+            );
         }
     });
 

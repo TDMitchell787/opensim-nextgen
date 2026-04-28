@@ -1,5 +1,5 @@
 //! Notification System for OpenSim Next Social Features
-//! 
+//!
 //! Provides comprehensive notification management including real-time notifications,
 //! push notifications, email notifications, and notification preferences.
 

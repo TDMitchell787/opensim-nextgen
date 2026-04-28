@@ -2,8 +2,8 @@ use anyhow::{bail, Result};
 use std::path::Path;
 use tracing::info;
 
-use super::encoder::{MeshFace, MeshGeometry};
 use super::collada_skin;
+use super::encoder::{MeshFace, MeshGeometry};
 
 pub fn import_file(path: &str) -> Result<MeshGeometry> {
     let file_path = Path::new(path);
@@ -11,7 +11,8 @@ pub fn import_file(path: &str) -> Result<MeshGeometry> {
         bail!("File not found: {}", path);
     }
 
-    let ext = file_path.extension()
+    let ext = file_path
+        .extension()
         .and_then(|e| e.to_str())
         .map(|e| e.to_lowercase())
         .unwrap_or_default();
@@ -19,14 +20,15 @@ pub fn import_file(path: &str) -> Result<MeshGeometry> {
     match ext.as_str() {
         "obj" => load_obj_file(path),
         "stl" => load_stl_file(path),
-        "dae" => {
-            match import_dae_with_skin(path) {
-                Ok(geom) => Ok(geom),
-                Err(_) => import_dae_geometry_only(path),
-            }
-        }
+        "dae" => match import_dae_with_skin(path) {
+            Ok(geom) => Ok(geom),
+            Err(_) => import_dae_geometry_only(path),
+        },
         "gltf" | "glb" | "ply" | "off" | "3dxml" => load_via_glc(path),
-        _ => bail!("Unsupported format: .{} (supported: obj, stl, dae, gltf, glb, ply, off, 3dxml)", ext),
+        _ => bail!(
+            "Unsupported format: .{} (supported: obj, stl, dae, gltf, glb, ply, off, 3dxml)",
+            ext
+        ),
     }
 }
 
@@ -54,7 +56,10 @@ pub fn import_obj_from_string(obj_data: &str) -> Result<MeshGeometry> {
     }
 
     info!("[GLC_BRIDGE] Parsed OBJ string: {} faces", faces.len());
-    Ok(MeshGeometry { faces, skin_info: None })
+    Ok(MeshGeometry {
+        faces,
+        skin_info: None,
+    })
 }
 
 fn load_obj_file(path: &str) -> Result<MeshGeometry> {
@@ -78,9 +83,16 @@ fn load_obj_file(path: &str) -> Result<MeshGeometry> {
         faces.push(face);
     }
 
-    info!("[GLC_BRIDGE] Loaded OBJ '{}': {} model(s), {} total faces",
-        path, models.len(), faces.len());
-    Ok(MeshGeometry { faces, skin_info: None })
+    info!(
+        "[GLC_BRIDGE] Loaded OBJ '{}': {} model(s), {} total faces",
+        path,
+        models.len(),
+        faces.len()
+    );
+    Ok(MeshGeometry {
+        faces,
+        skin_info: None,
+    })
 }
 
 fn tobj_mesh_to_face(mesh: &tobj::Mesh) -> Result<MeshFace> {
@@ -89,13 +101,15 @@ fn tobj_mesh_to_face(mesh: &tobj::Mesh) -> Result<MeshFace> {
         bail!("Mesh has no vertices");
     }
 
-    let positions: Vec<[f32; 3]> = mesh.positions
+    let positions: Vec<[f32; 3]> = mesh
+        .positions
         .chunks_exact(3)
         .map(|c| [c[0], c[1], c[2]])
         .collect();
 
     let normals: Vec<[f32; 3]> = if mesh.normals.len() == mesh.positions.len() {
-        mesh.normals.chunks_exact(3)
+        mesh.normals
+            .chunks_exact(3)
             .map(|c| [c[0], c[1], c[2]])
             .collect()
     } else {
@@ -103,7 +117,8 @@ fn tobj_mesh_to_face(mesh: &tobj::Mesh) -> Result<MeshFace> {
     };
 
     let tex_coords: Vec<[f32; 2]> = if mesh.texcoords.len() / 2 == vertex_count {
-        mesh.texcoords.chunks_exact(2)
+        mesh.texcoords
+            .chunks_exact(2)
             .map(|c| [c[0], c[1]])
             .collect()
     } else {
@@ -129,9 +144,7 @@ fn load_stl_file(path: &str) -> Result<MeshGeometry> {
         bail!("STL file has no vertices: {}", path);
     }
 
-    let positions: Vec<[f32; 3]> = stl.vertices.iter()
-        .map(|v| [v[0], v[1], v[2]])
-        .collect();
+    let positions: Vec<[f32; 3]> = stl.vertices.iter().map(|v| [v[0], v[1], v[2]]).collect();
 
     let mut indices = Vec::new();
     let mut normals_per_vertex = vec![[0.0f32; 3]; vertex_count];
@@ -149,8 +162,12 @@ fn load_stl_file(path: &str) -> Result<MeshGeometry> {
 
     let tex_coords = generate_planar_uvs(&positions);
 
-    info!("[GLC_BRIDGE] Loaded STL '{}': {} vertices, {} faces",
-        path, vertex_count, stl.faces.len());
+    info!(
+        "[GLC_BRIDGE] Loaded STL '{}': {} vertices, {} faces",
+        path,
+        vertex_count,
+        stl.faces.len()
+    );
 
     Ok(MeshGeometry {
         faces: vec![MeshFace {
@@ -178,7 +195,9 @@ fn load_via_glc(path: &str) -> Result<MeshGeometry> {
         if mesh.positions.is_empty() {
             continue;
         }
-        let ranges: Vec<(u32, u32)> = mesh.material_ranges.iter()
+        let ranges: Vec<(u32, u32)> = mesh
+            .material_ranges
+            .iter()
             .map(|r| (r.start, r.count))
             .collect();
         let geom = flat_vecs_to_geometry(
@@ -195,9 +214,16 @@ fn load_via_glc(path: &str) -> Result<MeshGeometry> {
         bail!("GLC model has no geometry data: {}", path);
     }
 
-    info!("[GLC_BRIDGE] Loaded via GLC '{}': {} meshes, {} faces",
-        path, world.meshes.len(), all_faces.len());
-    Ok(MeshGeometry { faces: all_faces, skin_info: None })
+    info!(
+        "[GLC_BRIDGE] Loaded via GLC '{}': {} meshes, {} faces",
+        path,
+        world.meshes.len(),
+        all_faces.len()
+    );
+    Ok(MeshGeometry {
+        faces: all_faces,
+        skin_info: None,
+    })
 }
 
 pub fn generate_flat_normals(positions: &[[f32; 3]], indices: &[u32]) -> Vec<[f32; 3]> {
@@ -238,14 +264,23 @@ pub fn generate_planar_uvs(positions: &[[f32; 3]]) -> Vec<[f32; 2]> {
     let mut min_y = f32::MAX;
     let mut max_y = f32::MIN;
     for p in positions {
-        if p[0] < min_x { min_x = p[0]; }
-        if p[0] > max_x { max_x = p[0]; }
-        if p[1] < min_y { min_y = p[1]; }
-        if p[1] > max_y { max_y = p[1]; }
+        if p[0] < min_x {
+            min_x = p[0];
+        }
+        if p[0] > max_x {
+            max_x = p[0];
+        }
+        if p[1] < min_y {
+            min_y = p[1];
+        }
+        if p[1] > max_y {
+            max_y = p[1];
+        }
     }
     let range_x = (max_x - min_x).max(1e-6);
     let range_y = (max_y - min_y).max(1e-6);
-    positions.iter()
+    positions
+        .iter()
         .map(|p| [(p[0] - min_x) / range_x, (p[1] - min_y) / range_y])
         .collect()
 }
@@ -257,20 +292,20 @@ pub fn flat_vecs_to_geometry(
     indices: &[u32],
     material_ranges: &[(u32, u32)],
 ) -> MeshGeometry {
-    let pos_arr: Vec<[f32; 3]> = positions.chunks_exact(3)
+    let pos_arr: Vec<[f32; 3]> = positions
+        .chunks_exact(3)
         .map(|c| [c[0], c[1], c[2]])
         .collect();
     let norm_arr: Vec<[f32; 3]> = if normals.len() == positions.len() {
-        normals.chunks_exact(3)
+        normals
+            .chunks_exact(3)
             .map(|c| [c[0], c[1], c[2]])
             .collect()
     } else {
         generate_flat_normals(&pos_arr, indices)
     };
     let tc_arr: Vec<[f32; 2]> = if tex_coords.len() / 2 == pos_arr.len() {
-        tex_coords.chunks_exact(2)
-            .map(|c| [c[0], c[1]])
-            .collect()
+        tex_coords.chunks_exact(2).map(|c| [c[0], c[1]]).collect()
     } else {
         generate_planar_uvs(&pos_arr)
     };
@@ -321,25 +356,41 @@ pub fn flat_vecs_to_geometry(
         });
     }
 
-    MeshGeometry { faces, skin_info: None }
+    MeshGeometry {
+        faces,
+        skin_info: None,
+    }
 }
 
 pub fn import_dae_with_skin(path: &str) -> Result<MeshGeometry> {
     let dae_xml = std::fs::read_to_string(path)?;
 
     let y_up = super::collada_geometry::is_collada_y_up(&dae_xml);
-    info!("[GLC_BRIDGE] COLLADA up_axis: {}", if y_up { "Y_UP" } else { "Z_UP" });
+    info!(
+        "[GLC_BRIDGE] COLLADA up_axis: {}",
+        if y_up { "Y_UP" } else { "Z_UP" }
+    );
 
     let skin_data = collada_skin::parse_collada_skin(&dae_xml)?;
-    let (skin_info, all_vertex_weights) = collada_skin::to_mesh_skin_info_with_axis(&skin_data, y_up);
+    let (skin_info, all_vertex_weights) =
+        collada_skin::to_mesh_skin_info_with_axis(&skin_data, y_up);
 
     let mut geom = match super::collada_geometry::parse_collada_geometry_with_axis(&dae_xml, y_up) {
         Ok(faces) => {
-            info!("[GLC_BRIDGE] Native Collada parser: {} face(s)", faces.len());
-            MeshGeometry { faces, skin_info: None }
+            info!(
+                "[GLC_BRIDGE] Native Collada parser: {} face(s)",
+                faces.len()
+            );
+            MeshGeometry {
+                faces,
+                skin_info: None,
+            }
         }
         Err(e) => {
-            info!("[GLC_BRIDGE] Native Collada parse failed ({}), falling back to GLC", e);
+            info!(
+                "[GLC_BRIDGE] Native Collada parse failed ({}), falling back to GLC",
+                e
+            );
             load_via_glc(path)?
         }
     };
@@ -347,7 +398,8 @@ pub fn import_dae_with_skin(path: &str) -> Result<MeshGeometry> {
     if !all_vertex_weights.is_empty() {
         for face in &mut geom.faces {
             if let Some(ref pos_indices) = face.original_position_indices {
-                let face_weights: Vec<super::encoder::VertexWeights> = pos_indices.iter()
+                let face_weights: Vec<super::encoder::VertexWeights> = pos_indices
+                    .iter()
                     .map(|&pi| {
                         if pi < all_vertex_weights.len() {
                             all_vertex_weights[pi].clone()
@@ -371,8 +423,12 @@ pub fn import_dae_with_skin(path: &str) -> Result<MeshGeometry> {
 
     geom.skin_info = Some(skin_info);
 
-    info!("[GLC_BRIDGE] Loaded DAE with skin '{}': {} faces, {} joints",
-        path, geom.faces.len(), geom.skin_info.as_ref().map_or(0, |s| s.joint_names.len()));
+    info!(
+        "[GLC_BRIDGE] Loaded DAE with skin '{}': {} faces, {} joints",
+        path,
+        geom.faces.len(),
+        geom.skin_info.as_ref().map_or(0, |s| s.joint_names.len())
+    );
 
     Ok(geom)
 }
@@ -380,13 +436,23 @@ pub fn import_dae_with_skin(path: &str) -> Result<MeshGeometry> {
 pub fn import_dae_geometry_only(path: &str) -> Result<MeshGeometry> {
     let dae_xml = std::fs::read_to_string(path)?;
     let y_up = super::collada_geometry::is_collada_y_up(&dae_xml);
-    info!("[GLC_BRIDGE] COLLADA geometry-only import, up_axis: {}", if y_up { "Y_UP" } else { "Z_UP" });
+    info!(
+        "[GLC_BRIDGE] COLLADA geometry-only import, up_axis: {}",
+        if y_up { "Y_UP" } else { "Z_UP" }
+    );
 
     let faces = super::collada_geometry::parse_collada_geometry_with_axis(&dae_xml, y_up)?;
-    info!("[GLC_BRIDGE] Geometry-only DAE '{}': {} faces, {} verts",
-        path, faces.len(), faces.iter().map(|f| f.positions.len()).sum::<usize>());
+    info!(
+        "[GLC_BRIDGE] Geometry-only DAE '{}': {} faces, {} verts",
+        path,
+        faces.len(),
+        faces.iter().map(|f| f.positions.len()).sum::<usize>()
+    );
 
-    Ok(MeshGeometry { faces, skin_info: None })
+    Ok(MeshGeometry {
+        faces,
+        skin_info: None,
+    })
 }
 
 pub fn import_ruth2_part(part_name: &str) -> Result<MeshGeometry> {
@@ -395,8 +461,13 @@ pub fn import_ruth2_part(part_name: &str) -> Result<MeshGeometry> {
     let geom = import_dae_with_skin(&path)?;
     let total_verts: usize = geom.faces.iter().map(|f| f.positions.len()).sum();
     let joint_count = geom.skin_info.as_ref().map_or(0, |s| s.joint_names.len());
-    info!("[RUTH2] Imported '{}': {} faces, {} vertices, {} joints",
-        part_name, geom.faces.len(), total_verts, joint_count);
+    info!(
+        "[RUTH2] Imported '{}': {} faces, {} vertices, {} joints",
+        part_name,
+        geom.faces.len(),
+        total_verts,
+        joint_count
+    );
     Ok(geom)
 }
 
@@ -410,7 +481,9 @@ pub fn import_ruth2_body_set(parts: &[&str]) -> Result<Vec<(String, MeshGeometry
     Ok(results)
 }
 
-pub fn import_multi_lod_dae(paths: &[std::path::PathBuf]) -> Result<super::encoder::MultiLodGeometry> {
+pub fn import_multi_lod_dae(
+    paths: &[std::path::PathBuf],
+) -> Result<super::encoder::MultiLodGeometry> {
     if paths.is_empty() {
         bail!("No LOD files provided");
     }
@@ -445,10 +518,17 @@ pub fn import_multi_lod_dae(paths: &[std::path::PathBuf]) -> Result<super::encod
     let low_verts: usize = low.faces.iter().map(|f| f.positions.len()).sum();
     let lowest_verts: usize = lowest.faces.iter().map(|f| f.positions.len()).sum();
 
-    info!("[GLC_BRIDGE] Multi-LOD: high={} med={} low={} lowest={} vertices",
-        high_verts, med_verts, low_verts, lowest_verts);
+    info!(
+        "[GLC_BRIDGE] Multi-LOD: high={} med={} low={} lowest={} vertices",
+        high_verts, med_verts, low_verts, lowest_verts
+    );
 
-    Ok(super::encoder::MultiLodGeometry { high, medium, low, lowest })
+    Ok(super::encoder::MultiLodGeometry {
+        high,
+        medium,
+        low,
+        lowest,
+    })
 }
 
 #[cfg(test)]
@@ -457,24 +537,19 @@ mod tests {
 
     #[test]
     fn test_flat_normals_triangle() {
-        let positions = vec![
-            [0.0, 0.0, 0.0],
-            [1.0, 0.0, 0.0],
-            [0.0, 1.0, 0.0],
-        ];
+        let positions = vec![[0.0, 0.0, 0.0], [1.0, 0.0, 0.0], [0.0, 1.0, 0.0]];
         let indices = vec![0, 1, 2];
         let normals = generate_flat_normals(&positions, &indices);
         assert_eq!(normals.len(), 3);
-        assert!((normals[0][2] - 1.0).abs() < 0.01, "Z normal should be ~1.0");
+        assert!(
+            (normals[0][2] - 1.0).abs() < 0.01,
+            "Z normal should be ~1.0"
+        );
     }
 
     #[test]
     fn test_planar_uvs() {
-        let positions = vec![
-            [0.0, 0.0, 0.0],
-            [2.0, 0.0, 0.0],
-            [0.0, 2.0, 0.0],
-        ];
+        let positions = vec![[0.0, 0.0, 0.0], [2.0, 0.0, 0.0], [0.0, 2.0, 0.0]];
         let uvs = generate_planar_uvs(&positions);
         assert_eq!(uvs.len(), 3);
         assert!((uvs[0][0]).abs() < 0.01, "min should map to 0");
@@ -496,8 +571,8 @@ mod tests {
     #[test]
     fn test_flat_vecs_multi_material() {
         let positions = vec![
-            0.0, 0.0, 0.0,  1.0, 0.0, 0.0,  0.0, 1.0, 0.0,
-            2.0, 0.0, 0.0,  3.0, 0.0, 0.0,  2.0, 1.0, 0.0,
+            0.0, 0.0, 0.0, 1.0, 0.0, 0.0, 0.0, 1.0, 0.0, 2.0, 0.0, 0.0, 3.0, 0.0, 0.0, 2.0, 1.0,
+            0.0,
         ];
         let normals: Vec<f32> = vec![];
         let tex_coords: Vec<f32> = vec![];
@@ -520,7 +595,9 @@ mod tests {
 
     #[test]
     fn test_import_ruth2_body() {
-        if super::super::blender_worker::ruth2_base_dir().is_none() { return; }
+        if super::super::blender_worker::ruth2_base_dir().is_none() {
+            return;
+        }
         let geom = import_ruth2_part("body").expect("Ruth2v4Body.dae import failed");
         assert!(geom.faces.len() >= 1, "Body should have at least 1 face");
         assert!(geom.skin_info.is_some(), "Body should have skin data");
@@ -530,23 +607,29 @@ mod tests {
 
     #[test]
     fn test_import_ruth2_headless() {
-        if super::super::blender_worker::ruth2_base_dir().is_none() { return; }
+        if super::super::blender_worker::ruth2_base_dir().is_none() {
+            return;
+        }
         let geom = import_ruth2_part("headless").expect("Ruth2v4Headless.dae import failed");
         assert!(geom.skin_info.is_some(), "Headless should have skin data");
     }
 
     #[test]
     fn test_import_ruth2_head() {
-        if super::super::blender_worker::ruth2_base_dir().is_none() { return; }
+        if super::super::blender_worker::ruth2_base_dir().is_none() {
+            return;
+        }
         let geom = import_ruth2_part("head").expect("Ruth2v4Head.dae import failed");
         assert!(geom.faces.len() >= 1, "Head should have at least 1 face");
     }
 
     #[test]
     fn test_import_ruth2_body_set() {
-        if super::super::blender_worker::ruth2_base_dir().is_none() { return; }
-        let parts = import_ruth2_body_set(&["body", "hands", "head"])
-            .expect("Body set import failed");
+        if super::super::blender_worker::ruth2_base_dir().is_none() {
+            return;
+        }
+        let parts =
+            import_ruth2_body_set(&["body", "hands", "head"]).expect("Body set import failed");
         assert_eq!(parts.len(), 3);
         assert_eq!(parts[0].0, "body");
         assert_eq!(parts[1].0, "hands");
@@ -563,6 +646,10 @@ mod tests {
         let obj_data = "v 0.0 0.0 0.0\nv 1.0 0.0 0.0\nv 1.0 1.0 0.0\nv 0.0 1.0 0.0\nf 1 2 3 4\n";
         let geom = import_obj_from_string(obj_data).expect("OBJ quad parse failed");
         assert_eq!(geom.faces.len(), 1);
-        assert_eq!(geom.faces[0].indices.len(), 6, "Quad should triangulate to 6 indices");
+        assert_eq!(
+            geom.faces[0].indices.len(),
+            6,
+            "Quad should triangulate to 6 indices"
+        );
     }
 }

@@ -166,9 +166,11 @@ impl AnalyticsEngine {
                 sqlx::query("CREATE INDEX IF NOT EXISTS idx_listings_status ON marketplace_listings(listing_status)")
                     .execute(pg_pool)
                     .await?;
-                sqlx::query("CREATE INDEX IF NOT EXISTS idx_fraud_created ON fraud_alerts(created_at)")
-                    .execute(pg_pool)
-                    .await?;
+                sqlx::query(
+                    "CREATE INDEX IF NOT EXISTS idx_fraud_created ON fraud_alerts(created_at)",
+                )
+                .execute(pg_pool)
+                .await?;
 
                 info!("Created PostgreSQL analytics tables");
             }
@@ -390,19 +392,21 @@ impl AnalyticsEngine {
 
         match pool {
             DatabasePoolRef::PostgreSQL(pg_pool) => {
-                let row: (i64,) =
-                    sqlx::query_as("SELECT COUNT(*) FROM marketplace_listings WHERE listing_status = 'Active'")
-                        .fetch_one(pg_pool)
-                        .await
-                        .unwrap_or((0,));
+                let row: (i64,) = sqlx::query_as(
+                    "SELECT COUNT(*) FROM marketplace_listings WHERE listing_status = 'Active'",
+                )
+                .fetch_one(pg_pool)
+                .await
+                .unwrap_or((0,));
                 Ok(row.0 as u64)
             }
             DatabasePoolRef::MySQL(mysql_pool) => {
-                let row: (i64,) =
-                    sqlx::query_as("SELECT COUNT(*) FROM marketplace_listings WHERE listing_status = 'Active'")
-                        .fetch_one(mysql_pool)
-                        .await
-                        .unwrap_or((0,));
+                let row: (i64,) = sqlx::query_as(
+                    "SELECT COUNT(*) FROM marketplace_listings WHERE listing_status = 'Active'",
+                )
+                .fetch_one(mysql_pool)
+                .await
+                .unwrap_or((0,));
                 Ok(row.0 as u64)
             }
         }
@@ -519,7 +523,11 @@ impl AnalyticsEngine {
                         category_name: name,
                         transaction_count: tx_count as u64,
                         total_volume: volume,
-                        average_price: if tx_count > 0 { volume as f64 / tx_count as f64 } else { 0.0 },
+                        average_price: if tx_count > 0 {
+                            volume as f64 / tx_count as f64
+                        } else {
+                            0.0
+                        },
                         top_sellers: Vec::new(),
                     });
                 }
@@ -550,7 +558,11 @@ impl AnalyticsEngine {
                         category_name: name,
                         transaction_count: tx_count as u64,
                         total_volume: volume,
-                        average_price: if tx_count > 0 { volume as f64 / tx_count as f64 } else { 0.0 },
+                        average_price: if tx_count > 0 {
+                            volume as f64 / tx_count as f64
+                        } else {
+                            0.0
+                        },
                         top_sellers: Vec::new(),
                     });
                 }
@@ -708,7 +720,10 @@ impl AnalyticsEngine {
             }
         }
 
-        info!("Recorded fraud alert: {} for user {}", alert.alert_id, alert.user_id);
+        info!(
+            "Recorded fraud alert: {} for user {}",
+            alert.alert_id, alert.user_id
+        );
         Ok(())
     }
 }

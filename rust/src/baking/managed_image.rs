@@ -55,11 +55,31 @@ impl ManagedImage {
             width,
             height,
             channels,
-            red: if channels.has_color() { vec![0; size] } else { Vec::new() },
-            green: if channels.has_color() { vec![0; size] } else { Vec::new() },
-            blue: if channels.has_color() { vec![0; size] } else { Vec::new() },
-            alpha: if channels.has_alpha() { vec![255; size] } else { Vec::new() },
-            bump: if channels.has_bump() { vec![0; size] } else { Vec::new() },
+            red: if channels.has_color() {
+                vec![0; size]
+            } else {
+                Vec::new()
+            },
+            green: if channels.has_color() {
+                vec![0; size]
+            } else {
+                Vec::new()
+            },
+            blue: if channels.has_color() {
+                vec![0; size]
+            } else {
+                Vec::new()
+            },
+            alpha: if channels.has_alpha() {
+                vec![255; size]
+            } else {
+                Vec::new()
+            },
+            bump: if channels.has_bump() {
+                vec![0; size]
+            } else {
+                Vec::new()
+            },
         }
     }
 
@@ -108,9 +128,21 @@ impl ManagedImage {
             for x in 0..self.width {
                 let i = (y * self.width + x) as usize;
                 let r = if !self.red.is_empty() { self.red[i] } else { 0 };
-                let g = if !self.green.is_empty() { self.green[i] } else { 0 };
-                let b = if !self.blue.is_empty() { self.blue[i] } else { 0 };
-                let a = if !self.alpha.is_empty() { self.alpha[i] } else { 255 };
+                let g = if !self.green.is_empty() {
+                    self.green[i]
+                } else {
+                    0
+                };
+                let b = if !self.blue.is_empty() {
+                    self.blue[i]
+                } else {
+                    0
+                };
+                let a = if !self.alpha.is_empty() {
+                    self.alpha[i]
+                } else {
+                    255
+                };
                 img.put_pixel(x, y, Rgba([r, g, b, a]));
             }
         }
@@ -122,7 +154,8 @@ impl ManagedImage {
         let img = self.to_rgba_image();
         let mut bytes: Vec<u8> = Vec::new();
         let mut cursor = Cursor::new(&mut bytes);
-        img.write_to(&mut cursor, image::ImageFormat::Png).unwrap_or_default();
+        img.write_to(&mut cursor, image::ImageFormat::Png)
+            .unwrap_or_default();
         bytes
     }
 
@@ -145,11 +178,31 @@ impl ManagedImage {
         let x_ratio = self.width as f64 / new_width as f64;
         let y_ratio = self.height as f64 / new_height as f64;
 
-        let mut new_red = if self.channels.has_color() { vec![0u8; new_size] } else { Vec::new() };
-        let mut new_green = if self.channels.has_color() { vec![0u8; new_size] } else { Vec::new() };
-        let mut new_blue = if self.channels.has_color() { vec![0u8; new_size] } else { Vec::new() };
-        let mut new_alpha = if self.channels.has_alpha() { vec![255u8; new_size] } else { Vec::new() };
-        let mut new_bump = if self.channels.has_bump() { vec![0u8; new_size] } else { Vec::new() };
+        let mut new_red = if self.channels.has_color() {
+            vec![0u8; new_size]
+        } else {
+            Vec::new()
+        };
+        let mut new_green = if self.channels.has_color() {
+            vec![0u8; new_size]
+        } else {
+            Vec::new()
+        };
+        let mut new_blue = if self.channels.has_color() {
+            vec![0u8; new_size]
+        } else {
+            Vec::new()
+        };
+        let mut new_alpha = if self.channels.has_alpha() {
+            vec![255u8; new_size]
+        } else {
+            Vec::new()
+        };
+        let mut new_bump = if self.channels.has_bump() {
+            vec![0u8; new_size]
+        } else {
+            Vec::new()
+        };
 
         for y in 0..new_height {
             for x in 0..new_width {

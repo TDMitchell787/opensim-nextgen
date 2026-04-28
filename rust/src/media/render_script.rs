@@ -1,10 +1,14 @@
-use std::path::Path;
 use anyhow::Result;
+use std::path::Path;
 
 use super::RenderJob;
 use crate::ai::npc_avatar::{CameraWaypoint, CinemaLight};
 
-pub fn generate_render_script(job: &RenderJob, meshes_dir: &Path, frames_dir: &Path) -> Result<String> {
+pub fn generate_render_script(
+    job: &RenderJob,
+    meshes_dir: &Path,
+    frames_dir: &Path,
+) -> Result<String> {
     let mut script = String::with_capacity(8192);
 
     script.push_str("import bpy\nimport os\nimport math\n\n");
@@ -18,7 +22,9 @@ pub fn generate_render_script(job: &RenderJob, meshes_dir: &Path, frames_dir: &P
     script.push_str(&format!("meshes_dir = '{}'\n", meshes_str));
     script.push_str(&format!("frames_dir = '{}'\n\n", frames_str));
 
-    script.push_str("import glob\nobj_files = sorted(glob.glob(os.path.join(meshes_dir, '*.obj')))\n");
+    script.push_str(
+        "import glob\nobj_files = sorted(glob.glob(os.path.join(meshes_dir, '*.obj')))\n",
+    );
     script.push_str("for obj_file in obj_files:\n");
     script.push_str("    bpy.ops.wm.obj_import(filepath=obj_file)\n\n");
 
@@ -39,7 +45,10 @@ pub fn generate_render_script(job: &RenderJob, meshes_dir: &Path, frames_dir: &P
     script.push_str("            obj.rotation_mode = 'QUATERNION'\n");
     script.push_str("            obj.rotation_quaternion = (rot[3], rot[0], rot[1], rot[2])\n\n");
 
-    script.push_str(&generate_camera_script(&job.waypoints, job.settings.frames_per_waypoint));
+    script.push_str(&generate_camera_script(
+        &job.waypoints,
+        job.settings.frames_per_waypoint,
+    ));
 
     for (i, light) in job.lights.iter().enumerate() {
         script.push_str(&generate_light_script(light, i));
@@ -78,30 +87,49 @@ fn generate_camera_script(waypoints: &[CameraWaypoint], frames_per_wp: u32) -> S
     for (i, wp) in waypoints.iter().enumerate() {
         let frame = i as u32 * frames_per_wp + 1;
 
-        s.push_str(&format!("cam_obj.location = ({}, {}, {})\n", wp.position[0], wp.position[1], wp.position[2]));
-        s.push_str(&format!("cam_obj.keyframe_insert(data_path='location', frame={})\n", frame));
+        s.push_str(&format!(
+            "cam_obj.location = ({}, {}, {})\n",
+            wp.position[0], wp.position[1], wp.position[2]
+        ));
+        s.push_str(&format!(
+            "cam_obj.keyframe_insert(data_path='location', frame={})\n",
+            frame
+        ));
 
         let dx = wp.focus[0] - wp.position[0];
         let dy = wp.focus[1] - wp.position[1];
         let dz = wp.focus[2] - wp.position[2];
-        let dist = (dx*dx + dy*dy + dz*dz).sqrt().max(0.001);
+        let dist = (dx * dx + dy * dy + dz * dz).sqrt().max(0.001);
         let pitch = (dz / dist).asin();
         let yaw = dy.atan2(dx);
         s.push_str(&format!(
             "cam_obj.rotation_euler = ({:.4}, 0, {:.4})\n",
-            std::f32::consts::FRAC_PI_2 - pitch, yaw + std::f32::consts::FRAC_PI_2
+            std::f32::consts::FRAC_PI_2 - pitch,
+            yaw + std::f32::consts::FRAC_PI_2
         ));
         s.push_str(&format!("cam_obj.rotation_mode = 'XYZ'\n"));
-        s.push_str(&format!("cam_obj.keyframe_insert(data_path='rotation_euler', frame={})\n", frame));
+        s.push_str(&format!(
+            "cam_obj.keyframe_insert(data_path='rotation_euler', frame={})\n",
+            frame
+        ));
 
         let focal_length = fov_to_focal_length(wp.fov);
         s.push_str(&format!("cam_data.lens = {:.2}\n", focal_length));
-        s.push_str(&format!("cam_data.keyframe_insert(data_path='lens', frame={})\n", frame));
+        s.push_str(&format!(
+            "cam_data.keyframe_insert(data_path='lens', frame={})\n",
+            frame
+        ));
 
         if wp.dwell > 0.0 {
             let hold_frame = frame + (wp.dwell * 24.0) as u32;
-            s.push_str(&format!("cam_obj.keyframe_insert(data_path='location', frame={})\n", hold_frame));
-            s.push_str(&format!("cam_obj.keyframe_insert(data_path='rotation_euler', frame={})\n", hold_frame));
+            s.push_str(&format!(
+                "cam_obj.keyframe_insert(data_path='location', frame={})\n",
+                hold_frame
+            ));
+            s.push_str(&format!(
+                "cam_obj.keyframe_insert(data_path='rotation_euler', frame={})\n",
+                hold_frame
+            ));
         }
     }
     s.push('\n');
@@ -112,14 +140,27 @@ fn generate_light_script(light: &CinemaLight, index: usize) -> String {
     let mut s = String::new();
     let name = format!("Light_{}", index);
 
-    s.push_str(&format!("light_data = bpy.data.lights.new(name='{}', type='POINT')\n", name));
-    s.push_str(&format!("light_obj = bpy.data.objects.new('{}', light_data)\n", name));
+    s.push_str(&format!(
+        "light_data = bpy.data.lights.new(name='{}', type='POINT')\n",
+        name
+    ));
+    s.push_str(&format!(
+        "light_obj = bpy.data.objects.new('{}', light_data)\n",
+        name
+    ));
     s.push_str("bpy.context.scene.collection.objects.link(light_obj)\n");
-    s.push_str(&format!("light_obj.location = ({}, {}, {})\n",
-        light.position[0], light.position[1], light.position[2]));
-    s.push_str(&format!("light_data.energy = {}\n", light.intensity * 1000.0));
-    s.push_str(&format!("light_data.color = ({}, {}, {})\n",
-        light.color[0], light.color[1], light.color[2]));
+    s.push_str(&format!(
+        "light_obj.location = ({}, {}, {})\n",
+        light.position[0], light.position[1], light.position[2]
+    ));
+    s.push_str(&format!(
+        "light_data.energy = {}\n",
+        light.intensity * 1000.0
+    ));
+    s.push_str(&format!(
+        "light_data.color = ({}, {}, {})\n",
+        light.color[0], light.color[1], light.color[2]
+    ));
     s.push_str(&format!("light_data.shadow_soft_size = {}\n", light.radius));
     s.push_str(&format!("light_data.use_shadow = True\n\n"));
 
@@ -129,7 +170,9 @@ fn generate_light_script(light: &CinemaLight, index: usize) -> String {
 fn generate_render_settings_script(job: &RenderJob, frames_str: &str) -> String {
     let mut s = String::new();
     let (w, h) = job.settings.resolution;
-    let total_frames = if job.waypoints.is_empty() { 1 } else {
+    let total_frames = if job.waypoints.is_empty() {
+        1
+    } else {
         job.waypoints.len() as u32 * job.settings.frames_per_waypoint
     };
 
@@ -144,18 +187,27 @@ fn generate_render_settings_script(job: &RenderJob, frames_str: &str) -> String 
     match job.settings.render_engine.as_str() {
         "CYCLES" => {
             s.push_str("scene.render.engine = 'CYCLES'\n");
-            s.push_str(&format!("scene.cycles.samples = {}\n", job.settings.samples));
+            s.push_str(&format!(
+                "scene.cycles.samples = {}\n",
+                job.settings.samples
+            ));
             s.push_str("scene.cycles.use_denoising = True\n");
         }
         _ => {
             s.push_str("scene.render.engine = 'BLENDER_EEVEE_NEXT'\n");
-            s.push_str(&format!("scene.eevee.taa_render_samples = {}\n", job.settings.samples));
+            s.push_str(&format!(
+                "scene.eevee.taa_render_samples = {}\n",
+                job.settings.samples
+            ));
         }
     }
 
     s.push_str("scene.render.image_settings.file_format = 'PNG'\n");
     s.push_str("scene.render.image_settings.color_mode = 'RGBA'\n");
-    s.push_str(&format!("scene.render.filepath = os.path.join('{}', 'frame_')\n\n", frames_str));
+    s.push_str(&format!(
+        "scene.render.filepath = os.path.join('{}', 'frame_')\n\n",
+        frames_str
+    ));
 
     s
 }
@@ -269,17 +321,23 @@ pub fn generate_photo_script(
     s.push_str("cam_obj = bpy.data.objects.new('PhotoCam', cam_data)\n");
     s.push_str("bpy.context.scene.collection.objects.link(cam_obj)\n");
     s.push_str("bpy.context.scene.camera = cam_obj\n");
-    s.push_str(&format!("cam_obj.location = ({}, {}, {})\n", camera_pos[0], camera_pos[1], camera_pos[2]));
+    s.push_str(&format!(
+        "cam_obj.location = ({}, {}, {})\n",
+        camera_pos[0], camera_pos[1], camera_pos[2]
+    ));
 
     let dx = camera_focus[0] - camera_pos[0];
     let dy = camera_focus[1] - camera_pos[1];
     let dz = camera_focus[2] - camera_pos[2];
-    let dist = (dx*dx + dy*dy + dz*dz).sqrt().max(0.001);
+    let dist = (dx * dx + dy * dy + dz * dz).sqrt().max(0.001);
     let pitch = (dz / dist).asin();
     let yaw = dy.atan2(dx);
     s.push_str(&format!("cam_obj.rotation_mode = 'XYZ'\n"));
-    s.push_str(&format!("cam_obj.rotation_euler = ({:.4}, 0, {:.4})\n",
-        std::f32::consts::FRAC_PI_2 - pitch, yaw + std::f32::consts::FRAC_PI_2));
+    s.push_str(&format!(
+        "cam_obj.rotation_euler = ({:.4}, 0, {:.4})\n",
+        std::f32::consts::FRAC_PI_2 - pitch,
+        yaw + std::f32::consts::FRAC_PI_2
+    ));
 
     let focal_length = fov_to_focal_length(fov);
     s.push_str(&format!("cam_data.lens = {:.2}\n", focal_length));

@@ -56,7 +56,9 @@ pub fn extract_home_uri(last_name: &str) -> Option<String> {
 }
 
 fn decode_region_name(name: &str) -> String {
-    urlencoding::decode(name).unwrap_or(std::borrow::Cow::Borrowed(name)).into_owned()
+    urlencoding::decode(name)
+        .unwrap_or(std::borrow::Cow::Borrowed(name))
+        .into_owned()
 }
 
 pub fn parse_hg_url(input: &str) -> Option<(String, u16, String)> {
@@ -77,7 +79,11 @@ pub fn parse_hg_url(input: &str) -> Option<(String, u16, String)> {
         } else {
             &trimmed[7..]
         };
-        let scheme = if trimmed.starts_with("https://") { "https://" } else { "http://" };
+        let scheme = if trimmed.starts_with("https://") {
+            "https://"
+        } else {
+            "http://"
+        };
 
         let (host_port, region) = if let Some(slash_pos) = without_scheme.find('/') {
             let hp = &without_scheme[..slash_pos];
@@ -113,7 +119,10 @@ pub fn parse_hg_url(input: &str) -> Option<(String, u16, String)> {
         2 => {
             let host = parts[0];
             let (port_part, slash_region) = if let Some(slash_pos) = parts[1].find('/') {
-                (&parts[1][..slash_pos], Some(parts[1][slash_pos + 1..].to_string()))
+                (
+                    &parts[1][..slash_pos],
+                    Some(parts[1][slash_pos + 1..].to_string()),
+                )
             } else {
                 (parts[1], None)
             };
@@ -169,7 +178,10 @@ mod tests {
     fn test_format_uui() {
         let uuid = Uuid::parse_str("00000000-0000-0000-0000-000000000001").unwrap();
         let uui = format_uui(uuid, "http://grid.example.com:8002", "Test", "User");
-        assert_eq!(uui, "00000000-0000-0000-0000-000000000001;http://grid.example.com:8002;Test User");
+        assert_eq!(
+            uui,
+            "00000000-0000-0000-0000-000000000001;http://grid.example.com:8002;Test User"
+        );
     }
 
     #[test]
@@ -279,12 +291,15 @@ mod tests {
 
     #[test]
     fn test_percent_encoded_region_names() {
-        let (gk, port, region) = parse_hg_url("grid.wolfterritories.org:8002:Lunaria%20Emporium%20-%20Main%20Store").unwrap();
+        let (gk, port, region) =
+            parse_hg_url("grid.wolfterritories.org:8002:Lunaria%20Emporium%20-%20Main%20Store")
+                .unwrap();
         assert_eq!(gk, "http://grid.wolfterritories.org:8002");
         assert_eq!(port, 8002);
         assert_eq!(region, "Lunaria Emporium - Main Store");
 
-        let (gk2, port2, region2) = parse_hg_url("http://grid.example.com:8002/My%20Region%20Name").unwrap();
+        let (gk2, port2, region2) =
+            parse_hg_url("http://grid.example.com:8002/My%20Region%20Name").unwrap();
         assert_eq!(gk2, "http://grid.example.com:8002");
         assert_eq!(port2, 8002);
         assert_eq!(region2, "My Region Name");

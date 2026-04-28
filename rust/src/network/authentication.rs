@@ -1,12 +1,12 @@
+use md5;
+use serde::{Deserialize, Serialize};
 use std::collections::HashMap;
 use std::net::IpAddr;
 use std::sync::Arc;
 use std::time::{Duration, Instant};
-use tokio::sync::RwLock;
-use serde::{Deserialize, Serialize};
 use thiserror::Error;
-use tracing::{info, warn, error, debug};
-use md5;
+use tokio::sync::RwLock;
+use tracing::{debug, error, info, warn};
 
 /// Production-ready authentication manager with MD5 password verification and rate limiting
 #[derive(Debug, Clone)]
@@ -26,7 +26,7 @@ pub struct AuthenticationConfig {
     pub max_attempts_per_ip: u32,
     /// Time window for rate limiting (in seconds)
     pub rate_limit_window: u64,
-    /// Temporary ban duration for exceeding rate limit (in seconds) 
+    /// Temporary ban duration for exceeding rate limit (in seconds)
     pub temp_ban_duration: u64,
     /// Enable detailed security logging
     pub enable_security_logging: bool,
@@ -109,9 +109,9 @@ pub enum AuthenticationError {
 impl Default for AuthenticationConfig {
     fn default() -> Self {
         Self {
-            max_attempts_per_ip: 10,           // 10 attempts per window
-            rate_limit_window: 600,            // 10 minute window
-            temp_ban_duration: 1800,           // 30 minute ban
+            max_attempts_per_ip: 10, // 10 attempts per window
+            rate_limit_window: 600,  // 10 minute window
+            temp_ban_duration: 1800, // 30 minute ban
             enable_security_logging: true,
             min_password_length: 8,
             max_password_length: 128,
@@ -141,7 +141,7 @@ impl AuthenticationManager {
     ) -> Result<AuthenticationResult, AuthenticationError> {
         // Check rate limiting first
         match self.check_rate_limit(client_ip).await {
-            Ok(()) => {},
+            Ok(()) => {}
             Err(e) => return Err(e),
         }
 
@@ -150,7 +150,8 @@ impl AuthenticationManager {
 
         // Verify password with timing attack protection
         let verification_result = if self.config.enable_timing_protection {
-            self.verify_password_with_timing_protection(password, stored_password_hash).await
+            self.verify_password_with_timing_protection(password, stored_password_hash)
+                .await
         } else {
             self.verify_password(password, stored_password_hash).await
         };
@@ -159,22 +160,31 @@ impl AuthenticationManager {
             Ok(AuthenticationResult::Success) => {
                 // Reset attempts on successful authentication
                 self.reset_attempts(client_ip).await;
-                
+
                 if self.config.enable_security_logging {
-                    info!("Successful authentication for user: {} from IP: {}", username, client_ip);
+                    info!(
+                        "Successful authentication for user: {} from IP: {}",
+                        username, client_ip
+                    );
                 }
-                
+
                 Ok(AuthenticationResult::Success)
             }
             Ok(result) => {
                 if self.config.enable_security_logging {
-                    warn!("Failed authentication for user: {} from IP: {} - {:?}", username, client_ip, result);
+                    warn!(
+                        "Failed authentication for user: {} from IP: {} - {:?}",
+                        username, client_ip, result
+                    );
                 }
                 Ok(result)
             }
             Err(e) => {
                 if self.config.enable_security_logging {
-                    error!("Authentication error for user: {} from IP: {} - {}", username, client_ip, e);
+                    error!(
+                        "Authentication error for user: {} from IP: {} - {}",
+                        username, client_ip, e
+                    );
                 }
                 Err(e)
             }
@@ -205,7 +215,8 @@ impl AuthenticationManager {
         password: &str,
         stored_hash: &str,
     ) -> Result<AuthenticationResult, AuthenticationError> {
-        self.password_verifier.verify_password(password, stored_hash)
+        self.password_verifier
+            .verify_password(password, stored_hash)
     }
 
     /// Verify password with timing attack protection
@@ -216,17 +227,19 @@ impl AuthenticationManager {
     ) -> Result<AuthenticationResult, AuthenticationError> {
         // Always perform the same amount of work regardless of input
         let start_time = Instant::now();
-        
-        let result = self.password_verifier.verify_password(password, stored_hash);
-        
+
+        let result = self
+            .password_verifier
+            .verify_password(password, stored_hash);
+
         // Ensure minimum computation time to prevent timing attacks
         let min_duration = Duration::from_millis(100);
         let elapsed = start_time.elapsed();
-        
+
         if elapsed < min_duration {
             tokio::time::sleep(min_duration - elapsed).await;
         }
-        
+
         result
     }
 
@@ -276,7 +289,7 @@ impl RateLimiter {
         // Check rate limit
         if let Some(tracker) = self.attempts.get(&ip) {
             let window_duration = Duration::from_secs(self.config.rate_limit_window);
-            
+
             // If within the window and exceeding limits
             if tracker.window_start.elapsed() < window_duration {
                 if tracker.attempts >= self.config.max_attempts_per_ip {
@@ -312,8 +325,11 @@ impl RateLimiter {
         if tracker.attempts >= self.config.max_attempts_per_ip {
             self.banned_ips.insert(ip, now);
             tracker.is_banned = true;
-            
-            warn!("IP {} temporarily banned for exceeding rate limit ({} attempts)", ip, tracker.attempts);
+
+            warn!(
+                "IP {} temporarily banned for exceeding rate limit ({} attempts)",
+                ip, tracker.attempts
+            );
         }
     }
 
@@ -333,7 +349,7 @@ impl RateLimiter {
 
     fn ban_ip(&mut self, ip: IpAddr, _duration: Duration) {
         self.banned_ips.insert(ip, Instant::now());
-        
+
         if let Some(tracker) = self.attempts.get_mut(&ip) {
             tracker.is_banned = true;
         }
@@ -345,11 +361,13 @@ impl RateLimiter {
         let window_duration = Duration::from_secs(self.config.rate_limit_window);
 
         // Remove expired bans
-        self.banned_ips.retain(|_, ban_time| ban_time.elapsed() < ban_duration);
+        self.banned_ips
+            .retain(|_, ban_time| ban_time.elapsed() < ban_duration);
 
         // Remove old attempt records
         self.attempts.retain(|_, tracker| {
-            tracker.window_start.elapsed() < window_duration || tracker.last_attempt.elapsed() < ban_duration
+            tracker.window_start.elapsed() < window_duration
+                || tracker.last_attempt.elapsed() < ban_duration
         });
     }
 
@@ -378,7 +396,11 @@ impl PasswordVerifier {
     }
 
     /// Verify password against stored hash with Cool Viewer compatibility
-    fn verify_password(&self, password: &str, stored_hash: &str) -> Result<AuthenticationResult, AuthenticationError> {
+    fn verify_password(
+        &self,
+        password: &str,
+        stored_hash: &str,
+    ) -> Result<AuthenticationResult, AuthenticationError> {
         // Validate password format
         if password.len() < self.config.min_password_length {
             return Ok(AuthenticationResult::PasswordTooWeak);
@@ -398,9 +420,14 @@ impl PasswordVerifier {
     }
 
     /// Verify MD5 hash (Second Life viewer format: "$1$hash")
-    fn verify_md5_hash(&self, password: &str, stored_hash: &str) -> Result<AuthenticationResult, AuthenticationError> {
+    fn verify_md5_hash(
+        &self,
+        password: &str,
+        stored_hash: &str,
+    ) -> Result<AuthenticationResult, AuthenticationError> {
         // Extract hash part after $1$ prefix
-        let hash_part = password.strip_prefix("$1$")
+        let hash_part = password
+            .strip_prefix("$1$")
             .ok_or(AuthenticationError::InvalidPasswordFormat)?;
 
         if hash_part.len() != 32 {
@@ -415,7 +442,7 @@ impl PasswordVerifier {
         // Compare with stored hash - this could be:
         // 1. A plaintext password that we hash and compare
         // 2. An already-hashed password that we compare directly
-        
+
         if stored_hash.len() == 32 && stored_hash.chars().all(|c| c.is_ascii_hexdigit()) {
             // Stored hash is already MD5, compare directly
             if constant_time_compare(hash_part.as_bytes(), stored_hash.as_bytes()) {
@@ -435,7 +462,11 @@ impl PasswordVerifier {
     }
 
     /// Verify plaintext password
-    fn verify_plaintext(&self, password: &str, stored_password: &str) -> Result<AuthenticationResult, AuthenticationError> {
+    fn verify_plaintext(
+        &self,
+        password: &str,
+        stored_password: &str,
+    ) -> Result<AuthenticationResult, AuthenticationError> {
         if constant_time_compare(password.as_bytes(), stored_password.as_bytes()) {
             Ok(AuthenticationResult::Success)
         } else {
@@ -481,22 +512,28 @@ mod tests {
     async fn test_authentication_manager_creation() {
         let config = AuthenticationConfig::default();
         let auth_manager = AuthenticationManager::new(config);
-        
+
         // Should be able to create without errors
-        assert!(!auth_manager.is_ip_banned(IpAddr::V4(Ipv4Addr::new(127, 0, 0, 1))).await);
+        assert!(
+            !auth_manager
+                .is_ip_banned(IpAddr::V4(Ipv4Addr::new(127, 0, 0, 1)))
+                .await
+        );
     }
 
     #[tokio::test]
     async fn test_md5_verification() {
         let config = AuthenticationConfig::default();
         let auth_manager = AuthenticationManager::new(config);
-        
+
         // Test MD5 hash verification
         let password = "$1$482c811da5d5b4bc6d497ffa98491e38"; // MD5 of "password123"
         let stored_password = "password123";
         let client_ip = IpAddr::V4(Ipv4Addr::new(127, 0, 0, 1));
-        
-        let result = auth_manager.authenticate_user("testuser", password, stored_password, client_ip).await;
+
+        let result = auth_manager
+            .authenticate_user("testuser", password, stored_password, client_ip)
+            .await;
         assert!(matches!(result, Ok(AuthenticationResult::Success)));
     }
 
@@ -504,23 +541,36 @@ mod tests {
     async fn test_rate_limiting() {
         let mut config = AuthenticationConfig::default();
         config.max_attempts_per_ip = 2; // Low limit for testing
-        
+
         let auth_manager = AuthenticationManager::new(config);
         let client_ip = IpAddr::V4(Ipv4Addr::new(192, 168, 1, 100));
-        
+
         // First attempt should be allowed
-        let result = auth_manager.authenticate_user("testuser", "wrongpassword", "correctpassword", client_ip).await;
-        assert!(matches!(result, Ok(AuthenticationResult::InvalidCredentials)));
-        
+        let result = auth_manager
+            .authenticate_user("testuser", "wrongpassword", "correctpassword", client_ip)
+            .await;
+        assert!(matches!(
+            result,
+            Ok(AuthenticationResult::InvalidCredentials)
+        ));
+
         // Second attempt should be allowed
-        let result = auth_manager.authenticate_user("testuser", "wrongpassword", "correctpassword", client_ip).await;
-        assert!(matches!(result, Ok(AuthenticationResult::InvalidCredentials)));
-        
+        let result = auth_manager
+            .authenticate_user("testuser", "wrongpassword", "correctpassword", client_ip)
+            .await;
+        assert!(matches!(
+            result,
+            Ok(AuthenticationResult::InvalidCredentials)
+        ));
+
         // Third attempt should be rate limited or IP banned
-        let result = auth_manager.authenticate_user("testuser", "wrongpassword", "correctpassword", client_ip).await;
-        assert!(matches!(result, 
-            Err(AuthenticationError::RateLimitExceeded { .. }) | 
-            Err(AuthenticationError::IpBanned { .. })
+        let result = auth_manager
+            .authenticate_user("testuser", "wrongpassword", "correctpassword", client_ip)
+            .await;
+        assert!(matches!(
+            result,
+            Err(AuthenticationError::RateLimitExceeded { .. })
+                | Err(AuthenticationError::IpBanned { .. })
         ));
     }
 
@@ -536,7 +586,7 @@ mod tests {
     fn test_md5_hash_computation() {
         let config = AuthenticationConfig::default();
         let verifier = PasswordVerifier::new(config);
-        
+
         let hash = verifier.compute_md5_hash("password123");
         assert_eq!(hash, "482c811da5d5b4bc6d497ffa98491e38");
     }

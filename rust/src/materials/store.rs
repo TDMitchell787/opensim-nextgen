@@ -52,7 +52,10 @@ pub fn mat_ovrd_from_bin(data: &[u8]) -> Vec<RenderMaterialOverrideEntry> {
 }
 
 pub fn overrides_to_tuples(entries: &[RenderMaterialOverrideEntry]) -> Vec<(u8, String)> {
-    entries.iter().map(|e| (e.te_index, e.data.clone())).collect()
+    entries
+        .iter()
+        .map(|e| (e.te_index, e.data.clone()))
+        .collect()
 }
 
 #[cfg(test)]

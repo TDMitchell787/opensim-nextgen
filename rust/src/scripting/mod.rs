@@ -1,41 +1,43 @@
 //! LSL (Linden Scripting Language) interpreter and execution environment
 
-pub mod lsl_interpreter;
-pub mod script_engine;
-pub mod lsl_types;
-pub mod lsl_constants;
-pub mod lsl_functions;
-pub mod sandbox;
 pub mod engine_manager;
 pub mod executor;
-pub mod state_machine;
 pub mod listen_manager;
-pub mod timer_manager;
-pub mod sensor_manager;
-pub mod yengine_module;
+pub mod lsl_constants;
+pub mod lsl_functions;
+pub mod lsl_interpreter;
+pub mod lsl_types;
 pub mod ossl_functions;
-pub mod sl_functions;
 pub mod persistence;
+pub mod sandbox;
+pub mod script_engine;
+pub mod sensor_manager;
+pub mod sl_functions;
+pub mod state_machine;
+pub mod timer_manager;
+pub mod yengine_module;
 
-use std::{collections::HashMap, sync::Arc, time::Duration};
 use anyhow::{anyhow, Result};
 use serde::{Deserialize, Serialize};
-use tokio::sync::{RwLock, mpsc};
-use tracing::{info, warn, error, debug};
+use std::{collections::HashMap, sync::Arc, time::Duration};
+use tokio::sync::{mpsc, RwLock};
+use tracing::{debug, error, info, warn};
 use uuid::Uuid;
 
 use crate::{
+    asset::AssetManager,
     region::{RegionId, RegionManager},
     state::StateManager,
-    asset::AssetManager,
 };
 
-pub use lsl_interpreter::LSLInterpreter;
-pub use script_engine::ScriptEngine;
-pub use lsl_types::*;
+pub use engine_manager::{
+    EngineCompatibility, ScriptEngineConfig, ScriptEngineManager, ScriptEngineType,
+};
 pub use lsl_functions::*;
+pub use lsl_interpreter::LSLInterpreter;
+pub use lsl_types::*;
 pub use sandbox::ScriptSandbox;
-pub use engine_manager::{ScriptEngineManager, ScriptEngineType, ScriptEngineConfig, EngineCompatibility};
+pub use script_engine::ScriptEngine;
 
 /// Script execution state
 #[derive(Debug, Clone, Serialize, Deserialize, PartialEq)]
@@ -476,7 +478,11 @@ impl ScriptingManager {
         info!("Script engine manager initialized");
 
         // Take the receiver out of the option
-        let mut event_rx = self.event_rx.write().await.take()
+        let mut event_rx = self
+            .event_rx
+            .write()
+            .await
+            .take()
             .ok_or_else(|| anyhow!("Scripting manager already started"))?;
 
         // Start event processing loop
@@ -603,11 +609,16 @@ impl ScriptingManager {
     /// Start a script
     pub async fn start_script(&self, script_id: Uuid) -> Result<()> {
         let mut scripts = self.scripts.write().await;
-        let script = scripts.get_mut(&script_id)
+        let script = scripts
+            .get_mut(&script_id)
             .ok_or_else(|| anyhow!("Script not found: {}", script_id))?;
 
         if script.state != ScriptState::Stopped && script.state != ScriptState::Suspended {
-            return Err(anyhow!("Script {} is not in a startable state: {:?}", script_id, script.state));
+            return Err(anyhow!(
+                "Script {} is not in a startable state: {:?}",
+                script_id,
+                script.state
+            ));
         }
 
         script.state = ScriptState::Running;
@@ -626,14 +637,15 @@ impl ScriptingManager {
     /// Stop a script
     pub async fn stop_script(&self, script_id: Uuid) -> Result<()> {
         let mut scripts = self.scripts.write().await;
-        let script = scripts.get_mut(&script_id)
+        let script = scripts
+            .get_mut(&script_id)
             .ok_or_else(|| anyhow!("Script not found: {}", script_id))?;
 
         if script.state == ScriptState::Running {
             // Send state_exit event before stopping
             drop(scripts);
             self.queue_event(script_id, LSLEvent::StateExit).await?;
-            
+
             let mut scripts_lock = self.scripts.write().await;
             let script = scripts_lock.get_mut(&script_id).unwrap();
             script.state = ScriptState::Stopped;
@@ -649,7 +661,8 @@ impl ScriptingManager {
     /// Suspend a script
     pub async fn suspend_script(&self, script_id: Uuid) -> Result<()> {
         let mut scripts = self.scripts.write().await;
-        let script = scripts.get_mut(&script_id)
+        let script = scripts
+            .get_mut(&script_id)
             .ok_or_else(|| anyhow!("Script not found: {}", script_id))?;
 
         if script.state == ScriptState::Running {
@@ -675,7 +688,7 @@ impl ScriptingManager {
 
         if let Some(script) = script {
             info!("Removed script: {}", script.name);
-            
+
             // Update statistics
             self.update_script_stats().await;
         }
@@ -686,7 +699,7 @@ impl ScriptingManager {
     /// Queue an event for a script
     pub async fn queue_event(&self, script_id: Uuid, event: LSLEvent) -> Result<()> {
         debug!("Queuing event {:?} for script {}", event, script_id);
-        
+
         if let Err(_) = self.event_tx.send((script_id, event)) {
             return Err(anyhow!("Failed to queue event - channel closed"));
         }
@@ -701,7 +714,9 @@ impl ScriptingManager {
 
     /// Get all scripts for an object
     pub async fn get_object_scripts(&self, object_id: Uuid) -> Vec<ScriptInfo> {
-        self.scripts.read().await
+        self.scripts
+            .read()
+            .await
             .values()
             .filter(|script| script.object_id == object_id)
             .cloned()
@@ -729,12 +744,19 @@ impl ScriptingManager {
     }
 
     /// Get engine compatibility information
-    pub async fn get_engine_compatibility(&self, engine_type: &engine_manager::ScriptEngineType) -> Option<engine_manager::EngineCompatibility> {
-        self.engine_manager.get_engine_compatibility(engine_type).await
+    pub async fn get_engine_compatibility(
+        &self,
+        engine_type: &engine_manager::ScriptEngineType,
+    ) -> Option<engine_manager::EngineCompatibility> {
+        self.engine_manager
+            .get_engine_compatibility(engine_type)
+            .await
     }
 
     /// Get combined engine statistics
-    pub async fn get_engine_stats(&self) -> Result<HashMap<engine_manager::ScriptEngineType, engine_manager::EngineStats>> {
+    pub async fn get_engine_stats(
+        &self,
+    ) -> Result<HashMap<engine_manager::ScriptEngineType, engine_manager::EngineStats>> {
         self.engine_manager.get_combined_stats().await
     }
 
@@ -753,7 +775,10 @@ impl ScriptingManager {
             match scripts.get(&script_id) {
                 Some(script) if script.state == ScriptState::Running => script.clone(),
                 Some(script) => {
-                    debug!("Skipping event for script {} in state {:?}", script_id, script.state);
+                    debug!(
+                        "Skipping event for script {} in state {:?}",
+                        script_id, script.state
+                    );
                     return Ok(());
                 }
                 None => {
@@ -764,12 +789,21 @@ impl ScriptingManager {
         };
 
         // Get script context
-        let context = self.contexts.read().await.get(&script_id).cloned()
+        let context = self
+            .contexts
+            .read()
+            .await
+            .get(&script_id)
+            .cloned()
             .ok_or_else(|| anyhow!("Script context not found: {}", script_id))?;
 
         // Execute the event in the script engine
         let start_time = std::time::Instant::now();
-        match self.script_engine.execute_event(script_id, &event, &context).await {
+        match self
+            .script_engine
+            .execute_event(script_id, &event, &context)
+            .await
+        {
             Ok(_) => {
                 let execution_time = start_time.elapsed().as_millis() as f64;
                 debug!("Event executed successfully in {}ms", execution_time);
@@ -789,12 +823,13 @@ impl ScriptingManager {
                     let mut stats = self.stats.write().await;
                     stats.events_processed += 1;
                     stats.total_execution_time_ms += execution_time;
-                    stats.average_execution_time_ms = stats.total_execution_time_ms / stats.events_processed as f64;
+                    stats.average_execution_time_ms =
+                        stats.total_execution_time_ms / stats.events_processed as f64;
                 }
             }
             Err(e) => {
                 error!("Script {} event execution failed: {}", script_info.name, e);
-                
+
                 // Mark script as error state
                 {
                     let mut scripts = self.scripts.write().await;
@@ -816,9 +851,18 @@ impl ScriptingManager {
         let mut stats = self.stats.write().await;
 
         stats.total_scripts = scripts.len();
-        stats.running_scripts = scripts.values().filter(|s| s.state == ScriptState::Running).count();
-        stats.suspended_scripts = scripts.values().filter(|s| s.state == ScriptState::Suspended).count();
-        stats.error_scripts = scripts.values().filter(|s| matches!(s.state, ScriptState::Error(_))).count();
+        stats.running_scripts = scripts
+            .values()
+            .filter(|s| s.state == ScriptState::Running)
+            .count();
+        stats.suspended_scripts = scripts
+            .values()
+            .filter(|s| s.state == ScriptState::Suspended)
+            .count();
+        stats.error_scripts = scripts
+            .values()
+            .filter(|s| matches!(s.state, ScriptState::Error(_)))
+            .count();
         stats.total_memory_usage = scripts.values().map(|s| s.memory_usage).sum();
         stats.peak_memory_usage = stats.peak_memory_usage.max(stats.total_memory_usage);
     }
@@ -829,7 +873,7 @@ impl ScriptingManager {
 
         loop {
             interval.tick().await;
-            
+
             // Update statistics
             self.update_script_stats().await;
 
@@ -847,7 +891,8 @@ impl ScriptingManager {
         let mut contexts = self.contexts.write().await;
 
         for (script_id, context) in contexts.iter_mut() {
-            let expired_timers: Vec<String> = context.timers
+            let expired_timers: Vec<String> = context
+                .timers
                 .iter()
                 .filter(|(_, &expiry)| expiry <= current_time)
                 .map(|(name, _)| name.clone())
@@ -855,9 +900,12 @@ impl ScriptingManager {
 
             for timer_name in expired_timers {
                 context.timers.remove(&timer_name);
-                
+
                 // Queue timer event
-                if let Err(e) = self.event_tx.send((*script_id, LSLEvent::Timer(timer_name))) {
+                if let Err(e) = self
+                    .event_tx
+                    .send((*script_id, LSLEvent::Timer(timer_name)))
+                {
                     error!("Failed to queue timer event: {}", e);
                 }
             }
@@ -886,7 +934,7 @@ impl ScriptingManager {
 impl Clone for ScriptingManager {
     fn clone(&self) -> Self {
         let (event_tx, _) = mpsc::unbounded_channel();
-        
+
         Self {
             script_engine: self.script_engine.clone(),
             engine_manager: self.engine_manager.clone(),
@@ -919,7 +967,7 @@ mod tests {
     use super::*;
     use crate::{
         ffi::physics::PhysicsBridge,
-        region::{RegionConfig, terrain::TerrainConfig},
+        region::{terrain::TerrainConfig, RegionConfig},
     };
 
     #[tokio::test]
@@ -928,14 +976,14 @@ mod tests {
         let state_manager = Arc::new(StateManager::new()?);
         let region_manager = Arc::new(RegionManager::new(physics_bridge, state_manager.clone()));
         // Create test dependencies for AssetManager
-        use crate::database::DatabaseManager;
         use crate::asset::{
-            cache::{AssetCache, CacheConfig}, 
-            cdn::{CdnManager, CdnConfig}, 
-            storage::StorageBackend, 
-            AssetManagerConfig
+            cache::{AssetCache, CacheConfig},
+            cdn::{CdnConfig, CdnManager},
+            storage::StorageBackend,
+            AssetManagerConfig,
         };
-        
+        use crate::database::DatabaseManager;
+
         let database = Arc::new(DatabaseManager::new("sqlite://test_scripting.db").await?);
         let cache_config = CacheConfig {
             memory_cache_size: 100,
@@ -958,16 +1006,17 @@ mod tests {
             regions: vec![],
         };
         let cdn = Arc::new(CdnManager::new(cdn_config).await?);
-        let storage: Arc<dyn StorageBackend> = Arc::new(crate::asset::storage::FileSystemStorage::new(std::path::PathBuf::from("./test_assets"))?);
+        let storage: Arc<dyn StorageBackend> =
+            Arc::new(crate::asset::storage::FileSystemStorage::new(
+                std::path::PathBuf::from("./test_assets"),
+            )?);
         let config = AssetManagerConfig::default();
-        
-        let asset_manager = Arc::new(AssetManager::new(database, cache, cdn, storage, config).await?);
-        
-        let scripting_manager = ScriptingManager::new(
-            region_manager,
-            state_manager,
-            asset_manager,
-        ).await?;
+
+        let asset_manager =
+            Arc::new(AssetManager::new(database, cache, cdn, storage, config).await?);
+
+        let scripting_manager =
+            ScriptingManager::new(region_manager, state_manager, asset_manager).await?;
 
         let stats = scripting_manager.get_stats().await;
         assert_eq!(stats.total_scripts, 0);
@@ -982,14 +1031,14 @@ mod tests {
         let state_manager = Arc::new(StateManager::new()?);
         let region_manager = Arc::new(RegionManager::new(physics_bridge, state_manager.clone()));
         // Create test dependencies for AssetManager
-        use crate::database::DatabaseManager;
         use crate::asset::{
-            cache::{AssetCache, CacheConfig}, 
-            cdn::{CdnManager, CdnConfig}, 
-            storage::StorageBackend, 
-            AssetManagerConfig
+            cache::{AssetCache, CacheConfig},
+            cdn::{CdnConfig, CdnManager},
+            storage::StorageBackend,
+            AssetManagerConfig,
         };
-        
+        use crate::database::DatabaseManager;
+
         let database = Arc::new(DatabaseManager::new("sqlite://test_scripting.db").await?);
         let cache_config = CacheConfig {
             memory_cache_size: 100,
@@ -1012,16 +1061,17 @@ mod tests {
             regions: vec![],
         };
         let cdn = Arc::new(CdnManager::new(cdn_config).await?);
-        let storage: Arc<dyn StorageBackend> = Arc::new(crate::asset::storage::FileSystemStorage::new(std::path::PathBuf::from("./test_assets"))?);
+        let storage: Arc<dyn StorageBackend> =
+            Arc::new(crate::asset::storage::FileSystemStorage::new(
+                std::path::PathBuf::from("./test_assets"),
+            )?);
         let config = AssetManagerConfig::default();
-        
-        let asset_manager = Arc::new(AssetManager::new(database, cache, cdn, storage, config).await?);
-        
-        let scripting_manager = ScriptingManager::new(
-            region_manager,
-            state_manager,
-            asset_manager,
-        ).await?;
+
+        let asset_manager =
+            Arc::new(AssetManager::new(database, cache, cdn, storage, config).await?);
+
+        let scripting_manager =
+            ScriptingManager::new(region_manager, state_manager, asset_manager).await?;
 
         let script_source = r#"
             default {
@@ -1031,21 +1081,26 @@ mod tests {
             }
         "#;
 
-        let script_id = scripting_manager.load_script(
-            "test_script".to_string(),
-            script_source.to_string(),
-            Uuid::new_v4(),
-            Uuid::new_v4(),
-            crate::region::RegionId(1),
-            (128.0, 128.0, 21.0),
-        ).await?;
+        let script_id = scripting_manager
+            .load_script(
+                "test_script".to_string(),
+                script_source.to_string(),
+                Uuid::new_v4(),
+                Uuid::new_v4(),
+                crate::region::RegionId(1),
+                (128.0, 128.0, 21.0),
+            )
+            .await?;
 
         let script = scripting_manager.get_script(script_id).await;
         assert!(script.is_some());
-        
+
         let script = script.unwrap();
         assert_eq!(script.name, "test_script");
-        assert!(matches!(script.state, ScriptState::Stopped | ScriptState::CompilationFailed(_)));
+        assert!(matches!(
+            script.state,
+            ScriptState::Stopped | ScriptState::CompilationFailed(_)
+        ));
 
         Ok(())
     }

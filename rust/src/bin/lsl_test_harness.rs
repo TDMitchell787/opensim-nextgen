@@ -78,7 +78,11 @@ fn main() -> Result<()> {
     let start = Instant::now();
 
     let args: Vec<String> = std::env::args().collect();
-    let dir_arg = if args.len() > 1 { &args[1] } else { "content/LSL-Scripts-master" };
+    let dir_arg = if args.len() > 1 {
+        &args[1]
+    } else {
+        "content/LSL-Scripts-master"
+    };
     let base_dir = Path::new(dir_arg);
     if !base_dir.exists() {
         eprintln!("ERROR: Script directory not found: {}", base_dir.display());
@@ -105,7 +109,12 @@ fn main() -> Result<()> {
 
     for (i, path) in files.iter().enumerate() {
         if (i + 1) % 200 == 0 || i + 1 == total {
-            eprint!("\rProcessing: {}/{} ({:.1}%)", i + 1, total, (i + 1) as f64 / total as f64 * 100.0);
+            eprint!(
+                "\rProcessing: {}/{} ({:.1}%)",
+                i + 1,
+                total,
+                (i + 1) as f64 / total as f64 * 100.0
+            );
         }
 
         let source = match fs::read_to_string(path) {
@@ -118,7 +127,9 @@ fn main() -> Result<()> {
                     error: format!("Read error: {}", e),
                     lines: 0,
                 });
-                *error_counts.entry(format!("Read error: {}", e)).or_insert(0) += 1;
+                *error_counts
+                    .entry(format!("Read error: {}", e))
+                    .or_insert(0) += 1;
                 continue;
             }
         };
@@ -179,8 +190,16 @@ fn main() -> Result<()> {
     println!("Results");
     println!("-------");
     println!("Scanned:   {} scripts", total);
-    println!("Parsed OK: {} ({:.1}%)", parsed_ok, parsed_ok as f64 / total.max(1) as f64 * 100.0);
-    println!("Failed:    {} ({:.1}%)", parse_failed, parse_failed as f64 / total.max(1) as f64 * 100.0);
+    println!(
+        "Parsed OK: {} ({:.1}%)",
+        parsed_ok,
+        parsed_ok as f64 / total.max(1) as f64 * 100.0
+    );
+    println!(
+        "Failed:    {} ({:.1}%)",
+        parse_failed,
+        parse_failed as f64 / total.max(1) as f64 * 100.0
+    );
     println!("Duration:  {:.2}s", duration.as_secs_f64());
 
     println!();

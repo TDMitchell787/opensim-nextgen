@@ -11,8 +11,10 @@ use std::sync::Arc;
 use tracing::{debug, info, warn};
 use uuid::Uuid;
 
-use crate::services::traits::{InventoryServiceTrait, InventoryFolder, InventoryItem, InventoryCollection};
 use crate::database::multi_backend::DatabaseConnection;
+use crate::services::traits::{
+    InventoryCollection, InventoryFolder, InventoryItem, InventoryServiceTrait,
+};
 
 pub struct LocalInventoryService {
     connection: Arc<DatabaseConnection>,
@@ -27,7 +29,9 @@ impl LocalInventoryService {
     fn get_pg_pool(&self) -> Result<&sqlx::PgPool> {
         match self.connection.as_ref() {
             DatabaseConnection::PostgreSQL(pool) => Ok(pool),
-            _ => Err(anyhow!("LocalInventoryService requires PostgreSQL connection")),
+            _ => Err(anyhow!(
+                "LocalInventoryService requires PostgreSQL connection"
+            )),
         }
     }
 
@@ -50,13 +54,18 @@ impl LocalInventoryService {
             asset_id: row.try_get("assetid")?,
             folder_id: row.try_get("parentfolderid")?,
             owner_id: row.try_get("avatarid")?,
-            creator_id: row.try_get::<String, _>("creatorid")
+            creator_id: row
+                .try_get::<String, _>("creatorid")
                 .ok()
                 .and_then(|s| Uuid::parse_str(&s).ok())
                 .unwrap_or_default(),
             creator_data: {
                 let full: String = row.try_get::<String, _>("creatorid").unwrap_or_default();
-                if let Some(pos) = full.find(';') { full[pos+1..].to_string() } else { String::new() }
+                if let Some(pos) = full.find(';') {
+                    full[pos + 1..].to_string()
+                } else {
+                    String::new()
+                }
             },
             name: row.try_get("inventoryname")?,
             description: row.try_get("inventorydescription").unwrap_or_default(),
@@ -64,15 +73,52 @@ impl LocalInventoryService {
             inv_type: row.try_get("invtype")?,
             flags: row.try_get::<i32, _>("flags").unwrap_or(0) as u32,
             creation_date: row.try_get::<i32, _>("creationdate").unwrap_or(0) as i64,
-            base_permissions: row.try_get::<Option<i32>, _>("inventorybasepermissions").ok().flatten().unwrap_or(0x7FFFFFFF) as u32,
-            current_permissions: row.try_get::<Option<i32>, _>("inventorycurrentpermissions").ok().flatten().unwrap_or(0x7FFFFFFF) as u32,
-            everyone_permissions: row.try_get::<Option<i32>, _>("inventoryeveryonepermissions").ok().flatten().unwrap_or(0) as u32,
-            next_permissions: row.try_get::<Option<i32>, _>("inventorynextpermissions").ok().flatten().unwrap_or(0x7FFFFFFF) as u32,
-            group_permissions: row.try_get::<Option<i32>, _>("inventorygrouppermissions").ok().flatten().unwrap_or(0) as u32,
-            group_id: row.try_get::<Option<Uuid>, _>("groupid").ok().flatten().unwrap_or_default(),
-            group_owned: row.try_get::<Option<i32>, _>("groupowned").ok().flatten().map(|v| v != 0).unwrap_or(false),
-            sale_price: row.try_get::<Option<i32>, _>("saleprice").ok().flatten().unwrap_or(0),
-            sale_type: row.try_get::<Option<i32>, _>("saletype").ok().flatten().unwrap_or(0),
+            base_permissions: row
+                .try_get::<Option<i32>, _>("inventorybasepermissions")
+                .ok()
+                .flatten()
+                .unwrap_or(0x7FFFFFFF) as u32,
+            current_permissions: row
+                .try_get::<Option<i32>, _>("inventorycurrentpermissions")
+                .ok()
+                .flatten()
+                .unwrap_or(0x7FFFFFFF) as u32,
+            everyone_permissions: row
+                .try_get::<Option<i32>, _>("inventoryeveryonepermissions")
+                .ok()
+                .flatten()
+                .unwrap_or(0) as u32,
+            next_permissions: row
+                .try_get::<Option<i32>, _>("inventorynextpermissions")
+                .ok()
+                .flatten()
+                .unwrap_or(0x7FFFFFFF) as u32,
+            group_permissions: row
+                .try_get::<Option<i32>, _>("inventorygrouppermissions")
+                .ok()
+                .flatten()
+                .unwrap_or(0) as u32,
+            group_id: row
+                .try_get::<Option<Uuid>, _>("groupid")
+                .ok()
+                .flatten()
+                .unwrap_or_default(),
+            group_owned: row
+                .try_get::<Option<i32>, _>("groupowned")
+                .ok()
+                .flatten()
+                .map(|v| v != 0)
+                .unwrap_or(false),
+            sale_price: row
+                .try_get::<Option<i32>, _>("saleprice")
+                .ok()
+                .flatten()
+                .unwrap_or(0),
+            sale_type: row
+                .try_get::<Option<i32>, _>("saletype")
+                .ok()
+                .flatten()
+                .unwrap_or(0),
         })
     }
 }
@@ -117,8 +163,15 @@ impl InventoryServiceTrait for LocalInventoryService {
         }
     }
 
-    async fn get_folder_content(&self, principal_id: Uuid, folder_id: Uuid) -> Result<InventoryCollection> {
-        debug!("Getting folder content: {} for user: {}", folder_id, principal_id);
+    async fn get_folder_content(
+        &self,
+        principal_id: Uuid,
+        folder_id: Uuid,
+    ) -> Result<InventoryCollection> {
+        debug!(
+            "Getting folder content: {} for user: {}",
+            folder_id, principal_id
+        );
 
         let pool = self.get_pg_pool()?;
 
@@ -194,7 +247,11 @@ impl InventoryServiceTrait for LocalInventoryService {
     }
 
     async fn delete_folders(&self, principal_id: Uuid, folder_ids: &[Uuid]) -> Result<bool> {
-        warn!("Deleting {} folders for user: {}", folder_ids.len(), principal_id);
+        warn!(
+            "Deleting {} folders for user: {}",
+            folder_ids.len(),
+            principal_id
+        );
 
         let pool = self.get_pg_pool()?;
         for folder_id in folder_ids {
@@ -306,7 +363,11 @@ impl InventoryServiceTrait for LocalInventoryService {
     }
 
     async fn delete_items(&self, principal_id: Uuid, item_ids: &[Uuid]) -> Result<bool> {
-        warn!("Deleting {} items for user: {}", item_ids.len(), principal_id);
+        warn!(
+            "Deleting {} items for user: {}",
+            item_ids.len(),
+            principal_id
+        );
 
         let pool = self.get_pg_pool()?;
         for item_id in item_ids {
@@ -356,16 +417,26 @@ impl InventoryServiceTrait for LocalInventoryService {
         Ok(true)
     }
 
-    async fn move_folder(&self, principal_id: Uuid, folder_id: Uuid, new_parent_id: Uuid) -> Result<bool> {
-        info!("Moving folder {} to parent {} for user {}", folder_id, new_parent_id, principal_id);
+    async fn move_folder(
+        &self,
+        principal_id: Uuid,
+        folder_id: Uuid,
+        new_parent_id: Uuid,
+    ) -> Result<bool> {
+        info!(
+            "Moving folder {} to parent {} for user {}",
+            folder_id, new_parent_id, principal_id
+        );
         let pool = self.get_pg_pool()?;
-        let result = sqlx::query("UPDATE inventoryfolders SET parentfolderid = $1 WHERE folderid = $2 AND agentid = $3")
-            .bind(new_parent_id)
-            .bind(folder_id)
-            .bind(principal_id)
-            .execute(pool)
-            .await
-            .map_err(|e| anyhow!("Failed to move folder: {}", e))?;
+        let result = sqlx::query(
+            "UPDATE inventoryfolders SET parentfolderid = $1 WHERE folderid = $2 AND agentid = $3",
+        )
+        .bind(new_parent_id)
+        .bind(folder_id)
+        .bind(principal_id)
+        .execute(pool)
+        .await
+        .map_err(|e| anyhow!("Failed to move folder: {}", e))?;
         Ok(result.rows_affected() > 0)
     }
 
@@ -405,8 +476,16 @@ impl InventoryServiceTrait for LocalInventoryService {
         Ok(items)
     }
 
-    async fn get_multiple_folders_content(&self, principal_id: Uuid, folder_ids: &[Uuid]) -> Result<Vec<InventoryCollection>> {
-        debug!("Getting content for {} folders for user: {}", folder_ids.len(), principal_id);
+    async fn get_multiple_folders_content(
+        &self,
+        principal_id: Uuid,
+        folder_ids: &[Uuid],
+    ) -> Result<Vec<InventoryCollection>> {
+        debug!(
+            "Getting content for {} folders for user: {}",
+            folder_ids.len(),
+            principal_id
+        );
         let mut results = Vec::new();
         for &folder_id in folder_ids {
             let collection = self.get_folder_content(principal_id, folder_id).await?;

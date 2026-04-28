@@ -1,8 +1,8 @@
 //! Physics bridge for communicating with Zig physics engine
-//! 
+//!
 //! This module provides the interface between Rust and the Zig physics engine.
 
-pub use crate::ffi::{Vec3, PhysicsBody, FFIError, PhysicsHeightfield};
+pub use crate::ffi::{FFIError, PhysicsBody, PhysicsHeightfield, Vec3};
 
 /// Physics data for entities
 #[derive(Debug, Clone)]
@@ -49,7 +49,9 @@ impl PhysicsBridge {
     /// Create a new physics bridge
     pub fn new() -> Result<Self, FFIError> {
         let physics = crate::ffi::Physics::new()?;
-        Ok(Self { physics: Some(physics) })
+        Ok(Self {
+            physics: Some(physics),
+        })
     }
 
     /// Create a disabled physics bridge (no FFI initialization required)
@@ -92,12 +94,18 @@ impl PhysicsBridge {
 
     /// Get error count from physics engine
     pub fn get_error_count(&self) -> i32 {
-        self.physics.as_ref().map(|p| p.get_error_count()).unwrap_or(0)
+        self.physics
+            .as_ref()
+            .map(|p| p.get_error_count())
+            .unwrap_or(0)
     }
 
     /// Get last error from physics engine
     pub fn get_last_error(&self) -> String {
-        self.physics.as_ref().map(|p| p.get_last_error()).unwrap_or_else(|| "Physics disabled".to_string())
+        self.physics
+            .as_ref()
+            .map(|p| p.get_last_error())
+            .unwrap_or_else(|| "Physics disabled".to_string())
     }
 
     pub fn create_hull_body(
@@ -115,24 +123,29 @@ impl PhysicsBridge {
         }
 
         let hull_count = hull_array[0] as i32;
-        let shape = unsafe {
-            crate::ffi::physics_create_hull_shape(hull_count, hull_array.as_ptr())
-        };
+        let shape =
+            unsafe { crate::ffi::physics_create_hull_shape(hull_count, hull_array.as_ptr()) };
         if shape.is_null() {
-            tracing::warn!("[MESH-PHYSICS] CreateHullShape2 returned null for id={}, falling back to capsule", id);
+            tracing::warn!(
+                "[MESH-PHYSICS] CreateHullShape2 returned null for id={}, falling back to capsule",
+                id
+            );
             return Err(FFIError::CreationFailed);
         }
 
         let body = unsafe {
             crate::ffi::physics_create_body_from_shape(
-                shape, id,
-                pos.x, pos.y, pos.z,
-                rot.x, rot.y, rot.z, rot.w,
+                shape, id, pos.x, pos.y, pos.z, rot.x, rot.y, rot.z, rot.w,
             )
         };
         if body.is_null() {
-            unsafe { crate::ffi::physics_delete_collision_shape(shape); }
-            tracing::warn!("[MESH-PHYSICS] CreateBodyFromShape2 returned null for id={}", id);
+            unsafe {
+                crate::ffi::physics_delete_collision_shape(shape);
+            }
+            tracing::warn!(
+                "[MESH-PHYSICS] CreateBodyFromShape2 returned null for id={}",
+                id
+            );
             return Err(FFIError::CreationFailed);
         }
 
@@ -145,16 +158,16 @@ impl PhysicsBridge {
 pub enum PhysicsError {
     #[error("FFI error: {0}")]
     FFI(#[from] FFIError),
-    
+
     #[error("Invalid physics data: {0}")]
     InvalidData(String),
-    
+
     #[error("Physics body not found")]
     BodyNotFound,
-    
+
     #[error("Physics simulation error: {0}")]
     SimulationError(String),
-    
+
     #[error("Internal error: {0}")]
     Internal(String),
-} 
+}

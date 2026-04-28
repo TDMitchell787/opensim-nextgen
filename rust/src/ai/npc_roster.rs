@@ -1,5 +1,5 @@
-use uuid::Uuid;
 use super::npc_avatar::{NPCAvatar, NPCRole};
+use uuid::Uuid;
 
 pub fn default_roster() -> Vec<NPCAvatar> {
     vec![

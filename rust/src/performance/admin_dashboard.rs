@@ -1,30 +1,26 @@
 //! Admin dashboard and management tools for OpenSim server administration
 
-use std::{
-    collections::HashMap,
-    sync::Arc,
-    time::Duration,
-};
 use anyhow::{anyhow, Result};
-use serde::{Deserialize, Serialize};
-use tokio::sync::RwLock;
-use tracing::{info, warn, error, debug};
 use axum::{
     extract::{Path, Query, State},
     http::StatusCode,
     response::Json,
-    routing::{get, post, put, delete},
+    routing::{delete, get, post, put},
     Router,
 };
+use serde::{Deserialize, Serialize};
+use std::{collections::HashMap, sync::Arc, time::Duration};
+use tokio::sync::RwLock;
+use tracing::{debug, error, info, warn};
 
 use super::{
-    metrics::MetricsRegistry,
-    profiling::Profiler,
     caching::CacheManager,
-    scaling::HorizontalScaler,
     load_balancer::LoadBalancer,
-    microservices::{ServiceMesh, ServiceType, ServiceHealth},
     logging::LogAggregator,
+    metrics::MetricsRegistry,
+    microservices::{ServiceHealth, ServiceMesh, ServiceType},
+    profiling::Profiler,
+    scaling::HorizontalScaler,
 };
 
 /// Admin dashboard configuration
@@ -197,7 +193,10 @@ impl AdminDashboard {
             return Ok(());
         }
 
-        info!("Starting admin dashboard on {}:{}", self.config.bind_address, self.config.port);
+        info!(
+            "Starting admin dashboard on {}:{}",
+            self.config.bind_address, self.config.port
+        );
 
         let app = self.create_router().await?;
         let addr = format!("{}:{}", self.config.bind_address, self.config.port);
@@ -209,12 +208,14 @@ impl AdminDashboard {
         self.start_dashboard_metrics().await?;
 
         tokio::spawn(async move {
-            let listener = tokio::net::TcpListener::bind(&addr).await
+            let listener = tokio::net::TcpListener::bind(&addr)
+                .await
                 .expect("Failed to bind admin dashboard server");
-            
+
             info!("Admin dashboard listening on {}", addr);
-            
-            axum::serve(listener, app).await
+
+            axum::serve(listener, app)
+                .await
                 .expect("Admin dashboard server failed");
         });
 
@@ -230,61 +231,59 @@ impl AdminDashboard {
             // Static file serving for web dashboard
             .route("/", get(serve_dashboard))
             .route("/index.html", get(serve_dashboard))
-            
             // Status and overview endpoints
             .route("/api/status", get(get_server_status))
             .route("/api/stats", get(get_performance_stats))
             .route("/api/overview", get(get_system_overview))
-            
             // Metrics endpoints
             .route("/api/metrics", get(get_metrics))
             .route("/api/metrics/prometheus", get(get_prometheus_metrics))
             .route("/api/metrics/custom", post(add_custom_metric))
-            
             // Service management endpoints
             .route("/api/services", get(list_services))
             .route("/api/services/:service_type", get(get_service_details))
-            .route("/api/services/:service_type/health", get(get_service_health))
+            .route(
+                "/api/services/:service_type/health",
+                get(get_service_health),
+            )
             .route("/api/services/:service_type/restart", post(restart_service))
             .route("/api/services/:service_type/scale", post(scale_service))
-            
             // Scaling management
             .route("/api/scaling/policies", get(get_scaling_policies))
             .route("/api/scaling/policies", post(create_scaling_policy))
-            .route("/api/scaling/policies/:policy_id", put(update_scaling_policy))
-            .route("/api/scaling/policies/:policy_id", delete(delete_scaling_policy))
-            
+            .route(
+                "/api/scaling/policies/:policy_id",
+                put(update_scaling_policy),
+            )
+            .route(
+                "/api/scaling/policies/:policy_id",
+                delete(delete_scaling_policy),
+            )
             // Cache management
             .route("/api/cache/stats", get(get_cache_stats))
             .route("/api/cache/clear", post(clear_cache))
             .route("/api/cache/keys", get(list_cache_keys))
-            
             // Log management
             .route("/api/logs", get(get_logs))
             .route("/api/logs/search", post(search_logs))
             .route("/api/logs/export", get(export_logs))
             .route("/api/logs/alerts", get(get_log_alerts))
-            
             // Profiling endpoints
             .route("/api/profiling/stats", get(get_profiling_stats))
             .route("/api/profiling/flamegraph", get(get_flame_graph))
             .route("/api/profiling/clear", post(clear_profiling_data))
-            
             // Configuration management
             .route("/api/config", get(get_configuration))
             .route("/api/config", put(update_configuration))
             .route("/api/config/reload", post(reload_configuration))
-            
             // System commands
             .route("/api/system/command", post(execute_system_command))
             .route("/api/system/backup", post(create_system_backup))
             .route("/api/system/health", get(system_health_check))
-            
             // Session management
             .route("/api/auth/login", post(admin_login))
             .route("/api/auth/logout", post(admin_logout))
             .route("/api/auth/sessions", get(list_active_sessions))
-            
             .with_state(dashboard_state);
 
         // Add debug endpoints if enabled
@@ -296,7 +295,7 @@ impl AdminDashboard {
                 .with_state(DashboardState {
                     dashboard: Arc::new(self.clone()),
                 });
-            
+
             Ok(app.merge(debug_app))
         } else {
             Ok(app)
@@ -309,36 +308,61 @@ impl AdminDashboard {
 
         tokio::spawn(async move {
             let mut interval = tokio::time::interval(Duration::from_secs(300)); // Check every 5 minutes
-            
+
             loop {
                 interval.tick().await;
-                
+
                 let mut sessions_guard = sessions.write().await;
                 let now = chrono::Utc::now();
                 let timeout_duration = chrono::Duration::minutes(timeout_minutes as i64);
-                
+
                 sessions_guard.retain(|_session_id, session| {
                     now.signed_duration_since(session.last_access) < timeout_duration
                 });
-                
-                debug!("Session cleanup completed, {} active sessions", sessions_guard.len());
+
+                debug!(
+                    "Session cleanup completed, {} active sessions",
+                    sessions_guard.len()
+                );
             }
         });
     }
 
     async fn start_dashboard_metrics(&self) -> Result<()> {
         let labels = HashMap::new();
-        
+
         // Register dashboard-specific metrics
-        self.metrics_registry.register_gauge("admin_dashboard_active_sessions", "Number of active admin sessions", labels.clone()).await?;
-        self.metrics_registry.register_counter("admin_dashboard_requests_total", "Total admin dashboard requests", labels.clone()).await?;
-        self.metrics_registry.register_histogram("admin_dashboard_request_duration_ms", "Admin dashboard request duration", labels.clone()).await?;
-        
+        self.metrics_registry
+            .register_gauge(
+                "admin_dashboard_active_sessions",
+                "Number of active admin sessions",
+                labels.clone(),
+            )
+            .await?;
+        self.metrics_registry
+            .register_counter(
+                "admin_dashboard_requests_total",
+                "Total admin dashboard requests",
+                labels.clone(),
+            )
+            .await?;
+        self.metrics_registry
+            .register_histogram(
+                "admin_dashboard_request_duration_ms",
+                "Admin dashboard request duration",
+                labels.clone(),
+            )
+            .await?;
+
         Ok(())
     }
 
     /// Create an admin session
-    pub async fn create_session(&self, user_id: &str, permissions: Vec<Permission>) -> Result<String> {
+    pub async fn create_session(
+        &self,
+        user_id: &str,
+        permissions: Vec<Permission>,
+    ) -> Result<String> {
         let sessions_guard = self.sessions.read().await;
         if sessions_guard.len() >= self.config.max_concurrent_sessions as usize {
             return Err(anyhow!("Maximum concurrent sessions reached"));
@@ -354,8 +378,11 @@ impl AdminDashboard {
             permissions,
         };
 
-        self.sessions.write().await.insert(session_id.clone(), session);
-        
+        self.sessions
+            .write()
+            .await
+            .insert(session_id.clone(), session);
+
         info!("Created admin session for user: {}", user_id);
         Ok(session_id)
     }
@@ -363,7 +390,7 @@ impl AdminDashboard {
     /// Validate a session and update last access time
     pub async fn validate_session(&self, session_id: &str) -> Result<DashboardSession> {
         let mut sessions = self.sessions.write().await;
-        
+
         if let Some(session) = sessions.get_mut(session_id) {
             session.last_access = chrono::Utc::now();
             Ok(session.clone())
@@ -434,34 +461,50 @@ async fn serve_dashboard() -> Result<axum::response::Html<String>, StatusCode> {
     Ok(axum::response::Html(DASHBOARD_HTML.to_string()))
 }
 
-async fn get_server_status(State(state): State<DashboardState>) -> Result<Json<ServerStatus>, StatusCode> {
+async fn get_server_status(
+    State(state): State<DashboardState>,
+) -> Result<Json<ServerStatus>, StatusCode> {
     match state.dashboard.get_server_status().await {
         Ok(status) => Ok(Json(status)),
         Err(_) => Err(StatusCode::INTERNAL_SERVER_ERROR),
     }
 }
 
-async fn get_performance_stats(State(state): State<DashboardState>) -> Result<Json<PerformanceStats>, StatusCode> {
+async fn get_performance_stats(
+    State(state): State<DashboardState>,
+) -> Result<Json<PerformanceStats>, StatusCode> {
     match state.dashboard.get_performance_stats().await {
         Ok(stats) => Ok(Json(stats)),
         Err(_) => Err(StatusCode::INTERNAL_SERVER_ERROR),
     }
 }
 
-async fn get_system_overview(State(state): State<DashboardState>) -> Result<Json<serde_json::Value>, StatusCode> {
-    let status = state.dashboard.get_server_status().await.map_err(|_| StatusCode::INTERNAL_SERVER_ERROR)?;
-    let stats = state.dashboard.get_performance_stats().await.map_err(|_| StatusCode::INTERNAL_SERVER_ERROR)?;
-    
+async fn get_system_overview(
+    State(state): State<DashboardState>,
+) -> Result<Json<serde_json::Value>, StatusCode> {
+    let status = state
+        .dashboard
+        .get_server_status()
+        .await
+        .map_err(|_| StatusCode::INTERNAL_SERVER_ERROR)?;
+    let stats = state
+        .dashboard
+        .get_performance_stats()
+        .await
+        .map_err(|_| StatusCode::INTERNAL_SERVER_ERROR)?;
+
     let overview = serde_json::json!({
         "status": status,
         "performance": stats,
         "timestamp": chrono::Utc::now()
     });
-    
+
     Ok(Json(overview))
 }
 
-async fn get_metrics(State(state): State<DashboardState>) -> Result<Json<Vec<super::metrics::Metric>>, StatusCode> {
+async fn get_metrics(
+    State(state): State<DashboardState>,
+) -> Result<Json<Vec<super::metrics::Metric>>, StatusCode> {
     match state.dashboard.metrics_registry.get_all_metrics().await {
         Ok(metrics) => Ok(Json(metrics)),
         Err(_) => Err(StatusCode::INTERNAL_SERVER_ERROR),
@@ -488,7 +531,9 @@ async fn add_custom_metric(
     }))
 }
 
-async fn list_services(State(state): State<DashboardState>) -> Result<Json<Vec<String>>, StatusCode> {
+async fn list_services(
+    State(state): State<DashboardState>,
+) -> Result<Json<Vec<String>>, StatusCode> {
     // Implementation would list all available services
     let services = vec![
         "RegionServer".to_string(),
@@ -534,7 +579,7 @@ async fn restart_service(
     Path(service_type): Path<String>,
 ) -> Result<Json<ServiceActionResponse>, StatusCode> {
     info!("Restarting service: {}", service_type);
-    
+
     Ok(Json(ServiceActionResponse {
         success: true,
         message: format!("Service {} restart initiated", service_type),
@@ -548,8 +593,11 @@ async fn scale_service(
     Path(service_type): Path<String>,
     Json(scale_request): Json<serde_json::Value>,
 ) -> Result<Json<ServiceActionResponse>, StatusCode> {
-    info!("Scaling service: {} with request: {:?}", service_type, scale_request);
-    
+    info!(
+        "Scaling service: {} with request: {:?}",
+        service_type, scale_request
+    );
+
     Ok(Json(ServiceActionResponse {
         success: true,
         message: format!("Service {} scaling initiated", service_type),
@@ -558,17 +606,17 @@ async fn scale_service(
     }))
 }
 
-async fn get_scaling_policies(State(state): State<DashboardState>) -> Result<Json<Vec<serde_json::Value>>, StatusCode> {
-    let policies = vec![
-        serde_json::json!({
-            "id": "auto-scale-regions",
-            "name": "Auto Scale Regions",
-            "target_service": "RegionServer",
-            "min_instances": 2,
-            "max_instances": 10,
-            "enabled": true
-        })
-    ];
+async fn get_scaling_policies(
+    State(state): State<DashboardState>,
+) -> Result<Json<Vec<serde_json::Value>>, StatusCode> {
+    let policies = vec![serde_json::json!({
+        "id": "auto-scale-regions",
+        "name": "Auto Scale Regions",
+        "target_service": "RegionServer",
+        "min_instances": 2,
+        "max_instances": 10,
+        "enabled": true
+    })];
     Ok(Json(policies))
 }
 
@@ -609,7 +657,9 @@ async fn delete_scaling_policy(
     }))
 }
 
-async fn get_cache_stats(State(state): State<DashboardState>) -> Result<Json<serde_json::Value>, StatusCode> {
+async fn get_cache_stats(
+    State(state): State<DashboardState>,
+) -> Result<Json<serde_json::Value>, StatusCode> {
     let stats = serde_json::json!({
         "hit_rate": 92.5,
         "miss_rate": 7.5,
@@ -620,7 +670,9 @@ async fn get_cache_stats(State(state): State<DashboardState>) -> Result<Json<ser
     Ok(Json(stats))
 }
 
-async fn clear_cache(State(state): State<DashboardState>) -> Result<Json<ServiceActionResponse>, StatusCode> {
+async fn clear_cache(
+    State(state): State<DashboardState>,
+) -> Result<Json<ServiceActionResponse>, StatusCode> {
     // Implementation would clear the cache
     Ok(Json(ServiceActionResponse {
         success: true,
@@ -647,12 +699,19 @@ async fn get_logs(
     State(state): State<DashboardState>,
     Query(params): Query<HashMap<String, String>>,
 ) -> Result<Json<Vec<super::logging::LogEntry>>, StatusCode> {
-    let level_filter = params.get("level").and_then(|l| serde_json::from_str(l).ok());
+    let level_filter = params
+        .get("level")
+        .and_then(|l| serde_json::from_str(l).ok());
     let module_filter = params.get("module").cloned();
     let message_filter = params.get("message").cloned();
     let limit = params.get("limit").and_then(|l| l.parse().ok());
 
-    match state.dashboard.log_aggregator.search_logs(level_filter, module_filter, message_filter, limit).await {
+    match state
+        .dashboard
+        .log_aggregator
+        .search_logs(level_filter, module_filter, message_filter, limit)
+        .await
+    {
         Ok(logs) => Ok(Json(logs)),
         Err(_) => Err(StatusCode::INTERNAL_SERVER_ERROR),
     }
@@ -663,7 +722,12 @@ async fn search_logs(
     Json(search_request): Json<serde_json::Value>,
 ) -> Result<Json<Vec<super::logging::LogEntry>>, StatusCode> {
     // Implementation would perform advanced log search
-    match state.dashboard.log_aggregator.search_logs(None, None, None, Some(100)).await {
+    match state
+        .dashboard
+        .log_aggregator
+        .search_logs(None, None, None, Some(100))
+        .await
+    {
         Ok(logs) => Ok(Json(logs)),
         Err(_) => Err(StatusCode::INTERNAL_SERVER_ERROR),
     }
@@ -680,25 +744,32 @@ async fn export_logs(
         _ => super::logging::LogExportFormat::Json,
     };
 
-    match state.dashboard.log_aggregator.export_logs(export_format).await {
+    match state
+        .dashboard
+        .log_aggregator
+        .export_logs(export_format)
+        .await
+    {
         Ok(export) => Ok(export),
         Err(_) => Err(StatusCode::INTERNAL_SERVER_ERROR),
     }
 }
 
-async fn get_log_alerts(State(state): State<DashboardState>) -> Result<Json<Vec<serde_json::Value>>, StatusCode> {
-    let alerts = vec![
-        serde_json::json!({
-            "id": "alert-1",
-            "severity": "high",
-            "message": "High error rate detected",
-            "triggered_at": chrono::Utc::now()
-        })
-    ];
+async fn get_log_alerts(
+    State(state): State<DashboardState>,
+) -> Result<Json<Vec<serde_json::Value>>, StatusCode> {
+    let alerts = vec![serde_json::json!({
+        "id": "alert-1",
+        "severity": "high",
+        "message": "High error rate detected",
+        "triggered_at": chrono::Utc::now()
+    })];
     Ok(Json(alerts))
 }
 
-async fn get_profiling_stats(State(state): State<DashboardState>) -> Result<Json<Vec<super::profiling::ProfileStats>>, StatusCode> {
+async fn get_profiling_stats(
+    State(state): State<DashboardState>,
+) -> Result<Json<Vec<super::profiling::ProfileStats>>, StatusCode> {
     match state.dashboard.profiler.get_stats().await {
         Ok(stats) => Ok(Json(stats)),
         Err(_) => Err(StatusCode::INTERNAL_SERVER_ERROR),
@@ -712,7 +783,9 @@ async fn get_flame_graph(State(state): State<DashboardState>) -> Result<String, 
     }
 }
 
-async fn clear_profiling_data(State(state): State<DashboardState>) -> Result<Json<ServiceActionResponse>, StatusCode> {
+async fn clear_profiling_data(
+    State(state): State<DashboardState>,
+) -> Result<Json<ServiceActionResponse>, StatusCode> {
     match state.dashboard.profiler.clear().await {
         Ok(_) => Ok(Json(ServiceActionResponse {
             success: true,
@@ -724,7 +797,9 @@ async fn clear_profiling_data(State(state): State<DashboardState>) -> Result<Jso
     }
 }
 
-async fn get_configuration(State(state): State<DashboardState>) -> Result<Json<HashMap<String, serde_json::Value>>, StatusCode> {
+async fn get_configuration(
+    State(state): State<DashboardState>,
+) -> Result<Json<HashMap<String, serde_json::Value>>, StatusCode> {
     let config = state.dashboard.system_config.read().await;
     Ok(Json(config.clone()))
 }
@@ -745,7 +820,9 @@ async fn update_configuration(
     }))
 }
 
-async fn reload_configuration(State(state): State<DashboardState>) -> Result<Json<ServiceActionResponse>, StatusCode> {
+async fn reload_configuration(
+    State(state): State<DashboardState>,
+) -> Result<Json<ServiceActionResponse>, StatusCode> {
     Ok(Json(ServiceActionResponse {
         success: true,
         message: "Configuration reloaded successfully".to_string(),
@@ -779,7 +856,9 @@ async fn execute_system_command(
     }))
 }
 
-async fn create_system_backup(State(state): State<DashboardState>) -> Result<Json<ServiceActionResponse>, StatusCode> {
+async fn create_system_backup(
+    State(state): State<DashboardState>,
+) -> Result<Json<ServiceActionResponse>, StatusCode> {
     Ok(Json(ServiceActionResponse {
         success: true,
         message: "System backup initiated successfully".to_string(),
@@ -788,7 +867,9 @@ async fn create_system_backup(State(state): State<DashboardState>) -> Result<Jso
     }))
 }
 
-async fn system_health_check(State(state): State<DashboardState>) -> Result<Json<serde_json::Value>, StatusCode> {
+async fn system_health_check(
+    State(state): State<DashboardState>,
+) -> Result<Json<serde_json::Value>, StatusCode> {
     let health = serde_json::json!({
         "status": "healthy",
         "checks": {
@@ -808,7 +889,7 @@ async fn admin_login(
     Json(login_request): Json<serde_json::Value>,
 ) -> Result<Json<serde_json::Value>, StatusCode> {
     let token = login_request.get("token").and_then(|t| t.as_str());
-    
+
     if let Some(expected_token) = &state.dashboard.config.admin_token {
         if token == Some(expected_token) {
             let permissions = vec![Permission::SystemAdmin]; // Full permissions for valid token
@@ -845,13 +926,17 @@ async fn admin_logout(
     }))
 }
 
-async fn list_active_sessions(State(state): State<DashboardState>) -> Result<Json<Vec<DashboardSession>>, StatusCode> {
+async fn list_active_sessions(
+    State(state): State<DashboardState>,
+) -> Result<Json<Vec<DashboardSession>>, StatusCode> {
     let sessions = state.dashboard.sessions.read().await;
     let session_list: Vec<_> = sessions.values().cloned().collect();
     Ok(Json(session_list))
 }
 
-async fn debug_memory_info(State(state): State<DashboardState>) -> Result<Json<serde_json::Value>, StatusCode> {
+async fn debug_memory_info(
+    State(state): State<DashboardState>,
+) -> Result<Json<serde_json::Value>, StatusCode> {
     let memory_info = serde_json::json!({
         "heap_allocated": "512 MB",
         "heap_used": "387 MB",
@@ -863,7 +948,9 @@ async fn debug_memory_info(State(state): State<DashboardState>) -> Result<Json<s
     Ok(Json(memory_info))
 }
 
-async fn debug_thread_info(State(state): State<DashboardState>) -> Result<Json<serde_json::Value>, StatusCode> {
+async fn debug_thread_info(
+    State(state): State<DashboardState>,
+) -> Result<Json<serde_json::Value>, StatusCode> {
     let thread_info = serde_json::json!({
         "active_threads": 24,
         "peak_threads": 32,
@@ -873,7 +960,9 @@ async fn debug_thread_info(State(state): State<DashboardState>) -> Result<Json<s
     Ok(Json(thread_info))
 }
 
-async fn force_garbage_collection(State(state): State<DashboardState>) -> Result<Json<ServiceActionResponse>, StatusCode> {
+async fn force_garbage_collection(
+    State(state): State<DashboardState>,
+) -> Result<Json<ServiceActionResponse>, StatusCode> {
     Ok(Json(ServiceActionResponse {
         success: true,
         message: "Garbage collection forced successfully".to_string(),
@@ -892,12 +981,12 @@ mod tests {
         let metrics = Arc::new(super::super::metrics::MetricsRegistry::new());
         let profiler = Arc::new(super::super::profiling::Profiler::new(
             super::super::profiling::ProfilingConfig::default(),
-            metrics.clone()
+            metrics.clone(),
         ));
-        
+
         // Create mock components for testing
         // In a real test, these would be properly initialized
-        
+
         Ok(())
     }
 
@@ -907,11 +996,11 @@ mod tests {
         let metrics = Arc::new(super::super::metrics::MetricsRegistry::new());
         let profiler = Arc::new(super::super::profiling::Profiler::new(
             super::super::profiling::ProfilingConfig::default(),
-            metrics.clone()
+            metrics.clone(),
         ));
-        
+
         // Test would verify session creation, validation, and cleanup
-        
+
         Ok(())
     }
 }

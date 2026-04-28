@@ -1,20 +1,21 @@
 use axum::extract::State;
+use axum::http::{header, StatusCode};
 use axum::response::IntoResponse;
-use axum::http::{StatusCode, header};
 use std::collections::HashMap;
 use tracing::{debug, warn};
 use uuid::Uuid;
 
-use super::RobustState;
 use super::xml_response::*;
+use super::RobustState;
 use crate::services::traits::AvatarData;
 
-pub async fn handle_avatar(
-    State(state): State<RobustState>,
-    body: String,
-) -> impl IntoResponse {
+pub async fn handle_avatar(State(state): State<RobustState>, body: String) -> impl IntoResponse {
     let params = parse_form_body(&body);
-    let method = params.get("METHOD").or_else(|| params.get("method")).cloned().unwrap_or_default();
+    let method = params
+        .get("METHOD")
+        .or_else(|| params.get("method"))
+        .cloned()
+        .unwrap_or_default();
 
     debug!("Avatar handler: METHOD={}", method);
 
@@ -29,7 +30,11 @@ pub async fn handle_avatar(
         }
     };
 
-    (StatusCode::OK, [(header::CONTENT_TYPE, "text/xml; charset=utf-8")], xml)
+    (
+        StatusCode::OK,
+        [(header::CONTENT_TYPE, "text/xml; charset=utf-8")],
+        xml,
+    )
 }
 
 async fn handle_get_avatar(state: &RobustState, params: &HashMap<String, String>) -> String {
@@ -58,16 +63,18 @@ async fn handle_set_avatar(state: &RobustState, params: &HashMap<String, String>
         }
     }
 
-    let avatar_type: i32 = data.remove("AvatarType")
+    let avatar_type: i32 = data
+        .remove("AvatarType")
         .and_then(|s| s.parse().ok())
         .unwrap_or(1);
 
-    let avatar_data = AvatarData {
-        avatar_type,
-        data,
-    };
+    let avatar_data = AvatarData { avatar_type, data };
 
-    match state.avatar_service.set_avatar(principal_id, &avatar_data).await {
+    match state
+        .avatar_service
+        .set_avatar(principal_id, &avatar_data)
+        .await
+    {
         Ok(true) => success_result(),
         Ok(false) => failure_result("Set avatar returned false"),
         Err(e) => failure_result(&format!("{}", e)),
@@ -86,11 +93,16 @@ async fn handle_reset_avatar(state: &RobustState, params: &HashMap<String, Strin
 
 async fn handle_remove_items(state: &RobustState, params: &HashMap<String, String>) -> String {
     let principal_id = parse_uuid(params, "UserID");
-    let names: Vec<String> = params.get("Names")
+    let names: Vec<String> = params
+        .get("Names")
         .map(|s| s.split(',').map(|n| n.trim().to_string()).collect())
         .unwrap_or_default();
 
-    match state.avatar_service.remove_items(principal_id, &names).await {
+    match state
+        .avatar_service
+        .remove_items(principal_id, &names)
+        .await
+    {
         Ok(true) => success_result(),
         Ok(false) => failure_result("Remove items returned false"),
         Err(e) => failure_result(&format!("{}", e)),
@@ -98,7 +110,8 @@ async fn handle_remove_items(state: &RobustState, params: &HashMap<String, Strin
 }
 
 fn parse_uuid(params: &HashMap<String, String>, key: &str) -> Uuid {
-    params.get(key)
+    params
+        .get(key)
         .and_then(|s| Uuid::parse_str(s).ok())
         .unwrap_or(Uuid::nil())
 }

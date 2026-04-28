@@ -2,15 +2,15 @@
 // Advanced analytics platform with AI-driven insights for virtual world management
 // Using ELEGANT ARCHIVE SOLUTION methodology
 
-use crate::monitoring::metrics::MetricsCollector;
-use crate::database::DatabaseManager;
 use super::{AIError, UserBehaviorPrediction};
-use std::sync::Arc;
-use std::collections::HashMap;
-use tokio::sync::RwLock;
+use crate::database::DatabaseManager;
+use crate::monitoring::metrics::MetricsCollector;
+use chrono::{DateTime, Duration, Utc};
 use serde::{Deserialize, Serialize};
+use std::collections::HashMap;
+use std::sync::Arc;
+use tokio::sync::RwLock;
 use uuid::Uuid;
-use chrono::{DateTime, Utc, Duration};
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct UserAnalytics {
@@ -228,20 +228,27 @@ impl PredictiveAnalyticsEngine {
         Ok(engine_arc)
     }
 
-    pub async fn predict_user_behavior(&self, user_id: Uuid) -> Result<UserBehaviorPrediction, AIError> {
+    pub async fn predict_user_behavior(
+        &self,
+        user_id: Uuid,
+    ) -> Result<UserBehaviorPrediction, AIError> {
         let analytics = self.get_user_analytics(user_id).await?;
-        self.user_behavior_predictor.predict_behavior(&analytics).await
+        self.user_behavior_predictor
+            .predict_behavior(&analytics)
+            .await
     }
 
     pub async fn get_performance_forecast(&self) -> Result<ServerPerformanceForecasting, AIError> {
-        self.performance_forecaster.generate_forecast(self.config.forecast_horizon_hours).await
+        self.performance_forecaster
+            .generate_forecast(self.config.forecast_horizon_hours)
+            .await
     }
 
     pub async fn get_security_threats(&self) -> Result<Vec<SecurityThreatPrediction>, AIError> {
         if !self.config.security_monitoring_enabled {
             return Ok(Vec::new());
         }
-        
+
         self.security_intelligence.predict_threats().await
     }
 
@@ -249,12 +256,18 @@ impl PredictiveAnalyticsEngine {
         self.business_intelligence.generate_insights().await
     }
 
-    pub async fn make_real_time_decision(&self, context: &str, data: &HashMap<String, String>) -> Result<String, AIError> {
+    pub async fn make_real_time_decision(
+        &self,
+        context: &str,
+        data: &HashMap<String, String>,
+    ) -> Result<String, AIError> {
         if !self.config.real_time_decisions_enabled {
             return Ok("Real-time decisions disabled".to_string());
         }
-        
-        self.real_time_decision_engine.make_decision(context, data).await
+
+        self.real_time_decision_engine
+            .make_decision(context, data)
+            .await
     }
 
     pub fn is_healthy(&self) -> bool {
@@ -264,8 +277,9 @@ impl PredictiveAnalyticsEngine {
 
     async fn get_user_analytics(&self, user_id: Uuid) -> Result<UserAnalytics, AIError> {
         let analytics = self.user_analytics.read().await;
-        
-        analytics.get(&user_id)
+
+        analytics
+            .get(&user_id)
             .cloned()
             .ok_or_else(|| AIError::ConfigurationError("User analytics not found".to_string()))
     }
@@ -278,15 +292,15 @@ impl PredictiveAnalyticsEngine {
 
     async fn start_prediction_updates(self: Arc<Self>) {
         let engine = self;
-        
+
         // User behavior prediction updates
         tokio::spawn({
             let engine = engine.clone();
             async move {
-                let mut interval = tokio::time::interval(
-                    tokio::time::Duration::from_secs(engine.config.prediction_update_interval_minutes * 60)
-                );
-                
+                let mut interval = tokio::time::interval(tokio::time::Duration::from_secs(
+                    engine.config.prediction_update_interval_minutes * 60,
+                ));
+
                 loop {
                     interval.tick().await;
                     if let Err(e) = engine.update_user_predictions().await {
@@ -301,7 +315,7 @@ impl PredictiveAnalyticsEngine {
             let engine = engine.clone();
             async move {
                 let mut interval = tokio::time::interval(tokio::time::Duration::from_secs(1800)); // 30 minutes
-                
+
                 loop {
                     interval.tick().await;
                     if let Err(e) = engine.update_performance_forecasts().await {
@@ -317,7 +331,7 @@ impl PredictiveAnalyticsEngine {
                 let engine = engine.clone();
                 async move {
                     let mut interval = tokio::time::interval(tokio::time::Duration::from_secs(300)); // 5 minutes
-                    
+
                     loop {
                         interval.tick().await;
                         if let Err(e) = engine.update_security_intelligence().await {
@@ -332,10 +346,10 @@ impl PredictiveAnalyticsEngine {
         tokio::spawn({
             let engine = engine.clone();
             async move {
-                let mut interval = tokio::time::interval(
-                    tokio::time::Duration::from_secs(engine.config.ml_model_retrain_interval_hours as u64 * 3600)
-                );
-                
+                let mut interval = tokio::time::interval(tokio::time::Duration::from_secs(
+                    engine.config.ml_model_retrain_interval_hours as u64 * 3600,
+                ));
+
                 loop {
                     interval.tick().await;
                     if let Err(e) = engine.retrain_ml_models().await {
@@ -368,7 +382,7 @@ impl PredictiveAnalyticsEngine {
 
     async fn update_security_intelligence(&self) -> Result<(), AIError> {
         let threats = self.get_security_threats().await?;
-        
+
         for threat in threats {
             if threat.risk_score > 0.8 {
                 // Handle high-risk threats
@@ -379,9 +393,15 @@ impl PredictiveAnalyticsEngine {
         Ok(())
     }
 
-    async fn handle_security_threat(&self, threat: &SecurityThreatPrediction) -> Result<(), AIError> {
+    async fn handle_security_threat(
+        &self,
+        threat: &SecurityThreatPrediction,
+    ) -> Result<(), AIError> {
         // Implement threat response logic
-        println!("HIGH RISK SECURITY THREAT DETECTED: {:?}", threat.threat_type);
+        println!(
+            "HIGH RISK SECURITY THREAT DETECTED: {:?}",
+            threat.threat_type
+        );
         println!("Risk Score: {:.2}", threat.risk_score);
         println!("Recommended Actions: {:?}", threat.recommended_mitigation);
         Ok(())
@@ -390,14 +410,14 @@ impl PredictiveAnalyticsEngine {
     async fn retrain_ml_models(&self) -> Result<(), AIError> {
         // Retrain ML models with latest data
         println!("Retraining ML models with latest data...");
-        
+
         // This would involve:
         // 1. Gathering training data from the last period
         // 2. Retraining behavior prediction models
         // 3. Retraining performance forecasting models
         // 4. Retraining security threat detection models
         // 5. Updating model weights and parameters
-        
+
         Ok(())
     }
 }
@@ -412,7 +432,10 @@ impl UserBehaviorPredictor {
         Ok(Self)
     }
 
-    async fn predict_behavior(&self, analytics: &UserAnalytics) -> Result<UserBehaviorPrediction, AIError> {
+    async fn predict_behavior(
+        &self,
+        analytics: &UserAnalytics,
+    ) -> Result<UserBehaviorPrediction, AIError> {
         // Simplified behavior prediction - in production, this would use actual ML models
         let engagement_score = match analytics.engagement_trend {
             EngagementTrend::Increasing => 0.8,
@@ -421,7 +444,11 @@ impl UserBehaviorPredictor {
             EngagementTrend::ChurnRisk => 0.2,
         };
 
-        let retention_probability = if analytics.session_count > 10 { 0.8 } else { 0.5 };
+        let retention_probability = if analytics.session_count > 10 {
+            0.8
+        } else {
+            0.5
+        };
 
         Ok(UserBehaviorPrediction {
             user_id: analytics.user_id,
@@ -448,15 +475,18 @@ impl PerformanceForcaster {
         Ok(Self)
     }
 
-    async fn generate_forecast(&self, horizon_hours: u32) -> Result<ServerPerformanceForecasting, AIError> {
+    async fn generate_forecast(
+        &self,
+        horizon_hours: u32,
+    ) -> Result<ServerPerformanceForecasting, AIError> {
         // Simplified performance forecasting
         let mut user_predictions = Vec::new();
         let base_time = Utc::now();
-        
+
         for hour in 0..horizon_hours {
             let timestamp = base_time + Duration::hours(hour as i64);
             let predicted_users = 100 + (hour * 5); // Simple linear growth
-            
+
             user_predictions.push(UserCountPrediction {
                 timestamp,
                 predicted_users,
@@ -478,16 +508,14 @@ impl PerformanceForcaster {
                 },
                 confidence_level: 0.8,
             },
-            capacity_recommendations: vec![
-                CapacityRecommendation {
-                    resource_type: "CPU".to_string(),
-                    current_capacity: 100.0,
-                    recommended_capacity: 150.0,
-                    urgency: RecommendationUrgency::WithinWeek,
-                    estimated_cost: 500.0,
-                    implementation_timeline: "3-5 days".to_string(),
-                },
-            ],
+            capacity_recommendations: vec![CapacityRecommendation {
+                resource_type: "CPU".to_string(),
+                current_capacity: 100.0,
+                recommended_capacity: 150.0,
+                urgency: RecommendationUrgency::WithinWeek,
+                estimated_cost: 500.0,
+                implementation_timeline: "3-5 days".to_string(),
+            }],
             cost_optimization: CostOptimization {
                 current_monthly_cost: 5000.0,
                 optimized_monthly_cost: 4200.0,
@@ -497,14 +525,12 @@ impl PerformanceForcaster {
                     "Implement auto-scaling".to_string(),
                 ],
             },
-            scaling_timeline: vec![
-                ScalingEvent {
-                    event_time: Utc::now() + Duration::days(7),
-                    event_type: "Scale Up".to_string(),
-                    description: "Add 2 additional server instances".to_string(),
-                    impact: "Handle 50% more concurrent users".to_string(),
-                },
-            ],
+            scaling_timeline: vec![ScalingEvent {
+                event_time: Utc::now() + Duration::days(7),
+                event_type: "Scale Up".to_string(),
+                description: "Add 2 additional server instances".to_string(),
+                impact: "Handle 50% more concurrent users".to_string(),
+            }],
         })
     }
 }
@@ -627,14 +653,19 @@ impl RealTimeDecisionEngine {
         Ok(Self)
     }
 
-    async fn make_decision(&self, context: &str, data: &HashMap<String, String>) -> Result<String, AIError> {
+    async fn make_decision(
+        &self,
+        context: &str,
+        data: &HashMap<String, String>,
+    ) -> Result<String, AIError> {
         // Simplified real-time decision making
         match context {
             "load_balancing" => {
-                let current_load = data.get("cpu_usage")
+                let current_load = data
+                    .get("cpu_usage")
                     .and_then(|s| s.parse::<f32>().ok())
                     .unwrap_or(0.0);
-                
+
                 if current_load > 0.8 {
                     Ok("Scale up immediately".to_string())
                 } else if current_load < 0.3 {
@@ -642,18 +673,19 @@ impl RealTimeDecisionEngine {
                 } else {
                     Ok("Maintain current capacity".to_string())
                 }
-            },
+            }
             "user_engagement" => {
-                let engagement_score = data.get("engagement")
+                let engagement_score = data
+                    .get("engagement")
                     .and_then(|s| s.parse::<f32>().ok())
                     .unwrap_or(0.5);
-                
+
                 if engagement_score < 0.3 {
                     Ok("Send personalized content recommendation".to_string())
                 } else {
                     Ok("Continue monitoring".to_string())
                 }
-            },
+            }
             _ => Ok("No decision rule for this context".to_string()),
         }
     }

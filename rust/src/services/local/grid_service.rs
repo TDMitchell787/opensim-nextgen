@@ -11,8 +11,8 @@ use std::sync::Arc;
 use tracing::{debug, info, warn};
 use uuid::Uuid;
 
-use crate::services::traits::{GridServiceTrait, RegionInfo};
 use crate::database::multi_backend::DatabaseConnection;
+use crate::services::traits::{GridServiceTrait, RegionInfo};
 
 pub struct LocalGridService {
     connection: Arc<DatabaseConnection>,
@@ -35,8 +35,10 @@ impl LocalGridService {
 #[async_trait]
 impl GridServiceTrait for LocalGridService {
     async fn register_region(&self, region: &RegionInfo) -> Result<bool> {
-        info!("Registering region: {} at ({}, {})",
-              region.region_name, region.region_loc_x, region.region_loc_y);
+        info!(
+            "Registering region: {} at ({}, {})",
+            region.region_name, region.region_loc_x, region.region_loc_y
+        );
 
         let pool = self.get_pg_pool()?;
 
@@ -79,7 +81,10 @@ impl GridServiceTrait for LocalGridService {
         .await
         .map_err(|e| anyhow!("Failed to register region: {}", e))?;
 
-        info!("Registered region: {} ({})", region.region_name, region.region_id);
+        info!(
+            "Registered region: {} ({})",
+            region.region_name, region.region_id
+        );
         Ok(true)
     }
 
@@ -95,7 +100,11 @@ impl GridServiceTrait for LocalGridService {
         Ok(result.rows_affected() > 0)
     }
 
-    async fn get_region_by_uuid(&self, scopeid: Uuid, region_id: Uuid) -> Result<Option<RegionInfo>> {
+    async fn get_region_by_uuid(
+        &self,
+        scopeid: Uuid,
+        region_id: Uuid,
+    ) -> Result<Option<RegionInfo>> {
         debug!("Getting region by UUID: {} (scope: {})", region_id, scopeid);
 
         let pool = self.get_pg_pool()?;
@@ -145,8 +154,16 @@ impl GridServiceTrait for LocalGridService {
         }
     }
 
-    async fn get_region_by_position(&self, scopeid: Uuid, x: u32, y: u32) -> Result<Option<RegionInfo>> {
-        debug!("Getting region by position: ({}, {}) (scope: {})", x, y, scopeid);
+    async fn get_region_by_position(
+        &self,
+        scopeid: Uuid,
+        x: u32,
+        y: u32,
+    ) -> Result<Option<RegionInfo>> {
+        debug!(
+            "Getting region by position: ({}, {}) (scope: {})",
+            x, y, scopeid
+        );
 
         let pool = self.get_pg_pool()?;
         let row = sqlx::query(
@@ -172,8 +189,16 @@ impl GridServiceTrait for LocalGridService {
         }
     }
 
-    async fn get_neighbours(&self, scopeid: Uuid, region_id: Uuid, range: u32) -> Result<Vec<RegionInfo>> {
-        debug!("Getting neighbours for region: {} (range: {})", region_id, range);
+    async fn get_neighbours(
+        &self,
+        scopeid: Uuid,
+        region_id: Uuid,
+        range: u32,
+    ) -> Result<Vec<RegionInfo>> {
+        debug!(
+            "Getting neighbours for region: {} (range: {})",
+            region_id, range
+        );
 
         let center = self.get_region_by_uuid(scopeid, region_id).await?;
         if center.is_none() {

@@ -78,12 +78,13 @@ impl InventoryFolder {
         let folder_key = format!("{}:{}", owner_id, folder_name.to_lowercase());
         Uuid::new_v5(&Uuid::NAMESPACE_OID, folder_key.as_bytes()).to_string()
     }
-    
+
     /// Convert to login response format
     pub fn to_login_folder(&self) -> LoginInventoryFolder {
         LoginInventoryFolder {
             folder_id: self.id.to_string(),
-            parent_id: self.parent_id
+            parent_id: self
+                .parent_id
                 .map(|id| id.to_string())
                 .unwrap_or_else(|| "00000000-0000-0000-0000-000000000000".to_string()),
             name: self.name.clone(),
@@ -91,18 +92,18 @@ impl InventoryFolder {
             version: self.version.to_string(),
         }
     }
-    
+
     /// Update folder version (for synchronization)
     pub fn increment_version(&mut self) {
         self.version += 1;
         self.updated_at = Utc::now();
     }
-    
+
     /// Check if this is the root folder
     pub fn is_root(&self) -> bool {
         self.folder_type == InventoryFolderType::Root && self.parent_id.is_none()
     }
-    
+
     /// Check if this is a system folder
     pub fn is_system_folder(&self) -> bool {
         self.folder_type.is_default_folder()
@@ -213,7 +214,10 @@ pub async fn lookup_database_folder_uuids(
     };
 
     if rows.is_empty() {
-        debug!("📦 Phase 85.8: No folders found in database for agent {}", agent_id);
+        debug!(
+            "📦 Phase 85.8: No folders found in database for agent {}",
+            agent_id
+        );
         return None;
     }
 
@@ -221,7 +225,11 @@ pub async fn lookup_database_folder_uuids(
 
     let suitcase_id: Option<Uuid> = rows.iter().find_map(|row| {
         let ft: i32 = row.try_get::<i32, _>("type").unwrap_or(-1);
-        if ft == 100 { row.try_get("folderid").ok() } else { None }
+        if ft == 100 {
+            row.try_get("folderid").ok()
+        } else {
+            None
+        }
     });
 
     for row in &rows {
@@ -232,10 +240,12 @@ pub async fn lookup_database_folder_uuids(
         let parent_id: Uuid = row.try_get("parentfolderid").unwrap_or(Uuid::nil());
         let name: String = row.try_get("foldername").unwrap_or_default();
 
-        let folder_type: i64 = row.try_get::<i64, _>("type")
+        let folder_type: i64 = row
+            .try_get::<i64, _>("type")
             .or_else(|_| row.try_get::<i32, _>("type").map(|v| v as i64))
             .unwrap_or(0);
-        let version: i64 = row.try_get::<i64, _>("version")
+        let version: i64 = row
+            .try_get::<i64, _>("version")
             .or_else(|_| row.try_get::<i32, _>("version").map(|v| v as i64))
             .unwrap_or(1);
 
@@ -248,16 +258,23 @@ pub async fn lookup_database_folder_uuids(
             }
         }
 
-        folder_map.insert(folder_type, DbFolderInfo {
-            folder_id,
-            parent_id,
-            name,
+        folder_map.insert(
             folder_type,
-            version,
-        });
+            DbFolderInfo {
+                folder_id,
+                parent_id,
+                name,
+                folder_type,
+                version,
+            },
+        );
     }
 
-    debug!("📦 Phase 85.8: Found {} folder UUIDs in database for agent {}", folder_map.len(), agent_id);
+    debug!(
+        "📦 Phase 85.8: Found {} folder UUIDs in database for agent {}",
+        folder_map.len(),
+        agent_id
+    );
 
     Some(folder_map)
 }
@@ -270,14 +287,14 @@ mod tests {
     fn test_inventory_folder_creation() {
         let owner_id = Uuid::new_v4();
         let parent_id = Uuid::new_v4();
-        
+
         let folder = InventoryFolder::new(
             owner_id,
             Some(parent_id),
             "Test Folder".to_string(),
             InventoryFolderType::Object,
         );
-        
+
         assert_eq!(folder.owner_id, owner_id);
         assert_eq!(folder.parent_id, Some(parent_id));
         assert_eq!(folder.name, "Test Folder");
@@ -286,12 +303,12 @@ mod tests {
         assert!(!folder.is_root());
         assert!(folder.is_system_folder());
     }
-    
+
     #[test]
     fn test_root_folder_creation() {
         let owner_id = Uuid::new_v4();
         let folder = InventoryFolder::new_root(owner_id);
-        
+
         assert_eq!(folder.owner_id, owner_id);
         assert_eq!(folder.parent_id, None);
         assert_eq!(folder.name, "My Inventory");
@@ -299,59 +316,59 @@ mod tests {
         assert!(folder.is_root());
         assert!(folder.is_system_folder());
     }
-    
+
     #[test]
     fn test_system_folder_creation() {
         let owner_id = Uuid::new_v4();
         let parent_id = Uuid::new_v4();
-        
-        let folder = InventoryFolder::new_system_folder(
-            owner_id,
-            parent_id,
-            InventoryFolderType::Texture,
-        );
-        
+
+        let folder =
+            InventoryFolder::new_system_folder(owner_id, parent_id, InventoryFolderType::Texture);
+
         assert_eq!(folder.name, "Textures");
         assert_eq!(folder.folder_type, InventoryFolderType::Texture);
         assert_eq!(folder.parent_id, Some(parent_id));
     }
-    
+
     #[test]
     fn test_login_folder_conversion() {
         let owner_id = Uuid::new_v4();
         let folder = InventoryFolder::new_root(owner_id);
         let login_folder = folder.to_login_folder();
-        
+
         assert_eq!(login_folder.folder_id, folder.id.to_string());
-        assert_eq!(login_folder.parent_id, "00000000-0000-0000-0000-000000000000");
+        assert_eq!(
+            login_folder.parent_id,
+            "00000000-0000-0000-0000-000000000000"
+        );
         assert_eq!(login_folder.name, "My Inventory");
         assert_eq!(login_folder.type_default, "8");
         assert_eq!(login_folder.version, "1");
     }
-    
+
     #[test]
     fn test_folder_version_increment() {
         let owner_id = Uuid::new_v4();
         let mut folder = InventoryFolder::new_root(owner_id);
         let initial_version = folder.version;
         let initial_updated = folder.updated_at;
-        
+
         // Small delay to ensure timestamp difference
         std::thread::sleep(std::time::Duration::from_millis(1));
-        
+
         folder.increment_version();
-        
+
         assert_eq!(folder.version, initial_version + 1);
         assert!(folder.updated_at > initial_updated);
     }
-    
+
     #[test]
     fn test_xmlrpc_struct_generation() {
         let owner_id = Uuid::new_v4();
         let folder = InventoryFolder::new_root(owner_id);
         let login_folder = folder.to_login_folder();
         let xmlrpc = login_folder.to_xmlrpc_struct();
-        
+
         assert!(xmlrpc.contains(&format!("<string>{}</string>", folder.id)));
         assert!(xmlrpc.contains("<string>My Inventory</string>"));
         assert!(xmlrpc.contains("<string>8</string>"));

@@ -1,27 +1,27 @@
 //! Virtual Economy System for OpenSim Next
-//! 
+//!
 //! This module provides comprehensive virtual economy management including:
 //! - Multi-currency virtual currency system
 //! - Secure transaction processing and validation
 //! - Marketplace integration with automated payments
 //! - Economic analytics and fraud detection
 
-pub mod currency;
-pub mod transactions;
-pub mod marketplace;
 pub mod analytics;
+pub mod currency;
 pub mod manager;
+pub mod marketplace;
+pub mod transactions;
 
-pub use currency::*;
-pub use transactions::*;
-pub use marketplace::*;
 pub use analytics::*;
+pub use currency::*;
 pub use manager::*;
+pub use marketplace::*;
+pub use transactions::*;
 
+use chrono::{DateTime, Utc};
 use serde::{Deserialize, Serialize};
 use std::collections::HashMap;
 use uuid::Uuid;
-use chrono::{DateTime, Utc};
 
 /// Virtual economy manager configuration
 #[derive(Debug, Clone, Serialize, Deserialize)]
@@ -128,8 +128,8 @@ pub struct FraudDetectionConfig {
 pub struct CurrencyBalance {
     pub user_id: Uuid,
     pub currency_code: String,
-    pub balance: i64, // Stored as smallest unit (e.g., cents)
-    pub reserved: i64, // Amount reserved for pending transactions
+    pub balance: i64,   // Stored as smallest unit (e.g., cents)
+    pub reserved: i64,  // Amount reserved for pending transactions
     pub available: i64, // balance - reserved
     pub last_updated: DateTime<Utc>,
     pub version: i64, // For optimistic locking
@@ -368,37 +368,37 @@ pub enum AlertStatus {
 pub enum EconomyError {
     #[error("Insufficient funds: required {required}, available {available}")]
     InsufficientFunds { required: i64, available: i64 },
-    
+
     #[error("Invalid currency: {currency}")]
     InvalidCurrency { currency: String },
-    
+
     #[error("Transaction limit exceeded: {limit}")]
     TransactionLimitExceeded { limit: i64 },
-    
+
     #[error("User not found: {user_id}")]
     UserNotFound { user_id: Uuid },
-    
+
     #[error("Marketplace listing not found: {listing_id}")]
     ListingNotFound { listing_id: Uuid },
-    
+
     #[error("Transaction failed: {reason}")]
     TransactionFailed { reason: String },
-    
+
     #[error("Fraud detected: {reason}")]
     FraudDetected { reason: String },
-    
+
     #[error("Access denied: {reason}")]
     AccessDenied { reason: String },
-    
+
     #[error("Economy system error: {message}")]
     SystemError { message: String },
-    
+
     #[error("Database error: {0}")]
     DatabaseError(#[from] sqlx::Error),
-    
+
     #[error("Serialization error: {0}")]
     SerializationError(#[from] serde_json::Error),
-    
+
     #[error("Database connection error: {0}")]
     ConnectionError(#[from] anyhow::Error),
 }
@@ -410,18 +410,16 @@ impl Default for EconomyConfig {
     fn default() -> Self {
         Self {
             default_currency: "L$".to_string(),
-            supported_currencies: vec![
-                CurrencyDefinition {
-                    currency_code: "L$".to_string(),
-                    currency_name: "Linden Dollars".to_string(),
-                    currency_symbol: "L$".to_string(),
-                    decimal_places: 2,
-                    exchange_rate_to_base: 1.0,
-                    enabled: true,
-                    minimum_balance: 0,
-                    maximum_balance: 999999999,
-                }
-            ],
+            supported_currencies: vec![CurrencyDefinition {
+                currency_code: "L$".to_string(),
+                currency_name: "Linden Dollars".to_string(),
+                currency_symbol: "L$".to_string(),
+                decimal_places: 2,
+                exchange_rate_to_base: 1.0,
+                enabled: true,
+                minimum_balance: 0,
+                maximum_balance: 999999999,
+            }],
             transaction_limits: TransactionLimits::default(),
             marketplace_config: MarketplaceConfig::default(),
             analytics_config: AnalyticsConfig::default(),
@@ -434,10 +432,10 @@ impl Default for TransactionLimits {
     fn default() -> Self {
         Self {
             max_transaction_amount: 100000, // L$1000.00
-            daily_limit: 500000, // L$5000.00
-            weekly_limit: 2000000, // L$20000.00
-            monthly_limit: 5000000, // L$50000.00
-            minimum_transaction: 1, // L$0.01
+            daily_limit: 500000,            // L$5000.00
+            weekly_limit: 2000000,          // L$20000.00
+            monthly_limit: 5000000,         // L$50000.00
+            minimum_transaction: 1,         // L$0.01
             rate_limit_per_minute: 30,
             require_verification_above: 10000, // L$100.00
         }
@@ -449,7 +447,7 @@ impl Default for MarketplaceConfig {
         Self {
             enabled: true,
             commission_rate: 0.05, // 5%
-            listing_fee: 10, // L$0.10
+            listing_fee: 10,       // L$0.10
             auto_delivery: true,
             escrow_enabled: true,
             dispute_resolution: true,

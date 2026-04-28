@@ -1,16 +1,14 @@
-pub mod opcodes;
 pub mod compiler;
+pub mod opcodes;
 pub mod vm;
 
-use std::collections::HashMap;
 use anyhow::{anyhow, Result};
+use std::collections::HashMap;
 use uuid::Uuid;
 
-use super::{
-    CompiledScript, ExecutionResult, ScriptExecutor, ScriptInstance,
-};
+use super::{CompiledScript, ExecutionResult, ScriptExecutor, ScriptInstance};
 use crate::scripting::lsl_interpreter::{LSLLexer, LSLParser};
-use crate::scripting::{LSLValue, LSLVector, LSLRotation};
+use crate::scripting::{LSLRotation, LSLValue, LSLVector};
 use compiler::BytecodeCompiler;
 use opcodes::BytecodeProgram;
 use vm::{Vm, VmResult};
@@ -31,13 +29,18 @@ impl BytecodeExecutor {
         self
     }
 
-    fn compile_to_bytecode(&self, source: &str, script_id: Uuid) -> Result<(CompiledScript, BytecodeProgram)> {
+    fn compile_to_bytecode(
+        &self,
+        source: &str,
+        script_id: Uuid,
+    ) -> Result<(CompiledScript, BytecodeProgram)> {
         let mut lexer = LSLLexer::new(source.to_string());
         let tokens = lexer.tokenize()?;
         let mut parser = LSLParser::new(tokens);
         let ast = parser.parse()?;
 
-        let (globals, functions, states) = super::tree_walk::TreeWalkExecutor::extract_script_parts(&ast)?;
+        let (globals, functions, states) =
+            super::tree_walk::TreeWalkExecutor::extract_script_parts(&ast)?;
 
         let compiled = CompiledScript {
             script_id,
@@ -103,8 +106,8 @@ impl ScriptExecutor for BytecodeExecutor {
 
 #[cfg(test)]
 mod tests {
-    use super::*;
     use super::super::ScriptInstance;
+    use super::*;
 
     #[test]
     fn test_bytecode_compile_simple() -> Result<()> {
@@ -169,7 +172,10 @@ default
         let mut instance = ScriptInstance::new(Uuid::new_v4(), compiled, 65536);
 
         executor.execute_event(&mut instance, "state_entry", &[])?;
-        assert_eq!(instance.global_vars.get("result"), Some(&LSLValue::Integer(10)));
+        assert_eq!(
+            instance.global_vars.get("result"),
+            Some(&LSLValue::Integer(10))
+        );
         Ok(())
     }
 
@@ -196,7 +202,10 @@ default
         let mut instance = ScriptInstance::new(Uuid::new_v4(), compiled, 65536);
 
         executor.execute_event(&mut instance, "state_entry", &[])?;
-        assert_eq!(instance.global_vars.get("count"), Some(&LSLValue::Integer(5)));
+        assert_eq!(
+            instance.global_vars.get("count"),
+            Some(&LSLValue::Integer(5))
+        );
         Ok(())
     }
 

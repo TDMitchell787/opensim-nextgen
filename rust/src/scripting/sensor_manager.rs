@@ -51,18 +51,17 @@ impl SensorManager {
         repeat_interval: Option<f64>,
     ) {
         let now = Instant::now();
-        let next_fire = if repeat_interval.is_some() {
-            now
-        } else {
-            now
-        };
+        let next_fire = if repeat_interval.is_some() { now } else { now };
 
-        self.sensors.insert(script_id, SensorEntry {
+        self.sensors.insert(
             script_id,
-            params,
-            repeat_interval,
-            next_fire,
-        });
+            SensorEntry {
+                script_id,
+                params,
+                repeat_interval,
+                next_fire,
+            },
+        );
     }
 
     pub fn remove_sensor(&mut self, script_id: Uuid) {
@@ -99,27 +98,42 @@ impl SensorManager {
 
     pub fn filter_results(results: &[SensorResult], max: usize) -> Vec<SensorResult> {
         let mut sorted = results.to_vec();
-        sorted.sort_by(|a, b| a.distance.partial_cmp(&b.distance).unwrap_or(std::cmp::Ordering::Equal));
+        sorted.sort_by(|a, b| {
+            a.distance
+                .partial_cmp(&b.distance)
+                .unwrap_or(std::cmp::Ordering::Equal)
+        });
         sorted.truncate(max.min(MAX_SENSOR_RESULTS));
         sorted
     }
 
     pub fn results_to_detect_params(results: &[SensorResult]) -> Vec<Vec<LSLValue>> {
-        results.iter().map(|r| {
-            vec![
-                LSLValue::Key(r.key),
-                LSLValue::String(r.name.clone()),
-                LSLValue::Integer(r.object_type),
-                LSLValue::Vector(super::LSLVector::new(r.position.0, r.position.1, r.position.2)),
-                LSLValue::Rotation(super::LSLRotation {
-                    x: r.rotation.0,
-                    y: r.rotation.1,
-                    z: r.rotation.2,
-                    s: r.rotation.3,
-                }),
-                LSLValue::Vector(super::LSLVector::new(r.velocity.0, r.velocity.1, r.velocity.2)),
-            ]
-        }).collect()
+        results
+            .iter()
+            .map(|r| {
+                vec![
+                    LSLValue::Key(r.key),
+                    LSLValue::String(r.name.clone()),
+                    LSLValue::Integer(r.object_type),
+                    LSLValue::Vector(super::LSLVector::new(
+                        r.position.0,
+                        r.position.1,
+                        r.position.2,
+                    )),
+                    LSLValue::Rotation(super::LSLRotation {
+                        x: r.rotation.0,
+                        y: r.rotation.1,
+                        z: r.rotation.2,
+                        s: r.rotation.3,
+                    }),
+                    LSLValue::Vector(super::LSLVector::new(
+                        r.velocity.0,
+                        r.velocity.1,
+                        r.velocity.2,
+                    )),
+                ]
+            })
+            .collect()
     }
 
     pub fn has_sensor(&self, script_id: Uuid) -> bool {
@@ -140,13 +154,17 @@ mod tests {
         let mut mgr = SensorManager::new();
         let script_id = Uuid::new_v4();
 
-        mgr.add_sensor(script_id, SensorParams {
-            name: "".to_string(),
-            key: Uuid::nil(),
-            sensor_type: 1,
-            range: 10.0,
-            arc: std::f32::consts::PI,
-        }, None);
+        mgr.add_sensor(
+            script_id,
+            SensorParams {
+                name: "".to_string(),
+                key: Uuid::nil(),
+                sensor_type: 1,
+                range: 10.0,
+                arc: std::f32::consts::PI,
+            },
+            None,
+        );
 
         assert!(mgr.has_sensor(script_id));
 
@@ -161,13 +179,17 @@ mod tests {
         let mut mgr = SensorManager::new();
         let script_id = Uuid::new_v4();
 
-        mgr.add_sensor(script_id, SensorParams {
-            name: "".to_string(),
-            key: Uuid::nil(),
-            sensor_type: 1,
-            range: 20.0,
-            arc: std::f32::consts::PI,
-        }, Some(1.0));
+        mgr.add_sensor(
+            script_id,
+            SensorParams {
+                name: "".to_string(),
+                key: Uuid::nil(),
+                sensor_type: 1,
+                range: 20.0,
+                arc: std::f32::consts::PI,
+            },
+            Some(1.0),
+        );
 
         let triggered = mgr.check_sensors();
         assert_eq!(triggered.len(), 1);
@@ -179,13 +201,17 @@ mod tests {
         let mut mgr = SensorManager::new();
         let script_id = Uuid::new_v4();
 
-        mgr.add_sensor(script_id, SensorParams {
-            name: "".to_string(),
-            key: Uuid::nil(),
-            sensor_type: 1,
-            range: 10.0,
-            arc: std::f32::consts::PI,
-        }, Some(1.0));
+        mgr.add_sensor(
+            script_id,
+            SensorParams {
+                name: "".to_string(),
+                key: Uuid::nil(),
+                sensor_type: 1,
+                range: 10.0,
+                arc: std::f32::consts::PI,
+            },
+            Some(1.0),
+        );
 
         mgr.remove_sensor(script_id);
         assert!(!mgr.has_sensor(script_id));

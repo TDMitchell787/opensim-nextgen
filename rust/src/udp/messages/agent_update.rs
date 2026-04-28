@@ -27,7 +27,11 @@ impl AgentUpdateMessage {
         let z = cursor.get_f32_le();
         // Derive W: W = sqrt(1 - x² - y² - z²)
         let w_squared = 1.0 - x * x - y * y - z * z;
-        let w = if w_squared > 0.0 { w_squared.sqrt() } else { 0.0 };
+        let w = if w_squared > 0.0 {
+            w_squared.sqrt()
+        } else {
+            0.0
+        };
         [x, y, z, w]
     }
 
@@ -42,7 +46,10 @@ impl AgentUpdateMessage {
         // - Far: 4, ControlFlags: 4, Flags: 1
         // Total: 16+16+12+12+1+48+4+4+1 = 114
         if data.len() < 114 {
-            anyhow::bail!("AgentUpdate packet too short: {} bytes (expected ≥114)", data.len());
+            anyhow::bail!(
+                "AgentUpdate packet too short: {} bytes (expected ≥114)",
+                data.len()
+            );
         }
 
         // UUIDs are big-endian in LLUDP
@@ -167,6 +174,9 @@ mod tests {
         assert_eq!(message.camera_center[2], 21.0);
         assert_eq!(message.far, 96.0);
         // Verify derived W component for identity quaternion
-        assert!((message.body_rotation[3] - 1.0).abs() < 0.0001, "W should be 1.0 for identity");
+        assert!(
+            (message.body_rotation[3] - 1.0).abs() < 0.0001,
+            "W should be 1.0 for identity"
+        );
     }
 }

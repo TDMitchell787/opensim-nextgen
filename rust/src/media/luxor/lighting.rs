@@ -1,5 +1,5 @@
-use serde::{Serialize, Deserialize};
-use super::camera::{dot, sub, normalize, scale, add};
+use super::camera::{add, dot, normalize, scale, sub};
+use serde::{Deserialize, Serialize};
 
 #[derive(Debug, Clone, Copy, PartialEq, Serialize, Deserialize)]
 pub enum LightType {
@@ -35,7 +35,13 @@ impl LuxorLight {
         }
     }
 
-    pub fn spot(position: [f32; 3], direction: [f32; 3], color: [f32; 3], intensity: f32, angle: f32) -> Self {
+    pub fn spot(
+        position: [f32; 3],
+        direction: [f32; 3],
+        color: [f32; 3],
+        intensity: f32,
+        angle: f32,
+    ) -> Self {
         Self {
             position,
             direction: normalize(direction),
@@ -195,7 +201,9 @@ pub enum LightingPreset {
 impl LightingPreset {
     pub fn from_name(name: &str) -> Option<Self> {
         match name.to_lowercase().as_str() {
-            "studio" | "studio_3point" | "3point" | "three_point" => Some(LightingPreset::Studio3Point),
+            "studio" | "studio_3point" | "3point" | "three_point" => {
+                Some(LightingPreset::Studio3Point)
+            }
             "rembrandt" => Some(LightingPreset::Rembrandt),
             "butterfly" | "paramount" => Some(LightingPreset::Butterfly),
             "noir" | "dramatic" | "hard" => Some(LightingPreset::Noir),
@@ -218,15 +226,18 @@ impl LightingPreset {
                 lights: vec![
                     LuxorLight::point(
                         [s[0] - d * 0.7, s[1] + d * 0.7, s[2] + d * 0.5],
-                        [1.0, 0.98, 0.95], 800.0,
+                        [1.0, 0.98, 0.95],
+                        800.0,
                     ),
                     LuxorLight::point(
                         [s[0] + d * 0.6, s[1] + d * 0.4, s[2] + d * 0.3],
-                        [0.85, 0.9, 1.0], 400.0,
+                        [0.85, 0.9, 1.0],
+                        400.0,
                     ),
                     LuxorLight::point(
                         [s[0], s[1] - d * 0.8, s[2] + d * 0.6],
-                        [1.0, 1.0, 1.0], 300.0,
+                        [1.0, 1.0, 1.0],
+                        300.0,
                     ),
                 ],
                 ambient_color: [0.12, 0.14, 0.18],
@@ -243,15 +254,19 @@ impl LightingPreset {
                     LuxorLight::spot(
                         [s[0] - d * 0.7, s[1] + d * 0.7, s[2] + d * 0.5],
                         normalize(sub(s, [s[0] - d * 0.7, s[1] + d * 0.7, s[2] + d * 0.5])),
-                        [1.0, 0.92, 0.8], 900.0, 45.0,
+                        [1.0, 0.92, 0.8],
+                        900.0,
+                        45.0,
                     ),
                     LuxorLight::point(
                         [s[0] + d * 0.5, s[1] + d * 0.5, s[2] + d * 0.2],
-                        [0.7, 0.75, 0.9], 250.0,
+                        [0.7, 0.75, 0.9],
+                        250.0,
                     ),
                     LuxorLight::point(
                         [s[0], s[1] - d * 0.8, s[2] + d * 0.6],
-                        [1.0, 1.0, 1.0], 350.0,
+                        [1.0, 1.0, 1.0],
+                        350.0,
                     ),
                 ],
                 ambient_color: [0.08, 0.08, 0.1],
@@ -265,13 +280,11 @@ impl LightingPreset {
 
             LightingPreset::Butterfly => LightingRig {
                 lights: vec![
-                    LuxorLight::point(
-                        [s[0], s[1] + d * 0.3, s[2] + d],
-                        [1.0, 1.0, 0.95], 1000.0,
-                    ),
+                    LuxorLight::point([s[0], s[1] + d * 0.3, s[2] + d], [1.0, 1.0, 0.95], 1000.0),
                     LuxorLight::point(
                         [s[0], s[1] + d * 0.3, s[2] - d * 0.3],
-                        [0.9, 0.9, 1.0], 200.0,
+                        [0.9, 0.9, 1.0],
+                        200.0,
                     ),
                 ],
                 ambient_color: [0.15, 0.15, 0.18],
@@ -284,13 +297,13 @@ impl LightingPreset {
             },
 
             LightingPreset::Noir => LightingRig {
-                lights: vec![
-                    LuxorLight::spot(
-                        [s[0] - d, s[1], s[2] + d * 0.3],
-                        normalize(sub(s, [s[0] - d, s[1], s[2] + d * 0.3])),
-                        [1.0, 1.0, 1.0], 1200.0, 30.0,
-                    ),
-                ],
+                lights: vec![LuxorLight::spot(
+                    [s[0] - d, s[1], s[2] + d * 0.3],
+                    normalize(sub(s, [s[0] - d, s[1], s[2] + d * 0.3])),
+                    [1.0, 1.0, 1.0],
+                    1200.0,
+                    30.0,
+                )],
                 ambient_color: [0.03, 0.03, 0.05],
                 ambient_intensity: 0.08,
                 sky_color_top: [0.05, 0.05, 0.1],
@@ -302,17 +315,12 @@ impl LightingPreset {
 
             LightingPreset::GoldenHour => LightingRig {
                 lights: vec![
-                    LuxorLight::directional(
-                        normalize([-1.0, 0.0, -0.15]),
-                        [1.0, 0.7, 0.3], 900.0,
-                    ),
-                    LuxorLight::point(
-                        [s[0], s[1], s[2] + d * 1.5],
-                        [0.5, 0.6, 0.9], 200.0,
-                    ),
+                    LuxorLight::directional(normalize([-1.0, 0.0, -0.15]), [1.0, 0.7, 0.3], 900.0),
+                    LuxorLight::point([s[0], s[1], s[2] + d * 1.5], [0.5, 0.6, 0.9], 200.0),
                     LuxorLight::point(
                         [s[0] + d * 0.8, s[1] - d * 0.5, s[2] + d * 0.3],
-                        [1.0, 0.75, 0.4], 400.0,
+                        [1.0, 0.75, 0.4],
+                        400.0,
                     ),
                 ],
                 ambient_color: [0.2, 0.15, 0.08],
@@ -326,13 +334,11 @@ impl LightingPreset {
 
             LightingPreset::Moonlight => LightingRig {
                 lights: vec![
-                    LuxorLight::directional(
-                        normalize([0.3, -0.5, -0.7]),
-                        [0.6, 0.65, 0.9], 500.0,
-                    ),
+                    LuxorLight::directional(normalize([0.3, -0.5, -0.7]), [0.6, 0.65, 0.9], 500.0),
                     LuxorLight::point(
                         [s[0] - d, s[1] + d, s[2] + d * 0.5],
-                        [0.4, 0.45, 0.7], 150.0,
+                        [0.4, 0.45, 0.7],
+                        150.0,
                     ),
                 ],
                 ambient_color: [0.04, 0.05, 0.1],
@@ -346,14 +352,8 @@ impl LightingPreset {
 
             LightingPreset::Split => LightingRig {
                 lights: vec![
-                    LuxorLight::point(
-                        [s[0] - d, s[1], s[2] + d * 0.3],
-                        [1.0, 0.95, 0.9], 800.0,
-                    ),
-                    LuxorLight::point(
-                        [s[0] + d, s[1], s[2] + d * 0.3],
-                        [0.6, 0.65, 0.8], 200.0,
-                    ),
+                    LuxorLight::point([s[0] - d, s[1], s[2] + d * 0.3], [1.0, 0.95, 0.9], 800.0),
+                    LuxorLight::point([s[0] + d, s[1], s[2] + d * 0.3], [0.6, 0.65, 0.8], 200.0),
                 ],
                 ambient_color: [0.06, 0.06, 0.08],
                 ambient_intensity: 0.1,
@@ -366,17 +366,16 @@ impl LightingPreset {
 
             LightingPreset::Flat => LightingRig {
                 lights: vec![
-                    LuxorLight::point(
-                        [s[0], s[1] + d, s[2] + d * 0.5],
-                        [1.0, 1.0, 1.0], 500.0,
-                    ),
+                    LuxorLight::point([s[0], s[1] + d, s[2] + d * 0.5], [1.0, 1.0, 1.0], 500.0),
                     LuxorLight::point(
                         [s[0] - d * 0.7, s[1] - d * 0.3, s[2] + d * 0.3],
-                        [0.95, 0.95, 1.0], 400.0,
+                        [0.95, 0.95, 1.0],
+                        400.0,
                     ),
                     LuxorLight::point(
                         [s[0] + d * 0.7, s[1] - d * 0.3, s[2] + d * 0.3],
-                        [0.95, 0.95, 1.0], 400.0,
+                        [0.95, 0.95, 1.0],
+                        400.0,
                     ),
                 ],
                 ambient_color: [0.2, 0.2, 0.22],
@@ -392,19 +391,23 @@ impl LightingPreset {
                 lights: vec![
                     LuxorLight::point(
                         [s[0], s[1] - d * 1.2, s[2] + d * 0.5],
-                        [1.0, 0.95, 0.85], 1000.0,
+                        [1.0, 0.95, 0.85],
+                        1000.0,
                     ),
                     LuxorLight::point(
                         [s[0] - d * 0.5, s[1] - d * 0.8, s[2] + d * 0.4],
-                        [1.0, 1.0, 1.0], 600.0,
+                        [1.0, 1.0, 1.0],
+                        600.0,
                     ),
                     LuxorLight::point(
                         [s[0] + d * 0.5, s[1] - d * 0.8, s[2] + d * 0.4],
-                        [1.0, 1.0, 1.0], 600.0,
+                        [1.0, 1.0, 1.0],
+                        600.0,
                     ),
                     LuxorLight::point(
                         [s[0], s[1] + d * 0.5, s[2] + d * 0.2],
-                        [0.5, 0.55, 0.7], 100.0,
+                        [0.5, 0.55, 0.7],
+                        100.0,
                     ),
                 ],
                 ambient_color: [0.05, 0.06, 0.08],
@@ -420,15 +423,18 @@ impl LightingPreset {
                 lights: vec![
                     LuxorLight::point(
                         [s[0] - d * 0.8, s[1], s[2] + d * 0.3],
-                        [1.0, 0.1, 0.6], 700.0,
+                        [1.0, 0.1, 0.6],
+                        700.0,
                     ),
                     LuxorLight::point(
                         [s[0] + d * 0.8, s[1], s[2] + d * 0.3],
-                        [0.1, 0.5, 1.0], 700.0,
+                        [0.1, 0.5, 1.0],
+                        700.0,
                     ),
                     LuxorLight::point(
                         [s[0], s[1] + d * 0.5, s[2] + d * 0.8],
-                        [0.0, 1.0, 0.6], 300.0,
+                        [0.0, 1.0, 0.6],
+                        300.0,
                     ),
                 ],
                 ambient_color: [0.02, 0.02, 0.05],
@@ -464,7 +470,11 @@ mod tests {
         ];
         for preset in &presets {
             let rig = preset.build_rig(subject, 8.0);
-            assert!(!rig.lights.is_empty(), "Preset {:?} should have lights", preset);
+            assert!(
+                !rig.lights.is_empty(),
+                "Preset {:?} should have lights",
+                preset
+            );
             for light in &rig.lights {
                 assert!(light.intensity > 0.0, "Light intensity should be positive");
             }
@@ -473,9 +483,18 @@ mod tests {
 
     #[test]
     fn test_preset_from_name() {
-        assert_eq!(LightingPreset::from_name("studio"), Some(LightingPreset::Studio3Point));
-        assert_eq!(LightingPreset::from_name("golden_hour"), Some(LightingPreset::GoldenHour));
-        assert_eq!(LightingPreset::from_name("cyberpunk"), Some(LightingPreset::Neon));
+        assert_eq!(
+            LightingPreset::from_name("studio"),
+            Some(LightingPreset::Studio3Point)
+        );
+        assert_eq!(
+            LightingPreset::from_name("golden_hour"),
+            Some(LightingPreset::GoldenHour)
+        );
+        assert_eq!(
+            LightingPreset::from_name("cyberpunk"),
+            Some(LightingPreset::Neon)
+        );
         assert_eq!(LightingPreset::from_name("invalid"), None);
     }
 
@@ -484,7 +503,12 @@ mod tests {
         let light = LuxorLight::point([0.0, 0.0, 10.0], [1.0, 1.0, 1.0], 500.0);
         let (i_near, _, _) = light.evaluate_at([0.0, 0.0, 9.0]);
         let (i_far, _, _) = light.evaluate_at([0.0, 0.0, 0.0]);
-        assert!(i_near > i_far, "Near point should be brighter: {} vs {}", i_near, i_far);
+        assert!(
+            i_near > i_far,
+            "Near point should be brighter: {} vs {}",
+            i_near,
+            i_far
+        );
     }
 
     #[test]
@@ -492,7 +516,10 @@ mod tests {
         let light = LuxorLight::directional([0.0, 0.0, -1.0], [1.0, 1.0, 1.0], 500.0);
         let (i1, _, d1) = light.evaluate_at([0.0, 0.0, 0.0]);
         let (i2, _, d2) = light.evaluate_at([100.0, 100.0, 100.0]);
-        assert!((i1 - i2).abs() < 1e-3, "Directional light should be constant intensity");
+        assert!(
+            (i1 - i2).abs() < 1e-3,
+            "Directional light should be constant intensity"
+        );
         assert!((d1[2] - d2[2]).abs() < 1e-6, "Direction should be constant");
     }
 
@@ -508,20 +535,33 @@ mod tests {
         let (i_center, _, _) = light.evaluate_at([0.0, 0.0, 0.0]);
         let (i_outside, _, _) = light.evaluate_at([20.0, 0.0, 0.0]);
         assert!(i_center > 0.0, "Center should be lit");
-        assert!(i_outside < i_center * 0.01, "Outside cone should be dark: {}", i_outside);
+        assert!(
+            i_outside < i_center * 0.01,
+            "Outside cone should be dark: {}",
+            i_outside
+        );
     }
 
     #[test]
     fn test_noir_is_single_light() {
         let rig = LightingPreset::Noir.build_rig([128.0, 128.0, 25.0], 8.0);
         assert_eq!(rig.lights.len(), 1, "Noir should have single hard light");
-        assert!(rig.ambient_intensity < 0.1, "Noir should have very low ambient");
+        assert!(
+            rig.ambient_intensity < 0.1,
+            "Noir should have very low ambient"
+        );
     }
 
     #[test]
     fn test_golden_hour_warm_tones() {
         let rig = LightingPreset::GoldenHour.build_rig([128.0, 128.0, 25.0], 8.0);
-        assert!(rig.sun_color[0] > rig.sun_color[2], "Golden hour sun should be warm (R > B)");
-        assert!(rig.ambient_color[0] > rig.ambient_color[2], "Golden hour ambient should be warm");
+        assert!(
+            rig.sun_color[0] > rig.sun_color[2],
+            "Golden hour sun should be warm (R > B)"
+        );
+        assert!(
+            rig.ambient_color[0] > rig.ambient_color[2],
+            "Golden hour ambient should be warm"
+        );
     }
 }

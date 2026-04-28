@@ -1,12 +1,12 @@
 use axum::extract::State;
+use axum::http::{header, StatusCode};
 use axum::response::IntoResponse;
-use axum::http::{StatusCode, header};
-use tracing::{info, warn, debug};
-use uuid::Uuid;
 use std::collections::HashMap;
+use tracing::{debug, info, warn};
+use uuid::Uuid;
 
-use super::RobustState;
 use super::xml_response::*;
+use super::RobustState;
 use crate::services::traits::AgentPrefs;
 
 pub async fn handle_agentprefs(
@@ -14,7 +14,11 @@ pub async fn handle_agentprefs(
     body: String,
 ) -> axum::response::Response {
     let params = parse_form_body(&body);
-    let method = params.get("METHOD").or_else(|| params.get("method")).cloned().unwrap_or_default();
+    let method = params
+        .get("METHOD")
+        .or_else(|| params.get("method"))
+        .cloned()
+        .unwrap_or_default();
 
     debug!("[AGENTPREFS] Request: METHOD={}", method);
 
@@ -28,7 +32,9 @@ pub async fn handle_agentprefs(
 
     match method.to_lowercase().as_str() {
         "getagentprefs" => {
-            let user_id = params.get("UserID").or_else(|| params.get("USERID"))
+            let user_id = params
+                .get("UserID")
+                .or_else(|| params.get("USERID"))
                 .and_then(|s| Uuid::parse_str(s).ok())
                 .unwrap_or_default();
             debug!("[AGENTPREFS] getagentprefs: {}", user_id);
@@ -36,14 +42,21 @@ pub async fn handle_agentprefs(
             match svc.get_agent_preferences(user_id).await {
                 Ok(Some(prefs)) => {
                     let kvp = prefs.to_key_value_pairs();
-                    let xml = build_xml_response(&kvp.into_iter()
-                        .map(|(k, v)| (k, XmlValue::Str(v)))
-                        .collect());
+                    let xml = build_xml_response(
+                        &kvp.into_iter()
+                            .map(|(k, v)| (k, XmlValue::Str(v)))
+                            .collect(),
+                    );
                     (StatusCode::OK, [(header::CONTENT_TYPE, "text/xml")], xml).into_response()
                 }
                 Ok(None) => {
                     let xml = "<?xml version=\"1.0\" encoding=\"utf-8\"?><ServerResponse />";
-                    (StatusCode::OK, [(header::CONTENT_TYPE, "text/xml")], xml.to_string()).into_response()
+                    (
+                        StatusCode::OK,
+                        [(header::CONTENT_TYPE, "text/xml")],
+                        xml.to_string(),
+                    )
+                        .into_response()
                 }
                 Err(e) => {
                     warn!("[AGENTPREFS] getagentprefs error: {}", e);
@@ -52,29 +65,55 @@ pub async fn handle_agentprefs(
             }
         }
         "setagentprefs" => {
-            let principal_id = params.get("PrincipalID").or_else(|| params.get("PRINCIPALID"))
+            let principal_id = params
+                .get("PrincipalID")
+                .or_else(|| params.get("PRINCIPALID"))
                 .and_then(|s| Uuid::parse_str(s).ok())
                 .unwrap_or_default();
 
             let prefs = AgentPrefs {
                 principal_id,
-                access_prefs: params.get("AccessPrefs").or_else(|| params.get("ACCESSPREFS"))
-                    .cloned().unwrap_or_else(|| "M".to_string()),
-                hover_height: params.get("HoverHeight").or_else(|| params.get("HOVERHEIGHT"))
-                    .and_then(|s| s.parse().ok()).unwrap_or(0.0),
-                language: params.get("Language").or_else(|| params.get("LANGUAGE"))
-                    .cloned().unwrap_or_else(|| "en-us".to_string()),
-                language_is_public: params.get("LanguageIsPublic").or_else(|| params.get("LANGUAGEISPUBLIC"))
-                    .map(|v| v == "1" || v.to_lowercase() == "true").unwrap_or(true),
-                perm_everyone: params.get("PermEveryone").or_else(|| params.get("PERMEVERYONE"))
-                    .and_then(|s| s.parse().ok()).unwrap_or(0),
-                perm_group: params.get("PermGroup").or_else(|| params.get("PERMGROUP"))
-                    .and_then(|s| s.parse().ok()).unwrap_or(0),
-                perm_next_owner: params.get("PermNextOwner").or_else(|| params.get("PERMNEXTOWNER"))
-                    .and_then(|s| s.parse().ok()).unwrap_or(532480),
+                access_prefs: params
+                    .get("AccessPrefs")
+                    .or_else(|| params.get("ACCESSPREFS"))
+                    .cloned()
+                    .unwrap_or_else(|| "M".to_string()),
+                hover_height: params
+                    .get("HoverHeight")
+                    .or_else(|| params.get("HOVERHEIGHT"))
+                    .and_then(|s| s.parse().ok())
+                    .unwrap_or(0.0),
+                language: params
+                    .get("Language")
+                    .or_else(|| params.get("LANGUAGE"))
+                    .cloned()
+                    .unwrap_or_else(|| "en-us".to_string()),
+                language_is_public: params
+                    .get("LanguageIsPublic")
+                    .or_else(|| params.get("LANGUAGEISPUBLIC"))
+                    .map(|v| v == "1" || v.to_lowercase() == "true")
+                    .unwrap_or(true),
+                perm_everyone: params
+                    .get("PermEveryone")
+                    .or_else(|| params.get("PERMEVERYONE"))
+                    .and_then(|s| s.parse().ok())
+                    .unwrap_or(0),
+                perm_group: params
+                    .get("PermGroup")
+                    .or_else(|| params.get("PERMGROUP"))
+                    .and_then(|s| s.parse().ok())
+                    .unwrap_or(0),
+                perm_next_owner: params
+                    .get("PermNextOwner")
+                    .or_else(|| params.get("PERMNEXTOWNER"))
+                    .and_then(|s| s.parse().ok())
+                    .unwrap_or(532480),
             };
 
-            info!("[AGENTPREFS] setagentprefs: {} lang={}", principal_id, prefs.language);
+            info!(
+                "[AGENTPREFS] setagentprefs: {} lang={}",
+                principal_id, prefs.language
+            );
 
             match svc.store_agent_preferences(&prefs).await {
                 Ok(true) => success_result_response(),
@@ -86,7 +125,9 @@ pub async fn handle_agentprefs(
             }
         }
         "getagentlang" => {
-            let user_id = params.get("UserID").or_else(|| params.get("USERID"))
+            let user_id = params
+                .get("UserID")
+                .or_else(|| params.get("USERID"))
                 .and_then(|s| Uuid::parse_str(s).ok())
                 .unwrap_or_default();
             debug!("[AGENTPREFS] getagentlang: {}", user_id);

@@ -11,8 +11,8 @@
 //! - Multi-format export capabilities (PDF, Excel, PowerBI, Tableau)
 //! - Advanced data visualization and insights
 
-pub mod data_collection;
 pub mod business_intelligence;
+pub mod data_collection;
 pub mod predictive_analytics;
 pub mod report_generation;
 // pub mod dashboard;
@@ -21,12 +21,12 @@ pub mod report_generation;
 // pub mod kpi_manager;
 pub mod manager;
 
+use chrono::{DateTime, Duration, Utc};
+use serde::{Deserialize, Serialize};
 use std::collections::HashMap;
 use std::sync::Arc;
 use tokio::sync::RwLock;
 use uuid::Uuid;
-use serde::{Deserialize, Serialize};
-use chrono::{DateTime, Utc, Duration};
 /// Analytics data point
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct AnalyticsDataPoint {
@@ -472,34 +472,37 @@ pub enum RiskLevel {
 pub enum ReportingError {
     #[error("Data source not found: {0}")]
     DataSourceNotFound(String),
-    
+
     #[error("Invalid report configuration: {reason}")]
     InvalidConfiguration { reason: String },
-    
+
     #[error("Report generation failed: {reason}")]
     GenerationFailed { reason: String },
-    
+
     #[error("Model training failed: {reason}")]
     ModelTrainingFailed { reason: String },
-    
+
     #[error("Prediction failed: {reason}")]
     PredictionFailed { reason: String },
-    
+
     #[error("Export failed: {format:?} - {reason}")]
-    ExportFailed { format: OutputFormat, reason: String },
-    
+    ExportFailed {
+        format: OutputFormat,
+        reason: String,
+    },
+
     #[error("Distribution failed: {reason}")]
     DistributionFailed { reason: String },
-    
+
     #[error("Database error: {0}")]
     DatabaseError(#[from] sqlx::Error),
-    
+
     #[error("I/O error: {0}")]
     IoError(#[from] std::io::Error),
-    
+
     #[error("Serialization error: {0}")]
     SerializationError(#[from] serde_json::Error),
-    
+
     #[error("Generic error: {0}")]
     AnyhowError(#[from] anyhow::Error),
 }
@@ -518,17 +521,18 @@ impl AnalyticsValue {
             _ => None,
         }
     }
-    
+
     /// Check if value is numeric
     pub fn is_numeric(&self) -> bool {
-        matches!(self, 
-            AnalyticsValue::Integer(_) | 
-            AnalyticsValue::Float(_) | 
-            AnalyticsValue::Counter(_) | 
-            AnalyticsValue::Percentage(_)
+        matches!(
+            self,
+            AnalyticsValue::Integer(_)
+                | AnalyticsValue::Float(_)
+                | AnalyticsValue::Counter(_)
+                | AnalyticsValue::Percentage(_)
         )
     }
-    
+
     /// Convert to string representation
     pub fn to_string(&self) -> String {
         match self {
@@ -548,13 +552,21 @@ impl AnalyticsValue {
 
 impl Default for WidgetPosition {
     fn default() -> Self {
-        Self { x: 0, y: 0, z_index: 0 }
+        Self {
+            x: 0,
+            y: 0,
+            z_index: 0,
+        }
     }
 }
 
 impl Default for WidgetSize {
     fn default() -> Self {
-        Self { width: 300, height: 200, responsive: true }
+        Self {
+            width: 300,
+            height: 200,
+            responsive: true,
+        }
     }
 }
 
@@ -582,19 +594,21 @@ impl BusinessKPI {
             .iter()
             .filter(|dp| dp.metric_name == self.metric_source)
             .collect();
-        
+
         if relevant_points.is_empty() {
             return None;
         }
-        
+
         match self.calculation_method {
-            CalculationMethod::Sum => {
-                Some(relevant_points.iter()
+            CalculationMethod::Sum => Some(
+                relevant_points
+                    .iter()
                     .filter_map(|dp| dp.value.as_f64())
-                    .sum())
-            },
+                    .sum(),
+            ),
             CalculationMethod::Average => {
-                let values: Vec<f64> = relevant_points.iter()
+                let values: Vec<f64> = relevant_points
+                    .iter()
                     .filter_map(|dp| dp.value.as_f64())
                     .collect();
                 if values.is_empty() {
@@ -602,14 +616,12 @@ impl BusinessKPI {
                 } else {
                     Some(values.iter().sum::<f64>() / values.len() as f64)
                 }
-            },
-            CalculationMethod::Count => {
-                Some(relevant_points.len() as f64)
-            },
+            }
+            CalculationMethod::Count => Some(relevant_points.len() as f64),
             _ => None, // More complex calculations would be implemented
         }
     }
-    
+
     /// Get KPI status based on current value
     pub fn get_status(&self, current_value: f64) -> KPIStatus {
         if let Some(critical) = self.threshold_critical {
@@ -617,13 +629,13 @@ impl BusinessKPI {
                 return KPIStatus::Critical;
             }
         }
-        
+
         if let Some(warning) = self.threshold_warning {
             if current_value <= warning {
                 return KPIStatus::Warning;
             }
         }
-        
+
         if let Some(target) = self.target_value {
             if current_value >= target {
                 KPIStatus::Excellent
@@ -655,7 +667,10 @@ pub enum TimeWindow {
     Last30Days,
     LastQuarter,
     LastYear,
-    Custom { start: DateTime<Utc>, end: DateTime<Utc> },
+    Custom {
+        start: DateTime<Utc>,
+        end: DateTime<Utc>,
+    },
 }
 
 impl TimeWindow {
@@ -672,7 +687,7 @@ impl TimeWindow {
             TimeWindow::Custom { start, .. } => *start,
         }
     }
-    
+
     /// Get the end time for this window
     pub fn end_time(&self) -> DateTime<Utc> {
         match self {

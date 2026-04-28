@@ -2,13 +2,13 @@
 // Revolutionary spatial audio engine with 3D positional audio, real-time reverb, and acoustic modeling
 // Supporting binaural audio, room acoustics simulation, and multi-channel audio systems
 
-use crate::vr::{VRError, Pose3D, SpatialAudioUpdate, SpatialAudioSource, RoomAcoustics};
 use crate::monitoring::metrics::MetricsCollector;
+use crate::vr::{Pose3D, RoomAcoustics, SpatialAudioSource, SpatialAudioUpdate, VRError};
+use serde::{Deserialize, Serialize};
+use std::collections::HashMap;
 use std::sync::Arc;
 use tokio::sync::RwLock;
-use serde::{Deserialize, Serialize};
 use uuid::Uuid;
-use std::collections::HashMap;
 
 #[derive(Debug)]
 pub struct SpatialAudioEngine {
@@ -160,7 +160,7 @@ pub enum AudioCompression {
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct RoomModel {
-    pub room_dimensions: [f32; 3], // Length, Width, Height
+    pub room_dimensions: [f32; 3],     // Length, Width, Height
     pub wall_materials: [Material; 6], // 6 walls (including floor and ceiling)
     pub room_shape: RoomShape,
     pub furniture: Vec<FurnitureItem>,
@@ -888,9 +888,9 @@ impl SpatialAudioEngine {
         let spatial_config = SpatialAudioConfig {
             enabled: config.spatial_audio_enabled,
             sample_rate: config.audio_sample_rate,
-            buffer_size: 512, // Reasonable default
-            channels: 2, // Stereo by default
-            bit_depth: 32, // 32-bit float
+            buffer_size: 512,        // Reasonable default
+            channels: 2,             // Stereo by default
+            bit_depth: 32,           // 32-bit float
             latency_target_ms: 10.0, // Low latency for VR
             hrtf_enabled: true,
             reverb_enabled: true,
@@ -995,7 +995,7 @@ impl SpatialAudioEngine {
 
         let audio_streaming = Arc::new(AudioStreaming {
             streaming_config: StreamingConfig {
-                enabled: false, // Disabled by default
+                enabled: false,         // Disabled by default
                 target_bitrate: 320000, // 320 kbps
                 adaptive_bitrate: true,
                 max_latency_ms: 50.0,
@@ -1046,7 +1046,11 @@ impl SpatialAudioEngine {
         Ok(Arc::new(engine))
     }
 
-    pub async fn create_audio_session(&self, session_id: Uuid, user_id: Uuid) -> Result<(), VRError> {
+    pub async fn create_audio_session(
+        &self,
+        session_id: Uuid,
+        user_id: Uuid,
+    ) -> Result<(), VRError> {
         let session = AudioSession {
             session_id,
             user_id,
@@ -1084,7 +1088,9 @@ impl SpatialAudioEngine {
             sessions.insert(session_id, session);
         }
 
-        self.metrics.record_spatial_audio_session_created(session_id).await;
+        self.metrics
+            .record_spatial_audio_session_created(session_id)
+            .await;
         Ok(())
     }
 
@@ -1094,11 +1100,17 @@ impl SpatialAudioEngine {
             sessions.remove(&session_id);
         }
 
-        self.metrics.record_spatial_audio_session_destroyed(session_id).await;
+        self.metrics
+            .record_spatial_audio_session_destroyed(session_id)
+            .await;
         Ok(())
     }
 
-    pub async fn process_spatial_frame(&self, session_id: Uuid, frame_data: &crate::vr::VRFrameData) -> Result<SpatialAudioUpdate, VRError> {
+    pub async fn process_spatial_frame(
+        &self,
+        session_id: Uuid,
+        frame_data: &crate::vr::VRFrameData,
+    ) -> Result<SpatialAudioUpdate, VRError> {
         let session = {
             let sessions = self.audio_sessions.read().await;
             sessions.get(&session_id).cloned()
@@ -1115,12 +1127,16 @@ impl SpatialAudioEngine {
         // Process all audio sources with spatial audio
         let mut audio_sources = Vec::new();
         for (source_id, source) in &session.audio_sources {
-            let processed_source = self.process_audio_source(source, &listener_pose, &session.room_model).await?;
+            let processed_source = self
+                .process_audio_source(source, &listener_pose, &session.room_model)
+                .await?;
             audio_sources.push(processed_source);
         }
 
         // Calculate room acoustics
-        let room_acoustics = self.calculate_room_acoustics(&session.room_model, &listener_pose).await?;
+        let room_acoustics = self
+            .calculate_room_acoustics(&session.room_model, &listener_pose)
+            .await?;
 
         let update = SpatialAudioUpdate {
             audio_sources,
@@ -1128,22 +1144,33 @@ impl SpatialAudioEngine {
             room_acoustics,
         };
 
-        self.metrics.record_spatial_audio_frame_processed(session_id).await;
+        self.metrics
+            .record_spatial_audio_frame_processed(session_id)
+            .await;
         Ok(update)
     }
 
-    async fn process_audio_source(&self, source: &AudioSource, listener_pose: &Pose3D, room_model: &RoomModel) -> Result<SpatialAudioSource, VRError> {
+    async fn process_audio_source(
+        &self,
+        source: &AudioSource,
+        listener_pose: &Pose3D,
+        room_model: &RoomModel,
+    ) -> Result<SpatialAudioSource, VRError> {
         // Calculate distance and direction
         let source_to_listener = [
             listener_pose.position[0] - source.position[0],
             listener_pose.position[1] - source.position[1],
             listener_pose.position[2] - source.position[2],
         ];
-        
-        let distance = (source_to_listener[0].powi(2) + source_to_listener[1].powi(2) + source_to_listener[2].powi(2)).sqrt();
+
+        let distance = (source_to_listener[0].powi(2)
+            + source_to_listener[1].powi(2)
+            + source_to_listener[2].powi(2))
+        .sqrt();
 
         // Apply distance attenuation
-        let distance_attenuation = self.calculate_distance_attenuation(distance, &source.distance_attenuation);
+        let distance_attenuation =
+            self.calculate_distance_attenuation(distance, &source.distance_attenuation);
 
         // Calculate frequency response (simplified)
         let frequency_response = vec![1.0; 10]; // 10 frequency bands
@@ -1157,22 +1184,27 @@ impl SpatialAudioEngine {
         })
     }
 
-    fn calculate_distance_attenuation(&self, distance: f32, attenuation: &DistanceAttenuation) -> f32 {
+    fn calculate_distance_attenuation(
+        &self,
+        distance: f32,
+        attenuation: &DistanceAttenuation,
+    ) -> f32 {
         match &attenuation.attenuation_model {
             AttenuationModel::None => 1.0,
             AttenuationModel::Linear => {
                 if distance <= attenuation.reference_distance {
                     1.0
                 } else {
-                    1.0 - ((distance - attenuation.reference_distance) / (attenuation.max_distance - attenuation.reference_distance))
+                    1.0 - ((distance - attenuation.reference_distance)
+                        / (attenuation.max_distance - attenuation.reference_distance))
                 }
             }
             AttenuationModel::Inverse => {
-                attenuation.reference_distance / (attenuation.reference_distance + attenuation.rolloff_factor * (distance - attenuation.reference_distance))
+                attenuation.reference_distance
+                    / (attenuation.reference_distance
+                        + attenuation.rolloff_factor * (distance - attenuation.reference_distance))
             }
-            AttenuationModel::InverseSquare => {
-                (attenuation.reference_distance / distance).powi(2)
-            }
+            AttenuationModel::InverseSquare => (attenuation.reference_distance / distance).powi(2),
             AttenuationModel::Logarithmic => {
                 if distance <= attenuation.reference_distance {
                     1.0
@@ -1187,11 +1219,15 @@ impl SpatialAudioEngine {
         }
     }
 
-    async fn calculate_room_acoustics(&self, room_model: &RoomModel, _listener_pose: &Pose3D) -> Result<RoomAcoustics, VRError> {
+    async fn calculate_room_acoustics(
+        &self,
+        room_model: &RoomModel,
+        _listener_pose: &Pose3D,
+    ) -> Result<RoomAcoustics, VRError> {
         // Simplified room acoustics calculation
         let reverb_time = self.calculate_reverb_time(room_model);
         let absorption_coefficients = self.calculate_absorption_coefficients(room_model);
-        
+
         Ok(RoomAcoustics {
             reverb_time,
             absorption_coefficients,
@@ -1201,18 +1237,24 @@ impl SpatialAudioEngine {
 
     fn calculate_reverb_time(&self, room_model: &RoomModel) -> f32 {
         // Sabine formula: RT60 = 0.161 * V / A
-        let volume = room_model.room_dimensions[0] * room_model.room_dimensions[1] * room_model.room_dimensions[2];
-        let surface_area = 2.0 * (room_model.room_dimensions[0] * room_model.room_dimensions[1] + 
-                                  room_model.room_dimensions[1] * room_model.room_dimensions[2] + 
-                                  room_model.room_dimensions[2] * room_model.room_dimensions[0]);
-        
+        let volume = room_model.room_dimensions[0]
+            * room_model.room_dimensions[1]
+            * room_model.room_dimensions[2];
+        let surface_area = 2.0
+            * (room_model.room_dimensions[0] * room_model.room_dimensions[1]
+                + room_model.room_dimensions[1] * room_model.room_dimensions[2]
+                + room_model.room_dimensions[2] * room_model.room_dimensions[0]);
+
         // Average absorption coefficient (simplified)
-        let avg_absorption = room_model.wall_materials.iter()
+        let avg_absorption = room_model
+            .wall_materials
+            .iter()
             .map(|m| m.absorption_coefficients.get(0).map_or(0.1, |f| f.response))
-            .sum::<f32>() / room_model.wall_materials.len() as f32;
-        
+            .sum::<f32>()
+            / room_model.wall_materials.len() as f32;
+
         let total_absorption = surface_area * avg_absorption;
-        
+
         if total_absorption > 0.0 {
             0.161 * volume / total_absorption
         } else {
@@ -1238,8 +1280,14 @@ impl SpatialAudioEngine {
                     position: [-1.0, 0.0, 0.0],
                     orientation: [1.0, 0.0, 0.0],
                     frequency_response: vec![
-                        FrequencyResponse { frequency_hz: 20.0, response: 1.0 },
-                        FrequencyResponse { frequency_hz: 20000.0, response: 1.0 },
+                        FrequencyResponse {
+                            frequency_hz: 20.0,
+                            response: 1.0,
+                        },
+                        FrequencyResponse {
+                            frequency_hz: 20000.0,
+                            response: 1.0,
+                        },
                     ],
                     max_output_level: 120.0, // dB SPL
                 },
@@ -1248,8 +1296,14 @@ impl SpatialAudioEngine {
                     position: [1.0, 0.0, 0.0],
                     orientation: [-1.0, 0.0, 0.0],
                     frequency_response: vec![
-                        FrequencyResponse { frequency_hz: 20.0, response: 1.0 },
-                        FrequencyResponse { frequency_hz: 20000.0, response: 1.0 },
+                        FrequencyResponse {
+                            frequency_hz: 20.0,
+                            response: 1.0,
+                        },
+                        FrequencyResponse {
+                            frequency_hz: 20000.0,
+                            response: 1.0,
+                        },
                     ],
                     max_output_level: 120.0, // dB SPL
                 },
@@ -1259,67 +1313,68 @@ impl SpatialAudioEngine {
     }
 
     fn create_panning_algorithms() -> Vec<PanningAlgorithm> {
-        vec![
-            PanningAlgorithm {
-                algorithm_name: "HRTF Binaural".to_string(),
-                algorithm_type: PanningMethod::Binaural,
-                parameters: HashMap::new(),
-            },
-        ]
+        vec![PanningAlgorithm {
+            algorithm_name: "HRTF Binaural".to_string(),
+            algorithm_type: PanningMethod::Binaural,
+            parameters: HashMap::new(),
+        }]
     }
 
     fn create_distance_processors() -> Vec<DistanceProcessor> {
-        vec![
-            DistanceProcessor {
-                processor_name: "Inverse Square Law".to_string(),
-                attenuation_model: AttenuationModel::InverseSquare,
-                air_absorption_model: AirAbsorptionModel {
-                    enabled: true,
-                    absorption_coefficients: vec![
-                        FrequencyAbsorption { frequency_hz: 1000.0, absorption_db_per_meter: 0.1 },
-                        FrequencyAbsorption { frequency_hz: 4000.0, absorption_db_per_meter: 0.3 },
-                        FrequencyAbsorption { frequency_hz: 8000.0, absorption_db_per_meter: 0.8 },
-                    ],
-                    temperature_compensation: true,
-                    humidity_compensation: true,
-                },
+        vec![DistanceProcessor {
+            processor_name: "Inverse Square Law".to_string(),
+            attenuation_model: AttenuationModel::InverseSquare,
+            air_absorption_model: AirAbsorptionModel {
+                enabled: true,
+                absorption_coefficients: vec![
+                    FrequencyAbsorption {
+                        frequency_hz: 1000.0,
+                        absorption_db_per_meter: 0.1,
+                    },
+                    FrequencyAbsorption {
+                        frequency_hz: 4000.0,
+                        absorption_db_per_meter: 0.3,
+                    },
+                    FrequencyAbsorption {
+                        frequency_hz: 8000.0,
+                        absorption_db_per_meter: 0.8,
+                    },
+                ],
+                temperature_compensation: true,
+                humidity_compensation: true,
             },
-        ]
+        }]
     }
 
     fn create_occlusion_models() -> Vec<OcclusionModel> {
-        vec![
-            OcclusionModel {
-                model_name: "Low Pass Filter".to_string(),
-                occlusion_type: OcclusionType::FrequencyDependentObstruction,
-                filter_parameters: FilterParameters {
-                    filter_type: FilterType::LowPass,
-                    cutoff_frequency: 1000.0,
-                    resonance: 0.7,
-                    gain: 0.5,
-                },
+        vec![OcclusionModel {
+            model_name: "Low Pass Filter".to_string(),
+            occlusion_type: OcclusionType::FrequencyDependentObstruction,
+            filter_parameters: FilterParameters {
+                filter_type: FilterType::LowPass,
+                cutoff_frequency: 1000.0,
+                resonance: 0.7,
+                gain: 0.5,
             },
-        ]
+        }]
     }
 
     fn create_reverb_algorithms() -> Vec<ReverbAlgorithm> {
-        vec![
-            ReverbAlgorithm {
-                algorithm_name: "Room Reverb".to_string(),
-                algorithm_type: ReverbType::RoomReverb,
-                parameters: ReverbParameters {
-                    room_size: 0.5,
-                    decay_time: 1.5,
-                    early_reflections_level: 0.3,
-                    late_reflections_level: 0.7,
-                    diffusion: 0.8,
-                    density: 0.9,
-                    high_frequency_damping: 0.2,
-                    low_frequency_damping: 0.1,
-                    pre_delay: 0.03,
-                },
+        vec![ReverbAlgorithm {
+            algorithm_name: "Room Reverb".to_string(),
+            algorithm_type: ReverbType::RoomReverb,
+            parameters: ReverbParameters {
+                room_size: 0.5,
+                decay_time: 1.5,
+                early_reflections_level: 0.3,
+                late_reflections_level: 0.7,
+                diffusion: 0.8,
+                density: 0.9,
+                high_frequency_damping: 0.2,
+                low_frequency_damping: 0.1,
+                pre_delay: 0.03,
             },
-        ]
+        }]
     }
 
     fn load_impulse_responses() -> HashMap<String, ImpulseResponse> {
@@ -1336,14 +1391,12 @@ impl SpatialAudioEngine {
     }
 
     fn create_acoustic_models() -> Vec<AcousticModel> {
-        vec![
-            AcousticModel {
-                model_name: "Geometric Acoustics".to_string(),
-                model_type: AcousticModelType::GeometricAcoustics,
-                accuracy: ModelAccuracy::High,
-                computational_cost: ComputationalCost::Medium,
-            },
-        ]
+        vec![AcousticModel {
+            model_name: "Geometric Acoustics".to_string(),
+            model_type: AcousticModelType::GeometricAcoustics,
+            accuracy: ModelAccuracy::High,
+            computational_cost: ComputationalCost::Medium,
+        }]
     }
 
     fn create_default_room_model() -> RoomModel {
@@ -1353,12 +1406,30 @@ impl SpatialAudioEngine {
                 let wall_material = Material {
                     material_type: MaterialType::Concrete,
                     absorption_coefficients: vec![
-                        FrequencyResponse { frequency_hz: 125.0, response: 0.01 },
-                        FrequencyResponse { frequency_hz: 250.0, response: 0.01 },
-                        FrequencyResponse { frequency_hz: 500.0, response: 0.02 },
-                        FrequencyResponse { frequency_hz: 1000.0, response: 0.02 },
-                        FrequencyResponse { frequency_hz: 2000.0, response: 0.02 },
-                        FrequencyResponse { frequency_hz: 4000.0, response: 0.03 },
+                        FrequencyResponse {
+                            frequency_hz: 125.0,
+                            response: 0.01,
+                        },
+                        FrequencyResponse {
+                            frequency_hz: 250.0,
+                            response: 0.01,
+                        },
+                        FrequencyResponse {
+                            frequency_hz: 500.0,
+                            response: 0.02,
+                        },
+                        FrequencyResponse {
+                            frequency_hz: 1000.0,
+                            response: 0.02,
+                        },
+                        FrequencyResponse {
+                            frequency_hz: 2000.0,
+                            response: 0.02,
+                        },
+                        FrequencyResponse {
+                            frequency_hz: 4000.0,
+                            response: 0.03,
+                        },
                     ],
                     reflection_coefficient: 0.98,
                     scattering_coefficient: 0.1,
@@ -1376,10 +1447,10 @@ impl SpatialAudioEngine {
             room_shape: RoomShape::Rectangular,
             furniture: Vec::new(),
             environmental_factors: EnvironmentalFactors {
-                temperature: 20.0, // Celsius
-                humidity: 50.0, // Percent
+                temperature: 20.0,      // Celsius
+                humidity: 50.0,         // Percent
                 air_pressure: 101325.0, // Pa
-                air_density: 1.2, // kg/m³
+                air_density: 1.2,       // kg/m³
                 wind_velocity: [0.0, 0.0, 0.0],
             },
         }

@@ -7,13 +7,13 @@
 
 use anyhow::{anyhow, Result};
 use async_trait::async_trait;
-use sha2::{Sha256, Digest};
+use sha2::{Digest, Sha256};
 use std::sync::Arc;
 use tracing::{debug, info, warn};
 use uuid::Uuid;
 
-use crate::services::traits::{AuthenticationServiceTrait, AuthInfo};
 use crate::database::multi_backend::DatabaseConnection;
+use crate::services::traits::{AuthInfo, AuthenticationServiceTrait};
 
 pub struct LocalAuthenticationService {
     connection: Arc<DatabaseConnection>,
@@ -28,7 +28,9 @@ impl LocalAuthenticationService {
     fn get_pg_pool(&self) -> Result<&sqlx::PgPool> {
         match self.connection.as_ref() {
             DatabaseConnection::PostgreSQL(pool) => Ok(pool),
-            _ => Err(anyhow!("LocalAuthenticationService requires PostgreSQL connection")),
+            _ => Err(anyhow!(
+                "LocalAuthenticationService requires PostgreSQL connection"
+            )),
         }
     }
 
@@ -51,17 +53,21 @@ impl LocalAuthenticationService {
 
 #[async_trait]
 impl AuthenticationServiceTrait for LocalAuthenticationService {
-    async fn authenticate(&self, principal_id: Uuid, password: &str, _lifetime: i32) -> Result<Option<String>> {
+    async fn authenticate(
+        &self,
+        principal_id: Uuid,
+        password: &str,
+        _lifetime: i32,
+    ) -> Result<Option<String>> {
         debug!("Authenticating user: {}", principal_id);
 
         let pool = self.get_pg_pool()?;
-        let row: Option<(String, String)> = sqlx::query_as(
-            "SELECT passwordhash, passwordsalt FROM auth WHERE uuid = $1"
-        )
-        .bind(principal_id)
-        .fetch_optional(pool)
-        .await
-        .map_err(|e| anyhow!("Failed to get auth info: {}", e))?;
+        let row: Option<(String, String)> =
+            sqlx::query_as("SELECT passwordhash, passwordsalt FROM auth WHERE uuid = $1")
+                .bind(principal_id)
+                .fetch_optional(pool)
+                .await
+                .map_err(|e| anyhow!("Failed to get auth info: {}", e))?;
 
         if let Some((stored_hash, salt)) = row {
             let computed_hash = self.hash_password(password, &salt);
@@ -71,11 +77,17 @@ impl AuthenticationServiceTrait for LocalAuthenticationService {
                 info!("Authentication successful for user: {}", principal_id);
                 Ok(Some(token))
             } else {
-                warn!("Authentication failed for user: {} (password mismatch)", principal_id);
+                warn!(
+                    "Authentication failed for user: {} (password mismatch)",
+                    principal_id
+                );
                 Ok(None)
             }
         } else {
-            warn!("Authentication failed for user: {} (not found)", principal_id);
+            warn!(
+                "Authentication failed for user: {} (not found)",
+                principal_id
+            );
             Ok(None)
         }
     }
@@ -104,7 +116,7 @@ impl AuthenticationServiceTrait for LocalAuthenticationService {
             ON CONFLICT(uuid) DO UPDATE SET
                 passwordhash = EXCLUDED.passwordhash,
                 passwordsalt = EXCLUDED.passwordsalt
-            "#
+            "#,
         )
         .bind(principal_id)
         .bind(&hash)
@@ -136,7 +148,9 @@ impl AuthenticationServiceTrait for LocalAuthenticationService {
                 password_hash: row.try_get("passwordhash")?,
                 password_salt: row.try_get("passwordsalt")?,
                 web_login_key: row.try_get("webloginkey").unwrap_or_default(),
-                account_type: row.try_get("accounttype").unwrap_or_else(|_| "UserAccount".to_string()),
+                account_type: row
+                    .try_get("accounttype")
+                    .unwrap_or_else(|_| "UserAccount".to_string()),
             }))
         } else {
             Ok(None)
@@ -152,7 +166,9 @@ mod tests {
     fn test_password_hashing() {
         let service = LocalAuthenticationService {
             connection: Arc::new(DatabaseConnection::PostgreSQL(
-                sqlx::postgres::PgPoolOptions::new().connect_lazy("postgres://localhost/test").unwrap()
+                sqlx::postgres::PgPoolOptions::new()
+                    .connect_lazy("postgres://localhost/test")
+                    .unwrap(),
             )),
         };
 

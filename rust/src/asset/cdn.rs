@@ -6,11 +6,11 @@
 //! - Bandwidth optimization
 //! - Multiple CDN provider support
 
-use std::{collections::HashMap, sync::Arc, time::Duration};
 use anyhow::{anyhow, Result};
 use bytes::Bytes;
 use reqwest::Client;
 use serde::{Deserialize, Serialize};
+use std::{collections::HashMap, sync::Arc, time::Duration};
 use tracing::{debug, info, warn};
 use uuid::Uuid;
 
@@ -94,9 +94,7 @@ pub struct CdnManager {
 impl CdnManager {
     /// Create a new CDN manager
     pub async fn new(config: CdnConfig) -> Result<Self> {
-        let client = Client::builder()
-            .timeout(Duration::from_secs(30))
-            .build()?;
+        let client = Client::builder().timeout(Duration::from_secs(30)).build()?;
 
         // Validate CDN connection
         Self::validate_cdn_connection(&client, &config).await?;
@@ -124,14 +122,18 @@ impl CdnManager {
         info!("Distributing asset {} to CDN", asset.id);
 
         let content_type = self.determine_content_type(&asset.asset_type);
-        let data = asset.data.as_ref()
+        let data = asset
+            .data
+            .as_ref()
             .ok_or_else(|| anyhow!("Asset {} has no data", asset.id))?;
         let checksum = self.calculate_checksum(data);
 
         // Upload to CDN based on provider
         let cdn_url = match self.config.provider {
             CdnProvider::CloudFlare => self.upload_to_cloudflare(asset, &content_type).await?,
-            CdnProvider::AmazonCloudFront => self.upload_to_cloudfront(asset, &content_type).await?,
+            CdnProvider::AmazonCloudFront => {
+                self.upload_to_cloudfront(asset, &content_type).await?
+            }
             CdnProvider::AzureCDN => self.upload_to_azure_cdn(asset, &content_type).await?,
             CdnProvider::GoogleCloudCDN => self.upload_to_google_cdn(asset, &content_type).await?,
             CdnProvider::Generic => self.upload_to_generic_cdn(asset, &content_type).await?,
@@ -141,7 +143,11 @@ impl CdnManager {
             asset_id: asset.id.to_string(),
             cdn_url,
             regions: self.config.regions.clone(),
-            created_at: asset.created_at.duration_since(std::time::UNIX_EPOCH).unwrap().as_secs(),
+            created_at: asset
+                .created_at
+                .duration_since(std::time::UNIX_EPOCH)
+                .unwrap()
+                .as_secs(),
             ttl: self.config.default_ttl,
             size: data.len(),
             content_type,
@@ -149,7 +155,10 @@ impl CdnManager {
         };
 
         // Store metadata
-        self.distributed_assets.write().await.insert(asset.id.to_string(), cdn_asset.clone());
+        self.distributed_assets
+            .write()
+            .await
+            .insert(asset.id.to_string(), cdn_asset.clone());
 
         // Update stats
         {
@@ -158,14 +167,19 @@ impl CdnManager {
             stats.total_size += asset.data.as_ref().map(|d| d.len()).unwrap_or(0) as u64;
         }
 
-        info!("Successfully distributed asset {} to CDN: {}", asset.id, cdn_asset.cdn_url);
+        info!(
+            "Successfully distributed asset {} to CDN: {}",
+            asset.id, cdn_asset.cdn_url
+        );
         Ok(cdn_asset)
     }
 
     /// Get CDN URL for an asset
     pub async fn get_cdn_url(&self, asset_id: &str) -> Option<String> {
         let assets = self.distributed_assets.read().await;
-        assets.get(asset_id).map(|cdn_asset| cdn_asset.cdn_url.clone())
+        assets
+            .get(asset_id)
+            .map(|cdn_asset| cdn_asset.cdn_url.clone())
     }
 
     /// Check if an asset is distributed to CDN
@@ -219,7 +233,9 @@ impl CdnManager {
         if let Some(cdn_asset) = assets.get(asset_id) {
             match self.config.provider {
                 CdnProvider::CloudFlare => self.purge_cloudflare_cache(&cdn_asset.cdn_url).await?,
-                CdnProvider::AmazonCloudFront => self.purge_cloudfront_cache(&cdn_asset.cdn_url).await?,
+                CdnProvider::AmazonCloudFront => {
+                    self.purge_cloudfront_cache(&cdn_asset.cdn_url).await?
+                }
                 CdnProvider::AzureCDN => self.purge_azure_cache(&cdn_asset.cdn_url).await?,
                 CdnProvider::GoogleCloudCDN => self.purge_google_cache(&cdn_asset.cdn_url).await?,
                 CdnProvider::Generic => {
@@ -270,7 +286,10 @@ impl CdnManager {
             }
             _ => {
                 // For AWS, Azure, Google - would need proper SDK integration
-                info!("CDN connection validation skipped for {:?}", config.provider);
+                info!(
+                    "CDN connection validation skipped for {:?}",
+                    config.provider
+                );
             }
         }
 
@@ -293,7 +312,7 @@ impl CdnManager {
 
     /// Calculate asset checksum
     fn calculate_checksum(&self, data: &Bytes) -> String {
-        use sha2::{Sha256, Digest};
+        use sha2::{Digest, Sha256};
         let mut hasher = Sha256::new();
         hasher.update(data);
         format!("{:x}", hasher.finalize())
@@ -301,17 +320,34 @@ impl CdnManager {
 
     // CloudFlare CDN integration
     async fn upload_to_cloudflare(&self, asset: &Asset, content_type: &str) -> Result<String> {
-        let url = format!("{}/client/v4/zones/{}/files", 
+        let url = format!(
+            "{}/client/v4/zones/{}/files",
             self.config.base_url,
-            self.config.provider_config.get("zone_id").unwrap_or(&"default".to_string())
+            self.config
+                .provider_config
+                .get("zone_id")
+                .unwrap_or(&"default".to_string())
         );
 
-        let response = self.client
+        let response = self
+            .client
             .put(&url)
-            .header("Authorization", format!("Bearer {}", 
-                self.config.api_key.as_ref().unwrap_or(&"".to_string())))
+            .header(
+                "Authorization",
+                format!(
+                    "Bearer {}",
+                    self.config.api_key.as_ref().unwrap_or(&"".to_string())
+                ),
+            )
             .header("Content-Type", content_type)
-            .body(asset.data.as_ref().ok_or_else(|| anyhow!("Asset has no data"))?.as_ref().clone())
+            .body(
+                asset
+                    .data
+                    .as_ref()
+                    .ok_or_else(|| anyhow!("Asset has no data"))?
+                    .as_ref()
+                    .clone(),
+            )
             .send()
             .await?;
 
@@ -325,20 +361,35 @@ impl CdnManager {
     // Amazon CloudFront integration (simplified)
     async fn upload_to_cloudfront(&self, asset: &Asset, content_type: &str) -> Result<String> {
         let default_bucket = "assets".to_string();
-        let bucket = self.config.provider_config.get("s3_bucket").unwrap_or(&default_bucket);
+        let bucket = self
+            .config
+            .provider_config
+            .get("s3_bucket")
+            .unwrap_or(&default_bucket);
         let url = format!("https://{}.s3.amazonaws.com/{}", bucket, asset.id);
 
-        let response = self.client
+        let response = self
+            .client
             .put(&url)
             .header("Content-Type", content_type)
             .header("x-amz-acl", "public-read")
-            .body(asset.data.as_ref().ok_or_else(|| anyhow!("Asset has no data"))?.as_ref().clone())
+            .body(
+                asset
+                    .data
+                    .as_ref()
+                    .ok_or_else(|| anyhow!("Asset has no data"))?
+                    .as_ref()
+                    .clone(),
+            )
             .send()
             .await?;
 
         if response.status().is_success() {
             let default_domain = format!("{}.cloudfront.net", bucket);
-            let distribution_domain = self.config.provider_config.get("distribution_domain")
+            let distribution_domain = self
+                .config
+                .provider_config
+                .get("distribution_domain")
                 .unwrap_or(&default_domain);
             Ok(format!("https://{}/{}", distribution_domain, asset.id))
         } else {
@@ -349,22 +400,44 @@ impl CdnManager {
     // Azure CDN integration (simplified)
     async fn upload_to_azure_cdn(&self, asset: &Asset, content_type: &str) -> Result<String> {
         let default_storage = "assets".to_string();
-        let storage_account = self.config.provider_config.get("storage_account").unwrap_or(&default_storage);
+        let storage_account = self
+            .config
+            .provider_config
+            .get("storage_account")
+            .unwrap_or(&default_storage);
         let default_container = "assets".to_string();
-        let container = self.config.provider_config.get("container").unwrap_or(&default_container);
-        let url = format!("https://{}.blob.core.windows.net/{}/{}", storage_account, container, asset.id);
+        let container = self
+            .config
+            .provider_config
+            .get("container")
+            .unwrap_or(&default_container);
+        let url = format!(
+            "https://{}.blob.core.windows.net/{}/{}",
+            storage_account, container, asset.id
+        );
 
-        let response = self.client
+        let response = self
+            .client
             .put(&url)
             .header("x-ms-blob-type", "BlockBlob")
             .header("Content-Type", content_type)
-            .body(asset.data.as_ref().ok_or_else(|| anyhow!("Asset has no data"))?.as_ref().clone())
+            .body(
+                asset
+                    .data
+                    .as_ref()
+                    .ok_or_else(|| anyhow!("Asset has no data"))?
+                    .as_ref()
+                    .clone(),
+            )
             .send()
             .await?;
 
         if response.status().is_success() {
             let default_endpoint = format!("{}.azureedge.net", storage_account);
-            let cdn_endpoint = self.config.provider_config.get("cdn_endpoint")
+            let cdn_endpoint = self
+                .config
+                .provider_config
+                .get("cdn_endpoint")
                 .unwrap_or(&default_endpoint);
             Ok(format!("https://{}/{}", cdn_endpoint, asset.id))
         } else {
@@ -375,23 +448,41 @@ impl CdnManager {
     // Google Cloud CDN integration (simplified)
     async fn upload_to_google_cdn(&self, asset: &Asset, content_type: &str) -> Result<String> {
         let default_bucket = "assets".to_string();
-        let bucket = self.config.provider_config.get("gcs_bucket").unwrap_or(&default_bucket);
+        let bucket = self
+            .config
+            .provider_config
+            .get("gcs_bucket")
+            .unwrap_or(&default_bucket);
         let url = format!("https://storage.googleapis.com/{}/{}", bucket, asset.id);
 
-        let response = self.client
+        let response = self
+            .client
             .put(&url)
             .header("Content-Type", content_type)
-            .body(asset.data.as_ref().ok_or_else(|| anyhow!("Asset has no data"))?.as_ref().clone())
+            .body(
+                asset
+                    .data
+                    .as_ref()
+                    .ok_or_else(|| anyhow!("Asset has no data"))?
+                    .as_ref()
+                    .clone(),
+            )
             .send()
             .await?;
 
         if response.status().is_success() {
             let default_domain = format!("{}.storage.googleapis.com", bucket);
-            let cdn_domain = self.config.provider_config.get("cdn_domain")
+            let cdn_domain = self
+                .config
+                .provider_config
+                .get("cdn_domain")
                 .unwrap_or(&default_domain);
             Ok(format!("https://{}/{}", cdn_domain, asset.id))
         } else {
-            Err(anyhow!("Google Cloud CDN upload failed: {}", response.status()))
+            Err(anyhow!(
+                "Google Cloud CDN upload failed: {}",
+                response.status()
+            ))
         }
     }
 
@@ -399,16 +490,21 @@ impl CdnManager {
     async fn upload_to_generic_cdn(&self, asset: &Asset, content_type: &str) -> Result<String> {
         let url = format!("{}/upload/{}", self.config.base_url, asset.id);
 
-        let mut request = self.client
-            .put(&url)
-            .header("Content-Type", content_type);
+        let mut request = self.client.put(&url).header("Content-Type", content_type);
 
         if let Some(api_key) = &self.config.api_key {
             request = request.header("Authorization", format!("Bearer {}", api_key));
         }
 
         let response = request
-            .body(asset.data.as_ref().ok_or_else(|| anyhow!("Asset has no data"))?.as_ref().clone())
+            .body(
+                asset
+                    .data
+                    .as_ref()
+                    .ok_or_else(|| anyhow!("Asset has no data"))?
+                    .as_ref()
+                    .clone(),
+            )
             .send()
             .await?;
 
@@ -436,7 +532,10 @@ impl CdnManager {
     }
 
     async fn remove_from_google_cdn(&self, cdn_asset: &CdnAsset) -> Result<()> {
-        debug!("Removing asset {} from Google Cloud CDN", cdn_asset.asset_id);
+        debug!(
+            "Removing asset {} from Google Cloud CDN",
+            cdn_asset.asset_id
+        );
         Ok(())
     }
 
@@ -450,7 +549,10 @@ impl CdnManager {
 
         let response = request.send().await?;
         if !response.status().is_success() {
-            return Err(anyhow!("Failed to remove asset from generic CDN: {}", response.status()));
+            return Err(anyhow!(
+                "Failed to remove asset from generic CDN: {}",
+                response.status()
+            ));
         }
 
         Ok(())

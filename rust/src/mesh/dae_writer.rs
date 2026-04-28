@@ -46,7 +46,9 @@ pub fn write_dae(geometry: &MeshGeometry, options: &DaeWriterOptions) -> Result<
 
 fn write_header(xml: &mut String, options: &DaeWriterOptions) -> Result<()> {
     xml.push_str("<?xml version=\"1.0\" encoding=\"utf-8\"?>\n");
-    xml.push_str("<COLLADA xmlns=\"http://www.collada.org/2005/11/COLLADASchema\" version=\"1.4.1\">\n");
+    xml.push_str(
+        "<COLLADA xmlns=\"http://www.collada.org/2005/11/COLLADASchema\" version=\"1.4.1\">\n",
+    );
     xml.push_str("  <asset>\n");
     xml.push_str("    <contributor>\n");
     xml.push_str("      <author>OpenSim Next Snapshot Statue Pipeline</author>\n");
@@ -70,7 +72,10 @@ fn write_images(xml: &mut String, options: &DaeWriterOptions) -> Result<()> {
     xml.push_str("  <library_images>\n");
     for (i, tex) in options.texture_files.iter().enumerate() {
         if let Some(ref path) = tex {
-            write!(xml, "    <image id=\"image_face{i}\" name=\"tex_face{i}\">\n")?;
+            write!(
+                xml,
+                "    <image id=\"image_face{i}\" name=\"tex_face{i}\">\n"
+            )?;
             write!(xml, "      <init_from>{path}</init_from>\n")?;
             xml.push_str("    </image>\n");
         }
@@ -79,7 +84,11 @@ fn write_images(xml: &mut String, options: &DaeWriterOptions) -> Result<()> {
     Ok(())
 }
 
-fn write_effects(xml: &mut String, geometry: &MeshGeometry, options: &DaeWriterOptions) -> Result<()> {
+fn write_effects(
+    xml: &mut String,
+    geometry: &MeshGeometry,
+    options: &DaeWriterOptions,
+) -> Result<()> {
     xml.push_str("  <library_effects>\n");
     for i in 0..geometry.faces.len() {
         write!(xml, "    <effect id=\"effect_face{i}\">\n")?;
@@ -100,7 +109,10 @@ fn write_effects(xml: &mut String, geometry: &MeshGeometry, options: &DaeWriterO
         xml.push_str("          <phong>\n");
         xml.push_str("            <diffuse>\n");
         if let Some(Some(_)) = options.texture_files.get(i) {
-            write!(xml, "              <texture texture=\"sampler_face{i}\" texcoord=\"UVMap\"/>\n")?;
+            write!(
+                xml,
+                "              <texture texture=\"sampler_face{i}\" texcoord=\"UVMap\"/>\n"
+            )?;
         } else {
             xml.push_str("              <color>0.8 0.8 0.8 1.0</color>\n");
         }
@@ -114,10 +126,17 @@ fn write_effects(xml: &mut String, geometry: &MeshGeometry, options: &DaeWriterO
     Ok(())
 }
 
-fn write_materials(xml: &mut String, geometry: &MeshGeometry, _options: &DaeWriterOptions) -> Result<()> {
+fn write_materials(
+    xml: &mut String,
+    geometry: &MeshGeometry,
+    _options: &DaeWriterOptions,
+) -> Result<()> {
     xml.push_str("  <library_materials>\n");
     for i in 0..geometry.faces.len() {
-        write!(xml, "    <material id=\"material_face{i}\" name=\"Face{i}\">\n")?;
+        write!(
+            xml,
+            "    <material id=\"material_face{i}\" name=\"Face{i}\">\n"
+        )?;
         write!(xml, "      <instance_effect url=\"#effect_face{i}\"/>\n")?;
         xml.push_str("    </material>\n");
     }
@@ -125,7 +144,11 @@ fn write_materials(xml: &mut String, geometry: &MeshGeometry, _options: &DaeWrit
     Ok(())
 }
 
-fn write_geometries(xml: &mut String, geometry: &MeshGeometry, options: &DaeWriterOptions) -> Result<()> {
+fn write_geometries(
+    xml: &mut String,
+    geometry: &MeshGeometry,
+    options: &DaeWriterOptions,
+) -> Result<()> {
     let name = &options.mesh_name;
     xml.push_str("  <library_geometries>\n");
     write!(xml, "    <geometry id=\"{name}-mesh\" name=\"{name}\">\n")?;
@@ -147,11 +170,17 @@ fn write_geometries(xml: &mut String, geometry: &MeshGeometry, options: &DaeWrit
 
     let pos_id = format!("{name}-positions");
     write!(xml, "        <source id=\"{pos_id}\">\n")?;
-    write!(xml, "          <float_array id=\"{pos_id}-array\" count=\"{}\">", total_positions * 3)?;
+    write!(
+        xml,
+        "          <float_array id=\"{pos_id}-array\" count=\"{}\">",
+        total_positions * 3
+    )?;
     let mut first = true;
     for face in &geometry.faces {
         for p in &face.positions {
-            if !first { xml.push(' '); }
+            if !first {
+                xml.push(' ');
+            }
             first = false;
             write!(xml, "{} {} {}", p[0], p[1], p[2])?;
         }
@@ -169,11 +198,17 @@ fn write_geometries(xml: &mut String, geometry: &MeshGeometry, options: &DaeWrit
     if has_normals {
         let norm_id = format!("{name}-normals");
         write!(xml, "        <source id=\"{norm_id}\">\n")?;
-        write!(xml, "          <float_array id=\"{norm_id}-array\" count=\"{}\">", total_normals * 3)?;
+        write!(
+            xml,
+            "          <float_array id=\"{norm_id}-array\" count=\"{}\">",
+            total_normals * 3
+        )?;
         let mut first = true;
         for face in &geometry.faces {
             for n in &face.normals {
-                if !first { xml.push(' '); }
+                if !first {
+                    xml.push(' ');
+                }
                 first = false;
                 write!(xml, "{} {} {}", n[0], n[1], n[2])?;
             }
@@ -192,18 +227,27 @@ fn write_geometries(xml: &mut String, geometry: &MeshGeometry, options: &DaeWrit
     if has_uvs {
         let uv_id = format!("{name}-map0");
         write!(xml, "        <source id=\"{uv_id}\">\n")?;
-        write!(xml, "          <float_array id=\"{uv_id}-array\" count=\"{}\">", total_uvs * 2)?;
+        write!(
+            xml,
+            "          <float_array id=\"{uv_id}-array\" count=\"{}\">",
+            total_uvs * 2
+        )?;
         let mut first = true;
         for face in &geometry.faces {
             for uv in &face.tex_coords {
-                if !first { xml.push(' '); }
+                if !first {
+                    xml.push(' ');
+                }
                 first = false;
                 write!(xml, "{} {}", uv[0], uv[1])?;
             }
         }
         xml.push_str("</float_array>\n");
         xml.push_str("          <technique_common>\n");
-        write!(xml, "            <accessor source=\"#{uv_id}-array\" count=\"{total_uvs}\" stride=\"2\">\n")?;
+        write!(
+            xml,
+            "            <accessor source=\"#{uv_id}-array\" count=\"{total_uvs}\" stride=\"2\">\n"
+        )?;
         xml.push_str("              <param name=\"S\" type=\"float\"/>\n");
         xml.push_str("              <param name=\"T\" type=\"float\"/>\n");
         xml.push_str("            </accessor>\n");
@@ -213,13 +257,19 @@ fn write_geometries(xml: &mut String, geometry: &MeshGeometry, options: &DaeWrit
 
     let vert_id = format!("{name}-vertices");
     write!(xml, "        <vertices id=\"{vert_id}\">\n")?;
-    write!(xml, "          <input semantic=\"POSITION\" source=\"#{pos_id}\"/>\n")?;
+    write!(
+        xml,
+        "          <input semantic=\"POSITION\" source=\"#{pos_id}\"/>\n"
+    )?;
     xml.push_str("        </vertices>\n");
 
     for (fi, face) in geometry.faces.iter().enumerate() {
         let base = vertex_offsets[fi];
         let tri_count = face.indices.len() / 3;
-        write!(xml, "        <triangles material=\"material_face{fi}\" count=\"{tri_count}\">\n")?;
+        write!(
+            xml,
+            "        <triangles material=\"material_face{fi}\" count=\"{tri_count}\">\n"
+        )?;
 
         let mut input_offset = 0;
         write!(xml, "          <input semantic=\"VERTEX\" source=\"#{vert_id}\" offset=\"{input_offset}\"/>\n")?;
@@ -240,10 +290,14 @@ fn write_geometries(xml: &mut String, geometry: &MeshGeometry, options: &DaeWrit
         let stride = input_offset;
         xml.push_str("          <p>");
         for (ti, idx) in face.indices.iter().enumerate() {
-            if ti > 0 { xml.push(' '); }
+            if ti > 0 {
+                xml.push(' ');
+            }
             let v = *idx as usize + base;
             for _s in 0..stride {
-                if _s > 0 { xml.push(' '); }
+                if _s > 0 {
+                    xml.push(' ');
+                }
                 write!(xml, "{v}")?;
             }
         }
@@ -265,21 +319,31 @@ fn write_controllers(
 ) -> Result<()> {
     let name = &options.mesh_name;
     xml.push_str("  <library_controllers>\n");
-    write!(xml, "    <controller id=\"{name}-skin\" name=\"{name}-skin\">\n")?;
+    write!(
+        xml,
+        "    <controller id=\"{name}-skin\" name=\"{name}-skin\">\n"
+    )?;
     write!(xml, "      <skin source=\"#{name}-mesh\">\n")?;
 
     xml.push_str("        <bind_shape_matrix>");
     for (i, v) in skin.bind_shape_matrix.iter().enumerate() {
-        if i > 0 { xml.push(' '); }
+        if i > 0 {
+            xml.push(' ');
+        }
         write!(xml, "{v}")?;
     }
     xml.push_str("</bind_shape_matrix>\n");
 
     let joint_count = skin.joint_names.len();
     write!(xml, "        <source id=\"{name}-skin-joints\">\n")?;
-    write!(xml, "          <Name_array id=\"{name}-skin-joints-array\" count=\"{joint_count}\">")?;
+    write!(
+        xml,
+        "          <Name_array id=\"{name}-skin-joints-array\" count=\"{joint_count}\">"
+    )?;
     for (i, jn) in skin.joint_names.iter().enumerate() {
-        if i > 0 { xml.push(' '); }
+        if i > 0 {
+            xml.push(' ');
+        }
         xml.push_str(jn);
     }
     xml.push_str("</Name_array>\n");
@@ -292,11 +356,18 @@ fn write_controllers(
 
     let ibm_count = skin.inverse_bind_matrices.len() * 16;
     write!(xml, "        <source id=\"{name}-skin-bind-poses\">\n")?;
-    write!(xml, "          <float_array id=\"{name}-skin-bind-poses-array\" count=\"{ibm_count}\">")?;
+    write!(
+        xml,
+        "          <float_array id=\"{name}-skin-bind-poses-array\" count=\"{ibm_count}\">"
+    )?;
     for (mi, mat) in skin.inverse_bind_matrices.iter().enumerate() {
-        if mi > 0 { xml.push(' '); }
+        if mi > 0 {
+            xml.push(' ');
+        }
         for (vi, v) in mat.iter().enumerate() {
-            if vi > 0 { xml.push(' '); }
+            if vi > 0 {
+                xml.push(' ');
+            }
             write!(xml, "{v}")?;
         }
     }
@@ -327,9 +398,14 @@ fn write_controllers(
 
     let weight_count = all_weights.len();
     write!(xml, "        <source id=\"{name}-skin-weights\">\n")?;
-    write!(xml, "          <float_array id=\"{name}-skin-weights-array\" count=\"{weight_count}\">")?;
+    write!(
+        xml,
+        "          <float_array id=\"{name}-skin-weights-array\" count=\"{weight_count}\">"
+    )?;
     for (i, w) in all_weights.iter().enumerate() {
-        if i > 0 { xml.push(' '); }
+        if i > 0 {
+            xml.push(' ');
+        }
         write!(xml, "{w}")?;
     }
     xml.push_str("</float_array>\n");
@@ -341,23 +417,39 @@ fn write_controllers(
     xml.push_str("        </source>\n");
 
     xml.push_str("        <joints>\n");
-    write!(xml, "          <input semantic=\"JOINT\" source=\"#{name}-skin-joints\"/>\n")?;
-    write!(xml, "          <input semantic=\"INV_BIND_MATRIX\" source=\"#{name}-skin-bind-poses\"/>\n")?;
+    write!(
+        xml,
+        "          <input semantic=\"JOINT\" source=\"#{name}-skin-joints\"/>\n"
+    )?;
+    write!(
+        xml,
+        "          <input semantic=\"INV_BIND_MATRIX\" source=\"#{name}-skin-bind-poses\"/>\n"
+    )?;
     xml.push_str("        </joints>\n");
 
     let total_verts: usize = vcounts.len();
     write!(xml, "        <vertex_weights count=\"{total_verts}\">\n")?;
-    write!(xml, "          <input semantic=\"JOINT\" source=\"#{name}-skin-joints\" offset=\"0\"/>\n")?;
-    write!(xml, "          <input semantic=\"WEIGHT\" source=\"#{name}-skin-weights\" offset=\"1\"/>\n")?;
+    write!(
+        xml,
+        "          <input semantic=\"JOINT\" source=\"#{name}-skin-joints\" offset=\"0\"/>\n"
+    )?;
+    write!(
+        xml,
+        "          <input semantic=\"WEIGHT\" source=\"#{name}-skin-weights\" offset=\"1\"/>\n"
+    )?;
     xml.push_str("          <vcount>");
     for (i, vc) in vcounts.iter().enumerate() {
-        if i > 0 { xml.push(' '); }
+        if i > 0 {
+            xml.push(' ');
+        }
         write!(xml, "{vc}")?;
     }
     xml.push_str("</vcount>\n");
     xml.push_str("          <v>");
     for (i, pair) in v_pairs.iter().enumerate() {
-        if i > 0 { xml.push(' '); }
+        if i > 0 {
+            xml.push(' ');
+        }
         xml.push_str(pair);
     }
     xml.push_str("</v>\n");
@@ -369,17 +461,32 @@ fn write_controllers(
     Ok(())
 }
 
-fn write_visual_scene(xml: &mut String, geometry: &MeshGeometry, options: &DaeWriterOptions) -> Result<()> {
+fn write_visual_scene(
+    xml: &mut String,
+    geometry: &MeshGeometry,
+    options: &DaeWriterOptions,
+) -> Result<()> {
     let name = &options.mesh_name;
     xml.push_str("  <library_visual_scenes>\n");
     xml.push_str("    <visual_scene id=\"Scene\" name=\"Scene\">\n");
 
     if let Some(ref skin) = geometry.skin_info {
-        write!(xml, "      <node id=\"Armature\" name=\"Armature\" type=\"NODE\">\n")?;
-        xml.push_str("        <matrix sid=\"transform\">1 0 0 0 0 1 0 0 0 0 1 0 0 0 0 1</matrix>\n");
+        write!(
+            xml,
+            "      <node id=\"Armature\" name=\"Armature\" type=\"NODE\">\n"
+        )?;
+        xml.push_str(
+            "        <matrix sid=\"transform\">1 0 0 0 0 1 0 0 0 0 1 0 0 0 0 1</matrix>\n",
+        );
         write_skeleton_joints(xml, skin)?;
-        write!(xml, "        <node id=\"{name}\" name=\"{name}\" type=\"NODE\">\n")?;
-        write!(xml, "          <instance_controller url=\"#{name}-skin\">\n")?;
+        write!(
+            xml,
+            "        <node id=\"{name}\" name=\"{name}\" type=\"NODE\">\n"
+        )?;
+        write!(
+            xml,
+            "          <instance_controller url=\"#{name}-skin\">\n"
+        )?;
         xml.push_str("            <skeleton>#Armature</skeleton>\n");
         xml.push_str("            <bind_material>\n");
         xml.push_str("              <technique_common>\n");
@@ -392,8 +499,13 @@ fn write_visual_scene(xml: &mut String, geometry: &MeshGeometry, options: &DaeWr
         xml.push_str("        </node>\n");
         xml.push_str("      </node>\n");
     } else {
-        write!(xml, "      <node id=\"{name}\" name=\"{name}\" type=\"NODE\">\n")?;
-        xml.push_str("        <matrix sid=\"transform\">1 0 0 0 0 1 0 0 0 0 1 0 0 0 0 1</matrix>\n");
+        write!(
+            xml,
+            "      <node id=\"{name}\" name=\"{name}\" type=\"NODE\">\n"
+        )?;
+        xml.push_str(
+            "        <matrix sid=\"transform\">1 0 0 0 0 1 0 0 0 0 1 0 0 0 0 1</matrix>\n",
+        );
         write!(xml, "        <instance_geometry url=\"#{name}-mesh\">\n")?;
         xml.push_str("          <bind_material>\n");
         xml.push_str("            <technique_common>\n");
@@ -442,18 +554,29 @@ fn write_skeleton_joints(xml: &mut String, skin: &MeshSkinInfo) -> Result<()> {
     ];
 
     let collision_volumes: &[(&str, &str)] = &[
-        ("HEAD", "mHead"), ("NECK", "mNeck"), ("CHEST", "mChest"),
-        ("LEFT_PEC", "mChest"), ("RIGHT_PEC", "mChest"),
-        ("UPPER_BACK", "mChest"), ("BELLY", "mTorso"),
-        ("LOWER_BACK", "mTorso"), ("PELVIS", "mPelvis"),
+        ("HEAD", "mHead"),
+        ("NECK", "mNeck"),
+        ("CHEST", "mChest"),
+        ("LEFT_PEC", "mChest"),
+        ("RIGHT_PEC", "mChest"),
+        ("UPPER_BACK", "mChest"),
+        ("BELLY", "mTorso"),
+        ("LOWER_BACK", "mTorso"),
+        ("PELVIS", "mPelvis"),
         ("BUTT", "mPelvis"),
-        ("L_CLAVICLE", "mCollarLeft"), ("L_UPPER_ARM", "mShoulderLeft"),
-        ("L_LOWER_ARM", "mElbowLeft"), ("L_HAND", "mWristLeft"),
-        ("R_CLAVICLE", "mCollarRight"), ("R_UPPER_ARM", "mShoulderRight"),
-        ("R_LOWER_ARM", "mElbowRight"), ("R_HAND", "mWristRight"),
-        ("L_UPPER_LEG", "mHipLeft"), ("L_LOWER_LEG", "mKneeLeft"),
+        ("L_CLAVICLE", "mCollarLeft"),
+        ("L_UPPER_ARM", "mShoulderLeft"),
+        ("L_LOWER_ARM", "mElbowLeft"),
+        ("L_HAND", "mWristLeft"),
+        ("R_CLAVICLE", "mCollarRight"),
+        ("R_UPPER_ARM", "mShoulderRight"),
+        ("R_LOWER_ARM", "mElbowRight"),
+        ("R_HAND", "mWristRight"),
+        ("L_UPPER_LEG", "mHipLeft"),
+        ("L_LOWER_LEG", "mKneeLeft"),
         ("L_FOOT", "mAnkleLeft"),
-        ("R_UPPER_LEG", "mHipRight"), ("R_LOWER_LEG", "mKneeRight"),
+        ("R_UPPER_LEG", "mHipRight"),
+        ("R_LOWER_LEG", "mKneeRight"),
         ("R_FOOT", "mAnkleRight"),
     ];
 
@@ -466,7 +589,12 @@ fn write_skeleton_joints(xml: &mut String, skin: &MeshSkinInfo) -> Result<()> {
         children: Vec<JNode>,
     }
 
-    fn build_tree(name: &str, hierarchy: &[(&str, Option<&str>)], cv_parents: &HashMap<&str, &str>, joint_set: &HashSet<&str>) -> JNode {
+    fn build_tree(
+        name: &str,
+        hierarchy: &[(&str, Option<&str>)],
+        cv_parents: &HashMap<&str, &str>,
+        joint_set: &HashSet<&str>,
+    ) -> JNode {
         let mut children = Vec::new();
         for &(child, parent) in hierarchy {
             if parent == Some(name) && joint_set.contains(child) {
@@ -475,16 +603,30 @@ fn write_skeleton_joints(xml: &mut String, skin: &MeshSkinInfo) -> Result<()> {
         }
         for (&cv, &parent) in cv_parents {
             if parent == name && joint_set.contains(cv) {
-                children.push(JNode { name: cv.to_string(), children: Vec::new() });
+                children.push(JNode {
+                    name: cv.to_string(),
+                    children: Vec::new(),
+                });
             }
         }
-        JNode { name: name.to_string(), children }
+        JNode {
+            name: name.to_string(),
+            children,
+        }
     }
 
     fn write_node(xml: &mut String, node: &JNode, depth: usize) -> Result<()> {
         let indent = "        ".repeat(depth + 1);
-        write!(xml, "{}<node id=\"{}\" sid=\"{}\" name=\"{}\" type=\"JOINT\">\n", indent, node.name, node.name, node.name)?;
-        write!(xml, "{}  <matrix sid=\"transform\">1 0 0 0 0 1 0 0 0 0 1 0 0 0 0 1</matrix>\n", indent)?;
+        write!(
+            xml,
+            "{}<node id=\"{}\" sid=\"{}\" name=\"{}\" type=\"JOINT\">\n",
+            indent, node.name, node.name, node.name
+        )?;
+        write!(
+            xml,
+            "{}  <matrix sid=\"transform\">1 0 0 0 0 1 0 0 0 0 1 0 0 0 0 1</matrix>\n",
+            indent
+        )?;
         for child in &node.children {
             write_node(xml, child, depth + 1)?;
         }
@@ -500,7 +642,11 @@ fn write_skeleton_joints(xml: &mut String, skin: &MeshSkinInfo) -> Result<()> {
             let found_in_hierarchy = hierarchy.iter().any(|(n, _)| *n == jname.as_str());
             let found_in_cv = cv_parents.contains_key(jname.as_str());
             if !found_in_hierarchy && !found_in_cv {
-                write!(xml, "        <node id=\"{}\" sid=\"{}\" name=\"{}\" type=\"JOINT\">\n", jname, jname, jname)?;
+                write!(
+                    xml,
+                    "        <node id=\"{}\" sid=\"{}\" name=\"{}\" type=\"JOINT\">\n",
+                    jname, jname, jname
+                )?;
                 xml.push_str("          <matrix sid=\"transform\">1 0 0 0 0 1 0 0 0 0 1 0 0 0 0 1</matrix>\n");
                 write!(xml, "        </node>\n")?;
             }
@@ -525,7 +671,9 @@ pub fn write_multi_mesh_dae(
     let mut xml = String::with_capacity(256 * 1024);
 
     xml.push_str("<?xml version=\"1.0\" encoding=\"utf-8\"?>\n");
-    xml.push_str("<COLLADA xmlns=\"http://www.collada.org/2005/11/COLLADASchema\" version=\"1.4.1\">\n");
+    xml.push_str(
+        "<COLLADA xmlns=\"http://www.collada.org/2005/11/COLLADASchema\" version=\"1.4.1\">\n",
+    );
     xml.push_str("  <asset>\n");
     xml.push_str("    <contributor>\n");
     xml.push_str("      <author>OpenSim Next Snapshot Statue Pipeline</author>\n");
@@ -541,7 +689,10 @@ pub fn write_multi_mesh_dae(
     for (name, _geo, textures) in meshes {
         for (i, tex) in textures.iter().enumerate() {
             if let Some(ref path) = tex {
-                write!(xml, "    <image id=\"image_{name}_face{i}\" name=\"tex_{name}_face{i}\">\n")?;
+                write!(
+                    xml,
+                    "    <image id=\"image_{name}_face{i}\" name=\"tex_{name}_face{i}\">\n"
+                )?;
                 write!(xml, "      <init_from>{path}</init_from>\n")?;
                 xml.push_str("    </image>\n");
             }
@@ -557,7 +708,10 @@ pub fn write_multi_mesh_dae(
             if let Some(Some(_)) = textures.get(i) {
                 write!(xml, "        <newparam sid=\"surface_{name}_face{i}\">\n")?;
                 xml.push_str("          <surface type=\"2D\">\n");
-                write!(xml, "            <init_from>image_{name}_face{i}</init_from>\n")?;
+                write!(
+                    xml,
+                    "            <init_from>image_{name}_face{i}</init_from>\n"
+                )?;
                 xml.push_str("          </surface>\n");
                 xml.push_str("        </newparam>\n");
                 write!(xml, "        <newparam sid=\"sampler_{name}_face{i}\">\n")?;
@@ -586,8 +740,14 @@ pub fn write_multi_mesh_dae(
     xml.push_str("  <library_materials>\n");
     for (name, geo, _) in meshes {
         for i in 0..geo.faces.len() {
-            write!(xml, "    <material id=\"material_{name}_face{i}\" name=\"{name}_Face{i}\">\n")?;
-            write!(xml, "      <instance_effect url=\"#effect_{name}_face{i}\"/>\n")?;
+            write!(
+                xml,
+                "    <material id=\"material_{name}_face{i}\" name=\"{name}_Face{i}\">\n"
+            )?;
+            write!(
+                xml,
+                "      <instance_effect url=\"#effect_{name}_face{i}\"/>\n"
+            )?;
             xml.push_str("    </material>\n");
         }
     }
@@ -620,10 +780,21 @@ pub fn write_multi_mesh_dae(
     xml.push_str("    <visual_scene id=\"Scene\" name=\"Scene\">\n");
     for (name, geo, _) in meshes {
         if geo.skin_info.is_some() {
-            write!(xml, "      <node id=\"{name}_Armature\" name=\"{name}_Armature\" type=\"NODE\">\n")?;
-            xml.push_str("        <matrix sid=\"transform\">1 0 0 0 0 1 0 0 0 0 1 0 0 0 0 1</matrix>\n");
-            write!(xml, "        <node id=\"{name}\" name=\"{name}\" type=\"NODE\">\n")?;
-            write!(xml, "          <instance_controller url=\"#{name}-skin\">\n")?;
+            write!(
+                xml,
+                "      <node id=\"{name}_Armature\" name=\"{name}_Armature\" type=\"NODE\">\n"
+            )?;
+            xml.push_str(
+                "        <matrix sid=\"transform\">1 0 0 0 0 1 0 0 0 0 1 0 0 0 0 1</matrix>\n",
+            );
+            write!(
+                xml,
+                "        <node id=\"{name}\" name=\"{name}\" type=\"NODE\">\n"
+            )?;
+            write!(
+                xml,
+                "          <instance_controller url=\"#{name}-skin\">\n"
+            )?;
             write!(xml, "            <skeleton>#{name}_Armature</skeleton>\n")?;
             xml.push_str("            <bind_material>\n");
             xml.push_str("              <technique_common>\n");
@@ -636,8 +807,13 @@ pub fn write_multi_mesh_dae(
             xml.push_str("        </node>\n");
             xml.push_str("      </node>\n");
         } else {
-            write!(xml, "      <node id=\"{name}\" name=\"{name}\" type=\"NODE\">\n")?;
-            xml.push_str("        <matrix sid=\"transform\">1 0 0 0 0 1 0 0 0 0 1 0 0 0 0 1</matrix>\n");
+            write!(
+                xml,
+                "      <node id=\"{name}\" name=\"{name}\" type=\"NODE\">\n"
+            )?;
+            xml.push_str(
+                "        <matrix sid=\"transform\">1 0 0 0 0 1 0 0 0 0 1 0 0 0 0 1</matrix>\n",
+            );
             write!(xml, "        <instance_geometry url=\"#{name}-mesh\">\n")?;
             xml.push_str("          <bind_material>\n");
             xml.push_str("            <technique_common>\n");
@@ -660,7 +836,12 @@ pub fn write_multi_mesh_dae(
     Ok(xml)
 }
 
-fn write_face_sources(xml: &mut String, face: &super::encoder::MeshFace, name: &str, fi: usize) -> Result<()> {
+fn write_face_sources(
+    xml: &mut String,
+    face: &super::encoder::MeshFace,
+    name: &str,
+    fi: usize,
+) -> Result<()> {
     let pos_id = format!("{name}-face{fi}-positions");
     let norm_id = format!("{name}-face{fi}-normals");
     let uv_id = format!("{name}-face{fi}-map0");
@@ -668,14 +849,23 @@ fn write_face_sources(xml: &mut String, face: &super::encoder::MeshFace, name: &
 
     write!(xml, "        <source id=\"{pos_id}\">\n")?;
     let pos_count = face.positions.len() * 3;
-    write!(xml, "          <float_array id=\"{pos_id}-array\" count=\"{pos_count}\">")?;
+    write!(
+        xml,
+        "          <float_array id=\"{pos_id}-array\" count=\"{pos_count}\">"
+    )?;
     for (vi, p) in face.positions.iter().enumerate() {
-        if vi > 0 { xml.push(' '); }
+        if vi > 0 {
+            xml.push(' ');
+        }
         write!(xml, "{} {} {}", p[0], p[1], p[2])?;
     }
     xml.push_str("</float_array>\n");
     xml.push_str("          <technique_common>\n");
-    write!(xml, "            <accessor source=\"#{pos_id}-array\" count=\"{}\" stride=\"3\">\n", face.positions.len())?;
+    write!(
+        xml,
+        "            <accessor source=\"#{pos_id}-array\" count=\"{}\" stride=\"3\">\n",
+        face.positions.len()
+    )?;
     xml.push_str("              <param name=\"X\" type=\"float\"/>\n");
     xml.push_str("              <param name=\"Y\" type=\"float\"/>\n");
     xml.push_str("              <param name=\"Z\" type=\"float\"/>\n");
@@ -686,14 +876,23 @@ fn write_face_sources(xml: &mut String, face: &super::encoder::MeshFace, name: &
     if !face.normals.is_empty() {
         write!(xml, "        <source id=\"{norm_id}\">\n")?;
         let norm_count = face.normals.len() * 3;
-        write!(xml, "          <float_array id=\"{norm_id}-array\" count=\"{norm_count}\">")?;
+        write!(
+            xml,
+            "          <float_array id=\"{norm_id}-array\" count=\"{norm_count}\">"
+        )?;
         for (vi, n) in face.normals.iter().enumerate() {
-            if vi > 0 { xml.push(' '); }
+            if vi > 0 {
+                xml.push(' ');
+            }
             write!(xml, "{} {} {}", n[0], n[1], n[2])?;
         }
         xml.push_str("</float_array>\n");
         xml.push_str("          <technique_common>\n");
-        write!(xml, "            <accessor source=\"#{norm_id}-array\" count=\"{}\" stride=\"3\">\n", face.normals.len())?;
+        write!(
+            xml,
+            "            <accessor source=\"#{norm_id}-array\" count=\"{}\" stride=\"3\">\n",
+            face.normals.len()
+        )?;
         xml.push_str("              <param name=\"X\" type=\"float\"/>\n");
         xml.push_str("              <param name=\"Y\" type=\"float\"/>\n");
         xml.push_str("              <param name=\"Z\" type=\"float\"/>\n");
@@ -705,14 +904,23 @@ fn write_face_sources(xml: &mut String, face: &super::encoder::MeshFace, name: &
     if !face.tex_coords.is_empty() {
         write!(xml, "        <source id=\"{uv_id}\">\n")?;
         let uv_count = face.tex_coords.len() * 2;
-        write!(xml, "          <float_array id=\"{uv_id}-array\" count=\"{uv_count}\">")?;
+        write!(
+            xml,
+            "          <float_array id=\"{uv_id}-array\" count=\"{uv_count}\">"
+        )?;
         for (vi, uv) in face.tex_coords.iter().enumerate() {
-            if vi > 0 { xml.push(' '); }
+            if vi > 0 {
+                xml.push(' ');
+            }
             write!(xml, "{} {}", uv[0], uv[1])?;
         }
         xml.push_str("</float_array>\n");
         xml.push_str("          <technique_common>\n");
-        write!(xml, "            <accessor source=\"#{uv_id}-array\" count=\"{}\" stride=\"2\">\n", face.tex_coords.len())?;
+        write!(
+            xml,
+            "            <accessor source=\"#{uv_id}-array\" count=\"{}\" stride=\"2\">\n",
+            face.tex_coords.len()
+        )?;
         xml.push_str("              <param name=\"S\" type=\"float\"/>\n");
         xml.push_str("              <param name=\"T\" type=\"float\"/>\n");
         xml.push_str("            </accessor>\n");
@@ -721,17 +929,29 @@ fn write_face_sources(xml: &mut String, face: &super::encoder::MeshFace, name: &
     }
 
     write!(xml, "        <vertices id=\"{vert_id}\">\n")?;
-    write!(xml, "          <input semantic=\"POSITION\" source=\"#{pos_id}\"/>\n")?;
+    write!(
+        xml,
+        "          <input semantic=\"POSITION\" source=\"#{pos_id}\"/>\n"
+    )?;
     xml.push_str("        </vertices>\n");
 
     let tri_count = face.indices.len() / 3;
-    write!(xml, "        <triangles material=\"material_{name}_face{fi}\" count=\"{tri_count}\">\n")?;
+    write!(
+        xml,
+        "        <triangles material=\"material_{name}_face{fi}\" count=\"{tri_count}\">\n"
+    )?;
 
     let mut offset = 0;
-    write!(xml, "          <input semantic=\"VERTEX\" source=\"#{vert_id}\" offset=\"{offset}\"/>\n")?;
+    write!(
+        xml,
+        "          <input semantic=\"VERTEX\" source=\"#{vert_id}\" offset=\"{offset}\"/>\n"
+    )?;
     offset += 1;
     if !face.normals.is_empty() {
-        write!(xml, "          <input semantic=\"NORMAL\" source=\"#{norm_id}\" offset=\"{offset}\"/>\n")?;
+        write!(
+            xml,
+            "          <input semantic=\"NORMAL\" source=\"#{norm_id}\" offset=\"{offset}\"/>\n"
+        )?;
         offset += 1;
     }
     if !face.tex_coords.is_empty() {
@@ -742,10 +962,14 @@ fn write_face_sources(xml: &mut String, face: &super::encoder::MeshFace, name: &
     let stride = offset;
     xml.push_str("          <p>");
     for (ti, idx) in face.indices.iter().enumerate() {
-        if ti > 0 { xml.push(' '); }
+        if ti > 0 {
+            xml.push(' ');
+        }
         let v = *idx as usize;
         for s in 0..stride {
-            if s > 0 { xml.push(' '); }
+            if s > 0 {
+                xml.push(' ');
+            }
             write!(xml, "{v}")?;
         }
     }
@@ -761,21 +985,31 @@ fn write_skin_controller(
     geometry: &MeshGeometry,
     skin: &MeshSkinInfo,
 ) -> Result<()> {
-    write!(xml, "    <controller id=\"{name}-skin\" name=\"{name}-skin\">\n")?;
+    write!(
+        xml,
+        "    <controller id=\"{name}-skin\" name=\"{name}-skin\">\n"
+    )?;
     write!(xml, "      <skin source=\"#{name}-mesh\">\n")?;
 
     xml.push_str("        <bind_shape_matrix>");
     for (i, v) in skin.bind_shape_matrix.iter().enumerate() {
-        if i > 0 { xml.push(' '); }
+        if i > 0 {
+            xml.push(' ');
+        }
         write!(xml, "{v}")?;
     }
     xml.push_str("</bind_shape_matrix>\n");
 
     let joint_count = skin.joint_names.len();
     write!(xml, "        <source id=\"{name}-skin-joints\">\n")?;
-    write!(xml, "          <Name_array id=\"{name}-skin-joints-array\" count=\"{joint_count}\">")?;
+    write!(
+        xml,
+        "          <Name_array id=\"{name}-skin-joints-array\" count=\"{joint_count}\">"
+    )?;
     for (i, jn) in skin.joint_names.iter().enumerate() {
-        if i > 0 { xml.push(' '); }
+        if i > 0 {
+            xml.push(' ');
+        }
         xml.push_str(jn);
     }
     xml.push_str("</Name_array>\n");
@@ -788,11 +1022,18 @@ fn write_skin_controller(
 
     let ibm_count = skin.inverse_bind_matrices.len() * 16;
     write!(xml, "        <source id=\"{name}-skin-bind-poses\">\n")?;
-    write!(xml, "          <float_array id=\"{name}-skin-bind-poses-array\" count=\"{ibm_count}\">")?;
+    write!(
+        xml,
+        "          <float_array id=\"{name}-skin-bind-poses-array\" count=\"{ibm_count}\">"
+    )?;
     for (mi, mat) in skin.inverse_bind_matrices.iter().enumerate() {
-        if mi > 0 { xml.push(' '); }
+        if mi > 0 {
+            xml.push(' ');
+        }
         for (vi, v) in mat.iter().enumerate() {
-            if vi > 0 { xml.push(' '); }
+            if vi > 0 {
+                xml.push(' ');
+            }
             write!(xml, "{v}")?;
         }
     }
@@ -823,9 +1064,14 @@ fn write_skin_controller(
 
     let weight_count = all_weights.len();
     write!(xml, "        <source id=\"{name}-skin-weights\">\n")?;
-    write!(xml, "          <float_array id=\"{name}-skin-weights-array\" count=\"{weight_count}\">")?;
+    write!(
+        xml,
+        "          <float_array id=\"{name}-skin-weights-array\" count=\"{weight_count}\">"
+    )?;
     for (i, w) in all_weights.iter().enumerate() {
-        if i > 0 { xml.push(' '); }
+        if i > 0 {
+            xml.push(' ');
+        }
         write!(xml, "{w}")?;
     }
     xml.push_str("</float_array>\n");
@@ -837,23 +1083,39 @@ fn write_skin_controller(
     xml.push_str("        </source>\n");
 
     xml.push_str("        <joints>\n");
-    write!(xml, "          <input semantic=\"JOINT\" source=\"#{name}-skin-joints\"/>\n")?;
-    write!(xml, "          <input semantic=\"INV_BIND_MATRIX\" source=\"#{name}-skin-bind-poses\"/>\n")?;
+    write!(
+        xml,
+        "          <input semantic=\"JOINT\" source=\"#{name}-skin-joints\"/>\n"
+    )?;
+    write!(
+        xml,
+        "          <input semantic=\"INV_BIND_MATRIX\" source=\"#{name}-skin-bind-poses\"/>\n"
+    )?;
     xml.push_str("        </joints>\n");
 
     let total_verts = vcounts.len();
     write!(xml, "        <vertex_weights count=\"{total_verts}\">\n")?;
-    write!(xml, "          <input semantic=\"JOINT\" source=\"#{name}-skin-joints\" offset=\"0\"/>\n")?;
-    write!(xml, "          <input semantic=\"WEIGHT\" source=\"#{name}-skin-weights\" offset=\"1\"/>\n")?;
+    write!(
+        xml,
+        "          <input semantic=\"JOINT\" source=\"#{name}-skin-joints\" offset=\"0\"/>\n"
+    )?;
+    write!(
+        xml,
+        "          <input semantic=\"WEIGHT\" source=\"#{name}-skin-weights\" offset=\"1\"/>\n"
+    )?;
     xml.push_str("          <vcount>");
     for (i, vc) in vcounts.iter().enumerate() {
-        if i > 0 { xml.push(' '); }
+        if i > 0 {
+            xml.push(' ');
+        }
         write!(xml, "{vc}")?;
     }
     xml.push_str("</vcount>\n");
     xml.push_str("          <v>");
     for (i, pair) in v_pairs.iter().enumerate() {
-        if i > 0 { xml.push(' '); }
+        if i > 0 {
+            xml.push(' ');
+        }
         xml.push_str(pair);
     }
     xml.push_str("</v>\n");
@@ -867,7 +1129,9 @@ fn write_skin_controller(
 #[cfg(test)]
 mod tests {
     use super::*;
-    use crate::mesh::encoder::{MeshFace, MeshGeometry, MeshSkinInfo, VertexWeights, JointInfluence};
+    use crate::mesh::encoder::{
+        JointInfluence, MeshFace, MeshGeometry, MeshSkinInfo, VertexWeights,
+    };
 
     fn make_triangle_face() -> MeshFace {
         MeshFace {
@@ -921,14 +1185,38 @@ mod tests {
             tex_coords: vec![[0.0, 0.0], [1.0, 0.0], [0.0, 1.0]],
             indices: vec![0, 1, 2],
             joint_weights: Some(vec![
-                VertexWeights { influences: vec![JointInfluence { joint_index: 0, weight: 1.0 }] },
-                VertexWeights { influences: vec![JointInfluence { joint_index: 0, weight: 0.5 }, JointInfluence { joint_index: 1, weight: 0.5 }] },
-                VertexWeights { influences: vec![JointInfluence { joint_index: 1, weight: 1.0 }] },
+                VertexWeights {
+                    influences: vec![JointInfluence {
+                        joint_index: 0,
+                        weight: 1.0,
+                    }],
+                },
+                VertexWeights {
+                    influences: vec![
+                        JointInfluence {
+                            joint_index: 0,
+                            weight: 0.5,
+                        },
+                        JointInfluence {
+                            joint_index: 1,
+                            weight: 0.5,
+                        },
+                    ],
+                },
+                VertexWeights {
+                    influences: vec![JointInfluence {
+                        joint_index: 1,
+                        weight: 1.0,
+                    }],
+                },
             ]),
             original_position_indices: None,
         };
         let mut identity = [0.0f32; 16];
-        identity[0] = 1.0; identity[5] = 1.0; identity[10] = 1.0; identity[15] = 1.0;
+        identity[0] = 1.0;
+        identity[5] = 1.0;
+        identity[10] = 1.0;
+        identity[15] = 1.0;
         let geo = MeshGeometry {
             faces: vec![face],
             skin_info: Some(MeshSkinInfo {
@@ -958,12 +1246,26 @@ mod tests {
             joint_weights: None,
             original_position_indices: None,
         };
-        let geo1 = MeshGeometry { faces: vec![face1], skin_info: None };
-        let geo2 = MeshGeometry { faces: vec![face2], skin_info: None };
+        let geo1 = MeshGeometry {
+            faces: vec![face1],
+            skin_info: None,
+        };
+        let geo2 = MeshGeometry {
+            faces: vec![face2],
+            skin_info: None,
+        };
 
         let meshes = vec![
-            ("body".to_string(), geo1, vec![Some("body_tex.png".to_string())]),
-            ("shirt".to_string(), geo2, vec![Some("shirt_tex.png".to_string())]),
+            (
+                "body".to_string(),
+                geo1,
+                vec![Some("body_tex.png".to_string())],
+            ),
+            (
+                "shirt".to_string(),
+                geo2,
+                vec![Some("shirt_tex.png".to_string())],
+            ),
         ];
 
         let dae = write_multi_mesh_dae(&meshes, UpAxis::ZUp).unwrap();
@@ -996,8 +1298,12 @@ mod tests {
         let epsilon = 0.001;
         for i in 0..3 {
             for j in 0..3 {
-                assert!((parsed[0].positions[i][j] - geo.faces[0].positions[i][j]).abs() < epsilon,
-                    "Position mismatch at [{i}][{j}]: {} vs {}", parsed[0].positions[i][j], geo.faces[0].positions[i][j]);
+                assert!(
+                    (parsed[0].positions[i][j] - geo.faces[0].positions[i][j]).abs() < epsilon,
+                    "Position mismatch at [{i}][{j}]: {} vs {}",
+                    parsed[0].positions[i][j],
+                    geo.faces[0].positions[i][j]
+                );
             }
         }
     }

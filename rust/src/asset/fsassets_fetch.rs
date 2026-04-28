@@ -1,11 +1,11 @@
-use std::sync::Arc;
-use std::sync::atomic::{AtomicU64, Ordering};
 use anyhow::Result;
 use bytes::Bytes;
+use std::sync::atomic::{AtomicU64, Ordering};
+use std::sync::Arc;
 use tracing::{debug, info, warn};
 
-use super::fsassets::FSAssetsStorage;
 use super::cache::AssetCache;
+use super::fsassets::FSAssetsStorage;
 
 #[derive(Debug, Default)]
 pub struct FetchStats {
@@ -119,7 +119,10 @@ impl AssetFetcher {
         }
 
         if let Some(ref fs) = self.fsassets {
-            if let Some(data) = self.try_fsassets_typed_pg(asset_id, asset_type_filter, pool, fs).await? {
+            if let Some(data) = self
+                .try_fsassets_typed_pg(asset_id, asset_type_filter, pool, fs)
+                .await?
+            {
                 self.stats.fs_hits.fetch_add(1, Ordering::Relaxed);
                 self.promote_to_cache(asset_id, &data).await;
                 return Ok(Some(data));
@@ -129,7 +132,7 @@ impl AssetFetcher {
         let data = match asset_type_filter {
             Some(at) => {
                 let row: Option<(Vec<u8>,)> = sqlx::query_as(
-                    "SELECT data FROM assets WHERE id = $1::uuid AND assettype = $2"
+                    "SELECT data FROM assets WHERE id = $1::uuid AND assettype = $2",
                 )
                 .bind(asset_id)
                 .bind(at)
@@ -162,12 +165,10 @@ impl AssetFetcher {
         fs: &FSAssetsStorage,
     ) -> Result<Option<Vec<u8>>> {
         use sqlx::Row;
-        let row = sqlx::query(
-            "SELECT hash FROM fsassets WHERE id = $1::uuid"
-        )
-        .bind(asset_id)
-        .fetch_optional(pool)
-        .await?;
+        let row = sqlx::query("SELECT hash FROM fsassets WHERE id = $1::uuid")
+            .bind(asset_id)
+            .fetch_optional(pool)
+            .await?;
 
         if let Some(row) = row {
             let hash: String = row.try_get("hash")?;
@@ -176,7 +177,10 @@ impl AssetFetcher {
                 debug!("FSAssets hit for {}", asset_id);
                 return Ok(Some(data));
             }
-            warn!("FSAssets metadata exists for {} but file missing (hash={})", asset_id, hash);
+            warn!(
+                "FSAssets metadata exists for {} but file missing (hash={})",
+                asset_id, hash
+            );
         }
 
         Ok(None)
@@ -192,21 +196,17 @@ impl AssetFetcher {
         use sqlx::Row;
         let row = match asset_type_filter {
             Some(at) => {
-                sqlx::query(
-                    "SELECT hash FROM fsassets WHERE id = $1::uuid AND type = $2"
-                )
-                .bind(asset_id)
-                .bind(at)
-                .fetch_optional(pool)
-                .await?
+                sqlx::query("SELECT hash FROM fsassets WHERE id = $1::uuid AND type = $2")
+                    .bind(asset_id)
+                    .bind(at)
+                    .fetch_optional(pool)
+                    .await?
             }
             None => {
-                sqlx::query(
-                    "SELECT hash FROM fsassets WHERE id = $1::uuid"
-                )
-                .bind(asset_id)
-                .fetch_optional(pool)
-                .await?
+                sqlx::query("SELECT hash FROM fsassets WHERE id = $1::uuid")
+                    .bind(asset_id)
+                    .fetch_optional(pool)
+                    .await?
             }
         };
 
@@ -226,12 +226,10 @@ impl AssetFetcher {
         asset_id: &str,
         pool: &sqlx::PgPool,
     ) -> Result<Option<Vec<u8>>> {
-        let row: Option<(Vec<u8>,)> = sqlx::query_as(
-            "SELECT data FROM assets WHERE id = $1::uuid"
-        )
-        .bind(asset_id)
-        .fetch_optional(pool)
-        .await?;
+        let row: Option<(Vec<u8>,)> = sqlx::query_as("SELECT data FROM assets WHERE id = $1::uuid")
+            .bind(asset_id)
+            .fetch_optional(pool)
+            .await?;
         Ok(row.map(|(d,)| d))
     }
 
@@ -266,7 +264,7 @@ impl AssetFetcher {
         sqlx::query(
             "INSERT INTO fsassets (id, type, hash, create_time, access_time, asset_flags) \
              VALUES ($1::uuid, $2, $3, $4, $5, $6) \
-             ON CONFLICT (id) DO NOTHING"
+             ON CONFLICT (id) DO NOTHING",
         )
         .bind(asset_id)
         .bind(asset_type)
@@ -294,22 +292,27 @@ impl AssetFetcher {
 
         let unique: Vec<String> = {
             let mut set = std::collections::HashSet::new();
-            asset_ids.iter().filter(|id| set.insert(id.clone())).cloned().collect()
+            asset_ids
+                .iter()
+                .filter(|id| set.insert(id.clone()))
+                .cloned()
+                .collect()
         };
 
         let count = unique.len();
-        self.stats.requests.fetch_add(count as u64, Ordering::Relaxed);
+        self.stats
+            .requests
+            .fetch_add(count as u64, Ordering::Relaxed);
 
         let mut results: HashMap<String, Vec<u8>> = HashMap::with_capacity(count);
 
         if let Some(ref fs) = self.fsassets {
             use sqlx::Row;
-            let rows = sqlx::query(
-                "SELECT id::text, hash FROM fsassets WHERE id = ANY($1::uuid[])"
-            )
-            .bind(&unique)
-            .fetch_all(pool)
-            .await?;
+            let rows =
+                sqlx::query("SELECT id::text, hash FROM fsassets WHERE id = ANY($1::uuid[])")
+                    .bind(&unique)
+                    .fetch_all(pool)
+                    .await?;
 
             let mut fs_futures = Vec::with_capacity(rows.len());
             for row in &rows {
@@ -339,7 +342,8 @@ impl AssetFetcher {
             }
         }
 
-        let missing: Vec<String> = unique.iter()
+        let missing: Vec<String> = unique
+            .iter()
             .filter(|id| !results.contains_key(*id))
             .cloned()
             .collect();
@@ -347,7 +351,7 @@ impl AssetFetcher {
         if !missing.is_empty() {
             use sqlx::Row;
             let rows = sqlx::query(
-                "SELECT id::text, data FROM assets WHERE id = ANY($1::uuid[]) AND data IS NOT NULL"
+                "SELECT id::text, data FROM assets WHERE id = ANY($1::uuid[]) AND data IS NOT NULL",
             )
             .bind(&missing)
             .fetch_all(pool)
@@ -378,8 +382,13 @@ impl AssetFetcher {
         let miss_count = count as u64 - hit_count;
         self.stats.misses.fetch_add(miss_count, Ordering::Relaxed);
 
-        debug!("Batch fetch: {} requested, {} unique, {} found, {} missing",
-            asset_ids.len(), count, hit_count, miss_count);
+        debug!(
+            "Batch fetch: {} requested, {} unique, {} found, {} missing",
+            asset_ids.len(),
+            count,
+            hit_count,
+            miss_count
+        );
 
         Ok(results)
     }
@@ -387,7 +396,10 @@ impl AssetFetcher {
     async fn promote_to_cache(&self, asset_id: &str, data: &[u8]) {
         if let Some(ref cache) = self.cache {
             let asset_type = super::AssetType::Unknown;
-            if let Err(e) = cache.put(asset_id, Bytes::copy_from_slice(data), asset_type).await {
+            if let Err(e) = cache
+                .put(asset_id, Bytes::copy_from_slice(data), asset_type)
+                .await
+            {
                 debug!("Cache promotion failed for {}: {}", asset_id, e);
             }
         }

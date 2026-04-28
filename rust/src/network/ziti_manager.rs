@@ -1,10 +1,10 @@
-use std::sync::Arc;
+use anyhow::{anyhow, Result};
 use std::sync::atomic::{AtomicBool, Ordering};
+use std::sync::Arc;
 use std::time::Duration;
-use anyhow::{Result, anyhow};
 use tokio::process::{Child, Command};
 use tokio::sync::Mutex;
-use tracing::{info, warn, error};
+use tracing::{error, info, warn};
 
 #[derive(Debug, Clone)]
 pub struct ZitiConfig {
@@ -23,14 +23,14 @@ impl ZitiConfig {
             enabled: std::env::var("OPENSIM_ZITI_ENABLED")
                 .map(|v| v == "true" || v == "1")
                 .unwrap_or(false),
-            identity_path: std::env::var("OPENSIM_ZITI_IDENTITY")
-                .unwrap_or_default(),
-            controller_url: std::env::var("OPENSIM_ZITI_CONTROLLER")
-                .unwrap_or_default(),
+            identity_path: std::env::var("OPENSIM_ZITI_IDENTITY").unwrap_or_default(),
+            controller_url: std::env::var("OPENSIM_ZITI_CONTROLLER").unwrap_or_default(),
             tunnel_binary: std::env::var("OPENSIM_ZITI_TUNNEL_BIN")
                 .unwrap_or_else(|_| "ziti-edge-tunnel".to_string()),
             keepalive_interval_secs: std::env::var("OPENSIM_ZITI_KEEPALIVE")
-                .ok().and_then(|v| v.parse().ok()).unwrap_or(15),
+                .ok()
+                .and_then(|v| v.parse().ok())
+                .unwrap_or(15),
             restart_delay_secs: 5,
             max_restart_attempts: 3,
         }
@@ -84,7 +84,10 @@ impl ZitiManager {
             return Err(anyhow!("OPENSIM_ZITI_IDENTITY not set"));
         }
 
-        info!("[ZITI] Starting OpenZiti tunnel with identity: {}", self.config.identity_path);
+        info!(
+            "[ZITI] Starting OpenZiti tunnel with identity: {}",
+            self.config.identity_path
+        );
 
         let child = Command::new(&self.config.tunnel_binary)
             .arg("run")
@@ -126,13 +129,19 @@ impl ZitiManager {
                             let count = restart_count.fetch_add(1, Ordering::Relaxed) + 1;
 
                             if count > max_restarts {
-                                error!("[ZITI] Max restart attempts ({}) exceeded, giving up", max_restarts);
+                                error!(
+                                    "[ZITI] Max restart attempts ({}) exceeded, giving up",
+                                    max_restarts
+                                );
                                 running.store(false, Ordering::Relaxed);
                                 *child_lock = None;
                                 break;
                             }
 
-                            info!("[ZITI] Restarting tunnel (attempt {}/{})", count, max_restarts);
+                            info!(
+                                "[ZITI] Restarting tunnel (attempt {}/{})",
+                                count, max_restarts
+                            );
                             tokio::time::sleep(Duration::from_secs(restart_delay)).await;
 
                             match Command::new(&tunnel_binary)

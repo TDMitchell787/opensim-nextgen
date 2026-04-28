@@ -2,18 +2,18 @@
 // Tools for migrating existing OpenSim region data to OpenSim Next
 
 use async_trait::async_trait;
-use sqlx::{Pool, Row, mysql::MySqlRow, postgres::PgRow, sqlite::SqliteRow};
-use uuid::Uuid;
 use chrono::{DateTime, Utc};
 use serde::{Deserialize, Serialize};
+use sqlx::{mysql::MySqlRow, postgres::PgRow, sqlite::SqliteRow, Pool, Row};
 use std::collections::HashMap;
 use std::path::{Path, PathBuf};
 use tokio::fs;
+use uuid::Uuid;
 use zip::ZipArchive;
 
-use crate::database::DatabaseManager;
 use super::data_model::*;
-use super::store::{RegionStore, RegionStoreError, PostgresRegionStore};
+use super::store::{PostgresRegionStore, RegionStore, RegionStoreError};
+use crate::database::DatabaseManager;
 
 enum SourcePool {
     PostgreSQL(Pool<sqlx::Postgres>),
@@ -25,15 +25,9 @@ impl SourcePool {
     async fn query_count(&self, table: &str) -> Result<i64, sqlx::Error> {
         let query = format!("SELECT COUNT(*) FROM {}", table);
         match self {
-            SourcePool::PostgreSQL(pool) => {
-                sqlx::query_scalar(&query).fetch_one(pool).await
-            }
-            SourcePool::MySQL(pool) => {
-                sqlx::query_scalar(&query).fetch_one(pool).await
-            }
-            SourcePool::SQLite(pool) => {
-                sqlx::query_scalar(&query).fetch_one(pool).await
-            }
+            SourcePool::PostgreSQL(pool) => sqlx::query_scalar(&query).fetch_one(pool).await,
+            SourcePool::MySQL(pool) => sqlx::query_scalar(&query).fetch_one(pool).await,
+            SourcePool::SQLite(pool) => sqlx::query_scalar(&query).fetch_one(pool).await,
         }
     }
 }
@@ -46,34 +40,34 @@ pub type MigrationResult<T> = Result<T, MigrationError>;
 pub enum MigrationError {
     #[error("Database error: {0}")]
     Database(#[from] sqlx::Error),
-    
+
     #[error("IO error: {0}")]
     Io(#[from] std::io::Error),
-    
+
     #[error("Serialization error: {0}")]
     Serialization(#[from] serde_json::Error),
-    
+
     #[error("XML parsing error: {0}")]
     Xml(String),
-    
+
     #[error("Archive error: {0}")]
     Archive(#[from] zip::result::ZipError),
-    
+
     #[error("Region store error: {0}")]
     RegionStore(#[from] RegionStoreError),
-    
+
     #[error("Invalid data format: {0}")]
     InvalidFormat(String),
-    
+
     #[error("Migration validation failed: {0}")]
     ValidationFailed(String),
-    
+
     #[error("Source not found: {0}")]
     SourceNotFound(String),
-    
+
     #[error("Destination exists: {0}")]
     DestinationExists(String),
-    
+
     #[error("Internal error: {0}")]
     Internal(String),
 }
@@ -87,17 +81,11 @@ pub enum MigrationSource {
         database_type: OpenSimDatabaseType,
     },
     /// OAR (OpenSim Archive) file
-    OarFile {
-        file_path: PathBuf,
-    },
+    OarFile { file_path: PathBuf },
     /// XML region configuration
-    XmlConfig {
-        file_path: PathBuf,
-    },
+    XmlConfig { file_path: PathBuf },
     /// Directory with region files
-    RegionDirectory {
-        directory_path: PathBuf,
-    },
+    RegionDirectory { directory_path: PathBuf },
 }
 
 /// Supported OpenSim database types
@@ -178,14 +166,14 @@ impl MigrationProgress {
             errors: Vec::new(),
         }
     }
-    
+
     pub fn completion_percentage(&self) -> f32 {
         if self.total_regions == 0 {
             return 0.0;
         }
         (self.completed_regions as f32 / self.total_regions as f32) * 100.0
     }
-    
+
     pub fn add_error(&mut self, error: String) {
         tracing::warn!("Migration error: {}", error);
         self.errors.push(error);
@@ -219,13 +207,13 @@ impl RegionMigrationManager {
             options,
         }
     }
-    
+
     /// Create migration manager with PostgreSQL destination
     pub fn with_postgres_destination(db: DatabaseManager, options: MigrationOptions) -> Self {
         let store = Box::new(PostgresRegionStore::new(db));
         Self::new(store, options)
     }
-    
+
     /// Migrate data from the specified source
     pub async fn migrate_from_source(
         &self,
@@ -234,24 +222,36 @@ impl RegionMigrationManager {
     ) -> MigrationResult<MigrationStats> {
         let start_time = Utc::now();
         let mut progress = MigrationProgress::new();
-        
+
         let stats = match source {
-            MigrationSource::OpenSimDatabase { connection_string, database_type } => {
-                self.migrate_from_database(connection_string, database_type, &mut progress, &progress_callback).await?
+            MigrationSource::OpenSimDatabase {
+                connection_string,
+                database_type,
+            } => {
+                self.migrate_from_database(
+                    connection_string,
+                    database_type,
+                    &mut progress,
+                    &progress_callback,
+                )
+                .await?
             }
             MigrationSource::OarFile { file_path } => {
-                self.migrate_from_oar(file_path, &mut progress, &progress_callback).await?
+                self.migrate_from_oar(file_path, &mut progress, &progress_callback)
+                    .await?
             }
             MigrationSource::XmlConfig { file_path } => {
-                self.migrate_from_xml(file_path, &mut progress, &progress_callback).await?
+                self.migrate_from_xml(file_path, &mut progress, &progress_callback)
+                    .await?
             }
             MigrationSource::RegionDirectory { directory_path } => {
-                self.migrate_from_directory(directory_path, &mut progress, &progress_callback).await?
+                self.migrate_from_directory(directory_path, &mut progress, &progress_callback)
+                    .await?
             }
         };
-        
+
         let migration_duration = Utc::now() - start_time;
-        
+
         Ok(MigrationStats {
             regions_migrated: stats.regions_migrated,
             objects_migrated: stats.objects_migrated,
@@ -263,7 +263,7 @@ impl RegionMigrationManager {
             validation_warnings: stats.validation_warnings,
         })
     }
-    
+
     /// Migrate from OpenSim database
     async fn migrate_from_database(
         &self,
@@ -276,7 +276,7 @@ impl RegionMigrationManager {
         if let Some(callback) = progress_callback {
             callback(progress);
         }
-        
+
         let source_pool = match database_type {
             OpenSimDatabaseType::PostgreSQL => {
                 let pool = sqlx::postgres::PgPoolOptions::new()
@@ -301,16 +301,17 @@ impl RegionMigrationManager {
             }
             OpenSimDatabaseType::MSSQL => {
                 return Err(MigrationError::Internal(
-                    "MSSQL migration is not supported - use MySQL or PostgreSQL instead".to_string()
+                    "MSSQL migration is not supported - use MySQL or PostgreSQL instead"
+                        .to_string(),
                 ));
             }
         };
-        
+
         progress.current_operation = "Analyzing source database".to_string();
         if let Some(callback) = progress_callback {
             callback(progress);
         }
-        
+
         let region_count = source_pool.query_count("regions").await?;
         progress.total_regions = region_count as usize;
 
@@ -319,7 +320,7 @@ impl RegionMigrationManager {
 
         let parcel_count = source_pool.query_count("land").await.unwrap_or(0);
         progress.total_parcels = parcel_count as usize;
-        
+
         let mut stats = MigrationStats {
             regions_migrated: 0,
             objects_migrated: 0,
@@ -330,13 +331,13 @@ impl RegionMigrationManager {
             errors_encountered: 0,
             validation_warnings: 0,
         };
-        
+
         // Migrate regions
         progress.current_operation = "Migrating regions".to_string();
         if let Some(callback) = progress_callback {
             callback(progress);
         }
-        
+
         let regions = self.load_regions_from_database(&source_pool).await?;
         for region in regions {
             match self.destination_store.store_region(&region).await {
@@ -345,49 +346,52 @@ impl RegionMigrationManager {
                     progress.completed_regions += 1;
                 }
                 Err(e) => {
-                    progress.add_error(format!("Failed to migrate region {}: {:?}", region.region_name, e));
+                    progress.add_error(format!(
+                        "Failed to migrate region {}: {:?}",
+                        region.region_name, e
+                    ));
                 }
             }
-            
+
             if let Some(callback) = progress_callback {
                 callback(progress);
             }
         }
-        
+
         // Migrate objects if enabled
         if self.options.include_objects {
             progress.current_operation = "Migrating objects".to_string();
             if let Some(callback) = progress_callback {
                 callback(progress);
             }
-            
+
             // Implementation would load and migrate objects in batches
             // For now, just update stats
             stats.objects_migrated = progress.total_objects;
             progress.completed_objects = progress.total_objects;
         }
-        
+
         // Migrate parcels if enabled
         if self.options.include_parcels {
             progress.current_operation = "Migrating land parcels".to_string();
             if let Some(callback) = progress_callback {
                 callback(progress);
             }
-            
+
             // Implementation would load and migrate parcels in batches
             // For now, just update stats
             stats.parcels_migrated = progress.total_parcels;
             progress.completed_parcels = progress.total_parcels;
         }
-        
+
         progress.current_operation = "Migration completed".to_string();
         if let Some(callback) = progress_callback {
             callback(progress);
         }
-        
+
         Ok(stats)
     }
-    
+
     async fn load_regions_from_database(
         &self,
         pool: &SourcePool,
@@ -449,7 +453,18 @@ impl RegionMigrationManager {
         let server_uri: String = row.try_get("serverURI")?;
         let owner_uuid: Option<String> = row.try_get("owner_uuid")?;
 
-        self.build_region_info(uuid_str, region_name, loc_x, loc_y, size_x, size_y, server_ip, server_port, server_uri, owner_uuid)
+        self.build_region_info(
+            uuid_str,
+            region_name,
+            loc_x,
+            loc_y,
+            size_x,
+            size_y,
+            server_ip,
+            server_port,
+            server_uri,
+            owner_uuid,
+        )
     }
 
     fn map_row_to_region_mysql(&self, row: &MySqlRow) -> MigrationResult<RegionInfo> {
@@ -464,7 +479,18 @@ impl RegionMigrationManager {
         let server_uri: String = row.try_get("serverURI")?;
         let owner_uuid: Option<String> = row.try_get("owner_uuid")?;
 
-        self.build_region_info(uuid_str, region_name, loc_x, loc_y, size_x, size_y, server_ip, server_port, server_uri, owner_uuid)
+        self.build_region_info(
+            uuid_str,
+            region_name,
+            loc_x,
+            loc_y,
+            size_x,
+            size_y,
+            server_ip,
+            server_port,
+            server_uri,
+            owner_uuid,
+        )
     }
 
     fn map_row_to_region_sqlite(&self, row: &SqliteRow) -> MigrationResult<RegionInfo> {
@@ -479,7 +505,18 @@ impl RegionMigrationManager {
         let server_uri: String = row.try_get("serverURI")?;
         let owner_uuid: Option<String> = row.try_get("owner_uuid")?;
 
-        self.build_region_info(uuid_str, region_name, loc_x, loc_y, size_x, size_y, server_ip, server_port, server_uri, owner_uuid)
+        self.build_region_info(
+            uuid_str,
+            region_name,
+            loc_x,
+            loc_y,
+            size_x,
+            size_y,
+            server_ip,
+            server_port,
+            server_uri,
+            owner_uuid,
+        )
     }
 
     fn build_region_info(
@@ -532,7 +569,7 @@ impl RegionMigrationManager {
             updated_at: Utc::now(),
         })
     }
-    
+
     /// Migrate from OAR file
     async fn migrate_from_oar(
         &self,
@@ -544,23 +581,23 @@ impl RegionMigrationManager {
         if let Some(callback) = progress_callback {
             callback(progress);
         }
-        
+
         // Open OAR file
         let file = std::fs::File::open(&file_path)?;
         let mut archive = ZipArchive::new(file)?;
-        
+
         progress.current_operation = "Extracting OAR contents".to_string();
         if let Some(callback) = progress_callback {
             callback(progress);
         }
-        
+
         // Use ELEGANT ARCHIVE SOLUTION for single-pass extraction
         let extracted_data = self.extract_oar_data(&mut archive).await?;
-        
+
         progress.total_regions = 1; // OAR contains one region
         progress.total_objects = extracted_data.objects.len();
         progress.total_parcels = extracted_data.parcels.len();
-        
+
         let mut stats = MigrationStats {
             regions_migrated: 0,
             objects_migrated: 0,
@@ -571,14 +608,14 @@ impl RegionMigrationManager {
             errors_encountered: 0,
             validation_warnings: 0,
         };
-        
+
         // Migrate region data
         if let Some(region) = extracted_data.region {
             progress.current_operation = format!("Migrating region: {}", region.region_name);
             if let Some(callback) = progress_callback {
                 callback(progress);
             }
-            
+
             match self.destination_store.store_region(&region).await {
                 Ok(_) => {
                     stats.regions_migrated += 1;
@@ -589,14 +626,14 @@ impl RegionMigrationManager {
                 }
             }
         }
-        
+
         // Migrate objects
         if self.options.include_objects {
             progress.current_operation = "Migrating objects from OAR".to_string();
             if let Some(callback) = progress_callback {
                 callback(progress);
             }
-            
+
             for object in extracted_data.objects {
                 match self.destination_store.store_object(&object).await {
                     Ok(_) => {
@@ -604,21 +641,28 @@ impl RegionMigrationManager {
                         progress.completed_objects += 1;
                     }
                     Err(e) => {
-                        progress.add_error(format!("Failed to migrate object {}: {:?}", object.name, e));
+                        progress.add_error(format!(
+                            "Failed to migrate object {}: {:?}",
+                            object.name, e
+                        ));
                     }
                 }
             }
         }
-        
+
         // Migrate terrain
         if self.options.include_terrain && extracted_data.terrain.is_some() {
             progress.current_operation = "Migrating terrain data".to_string();
             if let Some(callback) = progress_callback {
                 callback(progress);
             }
-            
+
             if let Some(terrain) = extracted_data.terrain {
-                match self.destination_store.store_terrain(terrain.region_id, &terrain).await {
+                match self
+                    .destination_store
+                    .store_terrain(terrain.region_id, &terrain)
+                    .await
+                {
                     Ok(_) => {
                         stats.terrain_files_migrated += 1;
                     }
@@ -628,15 +672,15 @@ impl RegionMigrationManager {
                 }
             }
         }
-        
+
         progress.current_operation = "OAR migration completed".to_string();
         if let Some(callback) = progress_callback {
             callback(progress);
         }
-        
+
         Ok(stats)
     }
-    
+
     /// Migrate from XML configuration
     async fn migrate_from_xml(
         &self,
@@ -648,19 +692,19 @@ impl RegionMigrationManager {
         if let Some(callback) = progress_callback {
             callback(progress);
         }
-        
+
         let xml_content = fs::read_to_string(&file_path).await?;
-        
+
         // Parse XML and extract region data
         // This would use a proper XML parser in production
         let region = self.parse_region_xml(&xml_content)?;
-        
+
         progress.total_regions = 1;
         progress.current_operation = format!("Migrating region: {}", region.region_name);
         if let Some(callback) = progress_callback {
             callback(progress);
         }
-        
+
         let mut stats = MigrationStats {
             regions_migrated: 0,
             objects_migrated: 0,
@@ -671,7 +715,7 @@ impl RegionMigrationManager {
             errors_encountered: 0,
             validation_warnings: 0,
         };
-        
+
         match self.destination_store.store_region(&region).await {
             Ok(_) => {
                 stats.regions_migrated += 1;
@@ -681,15 +725,15 @@ impl RegionMigrationManager {
                 progress.add_error(format!("Failed to migrate region: {:?}", e));
             }
         }
-        
+
         progress.current_operation = "XML migration completed".to_string();
         if let Some(callback) = progress_callback {
             callback(progress);
         }
-        
+
         Ok(stats)
     }
-    
+
     /// Migrate from directory
     async fn migrate_from_directory(
         &self,
@@ -701,20 +745,20 @@ impl RegionMigrationManager {
         if let Some(callback) = progress_callback {
             callback(progress);
         }
-        
+
         // Scan directory for region files
         let mut region_files = Vec::new();
         let mut dir_entries = fs::read_dir(&directory_path).await?;
-        
+
         while let Some(entry) = dir_entries.next_entry().await? {
             let path = entry.path();
             if path.extension().and_then(|s| s.to_str()) == Some("xml") {
                 region_files.push(path);
             }
         }
-        
+
         progress.total_regions = region_files.len();
-        
+
         let mut stats = MigrationStats {
             regions_migrated: 0,
             objects_migrated: 0,
@@ -725,14 +769,14 @@ impl RegionMigrationManager {
             errors_encountered: 0,
             validation_warnings: 0,
         };
-        
+
         // Process each region file
         for region_file in region_files {
             progress.current_operation = format!("Processing: {}", region_file.display());
             if let Some(callback) = progress_callback {
                 callback(progress);
             }
-            
+
             match self.migrate_from_xml(region_file, progress, &None).await {
                 Ok(file_stats) => {
                     stats.regions_migrated += file_stats.regions_migrated;
@@ -745,25 +789,28 @@ impl RegionMigrationManager {
                     progress.add_error(format!("Failed to process region file: {:?}", e));
                 }
             }
-            
+
             progress.completed_regions += 1;
             if let Some(callback) = progress_callback {
                 callback(progress);
             }
         }
-        
+
         progress.current_operation = "Directory migration completed".to_string();
         if let Some(callback) = progress_callback {
             callback(progress);
         }
-        
+
         Ok(stats)
     }
-    
+
     /// Extract data from OAR archive using ELEGANT ARCHIVE SOLUTION
-    async fn extract_oar_data(&self, archive: &mut ZipArchive<std::fs::File>) -> MigrationResult<ExtractedOarData> {
+    async fn extract_oar_data(
+        &self,
+        archive: &mut ZipArchive<std::fs::File>,
+    ) -> MigrationResult<ExtractedOarData> {
         let mut extracted = ExtractedOarData::new();
-        
+
         // Single-pass extraction to avoid borrow conflicts
         for i in 0..archive.len() {
             let mut file = archive.by_index(i)?;
@@ -798,19 +845,19 @@ impl RegionMigrationManager {
                 }
             }
         }
-        
+
         // Parse extracted data
         if let Some(region_xml) = &extracted.region_xml {
             extracted.region = Some(self.parse_region_xml(region_xml)?);
         }
-        
+
         // Parse objects
         for object_xml in &extracted.object_xmls {
             if let Ok(object) = self.parse_object_xml(object_xml) {
                 extracted.objects.push(object);
             }
         }
-        
+
         // Parse terrain
         if let Some(terrain_data) = &extracted.terrain_data {
             if let Some(region) = &extracted.region {
@@ -833,82 +880,87 @@ impl RegionMigrationManager {
                 extracted.terrain = Some(terrain);
             }
         }
-        
+
         Ok(extracted)
     }
-    
+
     /// Parse region XML data
     fn parse_region_xml(&self, xml_content: &str) -> MigrationResult<RegionInfo> {
         // Simplified XML parsing - would use proper XML parser in production
-        let region_name = self.extract_xml_value(xml_content, "RegionName")
+        let region_name = self
+            .extract_xml_value(xml_content, "RegionName")
             .unwrap_or_else(|| "Migrated Region".to_string());
-        
-        let location_x = self.extract_xml_value(xml_content, "RegionLocX")
+
+        let location_x = self
+            .extract_xml_value(xml_content, "RegionLocX")
             .and_then(|s| s.parse().ok())
             .unwrap_or(1000);
-        
-        let location_y = self.extract_xml_value(xml_content, "RegionLocY")
+
+        let location_y = self
+            .extract_xml_value(xml_content, "RegionLocY")
             .and_then(|s| s.parse().ok())
             .unwrap_or(1000);
-        
+
         let region = RegionInfo::new(region_name, location_x, location_y);
         Ok(region)
     }
-    
+
     /// Parse object XML data
     fn parse_object_xml(&self, xml_content: &str) -> MigrationResult<SceneObjectPart> {
         // Simplified XML parsing - would use proper XML parser in production
-        let name = self.extract_xml_value(xml_content, "Name")
+        let name = self
+            .extract_xml_value(xml_content, "Name")
             .unwrap_or_else(|| "Migrated Object".to_string());
-        
+
         let position = Vector3::new(128.0, 128.0, 25.0); // Default position
         let creator_id = Uuid::new_v4();
         let owner_id = Uuid::new_v4();
-        
+
         let object = SceneObjectPart::new(name, position, creator_id, owner_id);
         Ok(object)
     }
-    
+
     /// Extract value from XML content (simplified)
     fn extract_xml_value(&self, xml_content: &str, tag: &str) -> Option<String> {
         let start_tag = format!("<{}>", tag);
         let end_tag = format!("</{}>", tag);
-        
+
         if let Some(start_pos) = xml_content.find(&start_tag) {
             let start_pos = start_pos + start_tag.len();
             if let Some(end_pos) = xml_content[start_pos..].find(&end_tag) {
                 return Some(xml_content[start_pos..start_pos + end_pos].to_string());
             }
         }
-        
+
         None
     }
-    
+
     /// Validate migrated data
     pub async fn validate_migration(&self, region_id: Uuid) -> MigrationResult<ValidationReport> {
         let mut report = ValidationReport::new();
-        
+
         // Validate region exists
         match self.destination_store.load_region(region_id).await {
             Ok(Some(region)) => {
                 report.regions_validated += 1;
-                
+
                 // Validate region data
                 if region.region_name.is_empty() {
                     report.add_warning("Region name is empty".to_string());
                 }
-                
+
                 if region.size_x == 0 || region.size_y == 0 {
                     report.add_error("Invalid region size".to_string());
                 }
-                
+
                 // Validate objects
                 match self.destination_store.load_objects(region_id).await {
                     Ok(objects) => {
                         report.objects_validated = objects.len();
                         for object in &objects {
                             if object.name.is_empty() {
-                                report.add_warning(format!("Object {} has empty name", object.uuid));
+                                report
+                                    .add_warning(format!("Object {} has empty name", object.uuid));
                             }
                         }
                     }
@@ -916,7 +968,7 @@ impl RegionMigrationManager {
                         report.add_error(format!("Failed to load objects: {:?}", e));
                     }
                 }
-                
+
                 // Validate parcels
                 match self.destination_store.load_parcels(region_id).await {
                     Ok(parcels) => {
@@ -931,7 +983,7 @@ impl RegionMigrationManager {
                         report.add_error(format!("Failed to load parcels: {:?}", e));
                     }
                 }
-                
+
                 // Validate terrain
                 match self.destination_store.load_terrain(region_id).await {
                     Ok(Some(terrain)) => {
@@ -955,7 +1007,7 @@ impl RegionMigrationManager {
                 report.add_error(format!("Failed to load region: {:?}", e));
             }
         }
-        
+
         Ok(report)
     }
 }
@@ -1011,19 +1063,19 @@ impl ValidationReport {
             warnings: Vec::new(),
         }
     }
-    
+
     fn add_error(&mut self, error: String) {
         self.errors.push(error);
     }
-    
+
     fn add_warning(&mut self, warning: String) {
         self.warnings.push(warning);
     }
-    
+
     pub fn is_valid(&self) -> bool {
         self.errors.is_empty()
     }
-    
+
     pub fn has_warnings(&self) -> bool {
         !self.warnings.is_empty()
     }
@@ -1049,9 +1101,9 @@ mod tests {
         let mut progress = MigrationProgress::new();
         progress.total_regions = 10;
         progress.completed_regions = 5;
-        
+
         assert_eq!(progress.completion_percentage(), 50.0);
-        
+
         progress.add_error("Test error".to_string());
         assert_eq!(progress.errors.len(), 1);
     }
@@ -1061,11 +1113,11 @@ mod tests {
         let mut report = ValidationReport::new();
         assert!(report.is_valid());
         assert!(!report.has_warnings());
-        
+
         report.add_warning("Test warning".to_string());
         assert!(report.is_valid());
         assert!(report.has_warnings());
-        
+
         report.add_error("Test error".to_string());
         assert!(!report.is_valid());
     }
@@ -1076,9 +1128,10 @@ mod tests {
             Box::new(MockRegionStore::new()),
             MigrationOptions::default(),
         );
-        
-        let xml = "<Region><RegionName>Test Region</RegionName><RegionLocX>1000</RegionLocX></Region>";
-        
+
+        let xml =
+            "<Region><RegionName>Test Region</RegionName><RegionLocX>1000</RegionLocX></Region>";
+
         assert_eq!(
             manager.extract_xml_value(xml, "RegionName"),
             Some("Test Region".to_string())
@@ -1087,10 +1140,7 @@ mod tests {
             manager.extract_xml_value(xml, "RegionLocX"),
             Some("1000".to_string())
         );
-        assert_eq!(
-            manager.extract_xml_value(xml, "NonExistent"),
-            None
-        );
+        assert_eq!(manager.extract_xml_value(xml, "NonExistent"), None);
     }
 }
 
@@ -1111,87 +1161,114 @@ impl RegionStore for MockRegionStore {
     async fn load_region(&self, _region_id: Uuid) -> Result<Option<RegionInfo>, RegionStoreError> {
         Ok(None)
     }
-    
+
     async fn store_region(&self, _region: &RegionInfo) -> Result<(), RegionStoreError> {
         Ok(())
     }
-    
+
     async fn delete_region(&self, _region_id: Uuid) -> Result<(), RegionStoreError> {
         Ok(())
     }
-    
+
     async fn list_regions(&self) -> Result<Vec<RegionInfo>, RegionStoreError> {
         Ok(Vec::new())
     }
-    
-    async fn load_region_settings(&self, _region_id: Uuid) -> Result<Option<RegionSettings>, RegionStoreError> {
+
+    async fn load_region_settings(
+        &self,
+        _region_id: Uuid,
+    ) -> Result<Option<RegionSettings>, RegionStoreError> {
         Ok(None)
     }
-    
-    async fn store_region_settings(&self, _settings: &RegionSettings) -> Result<(), RegionStoreError> {
+
+    async fn store_region_settings(
+        &self,
+        _settings: &RegionSettings,
+    ) -> Result<(), RegionStoreError> {
         Ok(())
     }
-    
-    async fn load_objects(&self, _region_id: Uuid) -> Result<Vec<SceneObjectPart>, RegionStoreError> {
+
+    async fn load_objects(
+        &self,
+        _region_id: Uuid,
+    ) -> Result<Vec<SceneObjectPart>, RegionStoreError> {
         Ok(Vec::new())
     }
-    
-    async fn store_objects(&self, _region_id: Uuid, _objects: &[SceneObjectPart]) -> Result<(), RegionStoreError> {
+
+    async fn store_objects(
+        &self,
+        _region_id: Uuid,
+        _objects: &[SceneObjectPart],
+    ) -> Result<(), RegionStoreError> {
         Ok(())
     }
-    
+
     async fn store_object(&self, _object: &SceneObjectPart) -> Result<(), RegionStoreError> {
         Ok(())
     }
-    
+
     async fn delete_object(&self, _object_id: Uuid) -> Result<(), RegionStoreError> {
         Ok(())
     }
-    
+
     async fn load_prim_shapes(&self, _region_id: Uuid) -> Result<Vec<PrimShape>, RegionStoreError> {
         Ok(Vec::new())
     }
-    
+
     async fn store_prim_shape(&self, _shape: &PrimShape) -> Result<(), RegionStoreError> {
         Ok(())
     }
-    
+
     async fn delete_prim_shape(&self, _prim_id: Uuid) -> Result<(), RegionStoreError> {
         Ok(())
     }
-    
-    async fn load_terrain(&self, _region_id: Uuid) -> Result<Option<TerrainData>, RegionStoreError> {
+
+    async fn load_terrain(
+        &self,
+        _region_id: Uuid,
+    ) -> Result<Option<TerrainData>, RegionStoreError> {
         Ok(None)
     }
-    
-    async fn store_terrain(&self, _region_id: Uuid, _terrain: &TerrainData) -> Result<(), RegionStoreError> {
+
+    async fn store_terrain(
+        &self,
+        _region_id: Uuid,
+        _terrain: &TerrainData,
+    ) -> Result<(), RegionStoreError> {
         Ok(())
     }
-    
+
     async fn load_parcels(&self, _region_id: Uuid) -> Result<Vec<LandData>, RegionStoreError> {
         Ok(Vec::new())
     }
-    
-    async fn store_parcels(&self, _region_id: Uuid, _parcels: &[LandData]) -> Result<(), RegionStoreError> {
+
+    async fn store_parcels(
+        &self,
+        _region_id: Uuid,
+        _parcels: &[LandData],
+    ) -> Result<(), RegionStoreError> {
         Ok(())
     }
-    
+
     async fn store_parcel(&self, _parcel: &LandData) -> Result<(), RegionStoreError> {
         Ok(())
     }
-    
+
     async fn delete_parcel(&self, _parcel_id: Uuid) -> Result<(), RegionStoreError> {
         Ok(())
     }
-    
-    async fn load_spawn_points(&self, _region_id: Uuid) -> Result<Vec<SpawnPoint>, RegionStoreError> {
+
+    async fn load_spawn_points(
+        &self,
+        _region_id: Uuid,
+    ) -> Result<Vec<SpawnPoint>, RegionStoreError> {
         Ok(Vec::new())
     }
-    
+
     async fn store_spawn_point(&self, _spawn_point: &SpawnPoint) -> Result<(), RegionStoreError> {
         Ok(())
     }
-    
+
     async fn delete_spawn_point(&self, _spawn_point_id: Uuid) -> Result<(), RegionStoreError> {
         Ok(())
     }

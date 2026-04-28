@@ -1,9 +1,9 @@
 use super::super::AIError;
-use std::sync::Arc;
+use serde::{Deserialize, Serialize};
 use std::collections::HashMap;
 use std::path::PathBuf;
+use std::sync::Arc;
 use tokio::sync::RwLock;
-use serde::{Deserialize, Serialize};
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct PredictorConfig {
@@ -205,9 +205,8 @@ impl ONNXPredictor {
         }
 
         let mean: f32 = features.iter().sum::<f32>() / features.len() as f32;
-        let variance: f32 = features.iter()
-            .map(|x| (x - mean).powi(2))
-            .sum::<f32>() / features.len() as f32;
+        let variance: f32 =
+            features.iter().map(|x| (x - mean).powi(2)).sum::<f32>() / features.len() as f32;
 
         let complexity = variance.sqrt();
         let magnitude = features.iter().map(|x| x.abs()).sum::<f32>() / features.len() as f32;
@@ -225,7 +224,8 @@ impl ONNXPredictor {
             .map(|i| 1.0 / (1.0 + (i as f32 * 0.1)))
             .collect();
 
-        let weighted_sum: f32 = features.iter()
+        let weighted_sum: f32 = features
+            .iter()
             .zip(weights.iter())
             .map(|(f, w)| f * w)
             .sum();
@@ -238,10 +238,15 @@ impl ONNXPredictor {
             0.5
         };
 
-        (normalized * 0.6 + 0.2 + (features.len() as f32 * 0.001)).max(0.0).min(1.0)
+        (normalized * 0.6 + 0.2 + (features.len() as f32 * 0.001))
+            .max(0.0)
+            .min(1.0)
     }
 
-    pub async fn classify_content(&self, features: &[f32]) -> Result<ClassificationResult, AIError> {
+    pub async fn classify_content(
+        &self,
+        features: &[f32],
+    ) -> Result<ClassificationResult, AIError> {
         let start_time = std::time::Instant::now();
 
         let model_state = self.classification_model.read().await;
@@ -251,7 +256,8 @@ impl ONNXPredictor {
 
         let probabilities = self.simulate_classification(features);
 
-        let (max_category, max_prob) = probabilities.iter()
+        let (max_category, max_prob) = probabilities
+            .iter()
             .max_by(|a, b| a.1.partial_cmp(b.1).unwrap_or(std::cmp::Ordering::Equal))
             .map(|(k, v)| (k.clone(), *v))
             .unwrap_or(("Unknown".to_string(), 0.0));
@@ -287,8 +293,18 @@ impl ONNXPredictor {
         let mut probabilities = HashMap::new();
         let base_prob = 1.0 / 10.0;
 
-        for cat in &["Architecture", "Landscape", "Furniture", "Vehicle", "Avatar",
-                     "Script", "Texture", "Animation", "Sound", "Unknown"] {
+        for cat in &[
+            "Architecture",
+            "Landscape",
+            "Furniture",
+            "Vehicle",
+            "Avatar",
+            "Script",
+            "Texture",
+            "Animation",
+            "Sound",
+            "Unknown",
+        ] {
             probabilities.insert(cat.to_string(), base_prob);
         }
 
@@ -302,8 +318,17 @@ impl ONNXPredictor {
 
     fn simulate_classification(&self, features: &[f32]) -> HashMap<String, f32> {
         let mut probabilities = HashMap::new();
-        let categories = ["Architecture", "Landscape", "Furniture", "Vehicle", "Avatar",
-                        "Script", "Texture", "Animation", "Sound"];
+        let categories = [
+            "Architecture",
+            "Landscape",
+            "Furniture",
+            "Vehicle",
+            "Avatar",
+            "Script",
+            "Texture",
+            "Animation",
+            "Sound",
+        ];
 
         let feature_sum: f32 = features.iter().sum();
         let feature_var: f32 = if features.len() > 1 {
@@ -313,7 +338,9 @@ impl ONNXPredictor {
             0.0
         };
 
-        let mut raw_probs: Vec<f32> = categories.iter().enumerate()
+        let mut raw_probs: Vec<f32> = categories
+            .iter()
+            .enumerate()
             .map(|(i, _)| {
                 let base = 0.05;
                 let feature_influence = if i < features.len() {
@@ -380,20 +407,18 @@ impl ONNXPredictor {
         }
 
         let mean: f32 = features.iter().sum::<f32>() / features.len() as f32;
-        let std_dev: f32 = (features.iter()
-            .map(|x| (x - mean).powi(2))
-            .sum::<f32>() / features.len() as f32)
+        let std_dev: f32 = (features.iter().map(|x| (x - mean).powi(2)).sum::<f32>()
+            / features.len() as f32)
             .sqrt();
 
-        let outliers = features.iter()
+        let outliers = features
+            .iter()
             .filter(|&x| (x - mean).abs() > 2.0 * std_dev)
             .count();
 
         let outlier_ratio = outliers as f32 / features.len() as f32;
 
-        let extreme_values = features.iter()
-            .filter(|&x| x.abs() > 10.0)
-            .count();
+        let extreme_values = features.iter().filter(|&x| x.abs() > 10.0).count();
         let extreme_ratio = extreme_values as f32 / features.len() as f32;
 
         (outlier_ratio * 0.6 + extreme_ratio * 0.4).min(1.0)
@@ -406,21 +431,30 @@ impl ONNXPredictor {
         (base_score * model_adjustment).min(1.0)
     }
 
-    fn identify_contributing_features(&self, features: &[f32], _anomaly_score: f32) -> Vec<(String, f32)> {
+    fn identify_contributing_features(
+        &self,
+        features: &[f32],
+        _anomaly_score: f32,
+    ) -> Vec<(String, f32)> {
         if features.is_empty() {
             return Vec::new();
         }
 
         let mean: f32 = features.iter().sum::<f32>() / features.len() as f32;
-        let std_dev: f32 = (features.iter()
-            .map(|x| (x - mean).powi(2))
-            .sum::<f32>() / features.len() as f32)
+        let std_dev: f32 = (features.iter().map(|x| (x - mean).powi(2)).sum::<f32>()
+            / features.len() as f32)
             .sqrt();
 
-        let mut contributors: Vec<(String, f32)> = features.iter().enumerate()
+        let mut contributors: Vec<(String, f32)> = features
+            .iter()
+            .enumerate()
             .filter(|(_, &x)| std_dev > 0.0 && (x - mean).abs() > std_dev)
             .map(|(i, &x)| {
-                let z_score = if std_dev > 0.0 { (x - mean).abs() / std_dev } else { 0.0 };
+                let z_score = if std_dev > 0.0 {
+                    (x - mean).abs() / std_dev
+                } else {
+                    0.0
+                };
                 (format!("feature_{}", i), z_score)
             })
             .collect();
@@ -435,10 +469,7 @@ impl ONNXPredictor {
         let mut cache = self.prediction_cache.write().await;
 
         if cache.len() >= 10000 {
-            let keys_to_remove: Vec<String> = cache.keys()
-                .take(1000)
-                .cloned()
-                .collect();
+            let keys_to_remove: Vec<String> = cache.keys().take(1000).cloned().collect();
             for k in keys_to_remove {
                 cache.remove(&k);
             }

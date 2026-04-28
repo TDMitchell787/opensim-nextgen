@@ -93,7 +93,8 @@ impl EstateManagementModule {
                         settings.estate_id = estate_id as u32;
                     }
 
-                    let settings_query = "SELECT \"EstateName\", \"EstateOwner\", \"ParentEstateID\", \
+                    let settings_query =
+                        "SELECT \"EstateName\", \"EstateOwner\", \"ParentEstateID\", \
                         \"FixedSun\", \"AllowVoice\", \"AllowDirectTeleport\", \
                         \"DenyAnonymous\", \"ResetHomeOnTeleport\", \"SunPosition\" \
                         FROM estate_settings WHERE \"EstateID\" = $1";
@@ -103,24 +104,39 @@ impl EstateManagementModule {
                         .await
                     {
                         let mut settings = self.settings.write();
-                        settings.estate_name = srow.try_get::<String, _>("EstateName").unwrap_or_default();
+                        settings.estate_name =
+                            srow.try_get::<String, _>("EstateName").unwrap_or_default();
                         let owner_str: String = srow.try_get("EstateOwner").unwrap_or_default();
                         settings.estate_owner = owner_str.parse().unwrap_or(Uuid::nil());
-                        settings.parent_estate_id = srow.try_get::<i32, _>("ParentEstateID").unwrap_or(1) as u32;
-                        settings.sun_position = srow.try_get::<f64, _>("SunPosition").unwrap_or(6.0) as f32;
+                        settings.parent_estate_id =
+                            srow.try_get::<i32, _>("ParentEstateID").unwrap_or(1) as u32;
+                        settings.sun_position =
+                            srow.try_get::<f64, _>("SunPosition").unwrap_or(6.0) as f32;
                         let fixed_sun: i32 = srow.try_get("FixedSun").unwrap_or(0);
                         settings.use_fixed_sun = fixed_sun != 0;
 
                         let mut flags: u32 = 0;
-                        if srow.try_get::<i32, _>("AllowVoice").unwrap_or(0) != 0 { flags |= 1 << 28; }
-                        if srow.try_get::<i32, _>("AllowDirectTeleport").unwrap_or(0) != 0 { flags |= 1 << 26; }
-                        if srow.try_get::<i32, _>("DenyAnonymous").unwrap_or(0) != 0 { flags |= 1 << 10; }
-                        if srow.try_get::<i32, _>("ResetHomeOnTeleport").unwrap_or(0) != 0 { flags |= 1 << 4; }
+                        if srow.try_get::<i32, _>("AllowVoice").unwrap_or(0) != 0 {
+                            flags |= 1 << 28;
+                        }
+                        if srow.try_get::<i32, _>("AllowDirectTeleport").unwrap_or(0) != 0 {
+                            flags |= 1 << 26;
+                        }
+                        if srow.try_get::<i32, _>("DenyAnonymous").unwrap_or(0) != 0 {
+                            flags |= 1 << 10;
+                        }
+                        if srow.try_get::<i32, _>("ResetHomeOnTeleport").unwrap_or(0) != 0 {
+                            flags |= 1 << 4;
+                        }
                         settings.estate_flags = flags;
                     }
 
                     self.load_estate_lists(db, estate_id as u32).await;
-                    info!("[ESTATE] Loaded estate {} (id={})", self.settings.read().estate_name, estate_id);
+                    info!(
+                        "[ESTATE] Loaded estate {} (id={})",
+                        self.settings.read().estate_name,
+                        estate_id
+                    );
                 }
             }
             DatabaseConnection::MySQL(_pool) => {
@@ -132,10 +148,11 @@ impl EstateManagementModule {
     async fn load_estate_lists(&self, db: &DatabaseConnection, estate_id: u32) {
         match db {
             DatabaseConnection::PostgreSQL(pool) => {
-                if let Ok(rows) = sqlx::query("SELECT \"bannedUUID\" FROM estateban WHERE \"EstateID\" = $1")
-                    .bind(estate_id as i32)
-                    .fetch_all(pool)
-                    .await
+                if let Ok(rows) =
+                    sqlx::query("SELECT \"bannedUUID\" FROM estateban WHERE \"EstateID\" = $1")
+                        .bind(estate_id as i32)
+                        .fetch_all(pool)
+                        .await
                 {
                     use sqlx::Row;
                     let mut settings = self.settings.write();
@@ -147,10 +164,11 @@ impl EstateManagementModule {
                     }
                 }
 
-                if let Ok(rows) = sqlx::query("SELECT uuid FROM estate_managers WHERE \"EstateID\" = $1")
-                    .bind(estate_id as i32)
-                    .fetch_all(pool)
-                    .await
+                if let Ok(rows) =
+                    sqlx::query("SELECT uuid FROM estate_managers WHERE \"EstateID\" = $1")
+                        .bind(estate_id as i32)
+                        .fetch_all(pool)
+                        .await
                 {
                     use sqlx::Row;
                     let mut settings = self.settings.write();
@@ -162,10 +180,11 @@ impl EstateManagementModule {
                     }
                 }
 
-                if let Ok(rows) = sqlx::query("SELECT uuid FROM estate_users WHERE \"EstateID\" = $1")
-                    .bind(estate_id as i32)
-                    .fetch_all(pool)
-                    .await
+                if let Ok(rows) =
+                    sqlx::query("SELECT uuid FROM estate_users WHERE \"EstateID\" = $1")
+                        .bind(estate_id as i32)
+                        .fetch_all(pool)
+                        .await
                 {
                     use sqlx::Row;
                     let mut settings = self.settings.write();
@@ -183,14 +202,22 @@ impl EstateManagementModule {
 }
 
 impl IEstateModule for EstateManagementModule {
-    fn get_estate_id(&self) -> u32 { self.settings.read().estate_id }
-    fn get_estate_name(&self) -> String { self.settings.read().estate_name.clone() }
-    fn is_banned(&self, agent_id: Uuid) -> bool { self.settings.read().ban_list.contains(&agent_id) }
+    fn get_estate_id(&self) -> u32 {
+        self.settings.read().estate_id
+    }
+    fn get_estate_name(&self) -> String {
+        self.settings.read().estate_name.clone()
+    }
+    fn is_banned(&self, agent_id: Uuid) -> bool {
+        self.settings.read().ban_list.contains(&agent_id)
+    }
     fn is_manager(&self, agent_id: Uuid) -> bool {
         let s = self.settings.read();
         s.manager_list.contains(&agent_id) || s.estate_owner == agent_id
     }
-    fn get_estate_owner(&self) -> Uuid { self.settings.read().estate_owner }
+    fn get_estate_owner(&self) -> Uuid {
+        self.settings.read().estate_owner
+    }
 }
 
 const ESTATE_OWNER_MESSAGE_REPLY_ID: u32 = 0xFFFF0105; // Low 261
@@ -230,8 +257,12 @@ fn build_estate_owner_message(method: &str, invoice: &Uuid, params: &[String]) -
 
 #[async_trait]
 impl RegionModule for EstateManagementModule {
-    fn name(&self) -> &'static str { "EstateManagementModule" }
-    fn replaceable_interface(&self) -> Option<&'static str> { Some("IEstateModule") }
+    fn name(&self) -> &'static str {
+        "EstateManagementModule"
+    }
+    fn replaceable_interface(&self) -> Option<&'static str> {
+        Some("IEstateModule")
+    }
 
     async fn initialize(&mut self, _config: &ModuleConfig) -> Result<()> {
         info!("[ESTATE MODULE] Initialized");
@@ -255,30 +286,37 @@ impl RegionModule for EstateManagementModule {
         });
         scene.event_bus.subscribe(
             SceneEvent::OnEstateOwnerMessage {
-                agent_id: Uuid::nil(), method: String::new(),
-                params: Vec::new(), dest: "0.0.0.0:0".parse().unwrap(),
+                agent_id: Uuid::nil(),
+                method: String::new(),
+                params: Vec::new(),
+                dest: "0.0.0.0:0".parse().unwrap(),
             },
             handler,
             100,
         );
 
-        scene.service_registry.write().register::<EstateManagementModule>(
-            Arc::new(EstateManagementModule {
+        scene
+            .service_registry
+            .write()
+            .register::<EstateManagementModule>(Arc::new(EstateManagementModule {
                 settings: self.settings.clone(),
                 region_uuid: self.region_uuid,
                 socket: self.socket.clone(),
                 session_manager: self.session_manager.clone(),
                 db: self.db.clone(),
                 service_registry: self.service_registry.clone(),
-            }),
-        );
+            }));
 
         info!("[ESTATE MODULE] Added to region {:?}", scene.region_name);
         Ok(())
     }
 
-    fn as_any(&self) -> &dyn Any { self }
-    fn as_any_mut(&mut self) -> &mut dyn Any { self }
+    fn as_any(&self) -> &dyn Any {
+        self
+    }
+    fn as_any_mut(&mut self) -> &mut dyn Any {
+        self
+    }
 }
 
 #[async_trait]
@@ -292,7 +330,13 @@ struct EstateEventHandler {
 #[async_trait]
 impl EventHandler for EstateEventHandler {
     async fn handle_event(&self, event: &SceneEvent, _scene: &SceneContext) -> Result<()> {
-        if let SceneEvent::OnEstateOwnerMessage { agent_id, method, params, dest } = event {
+        if let SceneEvent::OnEstateOwnerMessage {
+            agent_id,
+            method,
+            params,
+            dest,
+        } = event
+        {
             match method.as_str() {
                 "getinfo" => {
                     let (reply_params, estate_name) = {
@@ -310,20 +354,30 @@ impl EventHandler for EstateEventHandler {
                         ];
                         (params, s.estate_name.clone())
                     };
-                    let packet = build_estate_owner_message("estateupdateinfo", &Uuid::nil(), &reply_params);
+                    let packet =
+                        build_estate_owner_message("estateupdateinfo", &Uuid::nil(), &reply_params);
                     let _ = self.socket.send_to(&packet, dest).await;
-                    info!("[ESTATE MODULE] Sent estate info for '{}' to {}", estate_name, dest);
+                    info!(
+                        "[ESTATE MODULE] Sent estate info for '{}' to {}",
+                        estate_name, dest
+                    );
                 }
                 "setregioninfo" => {
                     info!("[ESTATE MODULE] Agent {} updating region info", agent_id);
                 }
                 "estate_access_delta" => {
                     if params.len() >= 2 {
-                        info!("[ESTATE MODULE] Agent {} modifying estate access: {:?}", agent_id, params);
+                        info!(
+                            "[ESTATE MODULE] Agent {} modifying estate access: {:?}",
+                            agent_id, params
+                        );
                     }
                 }
                 "restart" => {
-                    warn!("[ESTATE MODULE] Agent {} requested region restart", agent_id);
+                    warn!(
+                        "[ESTATE MODULE] Agent {} requested region restart",
+                        agent_id
+                    );
                 }
                 "kickestate" => {
                     info!("[ESTATE MODULE] Agent {} kicked user from estate", agent_id);
@@ -337,7 +391,10 @@ impl EventHandler for EstateEventHandler {
                     }
                 }
                 _ => {
-                    info!("[ESTATE MODULE] Unhandled method '{}' from {}", method, agent_id);
+                    info!(
+                        "[ESTATE MODULE] Unhandled method '{}' from {}",
+                        method, agent_id
+                    );
                 }
             }
         }

@@ -1,5 +1,5 @@
 //! Intelligent Region Distribution System
-//! 
+//!
 //! AI-powered region placement and distribution across federated grids
 //! for optimal performance and resource utilization.
 

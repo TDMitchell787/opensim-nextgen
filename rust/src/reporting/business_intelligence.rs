@@ -3,20 +3,20 @@
 //! Provides AI-powered business insights, KPI management, and intelligent
 //! dashboard generation for comprehensive virtual world business intelligence.
 
+use super::{
+    AnalyticsCategory, AnalyticsDataPoint, BusinessDashboard, BusinessKPI, DashboardType,
+    DashboardWidget, KPICategory, KPIStatus, ReportingError, ReportingResult, TimeWindow,
+    WidgetType,
+};
+use crate::database::DatabaseManager;
+use crate::monitoring::MetricsCollector;
+use chrono::{DateTime, Duration, Utc};
+use serde::{Deserialize, Serialize};
+use sqlx::Row; // EADS fix for PgRow.get() method
 use std::collections::HashMap;
 use std::sync::Arc;
 use tokio::sync::RwLock;
 use uuid::Uuid;
-use chrono::{DateTime, Utc, Duration};
-use serde::{Deserialize, Serialize};
-use sqlx::Row;  // EADS fix for PgRow.get() method
-use crate::database::DatabaseManager;
-use crate::monitoring::MetricsCollector;
-use super::{
-    AnalyticsDataPoint, AnalyticsCategory, BusinessKPI, KPICategory, KPIStatus,
-    BusinessDashboard, DashboardType, DashboardWidget, WidgetType, TimeWindow,
-    ReportingError, ReportingResult
-};
 
 /// Business Intelligence Engine
 pub struct BusinessIntelligenceEngine {
@@ -74,7 +74,7 @@ pub struct BusinessInsight {
     pub insight_type: InsightType,
     pub title: String,
     pub description: String,
-    pub impact_score: f64, // 0.0 to 1.0
+    pub impact_score: f64,     // 0.0 to 1.0
     pub confidence_score: f64, // 0.0 to 1.0
     pub category: InsightCategory,
     pub related_kpis: Vec<Uuid>,
@@ -315,7 +315,7 @@ impl BusinessIntelligenceEngine {
     ) -> ReportingResult<Self> {
         let insight_engine = InsightEngine::new(database.clone()).await?;
         let ai_analytics = AIAnalyticsEngine::new().await?;
-        
+
         let engine = Self {
             database: database.clone(),
             metrics_collector,
@@ -326,26 +326,27 @@ impl BusinessIntelligenceEngine {
             real_time_metrics: Arc::new(RwLock::new(RealTimeMetrics::default())),
             config,
         };
-        
+
         // Initialize database tables
         engine.initialize_tables().await?;
-        
+
         // Load existing KPIs and dashboards
         engine.load_existing_data().await?;
-        
+
         // Start background tasks
         engine.start_background_tasks().await?;
-        
+
         Ok(engine)
     }
-    
+
     /// Initialize database tables
     async fn initialize_tables(&self) -> ReportingResult<()> {
         let pool_ref = self.database.get_pool()?;
         let pool = pool_ref.as_postgres_pool()?;
-        
+
         // Business KPIs table
-        sqlx::query(r#"
+        sqlx::query(
+            r#"
             CREATE TABLE IF NOT EXISTS business_kpis (
                 kpi_id UUID PRIMARY KEY,
                 name TEXT NOT NULL,
@@ -362,10 +363,14 @@ impl BusinessIntelligenceEngine {
                 created_at TIMESTAMP WITH TIME ZONE DEFAULT NOW(),
                 updated_at TIMESTAMP WITH TIME ZONE DEFAULT NOW()
             )
-        "#).execute(pool).await?;
-        
+        "#,
+        )
+        .execute(pool)
+        .await?;
+
         // Business insights table
-        sqlx::query(r#"
+        sqlx::query(
+            r#"
             CREATE TABLE IF NOT EXISTS business_insights (
                 insight_id UUID PRIMARY KEY,
                 insight_type TEXT NOT NULL,
@@ -381,10 +386,14 @@ impl BusinessIntelligenceEngine {
                 generated_at TIMESTAMP WITH TIME ZONE NOT NULL,
                 expires_at TIMESTAMP WITH TIME ZONE
             )
-        "#).execute(pool).await?;
-        
+        "#,
+        )
+        .execute(pool)
+        .await?;
+
         // Business dashboards table
-        sqlx::query(r#"
+        sqlx::query(
+            r#"
             CREATE TABLE IF NOT EXISTS business_dashboards (
                 dashboard_id UUID PRIMARY KEY,
                 name TEXT NOT NULL,
@@ -398,10 +407,14 @@ impl BusinessIntelligenceEngine {
                 created_at TIMESTAMP WITH TIME ZONE DEFAULT NOW(),
                 last_updated TIMESTAMP WITH TIME ZONE DEFAULT NOW()
             )
-        "#).execute(pool).await?;
-        
+        "#,
+        )
+        .execute(pool)
+        .await?;
+
         // Detected patterns table
-        sqlx::query(r#"
+        sqlx::query(
+            r#"
             CREATE TABLE IF NOT EXISTS detected_patterns (
                 pattern_id UUID PRIMARY KEY,
                 pattern_type TEXT NOT NULL,
@@ -411,10 +424,14 @@ impl BusinessIntelligenceEngine {
                 affected_metrics JSONB NOT NULL,
                 detected_at TIMESTAMP WITH TIME ZONE NOT NULL
             )
-        "#).execute(pool).await?;
-        
+        "#,
+        )
+        .execute(pool)
+        .await?;
+
         // Detected anomalies table
-        sqlx::query(r#"
+        sqlx::query(
+            r#"
             CREATE TABLE IF NOT EXISTS detected_anomalies (
                 anomaly_id UUID PRIMARY KEY,
                 anomaly_type TEXT NOT NULL,
@@ -429,37 +446,44 @@ impl BusinessIntelligenceEngine {
                 resolved BOOLEAN DEFAULT false,
                 resolved_at TIMESTAMP WITH TIME ZONE
             )
-        "#).execute(pool).await?;
-        
+        "#,
+        )
+        .execute(pool)
+        .await?;
+
         Ok(())
     }
-    
+
     /// Load existing data from database
     async fn load_existing_data(&self) -> ReportingResult<()> {
         // Load KPIs
         self.load_business_kpis().await?;
-        
+
         // Load dashboards
         self.load_business_dashboards().await?;
-        
+
         Ok(())
     }
-    
+
     /// Load business KPIs from database
     async fn load_business_kpis(&self) -> ReportingResult<()> {
         let pool_ref = self.database.get_pool()?;
         let pool = pool_ref.as_postgres_pool()?;
-        
-        let rows = sqlx::query(r#"
+
+        let rows = sqlx::query(
+            r#"
             SELECT kpi_id, name, description, category, metric_source, calculation_method,
                    target_value, threshold_warning, threshold_critical, unit, frequency,
                    is_active, created_at, updated_at
             FROM business_kpis 
             WHERE is_active = true
-        "#).fetch_all(pool).await?;
-        
+        "#,
+        )
+        .fetch_all(pool)
+        .await?;
+
         let mut kpi_registry = self.kpi_registry.write().await;
-        
+
         for row in rows {
             let kpi = BusinessKPI {
                 kpi_id: row.get("kpi_id"),
@@ -467,7 +491,9 @@ impl BusinessIntelligenceEngine {
                 description: row.get("description"),
                 category: serde_json::from_str(&row.get::<String, _>("category"))?,
                 metric_source: row.get("metric_source"),
-                calculation_method: serde_json::from_str(&row.get::<String, _>("calculation_method"))?,
+                calculation_method: serde_json::from_str(
+                    &row.get::<String, _>("calculation_method"),
+                )?,
                 target_value: row.get("target_value"),
                 threshold_warning: row.get("threshold_warning"),
                 threshold_critical: row.get("threshold_critical"),
@@ -477,26 +503,30 @@ impl BusinessIntelligenceEngine {
                 created_at: row.get("created_at"),
                 updated_at: row.get("updated_at"),
             };
-            
+
             kpi_registry.insert(kpi.kpi_id, kpi);
         }
-        
+
         Ok(())
     }
-    
+
     /// Load business dashboards from database
     async fn load_business_dashboards(&self) -> ReportingResult<()> {
         let pool_ref = self.database.get_pool()?;
         let pool = pool_ref.as_postgres_pool()?;
-        
-        let rows = sqlx::query(r#"
+
+        let rows = sqlx::query(
+            r#"
             SELECT dashboard_id, name, description, dashboard_type, widgets, filters,
                    refresh_interval_seconds, is_public, created_by, created_at, last_updated
             FROM business_dashboards
-        "#).fetch_all(pool).await?;
-        
+        "#,
+        )
+        .fetch_all(pool)
+        .await?;
+
         let mut dashboard_registry = self.dashboard_registry.write().await;
-        
+
         for row in rows {
             let dashboard = BusinessDashboard {
                 dashboard_id: row.get("dashboard_id"),
@@ -505,102 +535,123 @@ impl BusinessIntelligenceEngine {
                 dashboard_type: serde_json::from_str(&row.get::<String, _>("dashboard_type"))?,
                 widgets: serde_json::from_value(row.get("widgets"))?,
                 filters: serde_json::from_value(row.get("filters"))?,
-                refresh_interval: Duration::seconds(row.get::<i32, _>("refresh_interval_seconds") as i64),
+                refresh_interval: Duration::seconds(
+                    row.get::<i32, _>("refresh_interval_seconds") as i64
+                ),
                 is_public: row.get("is_public"),
                 created_by: row.get("created_by"),
                 created_at: row.get("created_at"),
                 last_updated: row.get("last_updated"),
             };
-            
+
             dashboard_registry.insert(dashboard.dashboard_id, dashboard);
         }
-        
+
         Ok(())
     }
-    
+
     /// Start background processing tasks
     async fn start_background_tasks(&self) -> ReportingResult<()> {
         // Start insight generation task
         self.start_insight_generation_task().await;
-        
+
         // Start KPI calculation task
         self.start_kpi_calculation_task().await;
-        
+
         // Start real-time metrics update task
         self.start_real_time_metrics_task().await;
-        
+
         Ok(())
     }
-    
+
     /// Generate business insights
-    pub async fn generate_insights(&self, time_period: TimeWindow) -> ReportingResult<Vec<BusinessInsight>> {
+    pub async fn generate_insights(
+        &self,
+        time_period: TimeWindow,
+    ) -> ReportingResult<Vec<BusinessInsight>> {
         let mut insights = Vec::new();
-        
+
         // Generate trend insights
-        let trend_insights = self.insight_engine.detect_trends(time_period.clone()).await?;
+        let trend_insights = self
+            .insight_engine
+            .detect_trends(time_period.clone())
+            .await?;
         insights.extend(trend_insights);
-        
+
         // Generate anomaly insights
-        let anomaly_insights = self.insight_engine.detect_anomalies(time_period.clone()).await?;
+        let anomaly_insights = self
+            .insight_engine
+            .detect_anomalies(time_period.clone())
+            .await?;
         insights.extend(anomaly_insights);
-        
+
         // Generate AI-powered insights
         if self.config.ai_insights_enabled {
             let ai_insights = self.ai_analytics.generate_ai_insights(time_period).await?;
             insights.extend(ai_insights);
         }
-        
+
         // Store insights in database
         for insight in &insights {
             self.store_insight(insight).await?;
         }
-        
+
         Ok(insights)
     }
-    
+
     /// Get business KPIs
-    pub async fn get_business_kpis(&self, category: Option<KPICategory>) -> ReportingResult<Vec<BusinessKPI>> {
+    pub async fn get_business_kpis(
+        &self,
+        category: Option<KPICategory>,
+    ) -> ReportingResult<Vec<BusinessKPI>> {
         let kpi_registry = self.kpi_registry.read().await;
-        
-        let kpis: Vec<BusinessKPI> = kpi_registry.values()
+
+        let kpis: Vec<BusinessKPI> = kpi_registry
+            .values()
             .filter(|kpi| {
-                category.as_ref()
+                category
+                    .as_ref()
                     .map(|cat| kpi.category == *cat)
                     .unwrap_or(true)
             })
             .cloned()
             .collect();
-        
+
         Ok(kpis)
     }
-    
+
     /// Calculate KPI current values
-    pub async fn calculate_kpi_values(&self, data_points: &[AnalyticsDataPoint]) -> ReportingResult<HashMap<Uuid, (f64, KPIStatus)>> {
+    pub async fn calculate_kpi_values(
+        &self,
+        data_points: &[AnalyticsDataPoint],
+    ) -> ReportingResult<HashMap<Uuid, (f64, KPIStatus)>> {
         let kpi_registry = self.kpi_registry.read().await;
         let mut kpi_values = HashMap::new();
-        
+
         for (kpi_id, kpi) in kpi_registry.iter() {
             if let Some(current_value) = kpi.calculate_current_value(data_points) {
                 let status = kpi.get_status(current_value);
                 kpi_values.insert(*kpi_id, (current_value, status));
             }
         }
-        
+
         Ok(kpi_values)
     }
-    
+
     /// Create business dashboard
     pub async fn create_dashboard(&self, dashboard: BusinessDashboard) -> ReportingResult<Uuid> {
         // Store in database
         let pool_ref = self.database.get_pool()?;
         let pool = pool_ref.as_postgres_pool()?;
-        
-        sqlx::query(r#"
+
+        sqlx::query(
+            r#"
             INSERT INTO business_dashboards 
             (dashboard_id, name, description, dashboard_type, widgets, filters,
              refresh_interval_seconds, is_public, created_by)
             VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9)
-        "#)
+        "#,
+        )
         .bind(&dashboard.dashboard_id)
         .bind(&dashboard.name)
         .bind(&dashboard.description)
@@ -610,77 +661,69 @@ impl BusinessIntelligenceEngine {
         .bind(dashboard.refresh_interval.num_seconds() as i32)
         .bind(dashboard.is_public)
         .bind(&dashboard.created_by)
-        .execute(pool).await?;
-        
+        .execute(pool)
+        .await?;
+
         // Add to registry
         let mut dashboard_registry = self.dashboard_registry.write().await;
         let dashboard_id = dashboard.dashboard_id;
         dashboard_registry.insert(dashboard_id, dashboard);
-        
+
         Ok(dashboard_id)
     }
-    
+
     /// Get dashboard data
     pub async fn get_dashboard_data(&self, dashboard_id: Uuid) -> ReportingResult<DashboardData> {
         let dashboard_registry = self.dashboard_registry.read().await;
-        
-        let dashboard = dashboard_registry.get(&dashboard_id)
-            .ok_or_else(|| ReportingError::DataSourceNotFound(
-                format!("Dashboard {}", dashboard_id) 
-            ))?;
-        
+
+        let dashboard = dashboard_registry.get(&dashboard_id).ok_or_else(|| {
+            ReportingError::DataSourceNotFound(format!("Dashboard {}", dashboard_id))
+        })?;
+
         let mut widget_data = HashMap::new();
-        
+
         // Generate data for each widget
         for widget in &dashboard.widgets {
             let data = self.generate_widget_data(widget).await?;
             widget_data.insert(widget.widget_id, data);
         }
-        
+
         Ok(DashboardData {
             dashboard_id,
             widget_data,
             last_updated: Utc::now(),
         })
     }
-    
+
     /// Generate widget data
     async fn generate_widget_data(&self, widget: &DashboardWidget) -> ReportingResult<WidgetData> {
         match widget.widget_type {
-            WidgetType::KPICard => {
-                self.generate_kpi_card_data(widget).await
-            },
-            WidgetType::LineChart => {
-                self.generate_line_chart_data(widget).await
-            },
-            WidgetType::BarChart => {
-                self.generate_bar_chart_data(widget).await
-            },
-            WidgetType::Table => {
-                self.generate_table_data(widget).await
-            },
-            _ => {
-                Ok(WidgetData {
-                    widget_id: widget.widget_id,
-                    data: serde_json::json!({"placeholder": "Data not implemented for this widget type"}),
-                    last_updated: Utc::now(),
-                })
-            }
+            WidgetType::KPICard => self.generate_kpi_card_data(widget).await,
+            WidgetType::LineChart => self.generate_line_chart_data(widget).await,
+            WidgetType::BarChart => self.generate_bar_chart_data(widget).await,
+            WidgetType::Table => self.generate_table_data(widget).await,
+            _ => Ok(WidgetData {
+                widget_id: widget.widget_id,
+                data: serde_json::json!({"placeholder": "Data not implemented for this widget type"}),
+                last_updated: Utc::now(),
+            }),
         }
     }
-    
+
     /// Store insight in database
     async fn store_insight(&self, insight: &BusinessInsight) -> ReportingResult<()> {
         let pool_ref = self.database.get_pool()?;
         let pool = pool_ref.as_postgres_pool()?;
-        
-        sqlx::query(r#"
+
+        sqlx::query(
+            r#"
             INSERT INTO business_insights 
             (insight_id, insight_type, title, description, impact_score, confidence_score,
              category, related_kpis, recommended_actions, supporting_data, time_period,
              generated_at, expires_at)
             VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13)
-        "#)
+        "#,
+        )
         .bind(&insight.insight_id)
         .bind(&format!("{:?}", insight.insight_type))
         .bind(&insight.title)
@@ -694,13 +737,17 @@ impl BusinessIntelligenceEngine {
         .bind(serde_json::to_value(&insight.time_period)?)
         .bind(&insight.generated_at)
         .bind(&insight.expires_at)
-        .execute(pool).await?;
-        
+        .execute(pool)
+        .await?;
+
         Ok(())
     }
-    
+
     /// Generate KPI card data
-    async fn generate_kpi_card_data(&self, widget: &DashboardWidget) -> ReportingResult<WidgetData> {
+    async fn generate_kpi_card_data(
+        &self,
+        widget: &DashboardWidget,
+    ) -> ReportingResult<WidgetData> {
         // Simplified implementation - would fetch actual KPI data
         let kpi_data = serde_json::json!({
             "value": 85.2,
@@ -709,16 +756,19 @@ impl BusinessIntelligenceEngine {
             "trend": "up",
             "change_percent": 3.2
         });
-        
+
         Ok(WidgetData {
             widget_id: widget.widget_id,
             data: kpi_data,
             last_updated: Utc::now(),
         })
     }
-    
+
     /// Generate line chart data
-    async fn generate_line_chart_data(&self, widget: &DashboardWidget) -> ReportingResult<WidgetData> {
+    async fn generate_line_chart_data(
+        &self,
+        widget: &DashboardWidget,
+    ) -> ReportingResult<WidgetData> {
         // Simplified implementation - would fetch actual time series data
         let chart_data = serde_json::json!({
             "labels": ["Jan", "Feb", "Mar", "Apr", "May", "Jun"],
@@ -727,16 +777,19 @@ impl BusinessIntelligenceEngine {
                 "data": [12000, 15000, 18000, 22000, 25000, 28000]
             }]
         });
-        
+
         Ok(WidgetData {
             widget_id: widget.widget_id,
             data: chart_data,
             last_updated: Utc::now(),
         })
     }
-    
+
     /// Generate bar chart data
-    async fn generate_bar_chart_data(&self, widget: &DashboardWidget) -> ReportingResult<WidgetData> {
+    async fn generate_bar_chart_data(
+        &self,
+        widget: &DashboardWidget,
+    ) -> ReportingResult<WidgetData> {
         // Simplified implementation - would fetch actual data
         let chart_data = serde_json::json!({
             "labels": ["Region A", "Region B", "Region C", "Region D"],
@@ -745,14 +798,14 @@ impl BusinessIntelligenceEngine {
                 "data": [450, 320, 280, 190]
             }]
         });
-        
+
         Ok(WidgetData {
             widget_id: widget.widget_id,
             data: chart_data,
             last_updated: Utc::now(),
         })
     }
-    
+
     /// Generate table data
     async fn generate_table_data(&self, widget: &DashboardWidget) -> ReportingResult<WidgetData> {
         // Simplified implementation - would fetch actual data
@@ -764,72 +817,70 @@ impl BusinessIntelligenceEngine {
                 ["Carol", "$2,100", 67, "East"]
             ]
         });
-        
+
         Ok(WidgetData {
             widget_id: widget.widget_id,
             data: table_data,
             last_updated: Utc::now(),
         })
     }
-    
+
     /// Start insight generation background task
     async fn start_insight_generation_task(&self) {
         let insight_engine = self.insight_engine.clone();
         let interval_minutes = self.config.insight_generation_interval_minutes;
-        
+
         tokio::spawn(async move {
-            let mut interval = tokio::time::interval(
-                std::time::Duration::from_secs(interval_minutes as u64 * 60)
-            );
-            
+            let mut interval =
+                tokio::time::interval(std::time::Duration::from_secs(interval_minutes as u64 * 60));
+
             loop {
                 interval.tick().await;
-                
+
                 // Generate insights for last 24 hours
                 let time_period = TimeWindow::Last24Hours;
                 if let Err(e) = insight_engine.detect_trends(time_period.clone()).await {
                     tracing::error!("Failed to generate trend insights: {}", e);
                 }
-                
+
                 if let Err(e) = insight_engine.detect_anomalies(time_period).await {
                     tracing::error!("Failed to generate anomaly insights: {}", e);
                 }
             }
         });
     }
-    
+
     /// Start KPI calculation background task
     async fn start_kpi_calculation_task(&self) {
         let kpi_registry = self.kpi_registry.clone();
         let database = self.database.clone();
         let interval_minutes = self.config.kpi_calculation_interval_minutes;
-        
+
         tokio::spawn(async move {
-            let mut interval = tokio::time::interval(
-                std::time::Duration::from_secs(interval_minutes as u64 * 60)
-            );
-            
+            let mut interval =
+                tokio::time::interval(std::time::Duration::from_secs(interval_minutes as u64 * 60));
+
             loop {
                 interval.tick().await;
-                
+
                 // Calculate KPI values
                 // This would fetch recent analytics data and calculate KPI values
                 tracing::info!("Calculating KPI values...");
             }
         });
     }
-    
+
     /// Start real-time metrics update task
     async fn start_real_time_metrics_task(&self) {
         let real_time_metrics = self.real_time_metrics.clone();
         let metrics_collector = self.metrics_collector.clone();
-        
+
         tokio::spawn(async move {
             let mut interval = tokio::time::interval(std::time::Duration::from_secs(10));
-            
+
             loop {
                 interval.tick().await;
-                
+
                 // Update real-time metrics
                 let mut metrics = real_time_metrics.write().await;
                 metrics.active_users = 150; // Would fetch actual data
@@ -867,13 +918,19 @@ impl InsightEngine {
             anomaly_detector: AnomalyDetector::new(),
         })
     }
-    
-    async fn detect_trends(&self, _time_period: TimeWindow) -> ReportingResult<Vec<BusinessInsight>> {
+
+    async fn detect_trends(
+        &self,
+        _time_period: TimeWindow,
+    ) -> ReportingResult<Vec<BusinessInsight>> {
         // Simplified implementation
         Ok(vec![])
     }
-    
-    async fn detect_anomalies(&self, _time_period: TimeWindow) -> ReportingResult<Vec<BusinessInsight>> {
+
+    async fn detect_anomalies(
+        &self,
+        _time_period: TimeWindow,
+    ) -> ReportingResult<Vec<BusinessInsight>> {
         // Simplified implementation
         Ok(vec![])
     }
@@ -898,8 +955,11 @@ impl AIAnalyticsEngine {
             natural_language_processor: NaturalLanguageProcessor::new(),
         })
     }
-    
-    async fn generate_ai_insights(&self, _time_period: TimeWindow) -> ReportingResult<Vec<BusinessInsight>> {
+
+    async fn generate_ai_insights(
+        &self,
+        _time_period: TimeWindow,
+    ) -> ReportingResult<Vec<BusinessInsight>> {
         // Simplified implementation
         Ok(vec![])
     }
@@ -934,8 +994,14 @@ impl NaturalLanguageProcessor {
 impl SentimentAnalyzer {
     fn new() -> Self {
         Self {
-            positive_words: vec!["good", "great", "excellent", "amazing"].into_iter().map(String::from).collect(),
-            negative_words: vec!["bad", "terrible", "awful", "horrible"].into_iter().map(String::from).collect(),
+            positive_words: vec!["good", "great", "excellent", "amazing"]
+                .into_iter()
+                .map(String::from)
+                .collect(),
+            negative_words: vec!["bad", "terrible", "awful", "horrible"]
+                .into_iter()
+                .map(String::from)
+                .collect(),
         }
     }
 }

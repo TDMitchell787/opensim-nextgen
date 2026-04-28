@@ -2,14 +2,14 @@
 // Universal VR headset compatibility through OpenXR standard
 // Supporting Meta Quest, HTC Vive, Valve Index, Pico, and all OpenXR-compliant devices
 
-use crate::vr::{VRError, VRDeviceInfo, VRFrameData, Pose3D};
-use crate::monitoring::metrics::MetricsCollector;
 use crate::database::DatabaseManager;
+use crate::monitoring::metrics::MetricsCollector;
+use crate::vr::{Pose3D, VRDeviceInfo, VRError, VRFrameData};
+use serde::{Deserialize, Serialize};
+use std::collections::HashMap;
 use std::sync::Arc;
 use tokio::sync::RwLock;
-use serde::{Deserialize, Serialize};
 use uuid::Uuid;
-use std::collections::HashMap;
 
 #[derive(Debug)]
 pub struct OpenXRIntegration {
@@ -42,8 +42,8 @@ pub enum GraphicsAPI {
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct PerformanceSettings {
-    pub cpu_level: u32,        // 0-3, higher = more performance
-    pub gpu_level: u32,        // 0-3, higher = more performance
+    pub cpu_level: u32, // 0-3, higher = more performance
+    pub gpu_level: u32, // 0-3, higher = more performance
     pub enable_foveated_rendering: bool,
     pub dynamic_resolution: bool,
     pub adaptive_quality: bool,
@@ -315,7 +315,7 @@ impl OpenXRIntegration {
     async fn initialize_runtime(&self) -> Result<(), VRError> {
         // Simulate OpenXR runtime initialization
         // In real implementation, this would use the OpenXR C API through FFI
-        
+
         let runtime = OpenXRRuntime {
             runtime_name: "OpenSim Next OpenXR Runtime".to_string(),
             runtime_version: "1.0.0".to_string(),
@@ -357,7 +357,11 @@ impl OpenXRIntegration {
         Ok(())
     }
 
-    pub async fn create_session(&self, session_id: Uuid, device_info: &VRDeviceInfo) -> Result<(), VRError> {
+    pub async fn create_session(
+        &self,
+        session_id: Uuid,
+        device_info: &VRDeviceInfo,
+    ) -> Result<(), VRError> {
         let session = OpenXRSession {
             session_id,
             user_id: Uuid::new_v4(), // This should come from the caller
@@ -389,11 +393,17 @@ impl OpenXRIntegration {
             sessions.remove(&session_id);
         }
 
-        self.metrics.record_openxr_session_destroyed(session_id).await;
+        self.metrics
+            .record_openxr_session_destroyed(session_id)
+            .await;
         Ok(())
     }
 
-    pub async fn update_session_state(&self, session_id: Uuid, new_state: SessionState) -> Result<(), VRError> {
+    pub async fn update_session_state(
+        &self,
+        session_id: Uuid,
+        new_state: SessionState,
+    ) -> Result<(), VRError> {
         let mut sessions = self.active_sessions.write().await;
         if let Some(session) = sessions.get_mut(&session_id) {
             session.session_state = new_state;
@@ -412,17 +422,21 @@ impl OpenXRIntegration {
         }
     }
 
-    pub async fn submit_frame(&self, session_id: Uuid, frame_data: &VRFrameData) -> Result<(), VRError> {
+    pub async fn submit_frame(
+        &self,
+        session_id: Uuid,
+        frame_data: &VRFrameData,
+    ) -> Result<(), VRError> {
         // Update frame state and performance counters
         {
             let mut sessions = self.active_sessions.write().await;
             if let Some(session) = sessions.get_mut(&session_id) {
                 session.frame_state.frame_number += 1;
                 session.performance_counters.frames_rendered += 1;
-                
+
                 // Calculate frame time (simplified)
                 let frame_time = 16.67; // Assume 60 FPS for now
-                session.performance_counters.average_frame_time_ms = 
+                session.performance_counters.average_frame_time_ms =
                     (session.performance_counters.average_frame_time_ms * 0.9) + (frame_time * 0.1);
             }
         }
@@ -440,13 +454,13 @@ impl OpenXRIntegration {
         // Platform-specific detection
         #[cfg(target_os = "windows")]
         return GraphicsAPI::DirectX11;
-        
+
         #[cfg(target_os = "macos")]
         return GraphicsAPI::Metal;
-        
+
         #[cfg(target_os = "linux")]
         return GraphicsAPI::Vulkan;
-        
+
         #[cfg(not(any(target_os = "windows", target_os = "macos", target_os = "linux")))]
         return GraphicsAPI::OpenGL;
     }
@@ -554,74 +568,85 @@ impl OpenXRIntegration {
 
     fn create_default_reference_spaces() -> HashMap<String, ReferenceSpace> {
         let mut spaces = HashMap::new();
-        
-        spaces.insert("view".to_string(), ReferenceSpace {
-            space_type: ReferenceSpaceType::View,
-            bounds: None,
-            pose: Pose3D {
-                position: [0.0, 0.0, 0.0],
-                orientation: [0.0, 0.0, 0.0, 1.0],
-            },
-        });
 
-        spaces.insert("local".to_string(), ReferenceSpace {
-            space_type: ReferenceSpaceType::Local,
-            bounds: None,
-            pose: Pose3D {
-                position: [0.0, 0.0, 0.0],
-                orientation: [0.0, 0.0, 0.0, 1.0],
+        spaces.insert(
+            "view".to_string(),
+            ReferenceSpace {
+                space_type: ReferenceSpaceType::View,
+                bounds: None,
+                pose: Pose3D {
+                    position: [0.0, 0.0, 0.0],
+                    orientation: [0.0, 0.0, 0.0, 1.0],
+                },
             },
-        });
+        );
 
-        spaces.insert("stage".to_string(), ReferenceSpace {
-            space_type: ReferenceSpaceType::Stage,
-            bounds: Some(PlayAreaBounds {
-                vertices: vec![
-                    [-2.0, -2.0],
-                    [2.0, -2.0],
-                    [2.0, 2.0],
-                    [-2.0, 2.0],
-                ],
-                center: [0.0, 0.0],
-                area_square_meters: 16.0,
-            }),
-            pose: Pose3D {
-                position: [0.0, 0.0, 0.0],
-                orientation: [0.0, 0.0, 0.0, 1.0],
+        spaces.insert(
+            "local".to_string(),
+            ReferenceSpace {
+                space_type: ReferenceSpaceType::Local,
+                bounds: None,
+                pose: Pose3D {
+                    position: [0.0, 0.0, 0.0],
+                    orientation: [0.0, 0.0, 0.0, 1.0],
+                },
             },
-        });
+        );
+
+        spaces.insert(
+            "stage".to_string(),
+            ReferenceSpace {
+                space_type: ReferenceSpaceType::Stage,
+                bounds: Some(PlayAreaBounds {
+                    vertices: vec![[-2.0, -2.0], [2.0, -2.0], [2.0, 2.0], [-2.0, 2.0]],
+                    center: [0.0, 0.0],
+                    area_square_meters: 16.0,
+                }),
+                pose: Pose3D {
+                    position: [0.0, 0.0, 0.0],
+                    orientation: [0.0, 0.0, 0.0, 1.0],
+                },
+            },
+        );
 
         spaces
     }
 
     fn create_default_action_sets() -> Vec<ActionSet> {
-        vec![
-            ActionSet {
-                name: "main_actions".to_string(),
-                localized_name: "Main Actions".to_string(),
-                priority: 0,
-                actions: vec![
-                    Action {
-                        name: "teleport".to_string(),
-                        action_type: ActionType::BooleanInput,
-                        subaction_paths: vec!["/user/hand/left".to_string(), "/user/hand/right".to_string()],
-                        localized_name: "Teleport".to_string(),
-                    },
-                    Action {
-                        name: "grab".to_string(),
-                        action_type: ActionType::BooleanInput,
-                        subaction_paths: vec!["/user/hand/left".to_string(), "/user/hand/right".to_string()],
-                        localized_name: "Grab Object".to_string(),
-                    },
-                    Action {
-                        name: "menu".to_string(),
-                        action_type: ActionType::BooleanInput,
-                        subaction_paths: vec!["/user/hand/left".to_string(), "/user/hand/right".to_string()],
-                        localized_name: "Open Menu".to_string(),
-                    },
-                ],
-            },
-        ]
+        vec![ActionSet {
+            name: "main_actions".to_string(),
+            localized_name: "Main Actions".to_string(),
+            priority: 0,
+            actions: vec![
+                Action {
+                    name: "teleport".to_string(),
+                    action_type: ActionType::BooleanInput,
+                    subaction_paths: vec![
+                        "/user/hand/left".to_string(),
+                        "/user/hand/right".to_string(),
+                    ],
+                    localized_name: "Teleport".to_string(),
+                },
+                Action {
+                    name: "grab".to_string(),
+                    action_type: ActionType::BooleanInput,
+                    subaction_paths: vec![
+                        "/user/hand/left".to_string(),
+                        "/user/hand/right".to_string(),
+                    ],
+                    localized_name: "Grab Object".to_string(),
+                },
+                Action {
+                    name: "menu".to_string(),
+                    action_type: ActionType::BooleanInput,
+                    subaction_paths: vec![
+                        "/user/hand/left".to_string(),
+                        "/user/hand/right".to_string(),
+                    ],
+                    localized_name: "Open Menu".to_string(),
+                },
+            ],
+        }]
     }
 }
 
@@ -630,9 +655,7 @@ impl Default for OpenXRConfig {
         Self {
             runtime_path: "/usr/local/lib/openxr".to_string(),
             preferred_graphics_api: GraphicsAPI::Vulkan,
-            required_extensions: vec![
-                "XR_KHR_composition_layer_depth".to_string(),
-            ],
+            required_extensions: vec!["XR_KHR_composition_layer_depth".to_string()],
             optional_extensions: vec![
                 "XR_EXT_eye_gaze_interaction".to_string(),
                 "XR_EXT_hand_tracking".to_string(),

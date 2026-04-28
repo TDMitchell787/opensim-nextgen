@@ -1,11 +1,11 @@
 //! Phase 24.1 Avatar System Integration Tests
-//! 
+//!
 //! Comprehensive tests for the enhanced avatar system including appearance,
 //! behavior, persistence, and social features.
 
+use anyhow::Result;
 use opensim_next::avatar::*;
 use opensim_next::database::DatabaseManager;
-use anyhow::Result;
 use std::sync::Arc;
 use tokio;
 use uuid::Uuid;
@@ -24,11 +24,9 @@ async fn test_avatar_management_operations() -> Result<()> {
     let avatar_name = "TestAvatar".to_string();
 
     // Test avatar creation
-    let avatar = avatar_manager.create_avatar(
-        user_id,
-        avatar_name.clone(),
-        None,
-    ).await?;
+    let avatar = avatar_manager
+        .create_avatar(user_id, avatar_name.clone(), None)
+        .await?;
 
     assert_eq!(avatar.user_id, user_id);
     assert_eq!(avatar.name, avatar_name);
@@ -64,11 +62,9 @@ async fn test_avatar_appearance_system() -> Result<()> {
     avatar_manager.persistence_layer.initialize_tables().await?;
 
     let user_id = Uuid::new_v4();
-    let avatar = avatar_manager.create_avatar(
-        user_id,
-        "AppearanceTestAvatar".to_string(),
-        None,
-    ).await?;
+    let avatar = avatar_manager
+        .create_avatar(user_id, "AppearanceTestAvatar".to_string(), None)
+        .await?;
 
     // Test default appearance
     let appearance = &avatar.appearance;
@@ -81,7 +77,9 @@ async fn test_avatar_appearance_system() -> Result<()> {
     new_appearance.height = 2.0;
     new_appearance.proportions.body_height = 1.2;
 
-    avatar_manager.update_appearance(avatar.id, new_appearance.clone()).await?;
+    avatar_manager
+        .update_appearance(avatar.id, new_appearance.clone())
+        .await?;
 
     // Verify update
     let updated_avatar = avatar_manager.get_avatar(avatar.id).await?;
@@ -106,18 +104,26 @@ async fn test_avatar_appearance_system() -> Result<()> {
     };
 
     let mut test_appearance = updated_avatar.appearance.clone();
-    avatar_manager.appearance_engine.update_wearable(&mut test_appearance, test_wearable.clone())?;
+    avatar_manager
+        .appearance_engine
+        .update_wearable(&mut test_appearance, test_wearable.clone())?;
 
     // Verify wearable was added
-    let shirt = avatar_manager.appearance_engine.get_wearable(&test_appearance, WearableType::Shirt);
+    let shirt = avatar_manager
+        .appearance_engine
+        .get_wearable(&test_appearance, WearableType::Shirt);
     assert!(shirt.is_some());
     assert_eq!(shirt.unwrap().name, "Test Shirt");
 
     // Test wearable removal
-    let removed = avatar_manager.appearance_engine.remove_wearable(&mut test_appearance, WearableType::Shirt)?;
+    let removed = avatar_manager
+        .appearance_engine
+        .remove_wearable(&mut test_appearance, WearableType::Shirt)?;
     assert!(removed);
 
-    let shirt_after_removal = avatar_manager.appearance_engine.get_wearable(&test_appearance, WearableType::Shirt);
+    let shirt_after_removal = avatar_manager
+        .appearance_engine
+        .get_wearable(&test_appearance, WearableType::Shirt);
     assert!(shirt_after_removal.is_none());
 
     // Cleanup
@@ -137,76 +143,72 @@ async fn test_avatar_behavior_system() -> Result<()> {
     avatar_manager.persistence_layer.initialize_tables().await?;
 
     let user_id = Uuid::new_v4();
-    let avatar = avatar_manager.create_avatar(
-        user_id,
-        "BehaviorTestAvatar".to_string(),
-        None,
-    ).await?;
+    let avatar = avatar_manager
+        .create_avatar(user_id, "BehaviorTestAvatar".to_string(), None)
+        .await?;
 
     // Test behavior validation
     let mut test_behavior = AvatarBehavior {
-        animations: vec![
-            AnimationState {
+        animations: vec![AnimationState {
+            animation_id: Uuid::new_v4(),
+            name: "Test Animation".to_string(),
+            priority: 50,
+            loop_animation: true,
+            start_time: chrono::Utc::now(),
+            duration: Some(10.0),
+            blend_weight: 1.0,
+        }],
+        gestures: vec![GestureInfo {
+            gesture_id: Uuid::new_v4(),
+            name: "Test Gesture".to_string(),
+            trigger: "/wave".to_string(),
+            animation_sequence: vec![Uuid::new_v4()],
+            sound_effects: Vec::new(),
+            chat_text: Some("waves".to_string()),
+            enabled: true,
+        }],
+        auto_behaviors: vec![AutoBehavior {
+            behavior_id: Uuid::new_v4(),
+            name: "Idle Behavior".to_string(),
+            trigger_condition: BehaviorTrigger::Idle {
+                duration_seconds: 30.0,
+            },
+            actions: vec![BehaviorAction::PlayAnimation {
                 animation_id: Uuid::new_v4(),
-                name: "Test Animation".to_string(),
-                priority: 50,
-                loop_animation: true,
-                start_time: chrono::Utc::now(),
-                duration: Some(10.0),
-                blend_weight: 1.0,
-            }
-        ],
-        gestures: vec![
-            GestureInfo {
-                gesture_id: Uuid::new_v4(),
-                name: "Test Gesture".to_string(),
-                trigger: "/wave".to_string(),
-                animation_sequence: vec![Uuid::new_v4()],
-                sound_effects: Vec::new(),
-                chat_text: Some("waves".to_string()),
-                enabled: true,
-            }
-        ],
-        auto_behaviors: vec![
-            AutoBehavior {
-                behavior_id: Uuid::new_v4(),
-                name: "Idle Behavior".to_string(),
-                trigger_condition: BehaviorTrigger::Idle { duration_seconds: 30.0 },
-                actions: vec![
-                    BehaviorAction::PlayAnimation { 
-                        animation_id: Uuid::new_v4(), 
-                        duration: Some(5.0) 
-                    }
-                ],
-                enabled: true,
-                cooldown_seconds: 60.0,
-            }
-        ],
-        expressions: vec![
-            FacialExpression {
-                expression_id: Uuid::new_v4(),
-                name: "Smile".to_string(),
-                morph_targets: std::collections::HashMap::new(),
-                duration: 2.0,
-                blend_in_time: 0.5,
-                blend_out_time: 0.5,
-            }
-        ],
+                duration: Some(5.0),
+            }],
+            enabled: true,
+            cooldown_seconds: 60.0,
+        }],
+        expressions: vec![FacialExpression {
+            expression_id: Uuid::new_v4(),
+            name: "Smile".to_string(),
+            morph_targets: std::collections::HashMap::new(),
+            duration: 2.0,
+            blend_in_time: 0.5,
+            blend_out_time: 0.5,
+        }],
         voice_settings: VoiceSettings::default(),
     };
 
     // Test behavior validation
-    let validation_result = avatar_manager.behavior_system.validate_behavior(&test_behavior);
+    let validation_result = avatar_manager
+        .behavior_system
+        .validate_behavior(&test_behavior);
     assert!(validation_result.is_ok());
 
     // Test invalid behavior (negative priority)
     test_behavior.animations[0].priority = -1;
-    let invalid_result = avatar_manager.behavior_system.validate_behavior(&test_behavior);
+    let invalid_result = avatar_manager
+        .behavior_system
+        .validate_behavior(&test_behavior);
     assert!(invalid_result.is_err());
 
     // Fix and test behavior update
     test_behavior.animations[0].priority = 75;
-    avatar_manager.update_behavior(avatar.id, test_behavior.clone()).await?;
+    avatar_manager
+        .update_behavior(avatar.id, test_behavior.clone())
+        .await?;
 
     // Verify behavior update
     let updated_avatar = avatar_manager.get_avatar(avatar.id).await?;
@@ -216,7 +218,10 @@ async fn test_avatar_behavior_system() -> Result<()> {
     assert_eq!(updated_avatar.behavior.auto_behaviors.len(), 1);
 
     // Test behavior system operations
-    avatar_manager.behavior_system.start_avatar_behaviors(avatar.id, &test_behavior).await?;
+    avatar_manager
+        .behavior_system
+        .start_avatar_behaviors(avatar.id, &test_behavior)
+        .await?;
 
     // Test animation start/stop
     let test_animation = AnimationState {
@@ -229,19 +234,31 @@ async fn test_avatar_behavior_system() -> Result<()> {
         blend_weight: 0.8,
     };
 
-    avatar_manager.behavior_system.start_animation(avatar.id, test_animation.clone()).await?;
-    
+    avatar_manager
+        .behavior_system
+        .start_animation(avatar.id, test_animation.clone())
+        .await?;
+
     // Small delay to allow processing
     tokio::time::sleep(tokio::time::Duration::from_millis(100)).await;
 
-    let active_animations = avatar_manager.behavior_system.get_active_animations(avatar.id).await;
+    let active_animations = avatar_manager
+        .behavior_system
+        .get_active_animations(avatar.id)
+        .await;
     assert!(active_animations.len() > 0);
 
-    avatar_manager.behavior_system.stop_animation(avatar.id, test_animation.animation_id).await?;
+    avatar_manager
+        .behavior_system
+        .stop_animation(avatar.id, test_animation.animation_id)
+        .await?;
 
     // Test gesture triggering
     let test_gesture_id = test_behavior.gestures[0].gesture_id;
-    avatar_manager.behavior_system.trigger_gesture(avatar.id, test_gesture_id, Some("/wave".to_string())).await?;
+    avatar_manager
+        .behavior_system
+        .trigger_gesture(avatar.id, test_gesture_id, Some("/wave".to_string()))
+        .await?;
 
     // Test expression update
     let test_expression = FacialExpression {
@@ -258,18 +275,27 @@ async fn test_avatar_behavior_system() -> Result<()> {
         blend_out_time: 0.7,
     };
 
-    avatar_manager.behavior_system.update_expression(avatar.id, test_expression).await?;
+    avatar_manager
+        .behavior_system
+        .update_expression(avatar.id, test_expression)
+        .await?;
 
     // Test context update
-    avatar_manager.behavior_system.update_context(
-        avatar.id,
-        MovementType::Walking,
-        Some(InteractionType::Chat),
-        Uuid::new_v4(),
-    ).await?;
+    avatar_manager
+        .behavior_system
+        .update_context(
+            avatar.id,
+            MovementType::Walking,
+            Some(InteractionType::Chat),
+            Uuid::new_v4(),
+        )
+        .await?;
 
     // Stop behaviors
-    avatar_manager.behavior_system.stop_avatar_behaviors(avatar.id).await?;
+    avatar_manager
+        .behavior_system
+        .stop_avatar_behaviors(avatar.id)
+        .await?;
 
     // Cleanup
     avatar_manager.delete_avatar(avatar.id).await?;
@@ -292,17 +318,13 @@ async fn test_avatar_social_features() -> Result<()> {
     let user1_id = Uuid::new_v4();
     let user2_id = Uuid::new_v4();
 
-    let avatar1 = avatar_manager.create_avatar(
-        user1_id,
-        "SocialTestAvatar1".to_string(),
-        None,
-    ).await?;
+    let avatar1 = avatar_manager
+        .create_avatar(user1_id, "SocialTestAvatar1".to_string(), None)
+        .await?;
 
-    let avatar2 = avatar_manager.create_avatar(
-        user2_id,
-        "SocialTestAvatar2".to_string(),
-        None,
-    ).await?;
+    let avatar2 = avatar_manager
+        .create_avatar(user2_id, "SocialTestAvatar2".to_string(), None)
+        .await?;
 
     // Test social profile update
     let social_profile = AvatarSocialProfile {
@@ -320,25 +342,42 @@ async fn test_avatar_social_features() -> Result<()> {
         achievements: Vec::new(),
     };
 
-    avatar_manager.update_social_profile(avatar1.id, social_profile.clone()).await?;
+    avatar_manager
+        .update_social_profile(avatar1.id, social_profile.clone())
+        .await?;
 
     // Verify social profile update
     let updated_avatar = avatar_manager.get_avatar(avatar1.id).await?;
-    assert_eq!(updated_avatar.social_profile.display_name, "Friendly Avatar");
+    assert_eq!(
+        updated_avatar.social_profile.display_name,
+        "Friendly Avatar"
+    );
     assert_eq!(updated_avatar.social_profile.interests.len(), 2);
     assert_eq!(updated_avatar.social_profile.languages.len(), 2);
 
     // Test friend management
-    avatar_manager.social_features.add_friend(avatar1.id, avatar2.id, avatar2.name.clone()).await?;
+    avatar_manager
+        .social_features
+        .add_friend(avatar1.id, avatar2.id, avatar2.name.clone())
+        .await?;
 
-    let friends = avatar_manager.social_features.get_friends(avatar1.id).await?;
+    let friends = avatar_manager
+        .social_features
+        .get_friends(avatar1.id)
+        .await?;
     assert_eq!(friends.len(), 1);
     assert_eq!(friends[0].friend_id, avatar2.id);
 
-    let friend_count = avatar_manager.social_features.get_friend_count(avatar1.id).await?;
+    let friend_count = avatar_manager
+        .social_features
+        .get_friend_count(avatar1.id)
+        .await?;
     assert_eq!(friend_count, 1);
 
-    let are_friends = avatar_manager.social_features.are_friends(avatar1.id, avatar2.id).await?;
+    let are_friends = avatar_manager
+        .social_features
+        .are_friends(avatar1.id, avatar2.id)
+        .await?;
     assert!(are_friends);
 
     // Test achievement system
@@ -352,14 +391,23 @@ async fn test_avatar_social_features() -> Result<()> {
         category: AchievementCategory::Special,
     };
 
-    avatar_manager.social_features.add_achievement(avatar1.id, achievement.clone()).await?;
+    avatar_manager
+        .social_features
+        .add_achievement(avatar1.id, achievement.clone())
+        .await?;
 
-    let achievements = avatar_manager.social_features.get_achievements(avatar1.id).await?;
+    let achievements = avatar_manager
+        .social_features
+        .get_achievements(avatar1.id)
+        .await?;
     assert_eq!(achievements.len(), 1);
     assert_eq!(achievements[0].name, "First Login");
     assert_eq!(achievements[0].points, 100);
 
-    let total_points = avatar_manager.social_features.get_achievement_points(avatar1.id).await?;
+    let total_points = avatar_manager
+        .social_features
+        .get_achievement_points(avatar1.id)
+        .await?;
     assert_eq!(total_points, 100);
 
     // Test messaging system
@@ -375,23 +423,41 @@ async fn test_avatar_social_features() -> Result<()> {
         attachments: Vec::new(),
     };
 
-    avatar_manager.social_features.send_message(avatar2.id, avatar1.id, message.clone()).await?;
+    avatar_manager
+        .social_features
+        .send_message(avatar2.id, avatar1.id, message.clone())
+        .await?;
 
-    let messages = avatar_manager.social_features.get_messages(avatar1.id, false, Some(10)).await?;
+    let messages = avatar_manager
+        .social_features
+        .get_messages(avatar1.id, false, Some(10))
+        .await?;
     assert_eq!(messages.len(), 1);
     assert_eq!(messages[0].from_avatar_id, avatar2.id);
     assert_eq!(messages[0].content, "Hi there, nice to meet you!");
 
-    let unread_messages = avatar_manager.social_features.get_messages(avatar1.id, true, Some(10)).await?;
+    let unread_messages = avatar_manager
+        .social_features
+        .get_messages(avatar1.id, true, Some(10))
+        .await?;
     assert_eq!(unread_messages.len(), 1);
 
     // Mark message as read
-    avatar_manager.social_features.mark_message_read(message.message_id).await?;
+    avatar_manager
+        .social_features
+        .mark_message_read(message.message_id)
+        .await?;
 
     // Test friend removal
-    avatar_manager.social_features.remove_friend(avatar1.id, avatar2.id).await?;
+    avatar_manager
+        .social_features
+        .remove_friend(avatar1.id, avatar2.id)
+        .await?;
 
-    let friends_after_removal = avatar_manager.social_features.get_friends(avatar1.id).await?;
+    let friends_after_removal = avatar_manager
+        .social_features
+        .get_friends(avatar1.id)
+        .await?;
     assert_eq!(friends_after_removal.len(), 0);
 
     // Cleanup
@@ -412,11 +478,9 @@ async fn test_avatar_session_management() -> Result<()> {
     avatar_manager.persistence_layer.initialize_tables().await?;
 
     let user_id = Uuid::new_v4();
-    let avatar = avatar_manager.create_avatar(
-        user_id,
-        "SessionTestAvatar".to_string(),
-        None,
-    ).await?;
+    let avatar = avatar_manager
+        .create_avatar(user_id, "SessionTestAvatar".to_string(), None)
+        .await?;
 
     // Test avatar login
     avatar_manager.login_avatar(avatar.id).await?;
@@ -426,11 +490,27 @@ async fn test_avatar_session_management() -> Result<()> {
     assert_eq!(active_avatars[0].id, avatar.id);
 
     // Test position update
-    let test_position = Vector3 { x: 100.0, y: 50.0, z: 25.0 };
-    let test_rotation = Quaternion { x: 0.0, y: 0.0, z: 0.0, w: 1.0 };
+    let test_position = Vector3 {
+        x: 100.0,
+        y: 50.0,
+        z: 25.0,
+    };
+    let test_rotation = Quaternion {
+        x: 0.0,
+        y: 0.0,
+        z: 0.0,
+        w: 1.0,
+    };
     let test_region = Uuid::new_v4();
 
-    avatar_manager.update_position(avatar.id, test_position.clone(), test_rotation.clone(), test_region).await?;
+    avatar_manager
+        .update_position(
+            avatar.id,
+            test_position.clone(),
+            test_rotation.clone(),
+            test_region,
+        )
+        .await?;
 
     // Verify position update
     let updated_avatar = avatar_manager.get_avatar(avatar.id).await?;
@@ -481,9 +561,15 @@ async fn test_avatar_search() -> Result<()> {
     let user2_id = Uuid::new_v4();
     let user3_id = Uuid::new_v4();
 
-    let avatar1 = avatar_manager.create_avatar(user1_id, "SearchAvatar1".to_string(), None).await?;
-    let avatar2 = avatar_manager.create_avatar(user2_id, "TestUser2".to_string(), None).await?;
-    let avatar3 = avatar_manager.create_avatar(user3_id, "SearchAvatar3".to_string(), None).await?;
+    let avatar1 = avatar_manager
+        .create_avatar(user1_id, "SearchAvatar1".to_string(), None)
+        .await?;
+    let avatar2 = avatar_manager
+        .create_avatar(user2_id, "TestUser2".to_string(), None)
+        .await?;
+    let avatar3 = avatar_manager
+        .create_avatar(user3_id, "SearchAvatar3".to_string(), None)
+        .await?;
 
     // Test search by name pattern
     let search_criteria = AvatarSearchCriteria {
@@ -496,7 +582,7 @@ async fn test_avatar_search() -> Result<()> {
     };
 
     let search_results = avatar_manager.search_avatars(search_criteria).await?;
-    
+
     // Note: The current search implementation is simplified and returns all avatars
     // In a real implementation, this would filter by the search criteria
     assert!(search_results.len() >= 2); // Should find SearchAvatar1 and SearchAvatar3
@@ -539,11 +625,9 @@ async fn test_avatar_cache_management() -> Result<()> {
     avatar_manager.persistence_layer.initialize_tables().await?;
 
     let user_id = Uuid::new_v4();
-    let avatar = avatar_manager.create_avatar(
-        user_id,
-        "CacheTestAvatar".to_string(),
-        None,
-    ).await?;
+    let avatar = avatar_manager
+        .create_avatar(user_id, "CacheTestAvatar".to_string(), None)
+        .await?;
 
     // First retrieval should load from database and cache
     let cached_avatar1 = avatar_manager.get_avatar(avatar.id).await?;

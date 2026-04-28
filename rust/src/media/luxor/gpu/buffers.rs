@@ -1,10 +1,10 @@
 use bytemuck::{Pod, Zeroable};
 
 use super::super::camera::CameraRig;
-use super::super::lighting::{LightingRig, LightType};
-use super::super::raytracer::RenderQuality;
-use super::super::scene_capture::{SceneGeometry, CapturedPrim, PrimShape, TerrainData};
 use super::super::geometry::{BVHNode, AABB};
+use super::super::lighting::{LightType, LightingRig};
+use super::super::raytracer::RenderQuality;
+use super::super::scene_capture::{CapturedPrim, PrimShape, SceneGeometry, TerrainData};
 
 #[repr(C)]
 #[derive(Copy, Clone, Debug, Pod, Zeroable)]
@@ -109,7 +109,15 @@ pub fn pack_scene(
     let use_dof = camera.has_dof_effect() && spp >= 4;
 
     let lighting_with_sun = lighting.with_sun();
-    let uniforms = pack_uniforms(camera, &lighting_with_sun, scene, width, height, spp, use_dof);
+    let uniforms = pack_uniforms(
+        camera,
+        &lighting_with_sun,
+        scene,
+        width,
+        height,
+        spp,
+        use_dof,
+    );
 
     let terrain_bytes = if let Some(ref terrain) = scene.terrain {
         bytemuck::cast_slice(&terrain.heightmap).to_vec()
@@ -153,18 +161,21 @@ pub fn pack_prims(prims: &[CapturedPrim]) -> Vec<GpuPrim> {
     if prims.is_empty() {
         return vec![GpuPrim::zeroed()];
     }
-    prims.iter().map(|p| GpuPrim {
-        position: p.position,
-        shape: shape_to_u32(p.shape),
-        rotation: p.rotation,
-        scale: p.scale,
-        shininess: p.shininess as u32,
-        color: p.color,
-        fullbright: if p.fullbright { 1 } else { 0 },
-        glow: p.glow,
-        alpha: p.alpha,
-        _pad: 0,
-    }).collect()
+    prims
+        .iter()
+        .map(|p| GpuPrim {
+            position: p.position,
+            shape: shape_to_u32(p.shape),
+            rotation: p.rotation,
+            scale: p.scale,
+            shininess: p.shininess as u32,
+            color: p.color,
+            fullbright: if p.fullbright { 1 } else { 0 },
+            glow: p.glow,
+            alpha: p.alpha,
+            _pad: 0,
+        })
+        .collect()
 }
 
 pub fn pack_lights(lighting: &LightingRig) -> Vec<GpuLight> {
@@ -172,17 +183,25 @@ pub fn pack_lights(lighting: &LightingRig) -> Vec<GpuLight> {
     if lighting_with_sun.lights.is_empty() {
         return vec![GpuLight::zeroed()];
     }
-    lighting_with_sun.lights.iter().map(|l| GpuLight {
-        position: l.position,
-        light_type: light_type_to_u32(l.light_type),
-        direction: l.direction,
-        intensity: l.intensity,
-        color: l.color,
-        radius: if l.radius.is_finite() { l.radius } else { 10000.0 },
-        spot_angle: l.spot_angle,
-        soft_edge: l.soft_edge,
-        _pad: [0.0; 2],
-    }).collect()
+    lighting_with_sun
+        .lights
+        .iter()
+        .map(|l| GpuLight {
+            position: l.position,
+            light_type: light_type_to_u32(l.light_type),
+            direction: l.direction,
+            intensity: l.intensity,
+            color: l.color,
+            radius: if l.radius.is_finite() {
+                l.radius
+            } else {
+                10000.0
+            },
+            spot_angle: l.spot_angle,
+            soft_edge: l.soft_edge,
+            _pad: [0.0; 2],
+        })
+        .collect()
 }
 
 pub fn pack_uniforms(
@@ -257,7 +276,10 @@ fn flatten_recursive(
     nodes.push(GpuBvhNode::zeroed());
 
     match node {
-        BVHNode::Leaf { prim_indices: leaf_indices, bounds } => {
+        BVHNode::Leaf {
+            prim_indices: leaf_indices,
+            bounds,
+        } => {
             let first = prim_indices.len() as i32;
             let count = leaf_indices.len() as i32;
             for &idx in leaf_indices {
@@ -273,7 +295,11 @@ fn flatten_recursive(
                 _pad: [0; 2],
             };
         }
-        BVHNode::Internal { left, right, bounds } => {
+        BVHNode::Internal {
+            left,
+            right,
+            bounds,
+        } => {
             let left_idx = flatten_recursive(left, nodes, prim_indices);
             let right_idx = flatten_recursive(right, nodes, prim_indices);
             nodes[my_idx] = GpuBvhNode {
@@ -297,10 +323,26 @@ mod tests {
 
     #[test]
     fn test_struct_sizes() {
-        assert_eq!(std::mem::size_of::<GpuPrim>(), 80, "GpuPrim must be 80 bytes");
-        assert_eq!(std::mem::size_of::<GpuBvhNode>(), 48, "GpuBvhNode must be 48 bytes");
-        assert_eq!(std::mem::size_of::<GpuLight>(), 64, "GpuLight must be 64 bytes");
-        assert_eq!(std::mem::size_of::<GpuUniforms>(), 144, "GpuUniforms must be 144 bytes");
+        assert_eq!(
+            std::mem::size_of::<GpuPrim>(),
+            80,
+            "GpuPrim must be 80 bytes"
+        );
+        assert_eq!(
+            std::mem::size_of::<GpuBvhNode>(),
+            48,
+            "GpuBvhNode must be 48 bytes"
+        );
+        assert_eq!(
+            std::mem::size_of::<GpuLight>(),
+            64,
+            "GpuLight must be 64 bytes"
+        );
+        assert_eq!(
+            std::mem::size_of::<GpuUniforms>(),
+            144,
+            "GpuUniforms must be 144 bytes"
+        );
     }
 
     #[test]
@@ -336,20 +378,38 @@ mod tests {
     fn test_flatten_bvh_simple() {
         let prims = vec![
             CapturedPrim {
-                local_id: 1, uuid: uuid::Uuid::nil(),
-                position: [5.0, 0.0, 0.0], rotation: [0.0, 0.0, 0.0, 1.0],
-                scale: [2.0, 2.0, 2.0], shape: PrimShape::Box,
-                color: [1.0, 0.0, 0.0, 1.0], fullbright: false, glow: 0.0,
-                alpha: 1.0, shininess: 0, profile_curve: 1, path_curve: 16,
-                profile_hollow: 0, parent_id: 0,
+                local_id: 1,
+                uuid: uuid::Uuid::nil(),
+                position: [5.0, 0.0, 0.0],
+                rotation: [0.0, 0.0, 0.0, 1.0],
+                scale: [2.0, 2.0, 2.0],
+                shape: PrimShape::Box,
+                color: [1.0, 0.0, 0.0, 1.0],
+                fullbright: false,
+                glow: 0.0,
+                alpha: 1.0,
+                shininess: 0,
+                profile_curve: 1,
+                path_curve: 16,
+                profile_hollow: 0,
+                parent_id: 0,
             },
             CapturedPrim {
-                local_id: 2, uuid: uuid::Uuid::nil(),
-                position: [15.0, 0.0, 0.0], rotation: [0.0, 0.0, 0.0, 1.0],
-                scale: [2.0, 2.0, 2.0], shape: PrimShape::Sphere,
-                color: [0.0, 1.0, 0.0, 1.0], fullbright: false, glow: 0.0,
-                alpha: 1.0, shininess: 0, profile_curve: 0, path_curve: 32,
-                profile_hollow: 0, parent_id: 0,
+                local_id: 2,
+                uuid: uuid::Uuid::nil(),
+                position: [15.0, 0.0, 0.0],
+                rotation: [0.0, 0.0, 0.0, 1.0],
+                scale: [2.0, 2.0, 2.0],
+                shape: PrimShape::Sphere,
+                color: [0.0, 1.0, 0.0, 1.0],
+                fullbright: false,
+                glow: 0.0,
+                alpha: 1.0,
+                shininess: 0,
+                profile_curve: 0,
+                path_curve: 32,
+                profile_hollow: 0,
+                parent_id: 0,
             },
         ];
         let mut indices: Vec<usize> = (0..prims.len()).collect();

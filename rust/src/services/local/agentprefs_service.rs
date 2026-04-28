@@ -1,11 +1,11 @@
-use std::sync::Arc;
 use anyhow::Result;
 use async_trait::async_trait;
+use std::sync::Arc;
+use tracing::{debug, info, warn};
 use uuid::Uuid;
-use tracing::{info, warn, debug};
 
-use crate::services::traits::{AgentPrefsServiceTrait, AgentPrefs};
 use crate::database::DatabaseConnection;
+use crate::services::traits::{AgentPrefs, AgentPrefsServiceTrait};
 
 pub struct LocalAgentPrefsService {
     db: Arc<DatabaseConnection>,
@@ -20,13 +20,15 @@ impl LocalAgentPrefsService {
 #[async_trait]
 impl AgentPrefsServiceTrait for LocalAgentPrefsService {
     async fn get_agent_preferences(&self, principal_id: Uuid) -> Result<Option<AgentPrefs>> {
-        let pool = self.db.postgres_pool()
+        let pool = self
+            .db
+            .postgres_pool()
             .ok_or_else(|| anyhow::anyhow!("No PG pool"))?;
 
         let row = sqlx::query(
             "SELECT principalid, accessprefs, hoverheight, language, \
              languageispublic, permeveryone, permgroup, permnextowner \
-             FROM agentprefs WHERE principalid = $1"
+             FROM agentprefs WHERE principalid = $1",
         )
         .bind(principal_id)
         .fetch_optional(pool)
@@ -36,9 +38,13 @@ impl AgentPrefsServiceTrait for LocalAgentPrefsService {
             Some(r) => {
                 use sqlx::Row;
                 let pid: Uuid = r.try_get("principalid").unwrap_or(principal_id);
-                let access: String = r.try_get::<String, _>("accessprefs").unwrap_or_else(|_| "M".to_string());
+                let access: String = r
+                    .try_get::<String, _>("accessprefs")
+                    .unwrap_or_else(|_| "M".to_string());
                 let hover: f32 = r.try_get("hoverheight").unwrap_or(0.0);
-                let lang: String = r.try_get::<String, _>("language").unwrap_or_else(|_| "en-us".to_string());
+                let lang: String = r
+                    .try_get::<String, _>("language")
+                    .unwrap_or_else(|_| "en-us".to_string());
                 let lang_pub: i32 = r.try_get("languageispublic").unwrap_or(1);
                 let pe: i32 = r.try_get("permeveryone").unwrap_or(0);
                 let pg: i32 = r.try_get("permgroup").unwrap_or(0);
@@ -60,7 +66,9 @@ impl AgentPrefsServiceTrait for LocalAgentPrefsService {
     }
 
     async fn store_agent_preferences(&self, prefs: &AgentPrefs) -> Result<bool> {
-        let pool = self.db.postgres_pool()
+        let pool = self
+            .db
+            .postgres_pool()
             .ok_or_else(|| anyhow::anyhow!("No PG pool"))?;
 
         sqlx::query(
@@ -69,7 +77,7 @@ impl AgentPrefsServiceTrait for LocalAgentPrefsService {
              VALUES ($1, $2, $3, $4, $5, $6, $7, $8) \
              ON CONFLICT (principalid) DO UPDATE SET \
              accessprefs = $2, hoverheight = $3, language = $4, \
-             languageispublic = $5, permeveryone = $6, permgroup = $7, permnextowner = $8"
+             languageispublic = $5, permeveryone = $6, permgroup = $7, permnextowner = $8",
         )
         .bind(prefs.principal_id)
         .bind(&prefs.access_prefs)

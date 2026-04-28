@@ -1,11 +1,11 @@
+use chrono::{DateTime, Utc};
 use std::collections::{HashMap, VecDeque};
 use std::path::{Path, PathBuf};
 use std::sync::Arc;
-use chrono::{DateTime, Utc};
 use tokio::io::{AsyncBufReadExt, BufReader};
 use tokio::process::{Child, Command};
 use tokio::sync::{broadcast, RwLock};
-use tracing::{info, warn, error};
+use tracing::{error, info, warn};
 
 use super::types::{ConsoleEntry, ConsoleOutputType};
 
@@ -13,10 +13,23 @@ const MAX_CONSOLE_BUFFER: usize = 2000;
 
 #[derive(Debug, Clone)]
 pub enum ProcessEvent {
-    Spawned { id: String, pid: u32 },
-    Exited { id: String, pid: u32, exit_code: Option<i32> },
-    StdoutLine { id: String, line: String },
-    StderrLine { id: String, line: String },
+    Spawned {
+        id: String,
+        pid: u32,
+    },
+    Exited {
+        id: String,
+        pid: u32,
+        exit_code: Option<i32>,
+    },
+    StdoutLine {
+        id: String,
+        line: String,
+    },
+    StderrLine {
+        id: String,
+        line: String,
+    },
 }
 
 pub struct ManagedProcess {
@@ -103,12 +116,24 @@ impl ProcessManager {
                 id,
                 name: name.clone(),
                 path: path.to_string_lossy().to_string(),
-                service_mode: env.get("OPENSIM_SERVICE_MODE").cloned().unwrap_or_else(|| "standalone".to_string()),
-                login_port: env.get("OPENSIM_LOGIN_PORT").and_then(|v| v.parse().ok()).unwrap_or(9000),
-                robust_port: env.get("OPENSIM_ROBUST_PORT").and_then(|v| v.parse().ok()).unwrap_or(8003),
+                service_mode: env
+                    .get("OPENSIM_SERVICE_MODE")
+                    .cloned()
+                    .unwrap_or_else(|| "standalone".to_string()),
+                login_port: env
+                    .get("OPENSIM_LOGIN_PORT")
+                    .and_then(|v| v.parse().ok())
+                    .unwrap_or(9000),
+                robust_port: env
+                    .get("OPENSIM_ROBUST_PORT")
+                    .and_then(|v| v.parse().ok())
+                    .unwrap_or(8003),
                 region_count,
                 database_url: env.get("DATABASE_URL").cloned().unwrap_or_default(),
-                hypergrid_enabled: env.get("OPENSIM_HYPERGRID_ENABLED").map(|v| v == "true").unwrap_or(false),
+                hypergrid_enabled: env
+                    .get("OPENSIM_HYPERGRID_ENABLED")
+                    .map(|v| v == "true")
+                    .unwrap_or(false),
             });
         }
 
@@ -116,7 +141,12 @@ impl ProcessManager {
         results
     }
 
-    pub async fn spawn_instance(&self, id: &str, instance_dir: &Path, controller_url: &str) -> anyhow::Result<u32> {
+    pub async fn spawn_instance(
+        &self,
+        id: &str,
+        instance_dir: &Path,
+        controller_url: &str,
+    ) -> anyhow::Result<u32> {
         {
             let procs = self.processes.read().await;
             if procs.contains_key(id) {
@@ -127,7 +157,10 @@ impl ProcessManager {
         let env_file = instance_dir.join(".env");
         let env = Self::parse_env_file(&env_file);
 
-        let service_mode = env.get("OPENSIM_SERVICE_MODE").cloned().unwrap_or_else(|| "standalone".to_string());
+        let service_mode = env
+            .get("OPENSIM_SERVICE_MODE")
+            .cloned()
+            .unwrap_or_else(|| "standalone".to_string());
 
         let binary = if self.binary_path.as_os_str().is_empty() {
             std::env::current_exe().unwrap_or_else(|_| PathBuf::from("opensim-next"))
@@ -158,9 +191,15 @@ impl ProcessManager {
         cmd.stdout(std::process::Stdio::piped());
         cmd.stderr(std::process::Stdio::piped());
 
-        info!("Spawning instance {} from {} (mode={})", id, instance_dir.display(), service_mode);
+        info!(
+            "Spawning instance {} from {} (mode={})",
+            id,
+            instance_dir.display(),
+            service_mode
+        );
 
-        let mut child = cmd.spawn()
+        let mut child = cmd
+            .spawn()
             .map_err(|e| anyhow::anyhow!("Failed to spawn instance {}: {}", id, e))?;
 
         let pid = child.id().unwrap_or(0);
@@ -186,7 +225,10 @@ impl ProcessManager {
             procs.insert(id.to_string(), managed);
         }
 
-        let _ = self.event_tx.send(ProcessEvent::Spawned { id: id.to_string(), pid });
+        let _ = self.event_tx.send(ProcessEvent::Spawned {
+            id: id.to_string(),
+            pid,
+        });
 
         if let Some(stdout) = stdout {
             let id_clone = id.to_string();
@@ -196,7 +238,10 @@ impl ProcessManager {
                 let reader = BufReader::new(stdout);
                 let mut lines = reader.lines();
                 while let Ok(Some(line)) = lines.next_line().await {
-                    let _ = event_tx.send(ProcessEvent::StdoutLine { id: id_clone.clone(), line: line.clone() });
+                    let _ = event_tx.send(ProcessEvent::StdoutLine {
+                        id: id_clone.clone(),
+                        line: line.clone(),
+                    });
                     let mut procs = procs.write().await;
                     if let Some(proc) = procs.get_mut(&id_clone) {
                         if proc.console_buffer.len() >= MAX_CONSOLE_BUFFER {
@@ -221,7 +266,10 @@ impl ProcessManager {
                 let reader = BufReader::new(stderr);
                 let mut lines = reader.lines();
                 while let Ok(Some(line)) = lines.next_line().await {
-                    let _ = event_tx.send(ProcessEvent::StderrLine { id: id_clone.clone(), line: line.clone() });
+                    let _ = event_tx.send(ProcessEvent::StderrLine {
+                        id: id_clone.clone(),
+                        line: line.clone(),
+                    });
                     let mut procs = procs.write().await;
                     if let Some(proc) = procs.get_mut(&id_clone) {
                         if proc.console_buffer.len() >= MAX_CONSOLE_BUFFER {
@@ -265,10 +313,14 @@ impl ProcessManager {
 
     pub async fn stop_instance(&self, id: &str, graceful: bool) -> anyhow::Result<()> {
         let mut procs = self.processes.write().await;
-        let proc = procs.get_mut(id)
+        let proc = procs
+            .get_mut(id)
             .ok_or_else(|| anyhow::anyhow!("Instance {} is not running", id))?;
 
-        info!("Stopping instance {} (PID {}, graceful={})", id, proc.pid, graceful);
+        info!(
+            "Stopping instance {} (PID {}, graceful={})",
+            id, proc.pid, graceful
+        );
 
         if let Some(kill_tx) = proc.kill_tx.take() {
             let _ = kill_tx.send(());
@@ -286,7 +338,12 @@ impl ProcessManager {
         Ok(())
     }
 
-    pub async fn restart_instance(&self, id: &str, instance_dir: &Path, controller_url: &str) -> anyhow::Result<u32> {
+    pub async fn restart_instance(
+        &self,
+        id: &str,
+        instance_dir: &Path,
+        controller_url: &str,
+    ) -> anyhow::Result<u32> {
         if self.is_running(id).await {
             self.stop_instance(id, true).await?;
             tokio::time::sleep(std::time::Duration::from_secs(2)).await;
@@ -313,7 +370,10 @@ impl ProcessManager {
 
     pub async fn list_running(&self) -> Vec<(String, u32, DateTime<Utc>)> {
         let procs = self.processes.read().await;
-        procs.values().map(|p| (p.id.clone(), p.pid, p.started_at)).collect()
+        procs
+            .values()
+            .map(|p| (p.id.clone(), p.pid, p.started_at))
+            .collect()
     }
 
     fn parse_env_file(path: &Path) -> HashMap<String, String> {
@@ -342,7 +402,8 @@ impl ProcessManager {
             return 0;
         }
         match std::fs::read_to_string(&regions_ini) {
-            Ok(content) => content.lines()
+            Ok(content) => content
+                .lines()
                 .filter(|l| l.trim().starts_with('['))
                 .count() as u32,
             Err(_) => 0,

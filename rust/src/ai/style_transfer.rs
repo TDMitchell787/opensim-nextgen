@@ -1,11 +1,11 @@
-use crate::database::DatabaseManager;
-use super::{AIError, ContentType, GeneratedContent, ContentParameters};
+use super::oar_analyzer::{OARAnalyzer, OARData};
 use super::pattern_repository::PatternRepository;
-use super::oar_analyzer::{OARData, OARAnalyzer};
-use std::sync::Arc;
-use std::collections::HashMap;
-use tokio::sync::RwLock;
+use super::{AIError, ContentParameters, ContentType, GeneratedContent};
+use crate::database::DatabaseManager;
 use serde::{Deserialize, Serialize};
+use std::collections::HashMap;
+use std::sync::Arc;
+use tokio::sync::RwLock;
 use uuid::Uuid;
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
@@ -272,7 +272,11 @@ impl StyleEncoder {
                 brightness_range: (0.3, 0.95),
             },
             texture_preferences: TexturePreferences {
-                preferred_textures: vec!["concrete".to_string(), "glass".to_string(), "metal".to_string()],
+                preferred_textures: vec![
+                    "concrete".to_string(),
+                    "glass".to_string(),
+                    "metal".to_string(),
+                ],
                 texture_resolution_preference: TextureResolution::High,
                 seamless_tiling: true,
                 normal_mapping_usage: 0.5,
@@ -282,7 +286,11 @@ impl StyleEncoder {
                 source_type: StyleSourceType::Preset,
                 creation_date: "2026-01-22".to_string(),
                 version: 1,
-                tags: vec!["modern".to_string(), "urban".to_string(), "clean".to_string()],
+                tags: vec![
+                    "modern".to_string(),
+                    "urban".to_string(),
+                    "clean".to_string(),
+                ],
                 description: "Clean, geometric modern architectural style".to_string(),
                 popularity_score: 0.8,
             },
@@ -357,7 +365,11 @@ impl StyleEncoder {
                 brightness_range: (0.2, 0.8),
             },
             texture_preferences: TexturePreferences {
-                preferred_textures: vec!["brick".to_string(), "wood".to_string(), "ornate".to_string()],
+                preferred_textures: vec![
+                    "brick".to_string(),
+                    "wood".to_string(),
+                    "ornate".to_string(),
+                ],
                 texture_resolution_preference: TextureResolution::High,
                 seamless_tiling: true,
                 normal_mapping_usage: 0.7,
@@ -367,7 +379,11 @@ impl StyleEncoder {
                 source_type: StyleSourceType::Preset,
                 creation_date: "2026-01-22".to_string(),
                 version: 1,
-                tags: vec!["victorian".to_string(), "historic".to_string(), "ornate".to_string()],
+                tags: vec![
+                    "victorian".to_string(),
+                    "historic".to_string(),
+                    "ornate".to_string(),
+                ],
                 description: "Ornate Victorian era architectural style".to_string(),
                 popularity_score: 0.7,
             },
@@ -442,7 +458,11 @@ impl StyleEncoder {
                 brightness_range: (0.1, 1.0),
             },
             texture_preferences: TexturePreferences {
-                preferred_textures: vec!["metal".to_string(), "glow".to_string(), "circuit".to_string()],
+                preferred_textures: vec![
+                    "metal".to_string(),
+                    "glow".to_string(),
+                    "circuit".to_string(),
+                ],
                 texture_resolution_preference: TextureResolution::Ultra,
                 seamless_tiling: true,
                 normal_mapping_usage: 0.3,
@@ -452,7 +472,11 @@ impl StyleEncoder {
                 source_type: StyleSourceType::Preset,
                 creation_date: "2026-01-22".to_string(),
                 version: 1,
-                tags: vec!["futuristic".to_string(), "sci-fi".to_string(), "neon".to_string()],
+                tags: vec![
+                    "futuristic".to_string(),
+                    "sci-fi".to_string(),
+                    "neon".to_string(),
+                ],
                 description: "High-tech futuristic architectural style".to_string(),
                 popularity_score: 0.85,
             },
@@ -527,7 +551,11 @@ impl StyleEncoder {
                 brightness_range: (0.2, 0.6),
             },
             texture_preferences: TexturePreferences {
-                preferred_textures: vec!["stone".to_string(), "wood".to_string(), "thatch".to_string()],
+                preferred_textures: vec![
+                    "stone".to_string(),
+                    "wood".to_string(),
+                    "thatch".to_string(),
+                ],
                 texture_resolution_preference: TextureResolution::Medium,
                 seamless_tiling: true,
                 normal_mapping_usage: 0.6,
@@ -537,7 +565,11 @@ impl StyleEncoder {
                 source_type: StyleSourceType::Preset,
                 creation_date: "2026-01-22".to_string(),
                 version: 1,
-                tags: vec!["medieval".to_string(), "fantasy".to_string(), "rustic".to_string()],
+                tags: vec![
+                    "medieval".to_string(),
+                    "fantasy".to_string(),
+                    "rustic".to_string(),
+                ],
                 description: "Medieval castle and village architectural style".to_string(),
                 popularity_score: 0.75,
             },
@@ -622,7 +654,11 @@ impl StyleEncoder {
                 source_type: StyleSourceType::Preset,
                 creation_date: "2026-01-22".to_string(),
                 version: 1,
-                tags: vec!["minimalist".to_string(), "clean".to_string(), "simple".to_string()],
+                tags: vec![
+                    "minimalist".to_string(),
+                    "clean".to_string(),
+                    "simple".to_string(),
+                ],
                 description: "Clean minimalist architectural style".to_string(),
                 popularity_score: 0.7,
             },
@@ -697,7 +733,11 @@ impl StyleEncoder {
                 brightness_range: (0.2, 0.6),
             },
             texture_preferences: TexturePreferences {
-                preferred_textures: vec!["brick".to_string(), "rust".to_string(), "concrete".to_string()],
+                preferred_textures: vec![
+                    "brick".to_string(),
+                    "rust".to_string(),
+                    "concrete".to_string(),
+                ],
                 texture_resolution_preference: TextureResolution::High,
                 seamless_tiling: true,
                 normal_mapping_usage: 0.8,
@@ -707,7 +747,11 @@ impl StyleEncoder {
                 source_type: StyleSourceType::Preset,
                 creation_date: "2026-01-22".to_string(),
                 version: 1,
-                tags: vec!["industrial".to_string(), "loft".to_string(), "urban".to_string()],
+                tags: vec![
+                    "industrial".to_string(),
+                    "loft".to_string(),
+                    "urban".to_string(),
+                ],
                 description: "Industrial loft architectural style".to_string(),
                 popularity_score: 0.72,
             },
@@ -782,7 +826,11 @@ impl StyleEncoder {
                 brightness_range: (0.15, 0.5),
             },
             texture_preferences: TexturePreferences {
-                preferred_textures: vec!["bark".to_string(), "moss".to_string(), "leaves".to_string()],
+                preferred_textures: vec![
+                    "bark".to_string(),
+                    "moss".to_string(),
+                    "leaves".to_string(),
+                ],
                 texture_resolution_preference: TextureResolution::High,
                 seamless_tiling: false,
                 normal_mapping_usage: 0.7,
@@ -792,7 +840,11 @@ impl StyleEncoder {
                 source_type: StyleSourceType::Preset,
                 creation_date: "2026-01-22".to_string(),
                 version: 1,
-                tags: vec!["nature".to_string(), "organic".to_string(), "forest".to_string()],
+                tags: vec![
+                    "nature".to_string(),
+                    "organic".to_string(),
+                    "forest".to_string(),
+                ],
                 description: "Organic nature-integrated architectural style".to_string(),
                 popularity_score: 0.68,
             },
@@ -867,7 +919,11 @@ impl StyleEncoder {
                 brightness_range: (0.1, 1.0),
             },
             texture_preferences: TexturePreferences {
-                preferred_textures: vec!["alien".to_string(), "energy".to_string(), "tech".to_string()],
+                preferred_textures: vec![
+                    "alien".to_string(),
+                    "energy".to_string(),
+                    "tech".to_string(),
+                ],
                 texture_resolution_preference: TextureResolution::Ultra,
                 seamless_tiling: true,
                 normal_mapping_usage: 0.4,
@@ -877,7 +933,11 @@ impl StyleEncoder {
                 source_type: StyleSourceType::Preset,
                 creation_date: "2026-01-22".to_string(),
                 version: 1,
-                tags: vec!["sci-fi".to_string(), "alien".to_string(), "space".to_string()],
+                tags: vec![
+                    "sci-fi".to_string(),
+                    "alien".to_string(),
+                    "space".to_string(),
+                ],
                 description: "Alien sci-fi architectural style".to_string(),
                 popularity_score: 0.78,
             },
@@ -918,7 +978,10 @@ impl StyleEncoder {
         vec![0.5, 0.5, 0.5, 0.5, 0.5, 0.5, 0.5, 0.5]
     }
 
-    fn extract_material_palette(&self, _analysis: &super::oar_analyzer::OARData) -> Vec<MaterialDescriptor> {
+    fn extract_material_palette(
+        &self,
+        _analysis: &super::oar_analyzer::OARData,
+    ) -> Vec<MaterialDescriptor> {
         vec![MaterialDescriptor {
             material_type: "Default".to_string(),
             primary_color: [0.5, 0.5, 0.5],
@@ -931,7 +994,10 @@ impl StyleEncoder {
         }]
     }
 
-    fn analyze_spatial_arrangement(&self, _analysis: &super::oar_analyzer::OARData) -> SpatialPattern {
+    fn analyze_spatial_arrangement(
+        &self,
+        _analysis: &super::oar_analyzer::OARData,
+    ) -> SpatialPattern {
         SpatialPattern {
             symmetry_type: SymmetryType::Mixed,
             vertical_emphasis: 0.5,
@@ -970,7 +1036,10 @@ impl StyleEncoder {
         }
     }
 
-    fn analyze_texture_preferences(&self, _analysis: &super::oar_analyzer::OARData) -> TexturePreferences {
+    fn analyze_texture_preferences(
+        &self,
+        _analysis: &super::oar_analyzer::OARData,
+    ) -> TexturePreferences {
         TexturePreferences {
             preferred_textures: vec!["default".to_string()],
             texture_resolution_preference: TextureResolution::Medium,
@@ -983,14 +1052,14 @@ impl StyleEncoder {
     pub async fn blend_styles(&self, request: &StyleBlendRequest) -> Result<EncodedStyle, AIError> {
         if request.styles.len() != request.weights.len() {
             return Err(AIError::ConfigurationError(
-                "Number of styles must match number of weights".to_string()
+                "Number of styles must match number of weights".to_string(),
             ));
         }
 
         let total_weight: f32 = request.weights.iter().sum();
         if (total_weight - 1.0).abs() > 0.01 {
             return Err(AIError::ConfigurationError(
-                "Weights must sum to 1.0".to_string()
+                "Weights must sum to 1.0".to_string(),
             ));
         }
 
@@ -998,35 +1067,46 @@ impl StyleEncoder {
         let mut styles: Vec<&EncodedStyle> = Vec::new();
 
         for style_id in &request.styles {
-            let style = cache.get(style_id)
-                .ok_or_else(|| AIError::ConfigurationError(format!(
-                    "Style {} not found",
-                    style_id
-                )))?;
+            let style = cache.get(style_id).ok_or_else(|| {
+                AIError::ConfigurationError(format!("Style {} not found", style_id))
+            })?;
             styles.push(style);
         }
 
         let blended_features = self.blend_vectors(
-            &styles.iter().map(|s| &s.architectural_features).collect::<Vec<_>>(),
+            &styles
+                .iter()
+                .map(|s| &s.architectural_features)
+                .collect::<Vec<_>>(),
             &request.weights,
         );
 
         let primary_style = styles[0];
         let blended_complexity = ComplexityProfile {
-            overall_complexity: styles.iter().enumerate()
+            overall_complexity: styles
+                .iter()
+                .enumerate()
                 .map(|(i, s)| s.complexity_profile.overall_complexity * request.weights[i])
                 .sum(),
-            geometric_complexity: styles.iter().enumerate()
+            geometric_complexity: styles
+                .iter()
+                .enumerate()
                 .map(|(i, s)| s.complexity_profile.geometric_complexity * request.weights[i])
                 .sum(),
-            material_variety: styles.iter().enumerate()
+            material_variety: styles
+                .iter()
+                .enumerate()
                 .map(|(i, s)| s.complexity_profile.material_variety * request.weights[i])
                 .sum(),
-            detail_density: styles.iter().enumerate()
+            detail_density: styles
+                .iter()
+                .enumerate()
                 .map(|(i, s)| s.complexity_profile.detail_density * request.weights[i])
                 .sum(),
             prim_count_tendency: primary_style.complexity_profile.prim_count_tendency.clone(),
-            script_complexity: styles.iter().enumerate()
+            script_complexity: styles
+                .iter()
+                .enumerate()
                 .map(|(i, s)| s.complexity_profile.script_complexity * request.weights[i])
                 .sum(),
         };
@@ -1079,7 +1159,10 @@ impl StyleEncoder {
     }
 
     pub async fn get_styles_by_tag(&self, tag: &str) -> Vec<EncodedStyle> {
-        self.style_cache.read().await.values()
+        self.style_cache
+            .read()
+            .await
+            .values()
             .filter(|s| s.metadata.tags.contains(&tag.to_string()))
             .cloned()
             .collect()
@@ -1109,11 +1192,8 @@ impl StyleApplicator {
     ) -> Result<GeneratedContent, AIError> {
         let strength = strength.max(0.0).min(1.0);
 
-        let modified_data = self.modify_content_with_style(
-            &base_content.data,
-            target_style,
-            strength,
-        )?;
+        let modified_data =
+            self.modify_content_with_style(&base_content.data, target_style, strength)?;
 
         let mut metadata = base_content.metadata.clone();
         metadata.insert("applied_style".to_string(), target_style.name.clone());
@@ -1164,11 +1244,14 @@ impl StyleApplicator {
             &style_b.architectural_features,
         );
 
-        let complexity_similarity = 1.0 - (
-            (style_a.complexity_profile.overall_complexity - style_b.complexity_profile.overall_complexity).abs() as f64
-        );
+        let complexity_similarity = 1.0
+            - ((style_a.complexity_profile.overall_complexity
+                - style_b.complexity_profile.overall_complexity)
+                .abs() as f64);
 
-        (feature_similarity * 0.6 + complexity_similarity * 0.4).max(0.0).min(1.0)
+        (feature_similarity * 0.6 + complexity_similarity * 0.4)
+            .max(0.0)
+            .min(1.0)
     }
 
     fn vector_cosine_similarity(&self, a: &[f32], b: &[f32]) -> f64 {

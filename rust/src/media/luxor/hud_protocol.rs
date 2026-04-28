@@ -1,12 +1,14 @@
-use serde::{Serialize, Deserialize};
+use serde::{Deserialize, Serialize};
 use tracing::{info, warn};
 
-use super::{ScreenSize, OutputFormat, OutputSettings, SnapshotRequest, VideoRequest, LUXOR_CHANNEL};
-use super::camera::{CameraRig, CameraPreset};
-use super::lighting::{LightingRig, LightingPreset};
-use super::raytracer::RenderQuality;
+use super::camera::{CameraPreset, CameraRig};
+use super::lighting::{LightingPreset, LightingRig};
 use super::post_process::PostEffect;
-use super::video::{VideoJob, PathType, CameraKeyframe};
+use super::raytracer::RenderQuality;
+use super::video::{CameraKeyframe, PathType, VideoJob};
+use super::{
+    OutputFormat, OutputSettings, ScreenSize, SnapshotRequest, VideoRequest, LUXOR_CHANNEL,
+};
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct LuxorCommand {
@@ -60,7 +62,10 @@ pub enum LuxorAction {
     Snapshot(SnapshotRequest),
     Preview(SnapshotRequest),
     SetCamera(CameraRig),
-    SetLight { slot: usize, light: super::lighting::LuxorLight },
+    SetLight {
+        slot: usize,
+        light: super::lighting::LuxorLight,
+    },
     SetEffects(Vec<PostEffect>),
     RecordStart(VideoRequest),
     RecordStop,
@@ -104,15 +109,14 @@ impl Default for HudState {
 
 impl HudState {
     pub fn parse_command(&mut self, json_str: &str) -> Result<LuxorAction, String> {
-        let cmd: LuxorCommand = serde_json::from_str(json_str)
-            .map_err(|e| format!("Invalid JSON: {}", e))?;
+        let cmd: LuxorCommand =
+            serde_json::from_str(json_str).map_err(|e| format!("Invalid JSON: {}", e))?;
 
         match cmd.cmd.to_lowercase().as_str() {
             "snapshot" | "snap" | "photo" | "capture" => {
                 self.apply_settings(&cmd);
-                let request = self.build_snapshot_request(
-                    cmd.name.as_deref().unwrap_or("snapshot"),
-                );
+                let request =
+                    self.build_snapshot_request(cmd.name.as_deref().unwrap_or("snapshot"));
                 Ok(LuxorAction::Snapshot(request))
             }
             "preview" => {
@@ -143,8 +147,10 @@ impl HudState {
                 if let Some(lookat) = cmd.lookat {
                     self.camera.look_at = lookat;
                 }
-                info!("[LUXOR HUD] Camera updated: focal={}mm f/{} focus={}m",
-                    self.camera.focal_length_mm, self.camera.f_stop, self.camera.focus_distance);
+                info!(
+                    "[LUXOR HUD] Camera updated: focal={}mm f/{} focus={}m",
+                    self.camera.focal_length_mm, self.camera.f_stop, self.camera.focus_distance
+                );
                 Ok(LuxorAction::SetCamera(self.camera.clone()))
             }
             "set_light" | "light" => {
@@ -156,7 +162,9 @@ impl HudState {
                     intensity: cmd.intensity.unwrap_or(500.0),
                     light_type: match cmd.light_type.as_deref() {
                         Some("spot") => super::lighting::LightType::Spot,
-                        Some("directional") | Some("sun") => super::lighting::LightType::Directional,
+                        Some("directional") | Some("sun") => {
+                            super::lighting::LightType::Directional
+                        }
                         Some("area") => super::lighting::LightType::Area,
                         _ => super::lighting::LightType::Point,
                     },
@@ -169,8 +177,10 @@ impl HudState {
                 } else {
                     self.lighting.lights.push(light.clone());
                 }
-                info!("[LUXOR HUD] Light slot {} updated: {:?} intensity={}",
-                    slot, light.light_type, light.intensity);
+                info!(
+                    "[LUXOR HUD] Light slot {} updated: {:?} intensity={}",
+                    slot, light.light_type, light.intensity
+                );
                 Ok(LuxorAction::SetLight { slot, light })
             }
             "set_lighting" | "lighting_preset" => {
@@ -241,8 +251,12 @@ impl HudState {
                     name: self.recording_name.clone(),
                 };
 
-                info!("[LUXOR HUD] Recording started: {} frames at {}fps, {:?} path",
-                    request.job.total_frames(), self.recording_fps, self.recording_path_type);
+                info!(
+                    "[LUXOR HUD] Recording started: {} frames at {}fps, {:?} path",
+                    request.job.total_frames(),
+                    self.recording_fps,
+                    self.recording_path_type
+                );
 
                 Ok(LuxorAction::RecordStart(request))
             }
@@ -274,24 +288,27 @@ impl HudState {
                 };
 
                 self.waypoints.push(kf.clone());
-                info!("[LUXOR HUD] Waypoint #{} added at t={:.1}s pos={:?}",
-                    self.waypoints.len(), time, pos);
+                info!(
+                    "[LUXOR HUD] Waypoint #{} added at t={:.1}s pos={:?}",
+                    self.waypoints.len(),
+                    time,
+                    pos
+                );
 
                 Ok(LuxorAction::AddWaypoint(kf))
             }
-            "status" | "info" => {
-                Ok(LuxorAction::Status)
-            }
+            "status" | "info" => Ok(LuxorAction::Status),
             "reset" | "clear" => {
                 *self = HudState::default();
                 info!("[LUXOR HUD] State reset to defaults");
                 Ok(LuxorAction::Status)
             }
-            other => {
-                Err(format!("Unknown Luxor command: '{}'. Valid: snapshot, preview, set_camera, \
+            other => Err(format!(
+                "Unknown Luxor command: '{}'. Valid: snapshot, preview, set_camera, \
                     set_light, set_lighting, set_effect, record_start, record_stop, \
-                    add_waypoint, status, reset", other))
-            }
+                    add_waypoint, status, reset",
+                other
+            )),
         }
     }
 
@@ -372,12 +389,21 @@ impl HudState {
             self.camera.focal_length_mm,
             self.camera.f_stop,
             self.camera.focus_distance,
-            self.camera.position[0], self.camera.position[1], self.camera.position[2],
-            self.camera.look_at[0], self.camera.look_at[1], self.camera.look_at[2],
-            w, h, self.size.display_name(),
+            self.camera.position[0],
+            self.camera.position[1],
+            self.camera.position[2],
+            self.camera.look_at[0],
+            self.camera.look_at[1],
+            self.camera.look_at[2],
+            w,
+            h,
+            self.size.display_name(),
             self.quality,
-            if self.effects.is_empty() { "none".to_string() }
-            else { format!("{:?}", self.effects) },
+            if self.effects.is_empty() {
+                "none".to_string()
+            } else {
+                format!("{:?}", self.effects)
+            },
             self.waypoints.len(),
             if self.recording { "YES" } else { "no" },
         )
@@ -440,7 +466,8 @@ mod tests {
     #[test]
     fn test_parse_add_waypoint() {
         let mut state = HudState::default();
-        let cmd1 = r#"{"cmd": "add_waypoint", "pos": [128,128,30], "lookat": [128,128,25], "focal": 50}"#;
+        let cmd1 =
+            r#"{"cmd": "add_waypoint", "pos": [128,128,30], "lookat": [128,128,25], "focal": 50}"#;
         let r1 = state.parse_command(cmd1);
         assert!(r1.is_ok());
         assert_eq!(state.waypoints.len(), 1);
@@ -501,8 +528,11 @@ mod tests {
         state.camera.focal_length_mm = 200.0;
         state.recording = true;
         state.waypoints.push(CameraKeyframe {
-            position: [0.0; 3], look_at: [0.0; 3],
-            focal_length_mm: 50.0, f_stop: 4.0, time: 0.0,
+            position: [0.0; 3],
+            look_at: [0.0; 3],
+            focal_length_mm: 50.0,
+            f_stop: 4.0,
+            time: 0.0,
         });
 
         let result = state.parse_command(r#"{"cmd": "reset"}"#);
@@ -522,9 +552,21 @@ mod tests {
     #[test]
     fn test_record_with_waypoints() {
         let mut state = HudState::default();
-        state.parse_command(r#"{"cmd": "add_waypoint", "pos": [118,128,30], "lookat": [128,128,25]}"#).unwrap();
-        state.parse_command(r#"{"cmd": "add_waypoint", "pos": [138,128,30], "lookat": [128,128,25]}"#).unwrap();
-        state.parse_command(r#"{"cmd": "add_waypoint", "pos": [138,138,30], "lookat": [128,128,25]}"#).unwrap();
+        state
+            .parse_command(
+                r#"{"cmd": "add_waypoint", "pos": [118,128,30], "lookat": [128,128,25]}"#,
+            )
+            .unwrap();
+        state
+            .parse_command(
+                r#"{"cmd": "add_waypoint", "pos": [138,128,30], "lookat": [128,128,25]}"#,
+            )
+            .unwrap();
+        state
+            .parse_command(
+                r#"{"cmd": "add_waypoint", "pos": [138,138,30], "lookat": [128,128,25]}"#,
+            )
+            .unwrap();
 
         let result = state.parse_command(r#"{"cmd": "record_start", "fps": 24, "duration": 5}"#);
         assert!(result.is_ok());

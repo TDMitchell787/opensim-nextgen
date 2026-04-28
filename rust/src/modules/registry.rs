@@ -38,11 +38,7 @@ impl ModuleRegistry {
         self.service_registry.clone()
     }
 
-    pub fn register_shared(
-        &mut self,
-        module: Box<dyn SharedRegionModule>,
-        config: ModuleConfig,
-    ) {
+    pub fn register_shared(&mut self, module: Box<dyn SharedRegionModule>, config: ModuleConfig) {
         let name = module.name();
         info!("[MODULES] Registered shared module: {}", name);
         self.modules.push(RegisteredModule {
@@ -85,7 +81,10 @@ impl ModuleRegistry {
     }
 
     pub async fn post_initialize_all(&mut self, scene: &SceneContext) -> Result<()> {
-        info!("[MODULES] PostInitialize for {} modules...", self.modules.len());
+        info!(
+            "[MODULES] PostInitialize for {} modules...",
+            self.modules.len()
+        );
         for entry in self.modules.iter_mut() {
             if entry.initialized && entry.added_to_region {
                 let name = entry.module.name();
@@ -97,7 +96,10 @@ impl ModuleRegistry {
     }
 
     pub async fn region_loaded_all(&mut self, scene: &SceneContext) -> Result<()> {
-        info!("[MODULES] RegionLoaded for {} modules...", self.modules.len());
+        info!(
+            "[MODULES] RegionLoaded for {} modules...",
+            self.modules.len()
+        );
         for entry in self.modules.iter_mut() {
             if entry.initialized && entry.added_to_region {
                 let name = entry.module.name();
@@ -105,12 +107,18 @@ impl ModuleRegistry {
                 entry.module.region_loaded(scene).await?;
             }
         }
-        info!("[MODULES] All modules loaded for region '{}'", scene.region_name);
+        info!(
+            "[MODULES] All modules loaded for region '{}'",
+            scene.region_name
+        );
         Ok(())
     }
 
     pub async fn remove_region_all(&mut self, scene: &SceneContext) -> Result<()> {
-        info!("[MODULES] Removing region '{}' from modules...", scene.region_name);
+        info!(
+            "[MODULES] Removing region '{}' from modules...",
+            scene.region_name
+        );
         for entry in self.modules.iter_mut().rev() {
             if entry.added_to_region {
                 let name = entry.module.name();

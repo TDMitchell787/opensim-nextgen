@@ -1,5 +1,5 @@
 //! Friend System for OpenSim Next Social Features
-//! 
+//!
 //! Provides comprehensive friend management including friend requests, acceptance,
 //! blocking, online status tracking, and friend-based privacy controls.
 
@@ -181,10 +181,14 @@ impl FriendSystem {
         target_id: Uuid,
         message: Option<String>,
     ) -> SocialResult<FriendRequest> {
-        info!("Sending friend request from {} to {}", requester_id, target_id);
+        info!(
+            "Sending friend request from {} to {}",
+            requester_id, target_id
+        );
 
         // Validate request
-        self.validate_friend_request(requester_id, target_id).await?;
+        self.validate_friend_request(requester_id, target_id)
+            .await?;
 
         // Check rate limits
         self.check_friend_request_rate_limit(requester_id).await?;
@@ -225,23 +229,36 @@ impl FriendSystem {
         // Add to cache
         {
             let mut requests = self.friend_requests.write().await;
-            requests.entry(target_id).or_insert_with(Vec::new).push(friend_request.clone());
+            requests
+                .entry(target_id)
+                .or_insert_with(Vec::new)
+                .push(friend_request.clone());
         }
 
         // Update rate limiter
         self.update_friend_request_rate_limit(requester_id).await;
 
-        info!("Friend request sent successfully: {}", friend_request.request_id);
+        info!(
+            "Friend request sent successfully: {}",
+            friend_request.request_id
+        );
         Ok(friend_request)
     }
 
     /// Accept friend request
-    pub async fn accept_friend_request(&self, request_id: Uuid, target_id: Uuid) -> SocialResult<Friendship> {
-        info!("Accepting friend request {} by user {}", request_id, target_id);
+    pub async fn accept_friend_request(
+        &self,
+        request_id: Uuid,
+        target_id: Uuid,
+    ) -> SocialResult<Friendship> {
+        info!(
+            "Accepting friend request {} by user {}",
+            request_id, target_id
+        );
 
         // Get and validate friend request
         let friend_request = self.get_friend_request(request_id).await?;
-        
+
         if friend_request.target_id != target_id {
             return Err(SocialError::AccessDenied {
                 reason: "Only the target user can accept this friend request".to_string(),
@@ -274,7 +291,7 @@ impl FriendSystem {
 
         // Save friendship (bidirectional)
         self.save_friendship(&friendship).await?;
-        
+
         // Create reverse friendship
         let reverse_friendship = Friendship {
             friendship_id: Uuid::new_v4(),
@@ -297,8 +314,14 @@ impl FriendSystem {
         // Update caches
         {
             let mut friendships = self.active_friendships.write().await;
-            friendships.entry(friendship.user_id).or_insert_with(Vec::new).push(friendship.clone());
-            friendships.entry(reverse_friendship.user_id).or_insert_with(Vec::new).push(reverse_friendship);
+            friendships
+                .entry(friendship.user_id)
+                .or_insert_with(Vec::new)
+                .push(friendship.clone());
+            friendships
+                .entry(reverse_friendship.user_id)
+                .or_insert_with(Vec::new)
+                .push(reverse_friendship);
         }
 
         // Remove from pending requests
@@ -314,12 +337,19 @@ impl FriendSystem {
     }
 
     /// Decline friend request
-    pub async fn decline_friend_request(&self, request_id: Uuid, target_id: Uuid) -> SocialResult<()> {
-        info!("Declining friend request {} by user {}", request_id, target_id);
+    pub async fn decline_friend_request(
+        &self,
+        request_id: Uuid,
+        target_id: Uuid,
+    ) -> SocialResult<()> {
+        info!(
+            "Declining friend request {} by user {}",
+            request_id, target_id
+        );
 
         // Get and validate friend request
         let mut friend_request = self.get_friend_request(request_id).await?;
-        
+
         if friend_request.target_id != target_id {
             return Err(SocialError::AccessDenied {
                 reason: "Only the target user can decline this friend request".to_string(),
@@ -399,7 +429,10 @@ impl FriendSystem {
         // Update cache
         {
             let mut blocked = self.blocked_users.write().await;
-            blocked.entry(user_id).or_insert_with(Vec::new).push(blocked_id);
+            blocked
+                .entry(user_id)
+                .or_insert_with(Vec::new)
+                .push(blocked_id);
         }
 
         info!("User blocked successfully");
@@ -465,7 +498,10 @@ impl FriendSystem {
             friends,
         };
 
-        debug!("Friend list retrieved: {} friends, {} online", response.total_count, response.online_count);
+        debug!(
+            "Friend list retrieved: {} friends, {} online",
+            response.total_count, response.online_count
+        );
         Ok(response)
     }
 
@@ -497,8 +533,15 @@ impl FriendSystem {
     }
 
     /// Search friends
-    pub async fn search_friends(&self, user_id: Uuid, criteria: FriendSearchCriteria) -> SocialResult<Vec<FriendInfo>> {
-        debug!("Searching friends for user {} with criteria: {:?}", user_id, criteria);
+    pub async fn search_friends(
+        &self,
+        user_id: Uuid,
+        criteria: FriendSearchCriteria,
+    ) -> SocialResult<Vec<FriendInfo>> {
+        debug!(
+            "Searching friends for user {} with criteria: {:?}",
+            user_id, criteria
+        );
 
         let friend_list = self.get_friend_list(user_id).await?;
         let mut results = friend_list.friends;
@@ -514,7 +557,11 @@ impl FriendSystem {
         }
 
         if !criteria.friendship_types.is_empty() {
-            results.retain(|f| criteria.friendship_types.contains(&f.friendship.friendship_type));
+            results.retain(|f| {
+                criteria
+                    .friendship_types
+                    .contains(&f.friendship.friendship_type)
+            });
         }
 
         // Apply sorting
@@ -548,14 +595,14 @@ impl FriendSystem {
                 results.sort_by(|a, b| b.mutual_friend_count.cmp(&a.mutual_friend_count));
             }
             FriendSortOption::LastOnline => {
-                results.sort_by(|a, b| {
-                    match (a.last_online.as_ref(), b.last_online.as_ref()) {
+                results.sort_by(
+                    |a, b| match (a.last_online.as_ref(), b.last_online.as_ref()) {
                         (Some(a_time), Some(b_time)) => b_time.cmp(a_time),
                         (Some(_), None) => std::cmp::Ordering::Less,
                         (None, Some(_)) => std::cmp::Ordering::Greater,
                         (None, None) => std::cmp::Ordering::Equal,
-                    }
-                });
+                    },
+                );
             }
         }
 
@@ -579,10 +626,12 @@ impl FriendSystem {
     /// Check if two users are friends
     pub async fn are_friends(&self, user_id: Uuid, friend_id: Uuid) -> SocialResult<bool> {
         let friendships = self.active_friendships.read().await;
-        
+
         if let Some(user_friends) = friendships.get(&user_id) {
             for friendship in user_friends {
-                if friendship.friend_id == friend_id && friendship.friendship_status == FriendshipStatus::Active {
+                if friendship.friend_id == friend_id
+                    && friendship.friendship_status == FriendshipStatus::Active
+                {
                     return Ok(true);
                 }
             }
@@ -594,7 +643,7 @@ impl FriendSystem {
     /// Check if user is blocked by another user
     pub async fn is_blocked(&self, user_id: Uuid, potential_blocker: Uuid) -> SocialResult<bool> {
         let blocked = self.blocked_users.read().await;
-        
+
         if let Some(user_blocked) = blocked.get(&potential_blocker) {
             return Ok(user_blocked.contains(&user_id));
         }
@@ -604,7 +653,11 @@ impl FriendSystem {
 
     // Private helper methods
 
-    async fn validate_friend_request(&self, requester_id: Uuid, target_id: Uuid) -> SocialResult<()> {
+    async fn validate_friend_request(
+        &self,
+        requester_id: Uuid,
+        target_id: Uuid,
+    ) -> SocialResult<()> {
         if requester_id == target_id {
             return Err(SocialError::ValidationError {
                 message: "Cannot send friend request to yourself".to_string(),
@@ -615,7 +668,9 @@ impl FriendSystem {
         let requests = self.friend_requests.read().await;
         if let Some(target_requests) = requests.get(&target_id) {
             for request in target_requests {
-                if request.requester_id == requester_id && request.status == FriendRequestStatus::Pending {
+                if request.requester_id == requester_id
+                    && request.status == FriendRequestStatus::Pending
+                {
                     return Err(SocialError::ValidationError {
                         message: "Friend request already pending".to_string(),
                     });
@@ -630,11 +685,13 @@ impl FriendSystem {
         let mut rate_limiter = self.rate_limiter.write().await;
         let now = std::time::Instant::now();
 
-        let user_limit = rate_limiter.entry(user_id).or_insert_with(|| FriendRequestRateLimit {
-            user_id,
-            requests_this_hour: 0,
-            last_reset: now,
-        });
+        let user_limit = rate_limiter
+            .entry(user_id)
+            .or_insert_with(|| FriendRequestRateLimit {
+                user_id,
+                requests_this_hour: 0,
+                last_reset: now,
+            });
 
         // Reset if an hour has passed
         if now.duration_since(user_limit.last_reset).as_secs() >= 3600 {
@@ -707,16 +764,19 @@ impl FriendSystem {
 
     async fn get_user_display_name(&self, user_id: Uuid) -> String {
         if let Ok(pool) = self.database.legacy_pool() {
-            let row_result = sqlx::query(
-                "SELECT FirstName, LastName FROM UserAccounts WHERE PrincipalID = $1"
-            )
-            .bind(user_id.to_string())
-            .fetch_optional(pool)
-            .await;
+            let row_result =
+                sqlx::query("SELECT FirstName, LastName FROM UserAccounts WHERE PrincipalID = $1")
+                    .bind(user_id.to_string())
+                    .fetch_optional(pool)
+                    .await;
 
             if let Ok(Some(row)) = row_result {
-                let first_name: String = row.try_get("FirstName").unwrap_or_else(|_| "Unknown".to_string());
-                let last_name: String = row.try_get("LastName").unwrap_or_else(|_| "User".to_string());
+                let first_name: String = row
+                    .try_get("FirstName")
+                    .unwrap_or_else(|_| "Unknown".to_string());
+                let last_name: String = row
+                    .try_get("LastName")
+                    .unwrap_or_else(|_| "User".to_string());
                 return format!("{} {}", first_name, last_name);
             }
         }

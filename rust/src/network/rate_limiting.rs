@@ -1,5 +1,5 @@
 //! Rate limiting module for preventing abuse and DDoS attacks
-//! 
+//!
 //! Implements token bucket rate limiting algorithm.
 
 use std::{
@@ -45,7 +45,7 @@ impl RateLimiter {
     /// Check if a client is within rate limits
     pub async fn check_rate_limit(&self, client_id: &str) -> bool {
         let mut buckets = self.buckets.write().await;
-        
+
         // Get or create bucket for this client
         let bucket = buckets.entry(client_id.to_string()).or_insert_with(|| {
             TokenBucket {
@@ -75,9 +75,12 @@ impl RateLimiter {
         let now = Instant::now();
         let elapsed = now.duration_since(bucket.last_refill);
         let tokens_to_add = (elapsed.as_secs_f64() * bucket.refill_rate) as u32;
-        
+
         if tokens_to_add > 0 {
-            bucket.tokens = bucket.tokens.saturating_add(tokens_to_add).min(bucket.max_tokens);
+            bucket.tokens = bucket
+                .tokens
+                .saturating_add(tokens_to_add)
+                .min(bucket.max_tokens);
             bucket.last_refill = now;
         }
     }
@@ -86,18 +89,19 @@ impl RateLimiter {
     pub async fn cleanup_old_buckets(&self) {
         let mut buckets = self.buckets.write().await;
         let now = Instant::now();
-        
-        buckets.retain(|_, bucket| {
-            now.duration_since(bucket.last_refill) < self.cleanup_interval
-        });
-        
-        debug!("Cleaned up old rate limit buckets, {} buckets remaining", buckets.len());
+
+        buckets.retain(|_, bucket| now.duration_since(bucket.last_refill) < self.cleanup_interval);
+
+        debug!(
+            "Cleaned up old rate limit buckets, {} buckets remaining",
+            buckets.len()
+        );
     }
 
     /// Get rate limit statistics for a client
     pub async fn get_client_stats(&self, client_id: &str) -> Option<RateLimitStats> {
         let buckets = self.buckets.read().await;
-        
+
         if let Some(bucket) = buckets.get(client_id) {
             Some(RateLimitStats {
                 tokens_remaining: bucket.tokens,
@@ -120,7 +124,10 @@ impl RateLimiter {
     /// Update rate limit configuration
     pub fn update_config(&mut self, max_requests_per_minute: u32) {
         self.max_requests_per_minute = max_requests_per_minute;
-        debug!("Updated rate limit configuration: {} requests per minute", max_requests_per_minute);
+        debug!(
+            "Updated rate limit configuration: {} requests per minute",
+            max_requests_per_minute
+        );
     }
 }
 
@@ -141,4 +148,4 @@ impl Default for RateLimiter {
     fn default() -> Self {
         Self::new(1000) // Default to 1000 requests per minute
     }
-} 
+}

@@ -1,8 +1,8 @@
+use serde::{Deserialize, Serialize};
 use std::collections::HashMap;
 use std::path::PathBuf;
-use serde::{Deserialize, Serialize};
 
-use crate::setup::{SetupConfig, ScenarioTemplate, ScenarioCategory, DifficultyLevel, SetupPreset};
+use crate::setup::{DifficultyLevel, ScenarioCategory, ScenarioTemplate, SetupConfig, SetupPreset};
 
 pub struct ScenarioManager {
     templates: HashMap<String, ScenarioTemplate>,
@@ -15,7 +15,7 @@ impl ScenarioManager {
             templates: HashMap::new(),
             base_path,
         };
-        
+
         manager.load_builtin_scenarios();
         manager
     }
@@ -36,7 +36,10 @@ impl ScenarioManager {
             .collect()
     }
 
-    pub fn list_scenarios_by_difficulty(&self, difficulty: DifficultyLevel) -> Vec<&ScenarioTemplate> {
+    pub fn list_scenarios_by_difficulty(
+        &self,
+        difficulty: DifficultyLevel,
+    ) -> Vec<&ScenarioTemplate> {
         self.templates
             .values()
             .filter(|template| template.difficulty == difficulty)
@@ -47,12 +50,18 @@ impl ScenarioManager {
         self.templates.get(name)
     }
 
-    pub fn apply_template(&self, template_name: &str, customizations: HashMap<String, String>) -> Result<SetupConfig, String> {
-        let template = self.templates.get(template_name)
+    pub fn apply_template(
+        &self,
+        template_name: &str,
+        customizations: HashMap<String, String>,
+    ) -> Result<SetupConfig, String> {
+        let template = self
+            .templates
+            .get(template_name)
             .ok_or("Template not found")?;
 
         let mut config = template.config_template.clone();
-        
+
         // Apply customizations
         for (key, value) in customizations {
             self.apply_customization(&mut config, &key, &value)?;
@@ -74,37 +83,48 @@ impl ScenarioManager {
         });
 
         // Small Grid 2x2
-        self.templates.insert("small-grid-2x2".to_string(), ScenarioTemplate {
-            name: "Small Grid (2x2)".to_string(),
-            description: "Four connected regions perfect for learning grid management".to_string(),
-            category: ScenarioCategory::GridDevelopment,
-            difficulty: DifficultyLevel::Beginner,
-            config_template: self.create_small_grid_config(),
-            documentation: self.create_small_grid_docs(),
-            startup_script: self.create_small_grid_script(),
-        });
+        self.templates.insert(
+            "small-grid-2x2".to_string(),
+            ScenarioTemplate {
+                name: "Small Grid (2x2)".to_string(),
+                description: "Four connected regions perfect for learning grid management"
+                    .to_string(),
+                category: ScenarioCategory::GridDevelopment,
+                difficulty: DifficultyLevel::Beginner,
+                config_template: self.create_small_grid_config(),
+                documentation: self.create_small_grid_docs(),
+                startup_script: self.create_small_grid_script(),
+            },
+        );
 
         // Creative Sandbox
-        self.templates.insert("creative-sandbox".to_string(), ScenarioTemplate {
-            name: "Creative Sandbox".to_string(),
-            description: "Enhanced environment for artists, builders, and content creators".to_string(),
-            category: ScenarioCategory::EducationalGrid,
-            difficulty: DifficultyLevel::Intermediate,
-            config_template: self.create_creative_config(),
-            documentation: self.create_creative_docs(),
-            startup_script: self.create_creative_script(),
-        });
+        self.templates.insert(
+            "creative-sandbox".to_string(),
+            ScenarioTemplate {
+                name: "Creative Sandbox".to_string(),
+                description: "Enhanced environment for artists, builders, and content creators"
+                    .to_string(),
+                category: ScenarioCategory::EducationalGrid,
+                difficulty: DifficultyLevel::Intermediate,
+                config_template: self.create_creative_config(),
+                documentation: self.create_creative_docs(),
+                startup_script: self.create_creative_script(),
+            },
+        );
 
         // Production Enterprise
-        self.templates.insert("production-enterprise".to_string(), ScenarioTemplate {
-            name: "Production Enterprise".to_string(),
-            description: "Full enterprise deployment with all advanced features".to_string(),
-            category: ScenarioCategory::EnterpriseDeployment,
-            difficulty: DifficultyLevel::Expert,
-            config_template: self.create_enterprise_config(),
-            documentation: self.create_enterprise_docs(),
-            startup_script: self.create_enterprise_script(),
-        });
+        self.templates.insert(
+            "production-enterprise".to_string(),
+            ScenarioTemplate {
+                name: "Production Enterprise".to_string(),
+                description: "Full enterprise deployment with all advanced features".to_string(),
+                category: ScenarioCategory::EnterpriseDeployment,
+                difficulty: DifficultyLevel::Expert,
+                config_template: self.create_enterprise_config(),
+                documentation: self.create_enterprise_docs(),
+                startup_script: self.create_enterprise_script(),
+            },
+        );
     }
 
     fn create_beginner_prompt(&self) -> ScenarioPrompt {
@@ -232,20 +252,25 @@ impl ScenarioManager {
         }
     }
 
-    fn apply_customization(&self, config: &mut SetupConfig, key: &str, value: &str) -> Result<(), String> {
+    fn apply_customization(
+        &self,
+        config: &mut SetupConfig,
+        key: &str,
+        value: &str,
+    ) -> Result<(), String> {
         match key {
             "grid_name" => config.grid_name = value.to_string(),
             "admin_first_name" => config.admin_first_name = value.to_string(),
             "admin_last_name" => config.admin_last_name = value.to_string(),
             "region_count" => {
                 config.region_count = value.parse().map_err(|_| "Invalid region count")?;
-            },
+            }
             "enable_hypergrid" => {
                 config.enable_hypergrid = value.parse().map_err(|_| "Invalid hypergrid setting")?;
-            },
+            }
             "enable_ossl" => {
                 config.enable_ossl = value.parse().map_err(|_| "Invalid OSSL setting")?;
-            },
+            }
             _ => return Err(format!("Unknown customization key: {}", key)),
         }
         Ok(())
@@ -289,7 +314,9 @@ impl ScenarioManager {
         config.enable_ossl = true;
         config.ossl_threat_level = "VeryHigh".to_string();
         config.database_provider = "PostgreSQL".to_string();
-        config.database_connection = "Host=localhost;Database=opensim_creative;Username=opensim;Password=secure_password".to_string();
+        config.database_connection =
+            "Host=localhost;Database=opensim_creative;Username=opensim;Password=secure_password"
+                .to_string();
         config.preset = SetupPreset::Development;
         config
     }
@@ -309,7 +336,8 @@ impl ScenarioManager {
 
     // Documentation creation methods (simplified)
     fn create_small_grid_docs(&self) -> String {
-        "# Small Grid (2x2) Setup\n\nFour connected regions perfect for learning grid management.".to_string()
+        "# Small Grid (2x2) Setup\n\nFour connected regions perfect for learning grid management."
+            .to_string()
     }
 
     fn create_creative_docs(&self) -> String {
@@ -317,7 +345,8 @@ impl ScenarioManager {
     }
 
     fn create_enterprise_docs(&self) -> String {
-        "# Enterprise Production Setup\n\nFull enterprise deployment with all advanced features.".to_string()
+        "# Enterprise Production Setup\n\nFull enterprise deployment with all advanced features."
+            .to_string()
     }
 
     // Script creation methods (simplified)

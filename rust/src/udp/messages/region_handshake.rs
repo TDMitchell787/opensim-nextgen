@@ -1,7 +1,7 @@
+use crate::region::data_model::RegionInfo;
 use anyhow::Result;
 use bytes::{Buf, BufMut, BytesMut};
 use uuid::Uuid;
-use crate::region::data_model::RegionInfo;
 
 #[derive(Debug, Clone)]
 pub struct RegionHandshakeMessage {
@@ -177,7 +177,10 @@ pub struct RegionHandshakeReplyMessage {
 impl RegionHandshakeReplyMessage {
     pub fn parse(data: &[u8]) -> Result<Self> {
         if data.len() < 36 {
-            anyhow::bail!("RegionHandshakeReply packet too short: {} bytes (expected at least 36)", data.len());
+            anyhow::bail!(
+                "RegionHandshakeReply packet too short: {} bytes (expected at least 36)",
+                data.len()
+            );
         }
 
         let mut cursor = std::io::Cursor::new(data);
@@ -193,7 +196,11 @@ impl RegionHandshakeReplyMessage {
 
         let flags = cursor.get_u32();
 
-        Ok(Self { agent_id, session_id, flags })
+        Ok(Self {
+            agent_id,
+            session_id,
+            flags,
+        })
     }
 
     pub fn serialize(&self) -> Vec<u8> {

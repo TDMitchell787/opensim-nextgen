@@ -1,18 +1,22 @@
 use axum::extract::State;
+use axum::http::{header, StatusCode};
 use axum::response::IntoResponse;
-use axum::http::{StatusCode, header};
-use tracing::{info, warn, debug};
 use std::collections::HashMap;
+use tracing::{debug, info, warn};
 
-use super::RobustState;
 use super::xml_response::*;
+use super::RobustState;
 
 pub async fn handle_friends(
     State(state): State<RobustState>,
     body: String,
 ) -> axum::response::Response {
     let params = parse_form_body(&body);
-    let method = params.get("METHOD").or_else(|| params.get("method")).cloned().unwrap_or_default();
+    let method = params
+        .get("METHOD")
+        .or_else(|| params.get("method"))
+        .cloned()
+        .unwrap_or_default();
 
     debug!("[FRIENDS] Request: METHOD={}", method);
 
@@ -26,7 +30,11 @@ pub async fn handle_friends(
 
     match method.to_lowercase().as_str() {
         "getfriends" => {
-            let principal_id = params.get("PRINCIPALID").or_else(|| params.get("PrincipalID")).cloned().unwrap_or_default();
+            let principal_id = params
+                .get("PRINCIPALID")
+                .or_else(|| params.get("PrincipalID"))
+                .cloned()
+                .unwrap_or_default();
             debug!("[FRIENDS] getfriends: {}", principal_id);
 
             match svc.get_friends(&principal_id).await {
@@ -38,7 +46,11 @@ pub async fn handle_friends(
             }
         }
         "getfriends_string" => {
-            let principal_id = params.get("PRINCIPALID").or_else(|| params.get("PrincipalID")).cloned().unwrap_or_default();
+            let principal_id = params
+                .get("PRINCIPALID")
+                .or_else(|| params.get("PrincipalID"))
+                .cloned()
+                .unwrap_or_default();
             debug!("[FRIENDS] getfriends_string: {}", principal_id);
 
             match svc.get_friends(&principal_id).await {
@@ -50,12 +62,25 @@ pub async fn handle_friends(
             }
         }
         "storefriend" => {
-            let principal_id = params.get("PrincipalID").or_else(|| params.get("PRINCIPALID")).cloned().unwrap_or_default();
-            let friend = params.get("Friend").or_else(|| params.get("FRIEND")).cloned().unwrap_or_default();
-            let flags: i32 = params.get("MyFlags").or_else(|| params.get("MYFLAGS"))
+            let principal_id = params
+                .get("PrincipalID")
+                .or_else(|| params.get("PRINCIPALID"))
+                .cloned()
+                .unwrap_or_default();
+            let friend = params
+                .get("Friend")
+                .or_else(|| params.get("FRIEND"))
+                .cloned()
+                .unwrap_or_default();
+            let flags: i32 = params
+                .get("MyFlags")
+                .or_else(|| params.get("MYFLAGS"))
                 .and_then(|s| s.parse().ok())
                 .unwrap_or(0);
-            info!("[FRIENDS] storefriend: {} -> {} flags={}", principal_id, friend, flags);
+            info!(
+                "[FRIENDS] storefriend: {} -> {} flags={}",
+                principal_id, friend, flags
+            );
 
             match svc.store_friend(&principal_id, &friend, flags).await {
                 Ok(true) => success_response(),
@@ -67,8 +92,16 @@ pub async fn handle_friends(
             }
         }
         "deletefriend" | "deletefriend_string" => {
-            let principal_id = params.get("PRINCIPALID").or_else(|| params.get("PrincipalID")).cloned().unwrap_or_default();
-            let friend = params.get("FRIEND").or_else(|| params.get("Friend")).cloned().unwrap_or_default();
+            let principal_id = params
+                .get("PRINCIPALID")
+                .or_else(|| params.get("PrincipalID"))
+                .cloned()
+                .unwrap_or_default();
+            let friend = params
+                .get("FRIEND")
+                .or_else(|| params.get("Friend"))
+                .cloned()
+                .unwrap_or_default();
             info!("[FRIENDS] deletefriend: {} -> {}", principal_id, friend);
 
             match svc.delete_friend(&principal_id, &friend).await {
@@ -87,19 +120,24 @@ pub async fn handle_friends(
     }
 }
 
-fn friends_list_response(friends: &[crate::services::traits::FriendInfo]) -> axum::response::Response {
+fn friends_list_response(
+    friends: &[crate::services::traits::FriendInfo],
+) -> axum::response::Response {
     use crate::services::traits::FriendInfo;
     if friends.is_empty() {
         return null_result_response();
     }
-    let items: Vec<HashMap<String, String>> = friends.iter().map(|f| {
-        let mut m = HashMap::new();
-        m.insert("PrincipalID".to_string(), f.principal_id.clone());
-        m.insert("Friend".to_string(), f.friend.clone());
-        m.insert("MyFlags".to_string(), f.my_flags.to_string());
-        m.insert("TheirFlags".to_string(), f.their_flags.to_string());
-        m
-    }).collect();
+    let items: Vec<HashMap<String, String>> = friends
+        .iter()
+        .map(|f| {
+            let mut m = HashMap::new();
+            m.insert("PrincipalID".to_string(), f.principal_id.clone());
+            m.insert("Friend".to_string(), f.friend.clone());
+            m.insert("MyFlags".to_string(), f.my_flags.to_string());
+            m.insert("TheirFlags".to_string(), f.their_flags.to_string());
+            m
+        })
+        .collect();
     let xml = list_result("friend", items);
     (StatusCode::OK, [(header::CONTENT_TYPE, "text/xml")], xml).into_response()
 }

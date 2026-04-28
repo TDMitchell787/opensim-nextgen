@@ -1,9 +1,9 @@
-use std::time::{Duration, Instant};
-use tokio::time::timeout;
-use uuid::Uuid;
 use serde::{Deserialize, Serialize};
+use std::time::{Duration, Instant};
 use thiserror::Error;
-use tracing::{info, warn, error};
+use tokio::time::timeout;
+use tracing::{error, info, warn};
+use uuid::Uuid;
 
 /// Login state machine matching Cool Viewer's systematic approach
 #[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
@@ -86,7 +86,7 @@ impl LoginStateMachine {
     pub fn new(session_id: Uuid) -> Self {
         let now = Instant::now();
         let initial_state = LoginState::BrowserInit;
-        
+
         Self {
             current_state: initial_state.clone(),
             session_id,
@@ -179,8 +179,7 @@ impl LoginStateMachine {
 
         info!(
             "Session {} transitioned to state: {:?}",
-            self.session_id,
-            self.current_state
+            self.session_id, self.current_state
         );
 
         Ok(())
@@ -199,10 +198,7 @@ impl LoginStateMachine {
 
         warn!(
             "Session {} retrying state {:?}, attempt {}/{}",
-            self.session_id,
-            self.current_state,
-            self.retry_count,
-            self.max_retries
+            self.session_id, self.current_state, self.retry_count, self.max_retries
         );
 
         Ok(())
@@ -211,7 +207,7 @@ impl LoginStateMachine {
     /// Handle state timeout
     pub fn handle_timeout(&mut self) -> Result<(), LoginError> {
         let error = LoginError::StateTimeout(format!("{:?}", self.current_state));
-        
+
         // Try to retry if not at max retries
         if self.retry_count < self.max_retries {
             self.retry()
@@ -364,7 +360,7 @@ mod tests {
     fn test_login_state_machine_creation() {
         let session_id = Uuid::new_v4();
         let state_machine = LoginStateMachine::new(session_id);
-        
+
         assert_eq!(state_machine.session_id(), session_id);
         assert_eq!(state_machine.current_state(), &LoginState::BrowserInit);
         assert!(!state_machine.is_complete());
@@ -375,11 +371,11 @@ mod tests {
     fn test_state_transitions() {
         let session_id = Uuid::new_v4();
         let mut state_machine = LoginStateMachine::new(session_id);
-        
+
         // Test valid transition
         assert!(state_machine.transition_to(LoginState::LoginShow).is_ok());
         assert_eq!(state_machine.current_state(), &LoginState::LoginShow);
-        
+
         // Test invalid transition
         assert!(state_machine.transition_to(LoginState::Started).is_err());
     }
@@ -388,11 +384,11 @@ mod tests {
     fn test_retry_logic() {
         let session_id = Uuid::new_v4();
         let mut state_machine = LoginStateMachine::new(session_id);
-        
+
         // Test retry within limit
         assert!(state_machine.retry().is_ok());
         assert_eq!(state_machine.retry_count(), 1);
-        
+
         // Test max retries exceeded
         state_machine.retry_count = 3;
         assert!(state_machine.retry().is_err());
@@ -403,14 +399,14 @@ mod tests {
     fn test_state_manager() {
         let mut manager = LoginStateManager::new();
         let session_id = Uuid::new_v4();
-        
+
         // Create session
         let state_machine = manager.create_session(session_id);
         assert_eq!(state_machine.session_id(), session_id);
-        
+
         // Get session
         assert!(manager.get_session(&session_id).is_some());
-        
+
         // Cleanup session
         manager.cleanup_session(&session_id);
         assert!(manager.get_session(&session_id).is_none());

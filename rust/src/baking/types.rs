@@ -27,7 +27,10 @@ impl BakeType {
     }
 
     pub fn is_skin(&self) -> bool {
-        matches!(self, BakeType::Head | BakeType::UpperBody | BakeType::LowerBody)
+        matches!(
+            self,
+            BakeType::Head | BakeType::UpperBody | BakeType::LowerBody
+        )
     }
 }
 
@@ -146,15 +149,9 @@ impl BakeType {
                 AvatarTextureIndex::LowerJacket,
                 AvatarTextureIndex::LowerAlpha,
             ],
-            BakeType::Eyes => vec![
-                AvatarTextureIndex::EyesIris,
-                AvatarTextureIndex::EyesAlpha,
-            ],
+            BakeType::Eyes => vec![AvatarTextureIndex::EyesIris, AvatarTextureIndex::EyesAlpha],
             BakeType::Skirt => vec![AvatarTextureIndex::Skirt],
-            BakeType::Hair => vec![
-                AvatarTextureIndex::Hair,
-                AvatarTextureIndex::HairAlpha,
-            ],
+            BakeType::Hair => vec![AvatarTextureIndex::Hair, AvatarTextureIndex::HairAlpha],
             _ => vec![],
         }
     }
@@ -185,9 +182,24 @@ pub struct Color4 {
 }
 
 impl Color4 {
-    pub const WHITE: Color4 = Color4 { r: 1.0, g: 1.0, b: 1.0, a: 1.0 };
-    pub const BLACK: Color4 = Color4 { r: 0.0, g: 0.0, b: 0.0, a: 1.0 };
-    pub const TRANSPARENT: Color4 = Color4 { r: 0.0, g: 0.0, b: 0.0, a: 0.0 };
+    pub const WHITE: Color4 = Color4 {
+        r: 1.0,
+        g: 1.0,
+        b: 1.0,
+        a: 1.0,
+    };
+    pub const BLACK: Color4 = Color4 {
+        r: 0.0,
+        g: 0.0,
+        b: 0.0,
+        a: 1.0,
+    };
+    pub const TRANSPARENT: Color4 = Color4 {
+        r: 0.0,
+        g: 0.0,
+        b: 0.0,
+        a: 0.0,
+    };
 
     pub fn new(r: f32, g: f32, b: f32, a: f32) -> Self {
         Self { r, g, b, a }

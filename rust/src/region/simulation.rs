@@ -1,13 +1,13 @@
 //! Main simulation engine for OpenSim
-//! 
+//!
 //! This module orchestrates the entire simulation loop, including region updates,
 //! physics steps, and network synchronization.
 
+use crate::region::{RegionError, RegionManager};
+use crate::state::StateManager;
 use std::sync::Arc;
 use tokio::sync::Mutex;
 use tokio::time::{self, Duration, Instant};
-use crate::region::{RegionManager, RegionError};
-use crate::state::StateManager;
 
 /// Simulation configuration parameters
 #[derive(Debug, Clone)]
@@ -44,10 +44,7 @@ pub struct SimulationEngine {
 
 impl SimulationEngine {
     /// Create a new simulation engine
-    pub fn new(
-        region_manager: Arc<RegionManager>,
-        state_manager: Arc<StateManager>,
-    ) -> Self {
+    pub fn new(region_manager: Arc<RegionManager>, state_manager: Arc<StateManager>) -> Self {
         Self {
             region_manager,
             state_manager,
@@ -86,7 +83,10 @@ impl SimulationEngine {
                 // Profiling end
                 if config.profiling {
                     let elapsed = tick_start.elapsed();
-                    println!("[Simulation] Tick took {:.3} ms", elapsed.as_secs_f64() * 1000.0);
+                    println!(
+                        "[Simulation] Tick took {:.3} ms",
+                        elapsed.as_secs_f64() * 1000.0
+                    );
                 }
             }
         });
@@ -113,8 +113,8 @@ impl SimulationEngine {
 #[cfg(test)]
 mod tests {
     use super::*;
-    use crate::region::{RegionManager, RegionConfig, terrain, simulation};
     use crate::ffi::physics::PhysicsBridge;
+    use crate::region::{simulation, terrain, RegionConfig, RegionManager};
     use crate::state::StateManager;
     use std::sync::Arc;
 
@@ -133,4 +133,4 @@ mod tests {
         tokio::time::sleep(Duration::from_millis(10)).await;
         assert!(!engine.is_running().await);
     }
-} 
+}

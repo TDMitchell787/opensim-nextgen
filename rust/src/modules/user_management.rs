@@ -56,7 +56,10 @@ impl UserManagementModule {
                             cache.insert(id, (first, last));
                         }
                     }
-                    info!("[USER MGMT] Populated name cache with {} entries", cache.len());
+                    info!(
+                        "[USER MGMT] Populated name cache with {} entries",
+                        cache.len()
+                    );
                 }
             }
             DatabaseConnection::MySQL(_pool) => {
@@ -80,8 +83,12 @@ impl IUserManagement for UserManagementModule {
 
 #[async_trait]
 impl RegionModule for UserManagementModule {
-    fn name(&self) -> &'static str { "UserManagementModule" }
-    fn replaceable_interface(&self) -> Option<&'static str> { Some("IUserManagement") }
+    fn name(&self) -> &'static str {
+        "UserManagementModule"
+    }
+    fn replaceable_interface(&self) -> Option<&'static str> {
+        Some("IUserManagement")
+    }
 
     async fn initialize(&mut self, _config: &ModuleConfig) -> Result<()> {
         info!("[USER MGMT MODULE] Initialized");
@@ -112,22 +119,27 @@ impl RegionModule for UserManagementModule {
             50,
         );
 
-        scene.service_registry.write().register::<UserManagementModule>(
-            Arc::new(UserManagementModule {
+        scene
+            .service_registry
+            .write()
+            .register::<UserManagementModule>(Arc::new(UserManagementModule {
                 name_cache: self.name_cache.clone(),
                 db: self.db.clone(),
                 session_manager: self.session_manager.clone(),
                 avatar_states: self.avatar_states.clone(),
                 service_registry: self.service_registry.clone(),
-            }),
-        );
+            }));
 
         info!("[USER MGMT MODULE] Added to region {:?}", scene.region_name);
         Ok(())
     }
 
-    fn as_any(&self) -> &dyn Any { self }
-    fn as_any_mut(&mut self) -> &mut dyn Any { self }
+    fn as_any(&self) -> &dyn Any {
+        self
+    }
+    fn as_any_mut(&mut self) -> &mut dyn Any {
+        self
+    }
 }
 
 #[async_trait]
@@ -144,7 +156,10 @@ impl EventHandler for UserMgmtEventHandler {
         if let SceneEvent::OnNewClient { agent_id, .. } = event {
             if let Some(session) = self.session_manager.get_session_by_agent_id(*agent_id) {
                 let mut cache = self.name_cache.write();
-                cache.insert(*agent_id, (session.first_name.clone(), session.last_name.clone()));
+                cache.insert(
+                    *agent_id,
+                    (session.first_name.clone(), session.last_name.clone()),
+                );
             }
         }
         Ok(())

@@ -1,12 +1,12 @@
 //! Region data persistence and management
 
-use std::sync::Arc;
 use anyhow::{anyhow, Result};
-use serde::{Deserialize, Serialize};
-use sqlx::{Row, FromRow};
-use tracing::{info, warn, error, debug};
-use uuid::Uuid;
 use chrono::{DateTime, Utc};
+use serde::{Deserialize, Serialize};
+use sqlx::{FromRow, Row};
+use std::sync::Arc;
+use tracing::{debug, error, info, warn};
+use uuid::Uuid;
 
 use super::multi_backend::DatabaseConnection;
 
@@ -165,15 +165,17 @@ impl RegionDatabase {
     /// Create a new region database
     pub async fn new(connection: Arc<DatabaseConnection>) -> Result<Self> {
         info!("Initializing region database");
-        Ok(Self { connection: Some(connection) })
+        Ok(Self {
+            connection: Some(connection),
+        })
     }
-    
+
     /// Create a stub region database for SQLite compatibility
     pub fn new_stub() -> Self {
         info!("Creating stub region database for SQLite compatibility");
         Self { connection: None }
     }
-    
+
     /// Get database connection pool (handles stub mode gracefully)
     fn pool(&self) -> Result<&sqlx::PgPool> {
         match &self.connection {
@@ -181,15 +183,17 @@ impl RegionDatabase {
                 super::multi_backend::DatabaseConnection::PostgreSQL(pool) => Ok(pool),
                 _ => Err(anyhow!("Database is not PostgreSQL")),
             },
-            None => Err(anyhow!("Database operation not available in stub mode"))
+            None => Err(anyhow!("Database operation not available in stub mode")),
         }
     }
-    
+
     /// Create a new region
     pub async fn create_region(&self, request: CreateRegionRequest) -> Result<RegionData> {
-        info!("Creating new region: {} at ({}, {})", 
-               request.region_name, request.location_x, request.location_y);
-        
+        info!(
+            "Creating new region: {} at ({}, {})",
+            request.region_name, request.location_x, request.location_y
+        );
+
         let region = sqlx::query_as::<_, RegionData>(
             r#"
             INSERT INTO regions (
@@ -199,7 +203,7 @@ impl RegionDatabase {
             )
             VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, NOW(), NOW(), NOW())
             RETURNING *
-            "#
+            "#,
         )
         .bind(&request.region_name)
         .bind(request.location_x)
@@ -214,222 +218,237 @@ impl RegionDatabase {
         .fetch_one(self.pool()?)
         .await
         .map_err(|e| anyhow!("Failed to create region: {}", e))?;
-        
+
         // Create default terrain
         self.create_default_terrain(region.id).await?;
-        
+
         info!("Created region: {} ({})", region.region_name, region.id);
         Ok(region)
     }
-    
+
     /// Get region by ID
     pub async fn get_region_by_id(&self, region_id: Uuid) -> Result<Option<RegionData>> {
         debug!("Getting region by ID: {}", region_id);
-        
+
         let region = sqlx::query_as::<_, RegionData>("SELECT * FROM regions WHERE id = $1")
             .bind(region_id)
             .fetch_optional(self.pool()?)
             .await
             .map_err(|e| anyhow!("Failed to get region by ID: {}", e))?;
-        
+
         Ok(region)
     }
-    
+
     /// Get region by name
     pub async fn get_region_by_name(&self, region_name: &str) -> Result<Option<RegionData>> {
         debug!("Getting region by name: {}", region_name);
-        
-        let region = sqlx::query_as::<_, RegionData>("SELECT * FROM regions WHERE region_name = $1")
-            .bind(region_name)
-            .fetch_optional(self.pool()?)
-            .await
-            .map_err(|e| anyhow!("Failed to get region by name: {}", e))?;
-        
+
+        let region =
+            sqlx::query_as::<_, RegionData>("SELECT * FROM regions WHERE region_name = $1")
+                .bind(region_name)
+                .fetch_optional(self.pool()?)
+                .await
+                .map_err(|e| anyhow!("Failed to get region by name: {}", e))?;
+
         Ok(region)
     }
-    
+
     /// Get region by location
     pub async fn get_region_by_location(&self, x: i32, y: i32) -> Result<Option<RegionData>> {
         debug!("Getting region by location: ({}, {})", x, y);
-        
+
         let region = sqlx::query_as::<_, RegionData>(
-            "SELECT * FROM regions WHERE location_x = $1 AND location_y = $2"
+            "SELECT * FROM regions WHERE location_x = $1 AND location_y = $2",
         )
         .bind(x)
         .bind(y)
         .fetch_optional(self.pool()?)
         .await
         .map_err(|e| anyhow!("Failed to get region by location: {}", e))?;
-        
+
         Ok(region)
     }
-    
+
     /// Update region data
-    pub async fn update_region(&self, region_id: Uuid, request: UpdateRegionRequest) -> Result<RegionData> {
+    pub async fn update_region(
+        &self,
+        region_id: Uuid,
+        request: UpdateRegionRequest,
+    ) -> Result<RegionData> {
         debug!("Updating region: {}", region_id);
-        
+
         // Build dynamic update query
         let mut updates = Vec::new();
         let mut params: Vec<Box<dyn sqlx::Encode<sqlx::Postgres> + Send + Sync>> = Vec::new();
         let mut param_count = 1;
-        
+
         if let Some(region_name) = &request.region_name {
             updates.push(format!("region_name = ${}", param_count));
             params.push(Box::new(region_name.clone()));
             param_count += 1;
         }
-        
+
         if let Some(internal_ip) = &request.internal_ip {
             updates.push(format!("internal_ip = ${}", param_count));
             params.push(Box::new(internal_ip.clone()));
             param_count += 1;
         }
-        
+
         if let Some(internal_port) = request.internal_port {
             updates.push(format!("internal_port = ${}", param_count));
             params.push(Box::new(internal_port));
             param_count += 1;
         }
-        
+
         if let Some(external_host_name) = &request.external_host_name {
             updates.push(format!("external_host_name = ${}", param_count));
             params.push(Box::new(external_host_name.clone()));
             param_count += 1;
         }
-        
+
         if let Some(master_avatar_id) = request.master_avatar_id {
             updates.push(format!("master_avatar_id = ${}", param_count));
             params.push(Box::new(master_avatar_id));
             param_count += 1;
         }
-        
+
         if let Some(owner_id) = request.owner_id {
             updates.push(format!("owner_id = ${}", param_count));
             params.push(Box::new(owner_id));
             param_count += 1;
         }
-        
+
         if let Some(flags) = request.flags {
             updates.push(format!("flags = ${}", param_count));
             params.push(Box::new(flags));
             param_count += 1;
         }
-        
+
         if let Some(prim_count) = request.prim_count {
             updates.push(format!("prim_count = ${}", param_count));
             params.push(Box::new(prim_count));
             param_count += 1;
         }
-        
+
         if let Some(agent_count) = request.agent_count {
             updates.push(format!("agent_count = ${}", param_count));
             params.push(Box::new(agent_count));
             param_count += 1;
         }
-        
+
         if updates.is_empty() {
             return Err(anyhow!("No fields to update"));
         }
-        
+
         updates.push("updated_at = NOW()".to_string());
         updates.push("last_seen = NOW()".to_string());
-        
+
         let query = format!(
             "UPDATE regions SET {} WHERE id = ${} RETURNING *",
             updates.join(", "),
             param_count
         );
-        
+
         // For simplicity, use a manual approach (in production, use a proper query builder)
         let updated_region = sqlx::query_as::<_, RegionData>(&query)
             .bind(region_id)
             .fetch_one(self.pool()?)
             .await
             .map_err(|e| anyhow!("Failed to update region: {}", e))?;
-        
-        info!("Updated region: {} ({})", updated_region.region_name, updated_region.id);
+
+        info!(
+            "Updated region: {} ({})",
+            updated_region.region_name, updated_region.id
+        );
         Ok(updated_region)
     }
-    
+
     /// Delete region
     pub async fn delete_region(&self, region_id: Uuid) -> Result<bool> {
         warn!("Deleting region: {}", region_id);
-        
+
         // Delete in transaction to ensure consistency
-        let connection = self.connection.as_ref().ok_or_else(|| anyhow!("Database not available in stub mode"))?;
+        let connection = self
+            .connection
+            .as_ref()
+            .ok_or_else(|| anyhow!("Database not available in stub mode"))?;
         let mut tx = connection.begin_transaction().await?;
-        
+
         // Delete terrain data
         let pg_tx = tx.as_postgres_tx()?;
-        
+
         let _ = sqlx::query("DELETE FROM region_terrain WHERE region_id = $1")
             .bind(region_id)
             .execute(&mut **pg_tx)
             .await;
-        
+
         // Delete scene objects
         let _ = sqlx::query("DELETE FROM scene_objects WHERE region_id = $1")
             .bind(region_id)
             .execute(&mut **pg_tx)
             .await;
-        
+
         // Delete region
         let result = sqlx::query("DELETE FROM regions WHERE id = $1")
             .bind(region_id)
             .execute(&mut **pg_tx)
             .await
             .map_err(|e| anyhow!("Failed to delete region: {}", e))?;
-        
-        tx.commit().await.map_err(|e| anyhow!("Failed to commit region deletion: {}", e))?;
-        
+
+        tx.commit()
+            .await
+            .map_err(|e| anyhow!("Failed to commit region deletion: {}", e))?;
+
         let deleted = result.rows_affected() > 0;
         if deleted {
             info!("Deleted region: {}", region_id);
         }
-        
+
         Ok(deleted)
     }
-    
+
     /// Get region terrain
     pub async fn get_region_terrain(&self, region_id: Uuid) -> Result<Option<RegionTerrain>> {
         debug!("Getting terrain for region: {}", region_id);
-        
-        let terrain = sqlx::query_as::<_, RegionTerrain>(
-            "SELECT * FROM region_terrain WHERE region_id = $1"
-        )
-        .bind(region_id)
-        .fetch_optional(self.pool()?)
-        .await
-        .map_err(|e| anyhow!("Failed to get region terrain: {}", e))?;
-        
+
+        let terrain =
+            sqlx::query_as::<_, RegionTerrain>("SELECT * FROM region_terrain WHERE region_id = $1")
+                .bind(region_id)
+                .fetch_optional(self.pool()?)
+                .await
+                .map_err(|e| anyhow!("Failed to get region terrain: {}", e))?;
+
         Ok(terrain)
     }
-    
+
     /// Update region terrain
     pub async fn update_region_terrain(&self, region_id: Uuid, terrain_data: &[u8]) -> Result<()> {
         debug!("Updating terrain for region: {}", region_id);
-        
+
         sqlx::query(
             r#"
             UPDATE region_terrain 
             SET terrain_data = $2, terrain_revision = terrain_revision + 1, updated_at = NOW()
             WHERE region_id = $1
-            "#
+            "#,
         )
         .bind(region_id)
         .bind(terrain_data)
         .execute(self.pool()?)
         .await
         .map_err(|e| anyhow!("Failed to update region terrain: {}", e))?;
-        
+
         debug!("Updated terrain for region: {}", region_id);
         Ok(())
     }
-    
+
     /// Save scene object
     pub async fn save_scene_object(&self, object: &SceneObject) -> Result<()> {
-        debug!("Saving scene object: {} in region {}", object.id, object.region_id);
-        
+        debug!(
+            "Saving scene object: {} in region {}",
+            object.id, object.region_id
+        );
+
         sqlx::query(
             r#"
             INSERT INTO scene_objects (
@@ -487,7 +506,7 @@ impl RegionDatabase {
                 shape_data = EXCLUDED.shape_data,
                 script_state = EXCLUDED.script_state,
                 updated_at = NOW()
-            "#
+            "#,
         )
         .bind(object.id)
         .bind(object.region_id)
@@ -534,42 +553,46 @@ impl RegionDatabase {
         .execute(self.pool()?)
         .await
         .map_err(|e| anyhow!("Failed to save scene object: {}", e))?;
-        
+
         debug!("Saved scene object: {}", object.id);
         Ok(())
     }
-    
+
     /// Load scene objects for region
     pub async fn load_scene_objects(&self, region_id: Uuid) -> Result<Vec<SceneObject>> {
         debug!("Loading scene objects for region: {}", region_id);
-        
+
         let objects = sqlx::query_as::<_, SceneObject>(
-            "SELECT * FROM scene_objects WHERE region_id = $1 ORDER BY created_at"
+            "SELECT * FROM scene_objects WHERE region_id = $1 ORDER BY created_at",
         )
         .bind(region_id)
         .fetch_all(self.pool()?)
         .await
         .map_err(|e| anyhow!("Failed to load scene objects: {}", e))?;
-        
-        debug!("Loaded {} scene objects for region: {}", objects.len(), region_id);
+
+        debug!(
+            "Loaded {} scene objects for region: {}",
+            objects.len(),
+            region_id
+        );
         Ok(objects)
     }
-    
+
     /// Get total region count
     pub async fn get_region_count(&self) -> Result<u64> {
         let row = sqlx::query("SELECT COUNT(*) as count FROM regions")
             .fetch_one(self.pool()?)
             .await
             .map_err(|e| anyhow!("Failed to get region count: {}", e))?;
-        
+
         let count: i64 = row.try_get("count")?;
         Ok(count as u64)
     }
-    
+
     /// Create default terrain for a region
     async fn create_default_terrain(&self, region_id: Uuid) -> Result<()> {
         debug!("Creating default terrain for region: {}", region_id);
-        
+
         sqlx::query(
             r#"
             INSERT INTO region_terrain (
@@ -579,13 +602,13 @@ impl RegionDatabase {
                 created_at, updated_at
             )
             VALUES ($1, 1, 0, 20.0, 100.0, -100.0, TRUE, FALSE, 0.0, NOW(), NOW())
-            "#
+            "#,
         )
         .bind(region_id)
         .execute(self.pool()?)
         .await
         .map_err(|e| anyhow!("Failed to create default terrain: {}", e))?;
-        
+
         Ok(())
     }
 }
@@ -593,7 +616,7 @@ impl RegionDatabase {
 #[cfg(test)]
 mod tests {
     use super::*;
-    
+
     #[test]
     fn test_create_region_request() {
         let request = CreateRegionRequest {
@@ -608,7 +631,7 @@ mod tests {
             master_avatar_id: None,
             owner_id: None,
         };
-        
+
         assert_eq!(request.region_name, "Test Region");
         assert_eq!(request.location_x, 1000);
         assert_eq!(request.location_y, 1000);

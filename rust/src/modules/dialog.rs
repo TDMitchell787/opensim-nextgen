@@ -17,17 +17,35 @@ use super::traits::{ModuleConfig, RegionModule, SceneContext, SharedRegionModule
 
 pub trait IDialogModule: Send + Sync + 'static {
     fn send_dialog(
-        &self, avatar_id: Uuid, object_name: &str, object_id: Uuid,
-        owner_id: Uuid, message: &str, buttons: &[String], channel: i32,
+        &self,
+        avatar_id: Uuid,
+        object_name: &str,
+        object_id: Uuid,
+        owner_id: Uuid,
+        message: &str,
+        buttons: &[String],
+        channel: i32,
         dest: SocketAddr,
     );
     fn send_text_box(
-        &self, avatar_id: Uuid, object_name: &str, object_id: Uuid,
-        owner_id: Uuid, message: &str, channel: i32, dest: SocketAddr,
+        &self,
+        avatar_id: Uuid,
+        object_name: &str,
+        object_id: Uuid,
+        owner_id: Uuid,
+        message: &str,
+        channel: i32,
+        dest: SocketAddr,
     );
     fn send_url_dialog(
-        &self, avatar_id: Uuid, object_name: &str, object_id: Uuid,
-        owner_id: Uuid, message: &str, url: &str, dest: SocketAddr,
+        &self,
+        avatar_id: Uuid,
+        object_name: &str,
+        object_id: Uuid,
+        owner_id: Uuid,
+        message: &str,
+        url: &str,
+        dest: SocketAddr,
     );
 }
 
@@ -54,9 +72,14 @@ const LOAD_URL_ID: u32 = 0xFFFF00C2; // Low 194
 const SCRIPT_DIALOG_REPLY_ID: u32 = 0xFFFF00B8; // Low 184
 
 fn build_script_dialog(
-    object_id: &Uuid, first_name: &str, last_name: &str,
-    object_name: &str, message: &str, channel: i32,
-    buttons: &[String], owner_id: &Uuid,
+    object_id: &Uuid,
+    first_name: &str,
+    last_name: &str,
+    object_name: &str,
+    message: &str,
+    channel: i32,
+    buttons: &[String],
+    owner_id: &Uuid,
 ) -> Vec<u8> {
     let mut packet = Vec::with_capacity(256);
     packet.push(0x40); // reliable
@@ -110,8 +133,12 @@ fn build_script_dialog(
 }
 
 fn build_load_url(
-    object_name: &str, object_id: &Uuid, owner_id: &Uuid,
-    owner_is_group: bool, message: &str, url: &str,
+    object_name: &str,
+    object_id: &Uuid,
+    owner_id: &Uuid,
+    owner_is_group: bool,
+    message: &str,
+    url: &str,
 ) -> Vec<u8> {
     let mut packet = Vec::with_capacity(256);
     packet.push(0x40);
@@ -144,26 +171,51 @@ fn build_load_url(
 
 impl IDialogModule for DialogModule {
     fn send_dialog(
-        &self, _avatar_id: Uuid, _object_name: &str, _object_id: Uuid,
-        _owner_id: Uuid, _message: &str, _buttons: &[String], _channel: i32,
+        &self,
+        _avatar_id: Uuid,
+        _object_name: &str,
+        _object_id: Uuid,
+        _owner_id: Uuid,
+        _message: &str,
+        _buttons: &[String],
+        _channel: i32,
         _dest: SocketAddr,
-    ) {}
+    ) {
+    }
 
     fn send_text_box(
-        &self, _avatar_id: Uuid, _object_name: &str, _object_id: Uuid,
-        _owner_id: Uuid, _message: &str, _channel: i32, _dest: SocketAddr,
-    ) {}
+        &self,
+        _avatar_id: Uuid,
+        _object_name: &str,
+        _object_id: Uuid,
+        _owner_id: Uuid,
+        _message: &str,
+        _channel: i32,
+        _dest: SocketAddr,
+    ) {
+    }
 
     fn send_url_dialog(
-        &self, _avatar_id: Uuid, _object_name: &str, _object_id: Uuid,
-        _owner_id: Uuid, _message: &str, _url: &str, _dest: SocketAddr,
-    ) {}
+        &self,
+        _avatar_id: Uuid,
+        _object_name: &str,
+        _object_id: Uuid,
+        _owner_id: Uuid,
+        _message: &str,
+        _url: &str,
+        _dest: SocketAddr,
+    ) {
+    }
 }
 
 #[async_trait]
 impl RegionModule for DialogModule {
-    fn name(&self) -> &'static str { "DialogModule" }
-    fn replaceable_interface(&self) -> Option<&'static str> { Some("IDialogModule") }
+    fn name(&self) -> &'static str {
+        "DialogModule"
+    }
+    fn replaceable_interface(&self) -> Option<&'static str> {
+        Some("IDialogModule")
+    }
 
     async fn initialize(&mut self, _config: &ModuleConfig) -> Result<()> {
         info!("[DIALOG MODULE] Initialized");
@@ -182,30 +234,39 @@ impl RegionModule for DialogModule {
         });
         scene.event_bus.subscribe(
             SceneEvent::OnScriptDialog {
-                avatar_id: Uuid::nil(), object_id: Uuid::nil(),
-                object_name: String::new(), owner_id: Uuid::nil(),
-                message: String::new(), buttons: Vec::new(),
-                channel: 0, dest: "0.0.0.0:0".parse().unwrap(),
+                avatar_id: Uuid::nil(),
+                object_id: Uuid::nil(),
+                object_name: String::new(),
+                owner_id: Uuid::nil(),
+                message: String::new(),
+                buttons: Vec::new(),
+                channel: 0,
+                dest: "0.0.0.0:0".parse().unwrap(),
             },
             handler,
             100,
         );
 
-        scene.service_registry.write().register::<DialogModule>(
-            Arc::new(DialogModule {
+        scene
+            .service_registry
+            .write()
+            .register::<DialogModule>(Arc::new(DialogModule {
                 region_uuid: self.region_uuid,
                 socket: self.socket.clone(),
                 session_manager: self.session_manager.clone(),
                 service_registry: self.service_registry.clone(),
-            }),
-        );
+            }));
 
         info!("[DIALOG MODULE] Added to region {:?}", scene.region_name);
         Ok(())
     }
 
-    fn as_any(&self) -> &dyn Any { self }
-    fn as_any_mut(&mut self) -> &mut dyn Any { self }
+    fn as_any(&self) -> &dyn Any {
+        self
+    }
+    fn as_any_mut(&mut self) -> &mut dyn Any {
+        self
+    }
 }
 
 #[async_trait]
@@ -220,22 +281,40 @@ struct DialogEventHandler {
 impl EventHandler for DialogEventHandler {
     async fn handle_event(&self, event: &SceneEvent, _scene: &SceneContext) -> Result<()> {
         if let SceneEvent::OnScriptDialog {
-            avatar_id, object_id, object_name, owner_id,
-            message, buttons, channel, dest,
-        } = event {
-            let (first, last) = if let Some(session) = self.session_manager.get_session_by_agent_id(*avatar_id) {
-                (session.first_name.clone(), session.last_name.clone())
-            } else {
-                ("Object".to_string(), "Owner".to_string())
-            };
+            avatar_id,
+            object_id,
+            object_name,
+            owner_id,
+            message,
+            buttons,
+            channel,
+            dest,
+        } = event
+        {
+            let (first, last) =
+                if let Some(session) = self.session_manager.get_session_by_agent_id(*avatar_id) {
+                    (session.first_name.clone(), session.last_name.clone())
+                } else {
+                    ("Object".to_string(), "Owner".to_string())
+                };
 
             let packet = build_script_dialog(
-                object_id, &first, &last, object_name,
-                message, *channel, buttons, owner_id,
+                object_id,
+                &first,
+                &last,
+                object_name,
+                message,
+                *channel,
+                buttons,
+                owner_id,
             );
             let _ = self.socket.send_to(&packet, dest).await;
 
-            info!("[DIALOG MODULE] Sent ScriptDialog to {} ({} buttons)", dest, buttons.len());
+            info!(
+                "[DIALOG MODULE] Sent ScriptDialog to {} ({} buttons)",
+                dest,
+                buttons.len()
+            );
         }
         Ok(())
     }

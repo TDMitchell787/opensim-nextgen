@@ -1,13 +1,13 @@
 use crate::database::multi_backend::DatabaseConnection;
 use crate::protocol::terrain::LayerType;
-use crate::region::terrain_storage::{TerrainStorage, TerrainRevision};
+use crate::region::terrain_storage::{TerrainRevision, TerrainStorage};
 use crate::udp::messages::LayerDataMessage;
 use anyhow::Result;
+use parking_lot::RwLock;
 use std::collections::HashMap;
 use std::net::SocketAddr;
 use std::sync::Arc;
 use std::time::Duration;
-use parking_lot::RwLock;
 use tokio::net::UdpSocket;
 use tokio::time::sleep;
 use tracing::{info, warn};
@@ -44,12 +44,19 @@ impl TerrainSender {
         {
             let cache = self.cached_packets.read();
             if let Some(packets) = cache.get(&region_uuid) {
-                info!("[TERRAIN] Serving {} cached LayerData packets for region {}", packets.len(), region_uuid);
+                info!(
+                    "[TERRAIN] Serving {} cached LayerData packets for region {}",
+                    packets.len(),
+                    region_uuid
+                );
                 return Ok(packets.clone());
             }
         }
 
-        info!("[TERRAIN] Loading terrain from DB for region {} (first time)", region_uuid);
+        info!(
+            "[TERRAIN] Loading terrain from DB for region {} (first time)",
+            region_uuid
+        );
 
         let heightmap = match self.terrain_storage.load_terrain(region_uuid).await? {
             Some(terrain) => {
@@ -58,7 +65,10 @@ impl TerrainSender {
             }
             None => {
                 info!("[TERRAIN] No terrain found, using default flat terrain at 21m");
-                let default_heightmap = TerrainStorage::create_default_heightmap_sized(self.region_size_x, self.region_size_y);
+                let default_heightmap = TerrainStorage::create_default_heightmap_sized(
+                    self.region_size_x,
+                    self.region_size_y,
+                );
 
                 if let Err(e) = self
                     .terrain_storage
@@ -72,12 +82,19 @@ impl TerrainSender {
             }
         };
 
-        self.cached_heightmaps.write().insert(region_uuid, heightmap.clone());
+        self.cached_heightmaps
+            .write()
+            .insert(region_uuid, heightmap.clone());
 
         let packets = LayerDataMessage::split_into_packets(&heightmap, LayerType::Land)?;
-        info!("[TERRAIN] Created {} LayerData packets (now cached)", packets.len());
+        info!(
+            "[TERRAIN] Created {} LayerData packets (now cached)",
+            packets.len()
+        );
 
-        self.cached_packets.write().insert(region_uuid, packets.clone());
+        self.cached_packets
+            .write()
+            .insert(region_uuid, packets.clone());
 
         Ok(packets)
     }
@@ -102,10 +119,23 @@ impl TerrainSender {
 
             // Phase 70.10: Debug first packet bytes for terrain analysis
             if i == 0 {
-                tracing::warn!("[TERRAIN] First LayerData packet (seq={}) total {} bytes:", sequence, udp_packet.len());
-                tracing::warn!("[TERRAIN] Header (first 10 bytes): {:02x?}", &udp_packet[..udp_packet.len().min(10)]);
-                tracing::warn!("[TERRAIN] Body (next 20 bytes): {:02x?}", &udp_packet[10..udp_packet.len().min(30)]);
-                tracing::warn!("[TERRAIN] Data bytes (10-40): {:02x?}", &udp_packet[10..udp_packet.len().min(40)]);
+                tracing::warn!(
+                    "[TERRAIN] First LayerData packet (seq={}) total {} bytes:",
+                    sequence,
+                    udp_packet.len()
+                );
+                tracing::warn!(
+                    "[TERRAIN] Header (first 10 bytes): {:02x?}",
+                    &udp_packet[..udp_packet.len().min(10)]
+                );
+                tracing::warn!(
+                    "[TERRAIN] Body (next 20 bytes): {:02x?}",
+                    &udp_packet[10..udp_packet.len().min(30)]
+                );
+                tracing::warn!(
+                    "[TERRAIN] Data bytes (10-40): {:02x?}",
+                    &udp_packet[10..udp_packet.len().min(40)]
+                );
             }
 
             sequence += 1;
@@ -118,11 +148,7 @@ impl TerrainSender {
             sleep(Duration::from_millis(2)).await;
 
             if (i + 1) % 16 == 0 {
-                info!(
-                    "[TERRAIN] Sent {}/{} terrain packets",
-                    i + 1,
-                    packets.len()
-                );
+                info!("[TERRAIN] Sent {}/{} terrain packets", i + 1, packets.len());
             }
         }
 
@@ -134,12 +160,21 @@ impl TerrainSender {
     pub async fn initialize_region_terrain(&self, region_uuid: Uuid) -> Result<()> {
         let heightmap = match self.terrain_storage.load_terrain(region_uuid).await? {
             Some(terrain) => {
-                info!("[TERRAIN] Loaded existing terrain for region {} into cache", region_uuid);
+                info!(
+                    "[TERRAIN] Loaded existing terrain for region {} into cache",
+                    region_uuid
+                );
                 terrain
             }
             None => {
-                info!("[TERRAIN] Initializing default terrain for region {}", region_uuid);
-                let default_heightmap = TerrainStorage::create_default_heightmap_sized(self.region_size_x, self.region_size_y);
+                info!(
+                    "[TERRAIN] Initializing default terrain for region {}",
+                    region_uuid
+                );
+                let default_heightmap = TerrainStorage::create_default_heightmap_sized(
+                    self.region_size_x,
+                    self.region_size_y,
+                );
                 self.terrain_storage
                     .store_terrain(region_uuid, &default_heightmap, TerrainRevision::Variable2D)
                     .await?;
@@ -147,10 +182,16 @@ impl TerrainSender {
             }
         };
 
-        self.cached_heightmaps.write().insert(region_uuid, heightmap.clone());
+        self.cached_heightmaps
+            .write()
+            .insert(region_uuid, heightmap.clone());
 
         let packets = LayerDataMessage::split_into_packets(&heightmap, LayerType::Land)?;
-        info!("[TERRAIN] Pre-cached {} terrain packets for region {}", packets.len(), region_uuid);
+        info!(
+            "[TERRAIN] Pre-cached {} terrain packets for region {}",
+            packets.len(),
+            region_uuid
+        );
         self.cached_packets.write().insert(region_uuid, packets);
 
         Ok(())
@@ -179,7 +220,9 @@ impl TerrainSender {
             packets.len(),
             region_uuid
         );
-        self.cached_heightmaps.write().insert(region_uuid, heightmap);
+        self.cached_heightmaps
+            .write()
+            .insert(region_uuid, heightmap);
         self.cached_packets.write().insert(region_uuid, packets);
 
         Ok(())
@@ -228,7 +271,9 @@ impl TerrainSender {
             Some(terrain) => terrain,
             None => TerrainStorage::create_default_heightmap(),
         };
-        self.cached_heightmaps.write().insert(region_uuid, hm.clone());
+        self.cached_heightmaps
+            .write()
+            .insert(region_uuid, hm.clone());
         Ok(hm)
     }
 }

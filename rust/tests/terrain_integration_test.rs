@@ -7,9 +7,9 @@ use uuid::Uuid;
 mod terrain_integration_tests {
     use super::*;
     use opensim_next::database::multi_backend::{DatabaseConnection, MultiDatabaseConfig};
-    use opensim_next::region::terrain_storage::{TerrainStorage, TerrainRevision};
+    use opensim_next::protocol::terrain::{LayerType, TerrainCompressor, TerrainPatch};
     use opensim_next::region::terrain_sender::TerrainSender;
-    use opensim_next::protocol::terrain::{TerrainCompressor, TerrainPatch, LayerType};
+    use opensim_next::region::terrain_storage::{TerrainRevision, TerrainStorage};
     use opensim_next::udp::messages::LayerDataMessage;
 
     #[tokio::test]
@@ -20,7 +20,7 @@ mod terrain_integration_tests {
             5432,
             "opensim_test",
             "opensim",
-            "password123"
+            "password123",
         );
 
         let db_connection = match DatabaseConnection::new(&config).await {
@@ -35,11 +35,9 @@ mod terrain_integration_tests {
         let region_uuid = Uuid::new_v4();
         let default_heightmap = TerrainStorage::create_default_heightmap();
 
-        terrain_storage.store_terrain(
-            region_uuid,
-            &default_heightmap,
-            TerrainRevision::Variable2D
-        ).await?;
+        terrain_storage
+            .store_terrain(region_uuid, &default_heightmap, TerrainRevision::Variable2D)
+            .await?;
 
         let loaded_terrain = terrain_storage.load_terrain(region_uuid).await?;
         assert!(loaded_terrain.is_some());
@@ -55,10 +53,7 @@ mod terrain_integration_tests {
     async fn test_terrain_compression_and_packets() -> Result<()> {
         let default_heightmap = TerrainStorage::create_default_heightmap();
 
-        let patches = LayerDataMessage::split_into_packets(
-            &default_heightmap,
-            LayerType::Land
-        )?;
+        let patches = LayerDataMessage::split_into_packets(&default_heightmap, LayerType::Land)?;
 
         assert!(patches.len() > 0);
         assert!(patches.len() <= 256);
@@ -117,12 +112,8 @@ mod terrain_integration_tests {
 
             assert_eq!(udp_packet[0] & 0x40, 0x40);
 
-            let sequence = u32::from_be_bytes([
-                udp_packet[1],
-                udp_packet[2],
-                udp_packet[3],
-                udp_packet[4],
-            ]);
+            let sequence =
+                u32::from_be_bytes([udp_packet[1], udp_packet[2], udp_packet[3], udp_packet[4]]);
             assert_eq!(sequence, i as u32);
         }
 

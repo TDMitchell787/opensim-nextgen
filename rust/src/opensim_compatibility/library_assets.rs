@@ -3,16 +3,16 @@
 //! Loads actual OpenSim assets from bin/assets/ and bin/inventory/ directories
 //! following the Nini XML format used by OpenSim master.
 
-use std::path::{Path, PathBuf};
+use crate::asset::{AssetData, AssetType};
+use anyhow::{anyhow, Result};
+use serde::{Deserialize, Serialize};
 use std::collections::HashMap;
 use std::fs;
+use std::path::{Path, PathBuf};
 use std::sync::{Arc, OnceLock};
-use uuid::Uuid;
-use serde::{Deserialize, Serialize};
 use tokio::sync::RwLock;
-use anyhow::{Result, anyhow};
-use crate::asset::{AssetType, AssetData};
-use tracing::{info, warn, debug, error};
+use tracing::{debug, error, info, warn};
+use uuid::Uuid;
 
 /// Global library asset manager instance
 static LIBRARY_ASSET_MANAGER: OnceLock<Arc<RwLock<LibraryAssetManager>>> = OnceLock::new();
@@ -163,7 +163,10 @@ impl LibraryAssetManager {
             return Ok(());
         }
 
-        info!("Initializing library asset manager from {}", self.bin_path.display());
+        info!(
+            "Initializing library asset manager from {}",
+            self.bin_path.display()
+        );
 
         // Load asset sets from bin/assets/
         if let Err(e) = self.load_asset_sets().await {
@@ -200,16 +203,36 @@ impl LibraryAssetManager {
 
     fn load_ruth_baked_textures(&mut self) {
         use crate::database::initialization::{
-            load_ruth_head_texture, load_ruth_upper_texture, load_ruth_lower_texture,
-            load_ruth_eyes_texture, load_ruth_hair_texture
+            load_ruth_eyes_texture, load_ruth_hair_texture, load_ruth_head_texture,
+            load_ruth_lower_texture, load_ruth_upper_texture,
         };
 
         let ruth_textures = [
-            ("5a9f4a74-30f2-821c-b88d-70499d3e7183", "Ruth Baked Head", load_ruth_head_texture()),
-            ("ae2de45c-d252-50b8-5c6e-19f39ce79317", "Ruth Baked Upper Body", load_ruth_upper_texture()),
-            ("24daea5f-0539-cfcf-047f-fbc40b2786ba", "Ruth Baked Lower Body", load_ruth_lower_texture()),
-            ("52cc6bb6-2ee5-e632-d3ad-50197b1dcb8a", "Ruth Baked Eyes", load_ruth_eyes_texture()),
-            ("09aac1fb-6bce-0bee-7d44-caac6dbb6c63", "Ruth Baked Hair", load_ruth_hair_texture()),
+            (
+                "5a9f4a74-30f2-821c-b88d-70499d3e7183",
+                "Ruth Baked Head",
+                load_ruth_head_texture(),
+            ),
+            (
+                "ae2de45c-d252-50b8-5c6e-19f39ce79317",
+                "Ruth Baked Upper Body",
+                load_ruth_upper_texture(),
+            ),
+            (
+                "24daea5f-0539-cfcf-047f-fbc40b2786ba",
+                "Ruth Baked Lower Body",
+                load_ruth_lower_texture(),
+            ),
+            (
+                "52cc6bb6-2ee5-e632-d3ad-50197b1dcb8a",
+                "Ruth Baked Eyes",
+                load_ruth_eyes_texture(),
+            ),
+            (
+                "09aac1fb-6bce-0bee-7d44-caac6dbb6c63",
+                "Ruth Baked Hair",
+                load_ruth_hair_texture(),
+            ),
         ];
 
         for (uuid_str, name, data) in ruth_textures {
@@ -238,14 +261,15 @@ impl LibraryAssetManager {
         }
 
         let content = fs::read_to_string(&asset_sets_path)
-            .map_err(|e| anyhow!(
-                format!("Failed to read AssetSets.xml: {}", e)
-            ))?;
+            .map_err(|e| anyhow!(format!("Failed to read AssetSets.xml: {}", e)))?;
 
         // Parse Nini XML to extract asset set file references
         let asset_set_files = self.parse_nini_asset_sets(&content)?;
 
-        info!("Found {} asset sets in AssetSets.xml", asset_set_files.len());
+        info!(
+            "Found {} asset sets in AssetSets.xml",
+            asset_set_files.len()
+        );
 
         // Load each asset set
         for (set_name, file_path) in asset_set_files {
@@ -298,10 +322,13 @@ impl LibraryAssetManager {
 
     /// Load a single asset set XML file
     async fn load_asset_set(&mut self, set_name: &str, path: &Path) -> Result<()> {
-        let content = fs::read_to_string(path)
-            .map_err(|e| anyhow!(
-                format!("Failed to read asset set {}: {}", path.display(), e)
-            ))?;
+        let content = fs::read_to_string(path).map_err(|e| {
+            anyhow!(format!(
+                "Failed to read asset set {}: {}",
+                path.display(),
+                e
+            ))
+        })?;
 
         let set_dir = path.parent().unwrap_or(Path::new("."));
         let mut count = 0;
@@ -394,25 +421,29 @@ impl LibraryAssetManager {
         }
 
         let content = fs::read_to_string(&libraries_path)
-            .map_err(|e| anyhow!(
-                format!("Failed to read Libraries.xml: {}", e)
-            ))?;
+            .map_err(|e| anyhow!(format!("Failed to read Libraries.xml: {}", e)))?;
 
         // Parse Libraries.xml to get folder/item file references
         let library_refs = self.parse_nini_libraries(&content)?;
 
-        info!("Found {} library references in Libraries.xml", library_refs.len());
+        info!(
+            "Found {} library references in Libraries.xml",
+            library_refs.len()
+        );
 
         // Add root library folder
         let root_folder_id = Uuid::parse_str("00000112-000f-0000-0000-000100bba000").unwrap();
         let library_owner_id = Uuid::parse_str("11111111-1111-0000-0000-000100bba000").unwrap();
 
-        self.folders.insert(root_folder_id, LibraryFolder {
-            folder_id: root_folder_id,
-            parent_folder_id: Uuid::nil(),
-            name: "OpenSim Library".to_string(),
-            folder_type: 8, // Root folder type
-        });
+        self.folders.insert(
+            root_folder_id,
+            LibraryFolder {
+                folder_id: root_folder_id,
+                parent_folder_id: Uuid::nil(),
+                name: "OpenSim Library".to_string(),
+                folder_type: 8, // Root folder type
+            },
+        );
 
         // Load each library's folders and items
         for (lib_name, folders_file, items_file) in library_refs {
@@ -441,7 +472,10 @@ impl LibraryAssetManager {
     }
 
     /// Parse Nini XML format for Libraries.xml
-    fn parse_nini_libraries(&self, content: &str) -> Result<Vec<(String, Option<String>, Option<String>)>> {
+    fn parse_nini_libraries(
+        &self,
+        content: &str,
+    ) -> Result<Vec<(String, Option<String>, Option<String>)>> {
         let mut libs = Vec::new();
 
         let mut current_section: Option<String> = None;
@@ -467,8 +501,7 @@ impl LibraryAssetManager {
                     folders_file = None;
                     items_file = None;
                 }
-            }
-            else if line.starts_with("<Key Name=") {
+            } else if line.starts_with("<Key Name=") {
                 if let Some(key_name) = extract_attribute(line, "Name") {
                     if let Some(value) = extract_attribute(line, "Value") {
                         match key_name.as_str() {
@@ -491,10 +524,13 @@ impl LibraryAssetManager {
 
     /// Load inventory folders from XML file
     async fn load_inventory_folders(&mut self, path: &Path) -> Result<()> {
-        let content = fs::read_to_string(path)
-            .map_err(|e| anyhow!(
-                format!("Failed to read folders file {}: {}", path.display(), e)
-            ))?;
+        let content = fs::read_to_string(path).map_err(|e| {
+            anyhow!(format!(
+                "Failed to read folders file {}: {}",
+                path.display(),
+                e
+            ))
+        })?;
 
         let mut in_section = false;
         let mut current_folder = LibraryFolder {
@@ -519,8 +555,7 @@ impl LibraryAssetManager {
                     name: String::new(),
                     folder_type: 0,
                 };
-            }
-            else if in_section && line.starts_with("<Key Name=") {
+            } else if in_section && line.starts_with("<Key Name=") {
                 if let Some(key_name) = extract_attribute(line, "Name") {
                     if let Some(value) = extract_attribute(line, "Value") {
                         match key_name.as_str() {
@@ -546,10 +581,10 @@ impl LibraryAssetManager {
                         }
                     }
                 }
-            }
-            else if line.starts_with("</Section>") {
+            } else if line.starts_with("</Section>") {
                 if !current_folder.folder_id.is_nil() {
-                    self.folders.insert(current_folder.folder_id, current_folder.clone());
+                    self.folders
+                        .insert(current_folder.folder_id, current_folder.clone());
                 }
                 in_section = false;
             }
@@ -560,10 +595,13 @@ impl LibraryAssetManager {
 
     /// Load inventory items from XML file
     async fn load_inventory_items(&mut self, path: &Path) -> Result<()> {
-        let content = fs::read_to_string(path)
-            .map_err(|e| anyhow!(
-                format!("Failed to read items file {}: {}", path.display(), e)
-            ))?;
+        let content = fs::read_to_string(path).map_err(|e| {
+            anyhow!(format!(
+                "Failed to read items file {}: {}",
+                path.display(),
+                e
+            ))
+        })?;
 
         let mut in_section = false;
         let mut current_item = LibraryItem {
@@ -596,8 +634,7 @@ impl LibraryAssetManager {
                     inventory_type: 0,
                     flags: 0,
                 };
-            }
-            else if in_section && line.starts_with("<Key Name=") {
+            } else if in_section && line.starts_with("<Key Name=") {
                 if let Some(key_name) = extract_attribute(line, "Name") {
                     if let Some(value) = extract_attribute(line, "Value") {
                         match key_name.as_str() {
@@ -641,10 +678,10 @@ impl LibraryAssetManager {
                         }
                     }
                 }
-            }
-            else if line.starts_with("</Section>") {
+            } else if line.starts_with("</Section>") {
                 if !current_item.inventory_id.is_nil() {
-                    self.items.insert(current_item.inventory_id, current_item.clone());
+                    self.items
+                        .insert(current_item.inventory_id, current_item.clone());
                 }
                 in_section = false;
             }
@@ -663,9 +700,7 @@ impl LibraryAssetManager {
         }
 
         let content = fs::read_to_string(&anim_path)
-            .map_err(|e| anyhow!(
-                format!("Failed to read avataranimations.xml: {}", e)
-            ))?;
+            .map_err(|e| anyhow!(format!("Failed to read avataranimations.xml: {}", e)))?;
 
         // Parse <animation name="..." state="...">UUID</animation>
         for line in content.lines() {
@@ -747,11 +782,15 @@ impl LibraryAssetManager {
             pants_asset_id: None,
         };
 
-        self.default_avatars.insert("male".to_string(), default_avatar.clone());
-        self.default_avatars.insert("female".to_string(), default_avatar);
+        self.default_avatars
+            .insert("male".to_string(), default_avatar.clone());
+        self.default_avatars
+            .insert("female".to_string(), default_avatar);
 
-        info!("Built default avatar configurations with shape={}, skin={}, hair={}, eyes={}",
-              shape_asset, skin_asset, hair_asset, eyes_asset);
+        info!(
+            "Built default avatar configurations with shape={}, skin={}, hair={}, eyes={}",
+            shape_asset, skin_asset, hair_asset, eyes_asset
+        );
     }
 
     // ==================== PUBLIC API ====================
@@ -788,14 +827,16 @@ impl LibraryAssetManager {
 
     /// Get items in a folder
     pub fn get_items_in_folder(&self, folder_id: &Uuid) -> Vec<&LibraryItem> {
-        self.items.values()
+        self.items
+            .values()
             .filter(|item| &item.folder_id == folder_id)
             .collect()
     }
 
     /// Get subfolders of a folder
     pub fn get_subfolders(&self, parent_id: &Uuid) -> Vec<&LibraryFolder> {
-        self.folders.values()
+        self.folders
+            .values()
             .filter(|folder| &folder.parent_folder_id == parent_id)
             .collect()
     }
@@ -844,7 +885,9 @@ impl LibraryAssetManager {
 
     /// Get default wearables for a specific gender (legacy API)
     pub fn get_default_wearables(&self, gender: &str) -> Option<&Vec<DefaultWearable>> {
-        self.default_avatars.get(gender).map(|avatar| &avatar.wearables)
+        self.default_avatars
+            .get(gender)
+            .map(|avatar| &avatar.wearables)
     }
 
     /// Get asset data for a library asset (legacy API)
@@ -864,7 +907,10 @@ impl LibraryAssetManager {
         stats.insert("total_folders".to_string(), self.folders.len() as u64);
         stats.insert("total_items".to_string(), self.items.len() as u64);
         stats.insert("total_animations".to_string(), self.animations.len() as u64);
-        stats.insert("default_avatars".to_string(), self.default_avatars.len() as u64);
+        stats.insert(
+            "default_avatars".to_string(),
+            self.default_avatars.len() as u64,
+        );
 
         // Count assets with loaded data
         let loaded = self.assets.values().filter(|a| a.data.is_some()).count();
@@ -913,20 +959,23 @@ impl LibraryAssetManager {
         }];
 
         // Add all other folders
-        folders.extend(self.folders.values()
-            .filter(|folder| folder.folder_id != root_id)
-            .map(|folder| LibraryLoginFolder {
-                folder_id: folder.folder_id.to_string(),
-                parent_id: if folder.parent_folder_id.is_nil() {
-                    // Folders with nil parent should be children of the library root
-                    root_id.to_string()
-                } else {
-                    folder.parent_folder_id.to_string()
-                },
-                name: folder.name.clone(),
-                type_default: folder.folder_type.to_string(),
-                version: "1".to_string(),
-            }));
+        folders.extend(
+            self.folders
+                .values()
+                .filter(|folder| folder.folder_id != root_id)
+                .map(|folder| LibraryLoginFolder {
+                    folder_id: folder.folder_id.to_string(),
+                    parent_id: if folder.parent_folder_id.is_nil() {
+                        // Folders with nil parent should be children of the library root
+                        root_id.to_string()
+                    } else {
+                        folder.parent_folder_id.to_string()
+                    },
+                    name: folder.name.clone(),
+                    type_default: folder.folder_type.to_string(),
+                    version: "1".to_string(),
+                }),
+        );
 
         folders
     }
@@ -940,11 +989,16 @@ impl LibraryAssetManager {
 
     /// Get folder descendants for FetchLibDescendents2 CAPS handler
     /// Returns (subfolders, items) for the requested folder
-    pub fn get_folder_descendants(&self, folder_id: &Uuid) -> Option<(Vec<&LibraryFolder>, Vec<&LibraryItem>)> {
+    pub fn get_folder_descendants(
+        &self,
+        folder_id: &Uuid,
+    ) -> Option<(Vec<&LibraryFolder>, Vec<&LibraryItem>)> {
         let root_id = self.get_library_root_folder_id();
 
         // Find subfolders whose parent is this folder
-        let subfolders: Vec<&LibraryFolder> = self.folders.values()
+        let subfolders: Vec<&LibraryFolder> = self
+            .folders
+            .values()
             .filter(|f| {
                 if f.parent_folder_id == *folder_id {
                     true
@@ -958,7 +1012,9 @@ impl LibraryAssetManager {
             .collect();
 
         // Find items in this folder
-        let items: Vec<&LibraryItem> = self.items.values()
+        let items: Vec<&LibraryItem> = self
+            .items
+            .values()
             .filter(|i| i.folder_id == *folder_id)
             .collect();
 
@@ -1007,7 +1063,10 @@ mod tests {
     fn test_extract_attribute() {
         let line = r#"<Key Name="assetID" Value="d342e6c0-b9d2-11dc-95ff-0800200c9a66"/>"#;
         assert_eq!(extract_attribute(line, "Name"), Some("assetID".to_string()));
-        assert_eq!(extract_attribute(line, "Value"), Some("d342e6c0-b9d2-11dc-95ff-0800200c9a66".to_string()));
+        assert_eq!(
+            extract_attribute(line, "Value"),
+            Some("d342e6c0-b9d2-11dc-95ff-0800200c9a66".to_string())
+        );
     }
 
     #[test]

@@ -16,7 +16,10 @@ mod xml_roundtrip {
         let xml = failure_result("Region not found");
         let parsed = parse_xml_response(&xml).unwrap();
         assert_eq!(parsed.get("Result").unwrap().as_str(), Some("Failure"));
-        assert_eq!(parsed.get("Message").unwrap().as_str(), Some("Region not found"));
+        assert_eq!(
+            parsed.get("Message").unwrap().as_str(),
+            Some("Region not found")
+        );
     }
 
     #[test]
@@ -43,7 +46,10 @@ mod xml_roundtrip {
     #[test]
     fn test_single_result_roundtrip() {
         let mut fields = std::collections::HashMap::new();
-        fields.insert("uuid".to_string(), "00000000-0000-0000-0000-000000000001".to_string());
+        fields.insert(
+            "uuid".to_string(),
+            "00000000-0000-0000-0000-000000000001".to_string(),
+        );
         fields.insert("regionName".to_string(), "Test Region".to_string());
         fields.insert("locX".to_string(), "1000".to_string());
         fields.insert("locY".to_string(), "1000".to_string());
@@ -52,8 +58,14 @@ mod xml_roundtrip {
         let parsed = parse_xml_response(&xml).unwrap();
 
         let result = parsed.get("result").unwrap().as_dict().unwrap();
-        assert_eq!(result.get("uuid").unwrap().as_str(), Some("00000000-0000-0000-0000-000000000001"));
-        assert_eq!(result.get("regionName").unwrap().as_str(), Some("Test Region"));
+        assert_eq!(
+            result.get("uuid").unwrap().as_str(),
+            Some("00000000-0000-0000-0000-000000000001")
+        );
+        assert_eq!(
+            result.get("regionName").unwrap().as_str(),
+            Some("Test Region")
+        );
         assert_eq!(result.get("locX").unwrap().as_str(), Some("1000"));
     }
 
@@ -86,7 +98,10 @@ mod xml_roundtrip {
     #[test]
     fn test_xml_name_encoding() {
         let mut fields = std::collections::HashMap::new();
-        fields.insert("Wearable 0:0".to_string(), "some-uuid:some-asset".to_string());
+        fields.insert(
+            "Wearable 0:0".to_string(),
+            "some-uuid:some-asset".to_string(),
+        );
         let xml = single_result(fields);
         assert!(xml.contains("Wearable_x0020_0_x003A_0"));
 
@@ -141,8 +156,8 @@ mod xml_roundtrip {
 }
 
 mod service_config {
-    use opensim_next::services::traits::{ServiceConfig, ServiceMode};
     use opensim_next::services::config_parser::*;
+    use opensim_next::services::traits::{ServiceConfig, ServiceMode};
 
     #[test]
     fn test_default_config() {
@@ -173,8 +188,8 @@ mod service_config {
 }
 
 mod service_factory {
-    use opensim_next::services::traits::{ServiceConfig, ServiceMode};
     use opensim_next::services::factory::ServiceFactory;
+    use opensim_next::services::traits::{ServiceConfig, ServiceMode};
 
     #[test]
     fn test_create_remote_grid_service() {

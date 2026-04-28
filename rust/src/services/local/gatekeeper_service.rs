@@ -1,17 +1,16 @@
 use anyhow::Result;
 use async_trait::async_trait;
-use uuid::Uuid;
-use std::sync::Arc;
 use std::collections::HashMap;
-use tracing::{info, warn, debug};
+use std::sync::Arc;
+use tracing::{debug, info, warn};
+use uuid::Uuid;
 
-use crate::services::traits::{
-    GatekeeperServiceTrait, HGRegionInfo, AgentCircuitData,
-    GridServiceTrait, PresenceServiceTrait, UserAgentServiceTrait,
-    UserAccountServiceTrait,
-};
-use crate::services::remote::uas_connector::UserAgentServiceConnector;
 use crate::database::DatabaseConnection;
+use crate::services::remote::uas_connector::UserAgentServiceConnector;
+use crate::services::traits::{
+    AgentCircuitData, GatekeeperServiceTrait, GridServiceTrait, HGRegionInfo, PresenceServiceTrait,
+    UserAccountServiceTrait, UserAgentServiceTrait,
+};
 
 pub struct LocalGatekeeperService {
     grid_service: Arc<dyn GridServiceTrait>,
@@ -86,10 +85,16 @@ impl LocalGatekeeperService {
 
         if self.is_local_home(&home_uri) {
             if let Some(ref uas) = self.local_uas {
-                match uas.verify_agent(agent_data.session_id, &agent_data.service_session_id).await {
+                match uas
+                    .verify_agent(agent_data.session_id, &agent_data.service_session_id)
+                    .await
+                {
                     Ok(valid) => {
                         if !valid {
-                            warn!("[GATEKEEPER] Local UAS rejected agent {} (token mismatch)", agent_data.agent_id);
+                            warn!(
+                                "[GATEKEEPER] Local UAS rejected agent {} (token mismatch)",
+                                agent_data.agent_id
+                            );
                         }
                         return valid;
                     }
@@ -102,10 +107,16 @@ impl LocalGatekeeperService {
         }
 
         let remote_uas = UserAgentServiceConnector::new(&home_uri);
-        match remote_uas.verify_agent(agent_data.session_id, &agent_data.service_session_id).await {
+        match remote_uas
+            .verify_agent(agent_data.session_id, &agent_data.service_session_id)
+            .await
+        {
             Ok(valid) => {
                 if !valid {
-                    warn!("[GATEKEEPER] Remote UAS at {} rejected agent {}", home_uri, agent_data.agent_id);
+                    warn!(
+                        "[GATEKEEPER] Remote UAS at {} rejected agent {}",
+                        home_uri, agent_data.agent_id
+                    );
                 }
                 valid
             }
@@ -119,7 +130,8 @@ impl LocalGatekeeperService {
     fn region_info_to_hg(&self, region: &crate::services::traits::RegionInfo) -> HGRegionInfo {
         let ext = self.external_name.trim_end_matches('/');
         let ext_host_port = ext
-            .strip_prefix("http://").or_else(|| ext.strip_prefix("https://"))
+            .strip_prefix("http://")
+            .or_else(|| ext.strip_prefix("https://"))
             .unwrap_or(ext);
 
         let loc_x_meters = region.region_loc_x * 256;
@@ -137,7 +149,11 @@ impl LocalGatekeeperService {
             region_name: region.region_name.clone(),
             region_loc_x: loc_x_meters,
             region_loc_y: loc_y_meters,
-            hostname: ext_host_port.split(':').next().unwrap_or(&region.server_ip).to_string(),
+            hostname: ext_host_port
+                .split(':')
+                .next()
+                .unwrap_or(&region.server_ip)
+                .to_string(),
             internal_port: region.server_port,
         }
     }
@@ -199,7 +215,8 @@ impl GatekeeperServiceTrait for LocalGatekeeperService {
     async fn link_region(&self, region_name: &str) -> Result<Option<HGRegionInfo>> {
         debug!("link_region request for: {}", region_name);
 
-        let region = self.grid_service
+        let region = self
+            .grid_service
             .get_region_by_name(Uuid::nil(), region_name)
             .await?;
 
@@ -213,7 +230,10 @@ impl GatekeeperServiceTrait for LocalGatekeeperService {
                 if region_name.is_empty() {
                     let defaults = self.grid_service.get_default_regions(Uuid::nil()).await?;
                     if let Some(r) = defaults.first() {
-                        info!("Linked default region '{}' ({})", r.region_name, r.region_id);
+                        info!(
+                            "Linked default region '{}' ({})",
+                            r.region_name, r.region_id
+                        );
                         return Ok(Some(self.region_info_to_hg(r)));
                     }
                 }
@@ -235,12 +255,16 @@ impl GatekeeperServiceTrait for LocalGatekeeperService {
             let defaults = self.grid_service.get_default_regions(Uuid::nil()).await?;
             let is_default = defaults.iter().any(|r| r.region_id == region_id);
             if !is_default {
-                warn!("Teleport to non-default region {} denied (AllowTeleportsToAnyRegion=false)", region_id);
+                warn!(
+                    "Teleport to non-default region {} denied (AllowTeleportsToAnyRegion=false)",
+                    region_id
+                );
                 return Ok(None);
             }
         }
 
-        let region = self.grid_service
+        let region = self
+            .grid_service
             .get_region_by_uuid(Uuid::nil(), region_id)
             .await?;
 
@@ -253,31 +277,49 @@ impl GatekeeperServiceTrait for LocalGatekeeperService {
         agent_data: &AgentCircuitData,
         destination: &HGRegionInfo,
     ) -> Result<(bool, String)> {
-        let home_uri = agent_data.service_urls.get("HomeURI")
+        let home_uri = agent_data
+            .service_urls
+            .get("HomeURI")
             .cloned()
             .unwrap_or_else(|| source.server_uri.clone());
 
-        info!("[GATEKEEPER] Login request: {} {} @ {} ({}) -> {}",
-            agent_data.first_name, agent_data.last_name,
-            home_uri, agent_data.agent_id, destination.region_name);
+        info!(
+            "[GATEKEEPER] Login request: {} {} @ {} ({}) -> {}",
+            agent_data.first_name,
+            agent_data.last_name,
+            home_uri,
+            agent_data.agent_id,
+            destination.region_name
+        );
 
         // Step 1: Authenticate — callback to the agent's home grid UAS
         if !self.authenticate(agent_data).await {
             return Ok((false, "Unable to verify identity".to_string()));
         }
-        debug!("[GATEKEEPER] Identity verified for {} {} @ {}",
-            agent_data.first_name, agent_data.last_name, home_uri);
+        debug!(
+            "[GATEKEEPER] Identity verified for {} {} @ {}",
+            agent_data.first_name, agent_data.last_name, home_uri
+        );
 
         // Step 2: Check for UUID impersonation — if agent UUID matches a local user,
         // they must be that user coming home, not a foreign user with a spoofed UUID
         let mut is_local_user = false;
         if let Some(ref user_svc) = self.user_account_service {
-            if let Ok(Some(_local_account)) = user_svc.get_user_account(Uuid::nil(), agent_data.agent_id).await {
+            if let Ok(Some(_local_account)) = user_svc
+                .get_user_account(Uuid::nil(), agent_data.agent_id)
+                .await
+            {
                 is_local_user = true;
                 if let Some(ref uas) = self.local_uas {
-                    match uas.is_agent_coming_home(agent_data.session_id, &self.external_name).await {
+                    match uas
+                        .is_agent_coming_home(agent_data.session_id, &self.external_name)
+                        .await
+                    {
                         Ok(true) => {
-                            debug!("[GATEKEEPER] Agent {} is a local user coming home", agent_data.agent_id);
+                            debug!(
+                                "[GATEKEEPER] Agent {} is a local user coming home",
+                                agent_data.agent_id
+                            );
                         }
                         _ => {
                             warn!("[GATEKEEPER] Foreign agent {} {} has same UUID as local user. Refusing.",
@@ -291,9 +333,14 @@ impl GatekeeperServiceTrait for LocalGatekeeperService {
 
         // Step 3: Foreign agents allowed?
         if !is_local_user && !self.foreign_agents_allowed {
-            info!("[GATEKEEPER] Foreign agents not permitted: {} {} @ {}",
-                agent_data.first_name, agent_data.last_name, home_uri);
-            return Ok((false, "Destination does not allow visitors from your world".to_string()));
+            info!(
+                "[GATEKEEPER] Foreign agents not permitted: {} {} @ {}",
+                agent_data.first_name, agent_data.last_name, home_uri
+            );
+            return Ok((
+                false,
+                "Destination does not allow visitors from your world".to_string(),
+            ));
         }
 
         // Step 4: Store traveling data
@@ -304,20 +351,30 @@ impl GatekeeperServiceTrait for LocalGatekeeperService {
             &home_uri,
             &service_token,
             &agent_data.client_ip,
-        ).await?;
+        )
+        .await?;
 
         // Step 5: Create presence entry for foreign agent
-        if let Err(e) = self.presence_service.login_agent(
-            agent_data.agent_id,
-            agent_data.session_id,
-            agent_data.secure_session_id,
-            destination.region_id,
-        ).await {
-            warn!("[GATEKEEPER] Failed to create presence for foreign agent: {}", e);
+        if let Err(e) = self
+            .presence_service
+            .login_agent(
+                agent_data.agent_id,
+                agent_data.session_id,
+                agent_data.secure_session_id,
+                destination.region_id,
+            )
+            .await
+        {
+            warn!(
+                "[GATEKEEPER] Failed to create presence for foreign agent: {}",
+                e
+            );
         }
 
-        info!("[GATEKEEPER] Foreign agent {} {} authenticated and logged in to {}",
-            agent_data.first_name, agent_data.last_name, destination.region_name);
+        info!(
+            "[GATEKEEPER] Foreign agent {} {} authenticated and logged in to {}",
+            agent_data.first_name, agent_data.last_name, destination.region_name
+        );
 
         Ok((true, "success".to_string()))
     }

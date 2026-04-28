@@ -28,4 +28,4 @@ impl Default for Config {
             network: NetworkConfig::default(),
         }
     }
-} 
+}

@@ -1,7 +1,7 @@
-use std::sync::Arc;
-use std::sync::atomic::{AtomicU64, Ordering};
-use std::time::Instant;
 use anyhow::{anyhow, Result};
+use std::sync::atomic::{AtomicU64, Ordering};
+use std::sync::Arc;
+use std::time::Instant;
 use tracing::{error, info, warn};
 
 use super::fsassets::FSAssetsStorage;
@@ -55,7 +55,10 @@ impl FSAssetsMigrator {
             }
 
             for (id, asset_type, asset_flags, data) in &batch {
-                if let Err(e) = self.migrate_one(id, *asset_type, *asset_flags, data.as_deref()).await {
+                if let Err(e) = self
+                    .migrate_one(id, *asset_type, *asset_flags, data.as_deref())
+                    .await
+                {
                     error!("Failed to migrate asset {}: {}", id, e);
                     self.errors.fetch_add(1, Ordering::Relaxed);
                 }
@@ -113,7 +116,8 @@ impl FSAssetsMigrator {
         let hash = FSAssetsStorage::compute_hash(data);
 
         if self.fsassets_row_exists(&hash).await? {
-            self.insert_fsassets_id_if_missing(id, asset_type, asset_flags, &hash).await?;
+            self.insert_fsassets_id_if_missing(id, asset_type, asset_flags, &hash)
+                .await?;
             self.skipped_existing.fetch_add(1, Ordering::Relaxed);
             return Ok(());
         }
@@ -121,10 +125,12 @@ impl FSAssetsMigrator {
         self.storage.store(data).await?;
 
         let now = chrono::Utc::now().timestamp() as i32;
-        self.insert_fsassets_metadata(id, asset_type, &hash, now, asset_flags).await?;
+        self.insert_fsassets_metadata(id, asset_type, &hash, now, asset_flags)
+            .await?;
 
         self.migrated.fetch_add(1, Ordering::Relaxed);
-        self.bytes_processed.fetch_add(data.len() as u64, Ordering::Relaxed);
+        self.bytes_processed
+            .fetch_add(data.len() as u64, Ordering::Relaxed);
         Ok(())
     }
 
@@ -150,7 +156,7 @@ impl FSAssetsMigrator {
                 use sqlx::Row;
                 let rows = sqlx::query(
                     "SELECT id::text, assettype, COALESCE(asset_flags, 0) as asset_flags, data \
-                     FROM assets ORDER BY id OFFSET $1 LIMIT $2"
+                     FROM assets ORDER BY id OFFSET $1 LIMIT $2",
                 )
                 .bind(offset)
                 .bind(limit)
@@ -174,12 +180,11 @@ impl FSAssetsMigrator {
     async fn fsassets_row_exists(&self, hash: &str) -> Result<bool> {
         match self.connection.as_ref() {
             DatabaseConnection::PostgreSQL(pool) => {
-                let row: Option<(i32,)> = sqlx::query_as(
-                    "SELECT 1 FROM fsassets WHERE hash = $1 LIMIT 1"
-                )
-                .bind(hash)
-                .fetch_optional(pool)
-                .await?;
+                let row: Option<(i32,)> =
+                    sqlx::query_as("SELECT 1 FROM fsassets WHERE hash = $1 LIMIT 1")
+                        .bind(hash)
+                        .fetch_optional(pool)
+                        .await?;
                 Ok(row.is_some())
             }
             _ => Err(anyhow!("FSAssets migration currently requires PostgreSQL")),
@@ -199,7 +204,7 @@ impl FSAssetsMigrator {
                 sqlx::query(
                     "INSERT INTO fsassets (id, type, hash, create_time, access_time, asset_flags) \
                      VALUES ($1::uuid, $2, $3, $4, $5, $6) \
-                     ON CONFLICT (id) DO NOTHING"
+                     ON CONFLICT (id) DO NOTHING",
                 )
                 .bind(id)
                 .bind(asset_type)
@@ -228,7 +233,7 @@ impl FSAssetsMigrator {
                 sqlx::query(
                     "INSERT INTO fsassets (id, type, hash, create_time, access_time, asset_flags) \
                      VALUES ($1::uuid, $2, $3, $4, $5, $6) \
-                     ON CONFLICT (id) DO UPDATE SET hash = EXCLUDED.hash"
+                     ON CONFLICT (id) DO UPDATE SET hash = EXCLUDED.hash",
                 )
                 .bind(id)
                 .bind(asset_type)
@@ -259,14 +264,16 @@ impl FSAssetsMigrator {
                 if fs_count < asset_count {
                     issues.push(format!(
                         "fsassets has {} rows but assets has {} — {} assets not migrated",
-                        fs_count, asset_count, asset_count - fs_count
+                        fs_count,
+                        asset_count,
+                        asset_count - fs_count
                     ));
                 }
 
                 use sqlx::Row;
                 let missing_files: Vec<sqlx::postgres::PgRow> = sqlx::query(
                     "SELECT f.id::text, f.hash FROM fsassets f \
-                     ORDER BY RANDOM() LIMIT 10"
+                     ORDER BY RANDOM() LIMIT 10",
                 )
                 .fetch_all(pool)
                 .await?;
@@ -276,13 +283,18 @@ impl FSAssetsMigrator {
                     let hash: String = row.try_get("hash")?;
                     let hash = hash.trim().to_string();
                     if !self.storage.exists(&hash).await {
-                        issues.push(format!("Asset {} hash {} not found on filesystem", id, hash));
+                        issues.push(format!(
+                            "Asset {} hash {} not found on filesystem",
+                            id, hash
+                        ));
                     }
                 }
 
                 info!(
                     "Migration verification: assets={}, fsassets={}, issues={}",
-                    asset_count, fs_count, issues.len()
+                    asset_count,
+                    fs_count,
+                    issues.len()
                 );
 
                 Ok((asset_count, fs_count, issues))
@@ -307,7 +319,10 @@ mod tests {
             bytes_processed: 1024 * 1024 * 50,
             elapsed_secs: 30.0,
         };
-        assert_eq!(stats.migrated + stats.skipped_existing + stats.skipped_null_data + stats.errors, 100);
+        assert_eq!(
+            stats.migrated + stats.skipped_existing + stats.skipped_null_data + stats.errors,
+            100
+        );
     }
 
     #[test]

@@ -1,19 +1,21 @@
+pub mod blender_worker;
+pub mod collada_geometry;
+pub mod collada_skin;
 pub mod dae_writer;
 pub mod decoder;
 pub mod encoder;
-pub mod snapshot_collector;
-pub mod texture_resolver;
-pub mod parser;
-pub mod types;
 pub mod glc_bridge;
-pub mod blender_worker;
-pub mod collada_skin;
-pub mod collada_geometry;
+pub mod parser;
+pub mod snapshot_collector;
 pub mod texture_compositor;
+pub mod texture_resolver;
+pub mod types;
 
-pub use blender_worker::{ruth2_base_dir, ruth2_dae_path, ruth2_uv_path, ruth2_texture_path};
-pub use glc_bridge::{import_ruth2_part, import_ruth2_body_set};
-pub use texture_compositor::{load_ruth2_uv_map, load_sl_avatar_texture, compose_garment_texture_with_uv};
+pub use blender_worker::{ruth2_base_dir, ruth2_dae_path, ruth2_texture_path, ruth2_uv_path};
+pub use glc_bridge::{import_ruth2_body_set, import_ruth2_part};
+pub use texture_compositor::{
+    compose_garment_texture_with_uv, load_ruth2_uv_map, load_sl_avatar_texture,
+};
 
 use anyhow::Result;
 use std::collections::HashMap;
@@ -99,24 +101,29 @@ pub async fn create_mesh_physics_shape(
     }
 
     let data = if let Some(fetcher) = asset_fetcher {
-        fetcher.fetch_asset_data_typed_pg(&asset_uuid.to_string(), Some(49), db_pool)
+        fetcher
+            .fetch_asset_data_typed_pg(&asset_uuid.to_string(), Some(49), db_pool)
             .await?
             .ok_or_else(|| anyhow::anyhow!("Mesh asset {} not found", asset_uuid))?
     } else {
-        let row: Option<(Vec<u8>,)> = sqlx::query_as(
-            "SELECT data FROM assets WHERE id = $1::uuid AND assettype = 49"
-        )
-        .bind(asset_uuid)
-        .fetch_optional(db_pool)
-        .await?;
-        row.ok_or_else(|| anyhow::anyhow!("Mesh asset {} not found in DB", asset_uuid))?.0
+        let row: Option<(Vec<u8>,)> =
+            sqlx::query_as("SELECT data FROM assets WHERE id = $1::uuid AND assettype = 49")
+                .bind(asset_uuid)
+                .fetch_optional(db_pool)
+                .await?;
+        row.ok_or_else(|| anyhow::anyhow!("Mesh asset {} not found in DB", asset_uuid))?
+            .0
     };
 
     let header = parser::parse_mesh_header(&data)?;
     let convex = parser::extract_physics_convex(&data, &header)?;
 
-    info!("[MESH-PHYSICS] Asset {} parsed: {} hulls, {} total vertices",
-        asset_uuid, convex.hull_count(), convex.total_vertices());
+    info!(
+        "[MESH-PHYSICS] Asset {} parsed: {} hulls, {} total vertices",
+        asset_uuid,
+        convex.hull_count(),
+        convex.total_vertices()
+    );
 
     let hull_array = parser::to_bullet_hull_array(&convex, scale);
     let cached = cache.insert(*asset_uuid, convex).await;

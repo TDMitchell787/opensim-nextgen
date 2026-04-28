@@ -1,11 +1,11 @@
 use rayon::prelude::*;
-use serde::{Serialize, Deserialize};
+use serde::{Deserialize, Serialize};
 use tracing::info;
 
-use super::camera::{CameraRig, Ray, dot, normalize};
+use super::camera::{dot, normalize, CameraRig, Ray};
+use super::geometry::{intersect_terrain, BVHNode, HitRecord};
 use super::lighting::LightingRig;
 use super::scene_capture::SceneGeometry;
-use super::geometry::{BVHNode, HitRecord, intersect_terrain};
 use super::shading::{shade_hit, shade_terrain, sky_color};
 
 #[derive(Debug, Clone, Copy, PartialEq, Serialize, Deserialize)]
@@ -45,7 +45,11 @@ pub struct LuxorRaytracer {
 
 impl LuxorRaytracer {
     pub fn new(camera: CameraRig, lighting: LightingRig, quality: RenderQuality) -> Self {
-        Self { camera, lighting, quality }
+        Self {
+            camera,
+            lighting,
+            quality,
+        }
     }
 
     pub fn render(&self, scene: &SceneGeometry, width: u32, height: u32) -> Vec<u8> {
@@ -62,52 +66,55 @@ impl LuxorRaytracer {
 
         let lighting = self.lighting.with_sun();
 
-        let scanlines: Vec<Vec<[f32; 3]>> = (0..height).into_par_iter().map(|y| {
-            let mut rng_state: u32 = y.wrapping_mul(2654435761).wrapping_add(1);
-            let mut row = Vec::with_capacity(width as usize);
+        let scanlines: Vec<Vec<[f32; 3]>> = (0..height)
+            .into_par_iter()
+            .map(|y| {
+                let mut rng_state: u32 = y.wrapping_mul(2654435761).wrapping_add(1);
+                let mut row = Vec::with_capacity(width as usize);
 
-            for x in 0..width {
-                let mut color_accum = [0.0f32; 3];
+                for x in 0..width {
+                    let mut color_accum = [0.0f32; 3];
 
-                for s in 0..spp {
-                    let (jx, jy) = if spp > 1 {
-                        rng_state = xorshift32(rng_state);
-                        let jx = (rng_state as f32 / u32::MAX as f32) - 0.5;
-                        rng_state = xorshift32(rng_state);
-                        let jy = (rng_state as f32 / u32::MAX as f32) - 0.5;
-                        (jx, jy)
-                    } else {
-                        (0.0, 0.0)
-                    };
+                    for s in 0..spp {
+                        let (jx, jy) = if spp > 1 {
+                            rng_state = xorshift32(rng_state);
+                            let jx = (rng_state as f32 / u32::MAX as f32) - 0.5;
+                            rng_state = xorshift32(rng_state);
+                            let jy = (rng_state as f32 / u32::MAX as f32) - 0.5;
+                            (jx, jy)
+                        } else {
+                            (0.0, 0.0)
+                        };
 
-                    let u = (x as f32 + 0.5 + jx) / width as f32;
-                    let v = 1.0 - (y as f32 + 0.5 + jy) / height as f32;
+                        let u = (x as f32 + 0.5 + jx) / width as f32;
+                        let v = 1.0 - (y as f32 + 0.5 + jy) / height as f32;
 
-                    let ray = if use_dof {
-                        rng_state = xorshift32(rng_state);
-                        let lu = rng_state as f32 / u32::MAX as f32;
-                        rng_state = xorshift32(rng_state);
-                        let lv = rng_state as f32 / u32::MAX as f32;
-                        self.camera.generate_dof_ray(u, v, aspect, lu, lv)
-                    } else {
-                        self.camera.generate_ray(u, v, aspect)
-                    };
+                        let ray = if use_dof {
+                            rng_state = xorshift32(rng_state);
+                            let lu = rng_state as f32 / u32::MAX as f32;
+                            rng_state = xorshift32(rng_state);
+                            let lv = rng_state as f32 / u32::MAX as f32;
+                            self.camera.generate_dof_ray(u, v, aspect, lu, lv)
+                        } else {
+                            self.camera.generate_ray(u, v, aspect)
+                        };
 
-                    let sample = self.trace_ray(&ray, scene, bvh.as_ref(), &lighting);
-                    color_accum[0] += sample[0];
-                    color_accum[1] += sample[1];
-                    color_accum[2] += sample[2];
+                        let sample = self.trace_ray(&ray, scene, bvh.as_ref(), &lighting);
+                        color_accum[0] += sample[0];
+                        color_accum[1] += sample[1];
+                        color_accum[2] += sample[2];
+                    }
+
+                    let inv_spp = 1.0 / spp as f32;
+                    row.push([
+                        color_accum[0] * inv_spp,
+                        color_accum[1] * inv_spp,
+                        color_accum[2] * inv_spp,
+                    ]);
                 }
-
-                let inv_spp = 1.0 / spp as f32;
-                row.push([
-                    color_accum[0] * inv_spp,
-                    color_accum[1] * inv_spp,
-                    color_accum[2] * inv_spp,
-                ]);
-            }
-            row
-        }).collect();
+                row
+            })
+            .collect();
 
         let mut pixels = Vec::with_capacity((width * height * 4) as usize);
         for row in &scanlines {
@@ -145,7 +152,11 @@ impl LuxorRaytracer {
 
         let closest = match (prim_hit, terrain_hit) {
             (Some(ph), Some(th)) => {
-                if ph.t <= th.t { Some(ph) } else { Some(th) }
+                if ph.t <= th.t {
+                    Some(ph)
+                } else {
+                    Some(th)
+                }
             }
             (Some(ph), None) => Some(ph),
             (None, Some(th)) => Some(th),
@@ -153,9 +164,7 @@ impl LuxorRaytracer {
         };
 
         match closest {
-            Some(hit) if hit.is_terrain => {
-                shade_terrain(&hit, ray, scene, bvh, lighting)
-            }
+            Some(hit) if hit.is_terrain => shade_terrain(&hit, ray, scene, bvh, lighting),
             Some(hit) => {
                 let prim = &scene.prims[hit.prim_index];
 
@@ -200,9 +209,9 @@ fn xorshift32(mut state: u32) -> u32 {
 
 #[cfg(test)]
 mod tests {
-    use super::*;
-    use super::super::scene_capture::{SceneGeometry, CapturedPrim, PrimShape};
     use super::super::lighting::LightingPreset;
+    use super::super::scene_capture::{CapturedPrim, PrimShape, SceneGeometry};
+    use super::*;
 
     #[test]
     fn test_render_empty_scene() {
@@ -261,7 +270,11 @@ mod tests {
 
         let center_idx = (12 * 32 + 16) * 4;
         let r = pixels[center_idx];
-        assert!(r > 20, "Center pixel should have red (box is red), got r={}", r);
+        assert!(
+            r > 20,
+            "Center pixel should have red (box is red), got r={}",
+            r
+        );
     }
 
     #[test]
@@ -274,8 +287,14 @@ mod tests {
 
     #[test]
     fn test_quality_from_name() {
-        assert_eq!(RenderQuality::from_name("draft"), Some(RenderQuality::Draft));
-        assert_eq!(RenderQuality::from_name("ultra"), Some(RenderQuality::Ultra));
+        assert_eq!(
+            RenderQuality::from_name("draft"),
+            Some(RenderQuality::Draft)
+        );
+        assert_eq!(
+            RenderQuality::from_name("ultra"),
+            Some(RenderQuality::Ultra)
+        );
         assert_eq!(RenderQuality::from_name("invalid"), None);
     }
 
@@ -288,6 +307,9 @@ mod tests {
             values.push(state);
         }
         let unique: std::collections::HashSet<u32> = values.iter().copied().collect();
-        assert!(unique.len() > 90, "PRNG should produce mostly unique values");
+        assert!(
+            unique.len() > 90,
+            "PRNG should produce mostly unique values"
+        );
     }
 }

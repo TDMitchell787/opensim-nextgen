@@ -272,8 +272,12 @@ default
     }
 }"#,
         defaults: &[
-            ("MAX_SPEED", "40.0"), ("FORWARD_POWER", "30.0"), ("REVERSE_POWER", "-12.0"),
-            ("BRAKE_POWER", "-25.0"), ("TURN_RATE", "2.5"), ("HUD_CH", "-14710"),
+            ("MAX_SPEED", "40.0"),
+            ("FORWARD_POWER", "30.0"),
+            ("REVERSE_POWER", "-12.0"),
+            ("BRAKE_POWER", "-25.0"),
+            ("TURN_RATE", "2.5"),
+            ("HUD_CH", "-14710"),
             ("SIT_POS", "0.3, -0.4, 0.5"),
         ],
     },
@@ -458,10 +462,16 @@ default
     }
 }"#,
         defaults: &[
-            ("MAX_THRUST", "30.0"), ("STALL_SPEED", "8.0"), ("MAX_SPEED", "60.0"),
-            ("ROLL_RATE", "2.5"), ("PITCH_RATE", "1.5"), ("YAW_RATE", "0.8"),
-            ("LIFT_FACTOR", "0.04"), ("DRAG_FACTOR", "0.002"),
-            ("HUD_CH", "-14720"), ("SIT_POS", "1.0, 0.0, 0.3"),
+            ("MAX_THRUST", "30.0"),
+            ("STALL_SPEED", "8.0"),
+            ("MAX_SPEED", "60.0"),
+            ("ROLL_RATE", "2.5"),
+            ("PITCH_RATE", "1.5"),
+            ("YAW_RATE", "0.8"),
+            ("LIFT_FACTOR", "0.04"),
+            ("DRAG_FACTOR", "0.002"),
+            ("HUD_CH", "-14720"),
+            ("SIT_POS", "1.0, 0.0, 0.3"),
         ],
     },
     ScriptTemplate {
@@ -612,9 +622,13 @@ default
     }
 }"#,
         defaults: &[
-            ("FORWARD_POWER", "20.0"), ("REVERSE_POWER", "-10.0"), ("TURN_RATE", "2.0"),
-            ("WIND_BASE_SPEED", "10.0"), ("WIND_PERIOD", "300.0"),
-            ("HUD_CH", "-14700"), ("SIT_POS", "0.5, 0.0, 0.6"),
+            ("FORWARD_POWER", "20.0"),
+            ("REVERSE_POWER", "-10.0"),
+            ("TURN_RATE", "2.0"),
+            ("WIND_BASE_SPEED", "10.0"),
+            ("WIND_PERIOD", "300.0"),
+            ("HUD_CH", "-14700"),
+            ("SIT_POS", "0.5, 0.0, 0.6"),
         ],
     },
     ScriptTemplate {
@@ -810,8 +824,12 @@ default
     }
 }"#,
         defaults: &[
-            ("COLOR", "1.0,1.0,1.0"), ("INTENSITY", "0.8"), ("RADIUS", "20.0"),
-            ("FALLOFF", "0.5"), ("CINEMA_CH", "-16000"), ("LIGHT_NAME", "Cinema Light"),
+            ("COLOR", "1.0,1.0,1.0"),
+            ("INTENSITY", "0.8"),
+            ("RADIUS", "20.0"),
+            ("FALLOFF", "0.5"),
+            ("CINEMA_CH", "-16000"),
+            ("LIGHT_NAME", "Cinema Light"),
         ],
     },
     ScriptTemplate {

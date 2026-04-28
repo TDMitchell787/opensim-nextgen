@@ -28,11 +28,20 @@ impl TarGzReader {
         let entries = Self::read_tar_raw(decoder)?;
 
         let asset_count = entries.keys().filter(|k| k.starts_with("assets/")).count();
-        let inv_count = entries.keys().filter(|k| k.starts_with("inventory/")).count();
+        let inv_count = entries
+            .keys()
+            .filter(|k| k.starts_with("inventory/"))
+            .count();
         let obj_count = entries.keys().filter(|k| k.starts_with("objects/")).count();
         let other_count = entries.len() - asset_count - inv_count - obj_count;
-        info!("Loaded {} entries from archive (assets={}, inventory={}, objects={}, other={})",
-            entries.len(), asset_count, inv_count, obj_count, other_count);
+        info!(
+            "Loaded {} entries from archive (assets={}, inventory={}, objects={}, other={})",
+            entries.len(),
+            asset_count,
+            inv_count,
+            obj_count,
+            other_count
+        );
         for key in entries.keys() {
             info!("[TAR] entry key: '{}' (size={})", key, entries[key].len());
         }
@@ -94,7 +103,10 @@ impl TarGzReader {
         }
 
         if long_link_entries > 0 {
-            info!("Processed {} GNU LongLink entries for paths > 100 chars", long_link_entries);
+            info!(
+                "Processed {} GNU LongLink entries for paths > 100 chars",
+                long_link_entries
+            );
         }
 
         Ok(entries)
@@ -213,10 +225,12 @@ impl TarGzWriter {
         let mut header = Header::new_gnu();
         header.set_size(data.len() as u64);
         header.set_mode(0o644);
-        header.set_mtime(std::time::SystemTime::now()
-            .duration_since(std::time::UNIX_EPOCH)
-            .unwrap()
-            .as_secs());
+        header.set_mtime(
+            std::time::SystemTime::now()
+                .duration_since(std::time::UNIX_EPOCH)
+                .unwrap()
+                .as_secs(),
+        );
         header.set_entry_type(tar::EntryType::Regular);
 
         if path.len() <= 100 {
@@ -245,10 +259,12 @@ impl TarGzWriter {
         header.set_size(0);
         header.set_mode(0o755);
         header.set_entry_type(tar::EntryType::Directory);
-        header.set_mtime(std::time::SystemTime::now()
-            .duration_since(std::time::UNIX_EPOCH)
-            .unwrap()
-            .as_secs());
+        header.set_mtime(
+            std::time::SystemTime::now()
+                .duration_since(std::time::UNIX_EPOCH)
+                .unwrap()
+                .as_secs(),
+        );
 
         if path.len() <= 100 {
             header.set_path(&path)?;
@@ -357,7 +373,9 @@ mod tests {
         {
             let mut writer = TarGzWriter::create(path).unwrap();
             writer.add_file("test.txt", b"Hello, World!").unwrap();
-            writer.add_file("folder/nested.txt", b"Nested content").unwrap();
+            writer
+                .add_file("folder/nested.txt", b"Nested content")
+                .unwrap();
             writer.finish().unwrap();
         }
 
@@ -366,7 +384,10 @@ mod tests {
             let reader = TarGzReader::open(path).unwrap();
             assert_eq!(reader.len(), 2);
             assert_eq!(reader.get("test.txt"), Some(b"Hello, World!".as_slice()));
-            assert_eq!(reader.get("folder/nested.txt"), Some(b"Nested content".as_slice()));
+            assert_eq!(
+                reader.get("folder/nested.txt"),
+                Some(b"Nested content".as_slice())
+            );
         }
     }
 }

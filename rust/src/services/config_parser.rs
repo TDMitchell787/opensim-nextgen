@@ -1,7 +1,7 @@
 use anyhow::{anyhow, Result};
 use std::collections::HashMap;
 use std::path::Path;
-use tracing::{info, warn, debug};
+use tracing::{debug, info, warn};
 
 use crate::services::traits::{ServiceConfig, ServiceMode};
 
@@ -29,37 +29,55 @@ pub fn parse_service_config(ini_path: &str) -> Result<ServiceConfig> {
     }
 
     if let Some(user) = sections.get("UserAccountService") {
-        if let Some(uri) = user.get("UserAccountServerURI").or_else(|| user.get("ServerURI")) {
+        if let Some(uri) = user
+            .get("UserAccountServerURI")
+            .or_else(|| user.get("ServerURI"))
+        {
             config.user_account_server_uri = Some(normalize_uri(uri));
         }
     }
 
     if let Some(asset) = sections.get("AssetService") {
-        if let Some(uri) = asset.get("AssetServerURI").or_else(|| asset.get("ServerURI")) {
+        if let Some(uri) = asset
+            .get("AssetServerURI")
+            .or_else(|| asset.get("ServerURI"))
+        {
             config.asset_server_uri = Some(normalize_uri(uri));
         }
     }
 
     if let Some(auth) = sections.get("AuthenticationService") {
-        if let Some(uri) = auth.get("AuthenticationServerURI").or_else(|| auth.get("ServerURI")) {
+        if let Some(uri) = auth
+            .get("AuthenticationServerURI")
+            .or_else(|| auth.get("ServerURI"))
+        {
             config.authentication_server_uri = Some(normalize_uri(uri));
         }
     }
 
     if let Some(inv) = sections.get("InventoryService") {
-        if let Some(uri) = inv.get("InventoryServerURI").or_else(|| inv.get("ServerURI")) {
+        if let Some(uri) = inv
+            .get("InventoryServerURI")
+            .or_else(|| inv.get("ServerURI"))
+        {
             config.inventory_server_uri = Some(normalize_uri(uri));
         }
     }
 
     if let Some(presence) = sections.get("PresenceService") {
-        if let Some(uri) = presence.get("PresenceServerURI").or_else(|| presence.get("ServerURI")) {
+        if let Some(uri) = presence
+            .get("PresenceServerURI")
+            .or_else(|| presence.get("ServerURI"))
+        {
             config.presence_server_uri = Some(normalize_uri(uri));
         }
     }
 
     if let Some(avatar) = sections.get("AvatarService") {
-        if let Some(uri) = avatar.get("AvatarServerURI").or_else(|| avatar.get("ServerURI")) {
+        if let Some(uri) = avatar
+            .get("AvatarServerURI")
+            .or_else(|| avatar.get("ServerURI"))
+        {
             config.avatar_server_uri = Some(normalize_uri(uri));
         }
     }
@@ -146,7 +164,10 @@ pub fn build_service_config(mode_str: &str) -> ServiceConfig {
     if effective_mode == ServiceMode::Grid {
         let default_robust = "http://localhost:8003".to_string();
         if config.grid_server_uri.is_none() {
-            warn!("Grid mode: no GridServerURI configured, using default {}", default_robust);
+            warn!(
+                "Grid mode: no GridServerURI configured, using default {}",
+                default_robust
+            );
             config.grid_server_uri = Some(default_robust.clone());
         }
         if config.asset_server_uri.is_none() {
@@ -193,7 +214,8 @@ fn parse_ini_sections(content: &str) -> HashMap<String, HashMap<String, String>>
             if let Some((key, value)) = trimmed.split_once('=') {
                 let key = key.trim().to_string();
                 let value = value.trim().trim_matches('"').to_string();
-                sections.entry(current_section.clone())
+                sections
+                    .entry(current_section.clone())
                     .or_default()
                     .insert(key, value);
             }
@@ -209,12 +231,12 @@ pub fn build_hypergrid_config() -> crate::network::hypergrid::HypergridConfig {
         .parse::<bool>()
         .unwrap_or(false);
 
-    let home_uri = std::env::var("OPENSIM_HOME_URI")
-        .unwrap_or_else(|_| "http://localhost:8002".to_string());
-    let gatekeeper_uri = std::env::var("OPENSIM_GATEKEEPER_URI")
-        .unwrap_or_else(|_| home_uri.clone());
-    let grid_name = std::env::var("OPENSIM_GRID_NAME")
-        .unwrap_or_else(|_| "OpenSim Next".to_string());
+    let home_uri =
+        std::env::var("OPENSIM_HOME_URI").unwrap_or_else(|_| "http://localhost:8002".to_string());
+    let gatekeeper_uri =
+        std::env::var("OPENSIM_GATEKEEPER_URI").unwrap_or_else(|_| home_uri.clone());
+    let grid_name =
+        std::env::var("OPENSIM_GRID_NAME").unwrap_or_else(|_| "OpenSim Next".to_string());
     let allow_teleports = std::env::var("OPENSIM_HG_ALLOW_TELEPORTS_TO_ANY_REGION")
         .unwrap_or_else(|_| "true".to_string())
         .parse::<bool>()
@@ -230,11 +252,9 @@ pub fn build_hypergrid_config() -> crate::network::hypergrid::HypergridConfig {
     } else {
         "bin/config-include/GridCommon.ini".to_string()
     };
-    let external_uri = std::env::var("OPENSIM_HG_EXTERNAL_URI")
-        .unwrap_or_default();
+    let external_uri = std::env::var("OPENSIM_HG_EXTERNAL_URI").unwrap_or_default();
 
-    let robust_port = std::env::var("OPENSIM_ROBUST_PORT")
-        .unwrap_or_else(|_| "8003".to_string());
+    let robust_port = std::env::var("OPENSIM_ROBUST_PORT").unwrap_or_else(|_| "8003".to_string());
     let external_robust_uri = if !external_uri.is_empty() {
         if let Ok(mut url) = url::Url::parse(&external_uri) {
             let _ = url.set_port(robust_port.parse::<u16>().ok());
@@ -276,8 +296,15 @@ pub fn build_hypergrid_config() -> crate::network::hypergrid::HypergridConfig {
         }
     }
 
-    info!("Hypergrid config: enabled={}, home={}, gk={}, ext={}, robust={}, grid='{}'",
-          cfg.enabled, cfg.home_uri, cfg.gatekeeper_uri, cfg.external_uri, cfg.external_robust_uri, cfg.grid_name);
+    info!(
+        "Hypergrid config: enabled={}, home={}, gk={}, ext={}, robust={}, grid='{}'",
+        cfg.enabled,
+        cfg.home_uri,
+        cfg.gatekeeper_uri,
+        cfg.external_uri,
+        cfg.external_robust_uri,
+        cfg.grid_name
+    );
     cfg
 }
 
@@ -308,14 +335,29 @@ ServerURI = http://robust.example.com:8003/
 "#;
         let sections = parse_ini_sections(content);
         assert_eq!(sections["Startup"]["ServiceMode"], "grid");
-        assert_eq!(sections["GridService"]["GridServerURI"], "http://robust.example.com:8003");
-        assert_eq!(sections["AssetService"]["ServerURI"], "http://robust.example.com:8003/");
+        assert_eq!(
+            sections["GridService"]["GridServerURI"],
+            "http://robust.example.com:8003"
+        );
+        assert_eq!(
+            sections["AssetService"]["ServerURI"],
+            "http://robust.example.com:8003/"
+        );
     }
 
     #[test]
     fn test_normalize_uri() {
-        assert_eq!(normalize_uri("http://localhost:8003/"), "http://localhost:8003");
-        assert_eq!(normalize_uri("http://localhost:8003"), "http://localhost:8003");
-        assert_eq!(normalize_uri("\"http://localhost:8003\""), "http://localhost:8003");
+        assert_eq!(
+            normalize_uri("http://localhost:8003/"),
+            "http://localhost:8003"
+        );
+        assert_eq!(
+            normalize_uri("http://localhost:8003"),
+            "http://localhost:8003"
+        );
+        assert_eq!(
+            normalize_uri("\"http://localhost:8003\""),
+            "http://localhost:8003"
+        );
     }
 }

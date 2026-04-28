@@ -3,17 +3,17 @@
 //! Manages zero trust services, including dark services and secure communication
 //! endpoints for virtual world components.
 
+use super::config::ZitiConfig;
+use super::ffi::{ZitiConnectionWrapper, ZitiFFI};
+use super::{ZitiProtocol, ZitiService, ZitiServiceType};
+use anyhow::{anyhow, Result};
+use serde::{Deserialize, Serialize};
 use std::collections::HashMap;
 use std::sync::Arc;
 use std::time::Duration;
-use tokio::sync::{RwLock, Mutex};
+use tokio::sync::{Mutex, RwLock};
 use tokio::time::{sleep, timeout};
 use uuid::Uuid;
-use serde::{Deserialize, Serialize};
-use anyhow::{Result, anyhow};
-use super::config::ZitiConfig;
-use super::{ZitiService, ZitiServiceType, ZitiProtocol};
-use super::ffi::{ZitiFFI, ZitiConnectionWrapper};
 
 /// Service manager for OpenZiti zero trust services
 pub struct ZitiServiceManager {
@@ -158,10 +158,10 @@ pub enum MessagePriority {
 pub trait ServiceCommunicationHandler: Send + Sync {
     /// Handle incoming service message
     async fn handle_message(&self, message: ServiceMessage) -> Result<Option<ServiceMessage>>;
-    
+
     /// Handle service connection events
     async fn handle_connection_event(&self, event: ServiceConnectionEvent) -> Result<()>;
-    
+
     /// Get handler capabilities
     fn get_capabilities(&self) -> ServiceHandlerCapabilities;
 }
@@ -169,11 +169,26 @@ pub trait ServiceCommunicationHandler: Send + Sync {
 /// Service connection events
 #[derive(Debug, Clone)]
 pub enum ServiceConnectionEvent {
-    Connected { connection_id: String, service_id: String },
-    Disconnected { connection_id: String, reason: String },
-    Error { connection_id: String, error: String },
-    DataReceived { connection_id: String, data_size: usize },
-    AuthenticationRequired { connection_id: String, challenge: String },
+    Connected {
+        connection_id: String,
+        service_id: String,
+    },
+    Disconnected {
+        connection_id: String,
+        reason: String,
+    },
+    Error {
+        connection_id: String,
+        error: String,
+    },
+    DataReceived {
+        connection_id: String,
+        data_size: usize,
+    },
+    AuthenticationRequired {
+        connection_id: String,
+        challenge: String,
+    },
 }
 
 /// Service handler capabilities
@@ -243,8 +258,10 @@ impl ZitiServiceManager {
         self.start_health_monitor().await?;
 
         self.is_initialized = true;
-        tracing::info!("OpenZiti service manager initialized with {} services", 
-                      self.services.read().await.len());
+        tracing::info!(
+            "OpenZiti service manager initialized with {} services",
+            self.services.read().await.len()
+        );
         Ok(())
     }
 
@@ -252,10 +269,10 @@ impl ZitiServiceManager {
     pub async fn create_service(&mut self, service: ZitiService) -> Result<String> {
         let mut services = self.services.write().await;
         let service_id = service.service_id.clone();
-        
+
         // Validate service configuration
         self.validate_service(&service)?;
-        
+
         // Create hosted service entry
         let hosted_service = HostedService {
             service_id: service_id.clone(),
@@ -280,7 +297,7 @@ impl ZitiServiceManager {
         };
 
         services.insert(service_id.clone(), service);
-        
+
         let mut hosted_services = self.hosted_services.write().await;
         hosted_services.insert(service_id.clone(), hosted_service);
 
@@ -293,18 +310,16 @@ impl ZitiServiceManager {
         &self,
         source_service: &str,
         target_service: &str,
-        connection_type: ServiceConnectionType
+        connection_type: ServiceConnectionType,
     ) -> Result<String> {
         // Verify both services exist
         let services = self.services.read().await;
-        let source = services.get(source_service)
-            .ok_or_else(|| anyhow!(
-                format!("Source service {} not found", source_service)
-            ))?;
-        let target = services.get(target_service)
-            .ok_or_else(|| anyhow!(
-                format!("Target service {} not found", target_service)
-            ))?;
+        let source = services
+            .get(source_service)
+            .ok_or_else(|| anyhow!(format!("Source service {} not found", source_service)))?;
+        let target = services
+            .get(target_service)
+            .ok_or_else(|| anyhow!(format!("Target service {} not found", target_service)))?;
 
         // Check if connection is allowed by policies
         self.verify_connection_policies(source, target).await?;
@@ -339,8 +354,12 @@ impl ZitiServiceManager {
         let mut connections = self.service_connections.write().await;
         connections.insert(connection_id.clone(), connection);
 
-        tracing::info!("Established secure connection {} between {} and {}", 
-                      connection_id, source_service, target_service);
+        tracing::info!(
+            "Established secure connection {} between {} and {}",
+            connection_id,
+            source_service,
+            target_service
+        );
 
         Ok(connection_id)
     }
@@ -352,7 +371,7 @@ impl ZitiServiceManager {
         target_service: &str,
         message_type: ServiceMessageType,
         payload: Vec<u8>,
-        priority: MessagePriority
+        priority: MessagePriority,
     ) -> Result<String> {
         let message_id = Uuid::new_v4().to_string();
         let now = std::time::SystemTime::now()
@@ -369,7 +388,7 @@ impl ZitiServiceManager {
             headers: HashMap::new(),
             timestamp: now,
             priority,
-            encryption_required: true, // Always encrypt service messages
+            encryption_required: true,  // Always encrypt service messages
             authentication_token: None, // Will be set during processing
             correlation_id: None,
             expires_at: Some(now + 300), // 5 minute default expiry
@@ -379,8 +398,12 @@ impl ZitiServiceManager {
         let mut queue = self.message_queue.lock().await;
         queue.push(message);
 
-        tracing::debug!("Queued secure message {} from {} to {}", 
-                       message_id, source_service, target_service);
+        tracing::debug!(
+            "Queued secure message {} from {} to {}",
+            message_id,
+            source_service,
+            target_service
+        );
 
         Ok(message_id)
     }
@@ -389,22 +412,28 @@ impl ZitiServiceManager {
     pub async fn register_handler(
         &self,
         service_id: &str,
-        handler: Arc<dyn ServiceCommunicationHandler>
+        handler: Arc<dyn ServiceCommunicationHandler>,
     ) -> Result<()> {
         let mut handlers = self.communication_handlers.write().await;
         handlers.insert(service_id.to_string(), handler);
-        
-        tracing::info!("Registered communication handler for service: {}", service_id);
+
+        tracing::info!(
+            "Registered communication handler for service: {}",
+            service_id
+        );
         Ok(())
     }
 
     /// Discover available services
-    pub async fn discover_services(&self, service_type: Option<ZitiServiceType>) -> Result<Vec<ServiceDiscoveryInfo>> {
+    pub async fn discover_services(
+        &self,
+        service_type: Option<ZitiServiceType>,
+    ) -> Result<Vec<ServiceDiscoveryInfo>> {
         let services = self.services.read().await;
         let hosted_services = self.hosted_services.read().await;
-        
+
         let mut discovered_services = Vec::new();
-        
+
         for (service_id, service) in services.iter() {
             // Filter by service type if specified
             if let Some(ref filter_type) = service_type {
@@ -427,7 +456,7 @@ impl ZitiServiceManager {
                     last_seen: hosted.last_heartbeat,
                     metadata: HashMap::new(),
                 };
-                
+
                 discovered_services.push(discovery_info);
             }
         }
@@ -436,41 +465,49 @@ impl ZitiServiceManager {
     }
 
     /// Get service communication statistics
-    pub async fn get_communication_stats(&self, service_id: &str) -> Result<ServiceCommunicationStats> {
+    pub async fn get_communication_stats(
+        &self,
+        service_id: &str,
+    ) -> Result<ServiceCommunicationStats> {
         let connections = self.service_connections.read().await;
-        
-        let service_connections: Vec<_> = connections.values()
+
+        let service_connections: Vec<_> = connections
+            .values()
             .filter(|conn| conn.source_service == service_id || conn.target_service == service_id)
             .collect();
 
         let total_connections = service_connections.len() as u32;
-        let active_connections = service_connections.iter()
+        let active_connections = service_connections
+            .iter()
             .filter(|conn| conn.status == ConnectionStatus::Connected)
             .count() as u32;
-        let failed_connections = service_connections.iter()
+        let failed_connections = service_connections
+            .iter()
             .filter(|conn| conn.status == ConnectionStatus::Failed)
             .count() as u32;
 
-        let total_bytes: u64 = service_connections.iter()
+        let total_bytes: u64 = service_connections
+            .iter()
             .map(|conn| conn.bytes_sent + conn.bytes_received)
             .sum();
 
-        let total_messages: u64 = service_connections.iter()
+        let total_messages: u64 = service_connections
+            .iter()
             .map(|conn| conn.message_count as u64)
             .sum();
 
         let stats = ServiceCommunicationStats {
             total_connections,
             active_connections,
-            messages_sent: total_messages / 2, // Approximate
+            messages_sent: total_messages / 2,     // Approximate
             messages_received: total_messages / 2, // Approximate
             bytes_transferred: total_bytes,
             failed_connections,
             average_latency_ms: 50.0, // Simplified
-            error_rate: if total_connections > 0 { 
-                failed_connections as f64 / total_connections as f64 
-            } else { 
-                0.0 
+            error_rate: if total_connections > 0 {
+                failed_connections as f64 / total_connections as f64
+            } else {
+                0.0
             },
             uptime_seconds: 3600, // Simplified
         };
@@ -493,7 +530,8 @@ impl ZitiServiceManager {
     /// Get active connections
     pub async fn get_active_connections(&self) -> Vec<ServiceConnection> {
         let connections = self.service_connections.read().await;
-        connections.values()
+        connections
+            .values()
             .filter(|conn| conn.status == ConnectionStatus::Connected)
             .cloned()
             .collect()
@@ -541,11 +579,11 @@ impl ZitiServiceManager {
     async fn start_message_processor(&self) -> Result<()> {
         let queue = Arc::clone(&self.message_queue);
         let handlers = Arc::clone(&self.communication_handlers);
-        
+
         tokio::spawn(async move {
             loop {
                 sleep(Duration::from_millis(100)).await;
-                
+
                 let mut messages = {
                     let mut queue_lock = queue.lock().await;
                     if queue_lock.is_empty() {
@@ -570,11 +608,11 @@ impl ZitiServiceManager {
     /// Start health monitor
     async fn start_health_monitor(&self) -> Result<()> {
         let hosted_services = Arc::clone(&self.hosted_services);
-        
+
         tokio::spawn(async move {
             loop {
                 sleep(Duration::from_secs(30)).await;
-                
+
                 let mut services = hosted_services.write().await;
                 let now = std::time::SystemTime::now()
                     .duration_since(std::time::UNIX_EPOCH)
@@ -583,10 +621,12 @@ impl ZitiServiceManager {
 
                 for (service_id, service) in services.iter_mut() {
                     // Check if service has sent heartbeat recently
-                    if now - service.last_heartbeat > 120 { // 2 minutes
+                    if now - service.last_heartbeat > 120 {
+                        // 2 minutes
                         service.health_status = ServiceHealthStatus::Unhealthy;
                         tracing::warn!("Service {} is unhealthy - no heartbeat", service_id);
-                    } else if now - service.last_heartbeat > 60 { // 1 minute
+                    } else if now - service.last_heartbeat > 60 {
+                        // 1 minute
                         service.health_status = ServiceHealthStatus::Degraded;
                     } else {
                         service.health_status = ServiceHealthStatus::Healthy;
@@ -601,9 +641,7 @@ impl ZitiServiceManager {
     /// Validate service configuration
     fn validate_service(&self, service: &ZitiService) -> Result<()> {
         if service.name.is_empty() {
-            return Err(anyhow!(
-                "Service name cannot be empty".to_string()
-            ));
+            return Err(anyhow!("Service name cannot be empty".to_string()));
         }
 
         if service.endpoint_address.is_empty() {
@@ -613,16 +651,18 @@ impl ZitiServiceManager {
         }
 
         if service.port == 0 {
-            return Err(anyhow!(
-                "Service port must be greater than 0".to_string()
-            ));
+            return Err(anyhow!("Service port must be greater than 0".to_string()));
         }
 
         Ok(())
     }
 
     /// Verify connection policies
-    async fn verify_connection_policies(&self, source: &ZitiService, target: &ZitiService) -> Result<()> {
+    async fn verify_connection_policies(
+        &self,
+        source: &ZitiService,
+        target: &ZitiService,
+    ) -> Result<()> {
         // Simplified policy verification - in real implementation would check against policy engine
         if source.policies.is_empty() && target.policies.is_empty() {
             return Ok(());
@@ -637,16 +677,21 @@ impl ZitiServiceManager {
             }
         }
 
-        Err(anyhow!(
-            format!("Service {} is not authorized to connect to {}", source.name, target.name)
-        ))
+        Err(anyhow!(format!(
+            "Service {} is not authorized to connect to {}",
+            source.name, target.name
+        )))
     }
 
     /// Authenticate service connection
     async fn authenticate_service_connection(&self, connection: &ServiceConnection) -> Result<()> {
         // Simplified authentication - in real implementation would use certificates/tokens
-        tracing::info!("Authenticating connection {} between {} and {}", 
-                      connection.connection_id, connection.source_service, connection.target_service);
+        tracing::info!(
+            "Authenticating connection {} between {} and {}",
+            connection.connection_id,
+            connection.source_service,
+            connection.target_service
+        );
         Ok(())
     }
 
@@ -664,9 +709,12 @@ impl ZitiServiceManager {
     /// Calculate service load factor
     async fn calculate_service_load(&self, service_id: &str) -> f64 {
         let connections = self.service_connections.read().await;
-        let active_connections = connections.values()
-            .filter(|conn| (conn.source_service == service_id || conn.target_service == service_id) 
-                         && conn.status == ConnectionStatus::Connected)
+        let active_connections = connections
+            .values()
+            .filter(|conn| {
+                (conn.source_service == service_id || conn.target_service == service_id)
+                    && conn.status == ConnectionStatus::Connected
+            })
             .count();
 
         // Simple load calculation based on connection count

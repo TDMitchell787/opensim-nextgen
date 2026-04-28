@@ -4,12 +4,12 @@ use std::path::{Path, PathBuf};
 use tracing::{info, warn};
 use uuid::Uuid;
 
-use crate::region::avatar::appearance::{Appearance, Attachment};
 use super::decoder::{decode_lod_geometry, LodLevel};
 use super::encoder::MeshGeometry;
+use super::parser::parse_mesh_header;
 use super::texture_resolver::TextureResolver;
 use super::types::MeshAssetHeader;
-use super::parser::parse_mesh_header;
+use crate::region::avatar::appearance::{Appearance, Attachment};
 
 pub const BAKE_HEAD: u32 = 8;
 pub const BAKE_UPPER: u32 = 9;
@@ -90,7 +90,15 @@ impl SnapshotCollector {
         db_pool: &sqlx::PgPool,
         asset_fetcher: Option<&crate::asset::AssetFetcher>,
     ) -> Result<AvatarSnapshot> {
-        self.collect_snapshot_with_live_te(avatar_id, avatar_name, appearance, db_pool, asset_fetcher, &std::collections::HashMap::new()).await
+        self.collect_snapshot_with_live_te(
+            avatar_id,
+            avatar_name,
+            appearance,
+            db_pool,
+            asset_fetcher,
+            &std::collections::HashMap::new(),
+        )
+        .await
     }
 
     pub async fn collect_snapshot_with_live_te(
@@ -102,27 +110,44 @@ impl SnapshotCollector {
         asset_fetcher: Option<&crate::asset::AssetFetcher>,
         live_texture_entries: &std::collections::HashMap<Uuid, Vec<u8>>,
     ) -> Result<AvatarSnapshot> {
-        info!("[SNAPSHOT] Collecting snapshot for {} ({})", avatar_name, avatar_id);
+        info!(
+            "[SNAPSHOT] Collecting snapshot for {} ({})",
+            avatar_name, avatar_id
+        );
 
-        let baked = self.resolve_baked_textures(appearance, db_pool, asset_fetcher).await;
+        let baked = self
+            .resolve_baked_textures(appearance, db_pool, asset_fetcher)
+            .await;
 
         let mut pieces = Vec::new();
 
         for attachment in &appearance.attachments {
             if (30..=37).contains(&attachment.point) {
-                info!("[SNAPSHOT] Skipping HUD attachment point {} ({})", attachment.point, attachment.asset_id);
+                info!(
+                    "[SNAPSHOT] Skipping HUD attachment point {} ({})",
+                    attachment.point, attachment.asset_id
+                );
                 continue;
             }
             let live_te = live_texture_entries.get(&attachment.item_id);
-            match self.collect_attachment_piece_with_te(attachment, db_pool, asset_fetcher, live_te).await {
+            match self
+                .collect_attachment_piece_with_te(attachment, db_pool, asset_fetcher, live_te)
+                .await
+            {
                 Ok(piece) => {
-                    info!("[SNAPSHOT] Collected attachment: {} (point {}, {} faces)",
-                        piece.name, attachment.point, piece.geometry.faces.len());
+                    info!(
+                        "[SNAPSHOT] Collected attachment: {} (point {}, {} faces)",
+                        piece.name,
+                        attachment.point,
+                        piece.geometry.faces.len()
+                    );
                     pieces.push(piece);
                 }
                 Err(e) => {
-                    warn!("[SNAPSHOT] Failed to collect attachment {} at point {}: {}",
-                        attachment.asset_id, attachment.point, e);
+                    warn!(
+                        "[SNAPSHOT] Failed to collect attachment {} at point {}: {}",
+                        attachment.asset_id, attachment.point, e
+                    );
                 }
             }
         }
@@ -134,7 +159,8 @@ impl SnapshotCollector {
             }
         }
 
-        info!("[SNAPSHOT] Complete: {} pieces, baked textures: head={} upper={} lower={} eyes={}",
+        info!(
+            "[SNAPSHOT] Complete: {} pieces, baked textures: head={} upper={} lower={} eyes={}",
             pieces.len(),
             baked.head.is_some(),
             baked.upper.is_some(),
@@ -160,16 +186,29 @@ impl SnapshotCollector {
         let mut baked = BakedTexturePaths::default();
 
         for te in &appearance.textures {
-            let path = self.texture_resolver
+            let path = self
+                .texture_resolver
                 .resolve_texture(&te.texture_id, db_pool, asset_fetcher)
                 .await
                 .ok();
 
             match te.face {
-                BAKE_HEAD => { baked.head = path; baked.head_uuid = Some(te.texture_id); }
-                BAKE_UPPER => { baked.upper = path; baked.upper_uuid = Some(te.texture_id); }
-                BAKE_LOWER => { baked.lower = path; baked.lower_uuid = Some(te.texture_id); }
-                BAKE_EYES => { baked.eyes = path; baked.eyes_uuid = Some(te.texture_id); }
+                BAKE_HEAD => {
+                    baked.head = path;
+                    baked.head_uuid = Some(te.texture_id);
+                }
+                BAKE_UPPER => {
+                    baked.upper = path;
+                    baked.upper_uuid = Some(te.texture_id);
+                }
+                BAKE_LOWER => {
+                    baked.lower = path;
+                    baked.lower_uuid = Some(te.texture_id);
+                }
+                BAKE_EYES => {
+                    baked.eyes = path;
+                    baked.eyes_uuid = Some(te.texture_id);
+                }
                 BAKE_SKIRT => baked.skirt = path,
                 BAKE_HAIR => baked.hair = path,
                 _ => {}
@@ -185,7 +224,8 @@ impl SnapshotCollector {
         db_pool: &sqlx::PgPool,
         asset_fetcher: Option<&crate::asset::AssetFetcher>,
     ) -> Result<SnapshotPiece> {
-        self.collect_attachment_piece_with_te(attachment, db_pool, asset_fetcher, None).await
+        self.collect_attachment_piece_with_te(attachment, db_pool, asset_fetcher, None)
+            .await
     }
 
     async fn collect_attachment_piece_with_te(
@@ -201,16 +241,21 @@ impl SnapshotCollector {
 
         let face_texture_ids = if let Some(te_bytes) = live_te {
             if !te_bytes.is_empty() {
-                info!("[SNAPSHOT] Using live texture_entry ({} bytes) for attachment point {}",
-                    te_bytes.len(), attachment.point);
+                info!(
+                    "[SNAPSHOT] Using live texture_entry ({} bytes) for attachment point {}",
+                    te_bytes.len(),
+                    attachment.point
+                );
                 super::texture_resolver::parse_texture_entry_face_textures(te_bytes)
             } else {
                 self.extract_face_texture_ids_from_object(&attachment.item_id, db_pool)
-                    .await.unwrap_or_default()
+                    .await
+                    .unwrap_or_default()
             }
         } else {
             self.extract_face_texture_ids_from_object(&attachment.item_id, db_pool)
-                .await.unwrap_or_default()
+                .await
+                .unwrap_or_default()
         };
 
         let mut texture_paths = Vec::new();
@@ -219,7 +264,11 @@ impl SnapshotCollector {
             if let Some(tex_id) = face_texture_ids.get(i) {
                 if *tex_id != Uuid::nil() {
                     texture_uuids.push(Some(*tex_id));
-                    match self.texture_resolver.resolve_texture(tex_id, db_pool, asset_fetcher).await {
+                    match self
+                        .texture_resolver
+                        .resolve_texture(tex_id, db_pool, asset_fetcher)
+                        .await
+                    {
                         Ok(path) => texture_paths.push(Some(path)),
                         Err(_) => texture_paths.push(None),
                     }
@@ -233,7 +282,16 @@ impl SnapshotCollector {
             }
         }
 
-        let name = format!("attach_{}_{}", attachment.point, attachment.asset_id.to_string().split('-').next().unwrap_or("unknown"));
+        let name = format!(
+            "attach_{}_{}",
+            attachment.point,
+            attachment
+                .asset_id
+                .to_string()
+                .split('-')
+                .next()
+                .unwrap_or("unknown")
+        );
 
         Ok(SnapshotPiece {
             name,
@@ -251,15 +309,16 @@ impl SnapshotCollector {
         item_id: &Uuid,
         db_pool: &sqlx::PgPool,
     ) -> Result<Vec<Uuid>> {
-        let row: Option<(Vec<u8>,)> = sqlx::query_as(
-            "SELECT texture FROM prims WHERE inventoryitemid = $1::uuid LIMIT 1"
-        )
-        .bind(item_id)
-        .fetch_optional(db_pool)
-        .await?;
+        let row: Option<(Vec<u8>,)> =
+            sqlx::query_as("SELECT texture FROM prims WHERE inventoryitemid = $1::uuid LIMIT 1")
+                .bind(item_id)
+                .fetch_optional(db_pool)
+                .await?;
 
         if let Some((te_bytes,)) = row {
-            Ok(super::texture_resolver::parse_texture_entry_face_textures(&te_bytes))
+            Ok(super::texture_resolver::parse_texture_entry_face_textures(
+                &te_bytes,
+            ))
         } else {
             Ok(vec![])
         }
@@ -276,19 +335,19 @@ async fn fetch_mesh_asset(
     asset_fetcher: Option<&crate::asset::AssetFetcher>,
 ) -> Result<Vec<u8>> {
     if let Some(fetcher) = asset_fetcher {
-        if let Ok(Some(data)) = fetcher.fetch_asset_data_typed_pg(
-            &asset_id.to_string(), Some(49), db_pool
-        ).await {
+        if let Ok(Some(data)) = fetcher
+            .fetch_asset_data_typed_pg(&asset_id.to_string(), Some(49), db_pool)
+            .await
+        {
             return Ok(data);
         }
     }
 
-    let row: Option<(Vec<u8>,)> = sqlx::query_as(
-        "SELECT data FROM assets WHERE id = $1::uuid AND assettype = 49"
-    )
-    .bind(asset_id)
-    .fetch_optional(db_pool)
-    .await?;
+    let row: Option<(Vec<u8>,)> =
+        sqlx::query_as("SELECT data FROM assets WHERE id = $1::uuid AND assettype = 49")
+            .bind(asset_id)
+            .fetch_optional(db_pool)
+            .await?;
 
     row.map(|r| r.0)
         .ok_or_else(|| anyhow!("Mesh asset {} not found", asset_id))

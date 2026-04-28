@@ -1,10 +1,10 @@
+use chrono::{DateTime, Utc};
+use serde::{Deserialize, Serialize};
 use std::collections::HashMap;
 use std::sync::Arc;
 use tokio::sync::RwLock;
-use serde::{Deserialize, Serialize};
+use tracing::{debug, info};
 use uuid::Uuid;
-use chrono::{DateTime, Utc};
-use tracing::{info, debug};
 
 use super::super::AIError;
 
@@ -67,7 +67,9 @@ pub enum RecommendationReason {
 impl RecommendationReason {
     pub fn description(&self) -> &'static str {
         match self {
-            RecommendationReason::SimilarVisitors => "Users who visited similar places also visited this",
+            RecommendationReason::SimilarVisitors => {
+                "Users who visited similar places also visited this"
+            }
             RecommendationReason::SimilarInterests => "Based on your interests",
             RecommendationReason::PopularNearby => "Popular nearby",
             RecommendationReason::FriendsVisited => "Your friends visited this",
@@ -200,12 +202,15 @@ impl CollaborativeRecommender {
         let activities = self.user_activities.read().await;
         let user_activities = activities.get(&user_id);
 
-        if user_activities.is_none() || user_activities.unwrap().len() < self.config.min_interactions_for_recommendation {
+        if user_activities.is_none()
+            || user_activities.unwrap().len() < self.config.min_interactions_for_recommendation
+        {
             return Ok(self.get_popular_items(limit).await);
         }
 
         let user_acts = user_activities.unwrap();
-        let user_items: Vec<Uuid> = user_acts.iter()
+        let user_items: Vec<Uuid> = user_acts
+            .iter()
             .map(|a| a.target_id)
             .collect::<std::collections::HashSet<_>>()
             .into_iter()
@@ -234,23 +239,30 @@ impl CollaborativeRecommender {
             }
         }
 
-        let mut recommendations: Vec<ContentRecommendation> = candidates.into_iter()
-            .map(|(content_id, (score, sources))| {
-                ContentRecommendation {
-                    content_id,
-                    content_type: ContentItemType::Region,
-                    name: format!("Item_{}", &content_id.to_string()[..8]),
-                    score,
-                    reason: RecommendationReason::SimilarVisitors,
-                    source_items: sources,
-                }
+        let mut recommendations: Vec<ContentRecommendation> = candidates
+            .into_iter()
+            .map(|(content_id, (score, sources))| ContentRecommendation {
+                content_id,
+                content_type: ContentItemType::Region,
+                name: format!("Item_{}", &content_id.to_string()[..8]),
+                score,
+                reason: RecommendationReason::SimilarVisitors,
+                source_items: sources,
             })
             .collect();
 
-        recommendations.sort_by(|a, b| b.score.partial_cmp(&a.score).unwrap_or(std::cmp::Ordering::Equal));
+        recommendations.sort_by(|a, b| {
+            b.score
+                .partial_cmp(&a.score)
+                .unwrap_or(std::cmp::Ordering::Equal)
+        });
         recommendations.truncate(limit.min(self.config.max_recommendations));
 
-        debug!("Generated {} content recommendations for user {}", recommendations.len(), user_id);
+        debug!(
+            "Generated {} content recommendations for user {}",
+            recommendations.len(),
+            user_id
+        );
         Ok(recommendations)
     }
 
@@ -276,16 +288,22 @@ impl CollaborativeRecommender {
                 continue;
             }
 
-            let common_interests: Vec<String> = user_profile.interests.iter()
+            let common_interests: Vec<String> = user_profile
+                .interests
+                .iter()
                 .filter(|i| other_profile.interests.contains(i))
                 .cloned()
                 .collect();
 
-            let common_friends = user_profile.friends.iter()
+            let common_friends = user_profile
+                .friends
+                .iter()
                 .filter(|f| other_profile.friends.contains(f))
                 .count();
 
-            let mutual_regions: Vec<String> = user_profile.visited_regions.iter()
+            let mutual_regions: Vec<String> = user_profile
+                .visited_regions
+                .iter()
                 .filter(|r| other_profile.visited_regions.contains(r))
                 .map(|r| format!("Region_{}", &r.to_string()[..8]))
                 .collect();
@@ -307,10 +325,18 @@ impl CollaborativeRecommender {
             }
         }
 
-        candidates.sort_by(|a, b| b.score.partial_cmp(&a.score).unwrap_or(std::cmp::Ordering::Equal));
+        candidates.sort_by(|a, b| {
+            b.score
+                .partial_cmp(&a.score)
+                .unwrap_or(std::cmp::Ordering::Equal)
+        });
         candidates.truncate(limit.min(self.config.max_recommendations));
 
-        debug!("Generated {} social recommendations for user {}", candidates.len(), user_id);
+        debug!(
+            "Generated {} social recommendations for user {}",
+            candidates.len(),
+            user_id
+        );
         Ok(candidates)
     }
 
@@ -349,7 +375,10 @@ impl CollaborativeRecommender {
             if let Some(user_acts) = activities.get(&user_id) {
                 let sim = self.compute_user_similarity(user_acts, other_acts);
                 if sim > self.config.min_similarity_threshold {
-                    for act in other_acts.iter().filter(|a| a.activity_type == ActivityType::CreatorFollow) {
+                    for act in other_acts
+                        .iter()
+                        .filter(|a| a.activity_type == ActivityType::CreatorFollow)
+                    {
                         if !user_profile.followed_creators.contains(&act.target_id) {
                             *creator_scores.entry(act.target_id).or_insert(0.0) += sim;
                         }
@@ -358,20 +387,23 @@ impl CollaborativeRecommender {
             }
         }
 
-        let mut recommendations: Vec<ContentRecommendation> = creator_scores.into_iter()
-            .map(|(creator_id, score)| {
-                ContentRecommendation {
-                    content_id: creator_id,
-                    content_type: ContentItemType::Creator,
-                    name: format!("Creator_{}", &creator_id.to_string()[..8]),
-                    score,
-                    reason: RecommendationReason::CreatorFollowed,
-                    source_items: Vec::new(),
-                }
+        let mut recommendations: Vec<ContentRecommendation> = creator_scores
+            .into_iter()
+            .map(|(creator_id, score)| ContentRecommendation {
+                content_id: creator_id,
+                content_type: ContentItemType::Creator,
+                name: format!("Creator_{}", &creator_id.to_string()[..8]),
+                score,
+                reason: RecommendationReason::CreatorFollowed,
+                source_items: Vec::new(),
             })
             .collect();
 
-        recommendations.sort_by(|a, b| b.score.partial_cmp(&a.score).unwrap_or(std::cmp::Ordering::Equal));
+        recommendations.sort_by(|a, b| {
+            b.score
+                .partial_cmp(&a.score)
+                .unwrap_or(std::cmp::Ordering::Equal)
+        });
         recommendations.truncate(limit.min(self.config.max_recommendations));
 
         Ok(recommendations)
@@ -385,40 +417,54 @@ impl CollaborativeRecommender {
         let thirty_days_ago = now - chrono::Duration::days(30);
 
         if let Some(acts) = user_activities {
-            let recent: Vec<&UserActivity> = acts.iter()
+            let recent: Vec<&UserActivity> = acts
+                .iter()
                 .filter(|a| a.timestamp >= thirty_days_ago)
                 .collect();
 
-            let sessions = recent.iter()
+            let sessions = recent
+                .iter()
                 .filter(|a| a.activity_type == ActivityType::RegionVisit)
                 .count() as u32;
 
-            let avg_duration = recent.iter()
+            let avg_duration = recent
+                .iter()
                 .filter_map(|a| a.duration_seconds)
                 .map(|d| d as f32 / 60.0)
-                .sum::<f32>() / sessions.max(1) as f32;
+                .sum::<f32>()
+                / sessions.max(1) as f32;
 
-            let regions_visited: std::collections::HashSet<Uuid> = recent.iter()
+            let regions_visited: std::collections::HashSet<Uuid> = recent
+                .iter()
                 .filter(|a| a.activity_type == ActivityType::RegionVisit)
                 .map(|a| a.target_id)
                 .collect();
 
-            let social_interactions = recent.iter()
-                .filter(|a| matches!(a.activity_type,
-                    ActivityType::ChatInteraction | ActivityType::FriendAdd | ActivityType::GroupJoin
-                ))
+            let social_interactions = recent
+                .iter()
+                .filter(|a| {
+                    matches!(
+                        a.activity_type,
+                        ActivityType::ChatInteraction
+                            | ActivityType::FriendAdd
+                            | ActivityType::GroupJoin
+                    )
+                })
                 .count() as u32;
 
-            let content_created = recent.iter()
+            let content_created = recent
+                .iter()
                 .filter(|a| a.activity_type == ActivityType::ContentCreate)
                 .count() as u32;
 
             let sixty_days_ago = now - chrono::Duration::days(60);
-            let previous_period: Vec<&UserActivity> = acts.iter()
+            let previous_period: Vec<&UserActivity> = acts
+                .iter()
                 .filter(|a| a.timestamp >= sixty_days_ago && a.timestamp < thirty_days_ago)
                 .collect();
 
-            let previous_sessions = previous_period.iter()
+            let previous_sessions = previous_period
+                .iter()
                 .filter(|a| a.activity_type == ActivityType::RegionVisit)
                 .count() as f32;
 
@@ -471,14 +517,14 @@ impl CollaborativeRecommender {
 
     pub async fn get_trending_content(&self, limit: usize) -> Vec<ContentRecommendation> {
         let popularity = self.item_popularity.read().await;
-        let mut items: Vec<(Uuid, u32)> = popularity.iter()
-            .map(|(id, count)| (*id, *count))
-            .collect();
+        let mut items: Vec<(Uuid, u32)> =
+            popularity.iter().map(|(id, count)| (*id, *count)).collect();
 
         items.sort_by(|a, b| b.1.cmp(&a.1));
         items.truncate(limit);
 
-        items.into_iter()
+        items
+            .into_iter()
             .map(|(id, count)| {
                 let max_count = popularity.values().max().copied().unwrap_or(1) as f32;
                 ContentRecommendation {

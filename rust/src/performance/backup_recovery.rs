@@ -1,25 +1,17 @@
 //! Backup and disaster recovery system for OpenSim
 
+use anyhow::{anyhow, Result};
+use serde::{Deserialize, Serialize};
 use std::{
     collections::HashMap,
     path::{Path, PathBuf},
     sync::Arc,
     time::{Duration, SystemTime, UNIX_EPOCH},
 };
-use anyhow::{anyhow, Result};
-use serde::{Deserialize, Serialize};
-use tokio::{
-    fs,
-    io::AsyncWriteExt,
-    sync::RwLock,
-};
-use tracing::{info, warn, error, debug};
+use tokio::{fs, io::AsyncWriteExt, sync::RwLock};
+use tracing::{debug, error, info, warn};
 
-use super::{
-    metrics::MetricsRegistry,
-    logging::LogAggregator,
-    health_checks::HealthCheckSystem,
-};
+use super::{health_checks::HealthCheckSystem, logging::LogAggregator, metrics::MetricsRegistry};
 
 /// Backup and recovery configuration
 #[derive(Debug, Clone, Serialize, Deserialize)]
@@ -309,7 +301,11 @@ impl BackupRecoverySystem {
     }
 
     /// Create a manual backup
-    pub async fn create_backup(&self, backup_type: BackupType, components: Vec<ComponentType>) -> Result<String> {
+    pub async fn create_backup(
+        &self,
+        backup_type: BackupType,
+        components: Vec<ComponentType>,
+    ) -> Result<String> {
         info!("Creating manual backup of type: {:?}", backup_type);
 
         let backup_id = uuid::Uuid::new_v4().to_string();
@@ -332,7 +328,10 @@ impl BackupRecoverySystem {
         };
 
         // Add to records
-        self.backup_records.write().await.push(backup_record.clone());
+        self.backup_records
+            .write()
+            .await
+            .push(backup_record.clone());
 
         // Perform backup asynchronously
         let system = self.clone();
@@ -361,15 +360,25 @@ impl BackupRecoverySystem {
     }
 
     /// Start a recovery operation
-    pub async fn start_recovery(&self, backup_id: &str, recovery_type: RecoveryType, components: Vec<ComponentType>) -> Result<String> {
+    pub async fn start_recovery(
+        &self,
+        backup_id: &str,
+        recovery_type: RecoveryType,
+        components: Vec<ComponentType>,
+    ) -> Result<String> {
         info!("Starting recovery operation from backup: {}", backup_id);
 
         // Verify backup exists and is valid
-        let backup_record = self.get_backup_record(backup_id).await
+        let backup_record = self
+            .get_backup_record(backup_id)
+            .await
             .ok_or_else(|| anyhow!("Backup not found: {}", backup_id))?;
 
         if backup_record.status != BackupStatus::Completed {
-            return Err(anyhow!("Backup is not in completed state: {:?}", backup_record.status));
+            return Err(anyhow!(
+                "Backup is not in completed state: {:?}",
+                backup_record.status
+            ));
         }
 
         let recovery_id = uuid::Uuid::new_v4().to_string();
@@ -387,17 +396,25 @@ impl BackupRecoverySystem {
             metadata: HashMap::new(),
         };
 
-        self.recovery_operations.write().await.push(recovery_operation);
+        self.recovery_operations
+            .write()
+            .await
+            .push(recovery_operation);
 
         // Perform recovery asynchronously
         let system = self.clone();
         let backup_id = backup_id.to_string();
         let recovery_id_clone = recovery_id.clone();
         tokio::spawn(async move {
-            match system.perform_recovery(&recovery_id_clone, &backup_id, components).await {
+            match system
+                .perform_recovery(&recovery_id_clone, &backup_id, components)
+                .await
+            {
                 Ok(_) => {
                     let mut operations = system.recovery_operations.write().await;
-                    if let Some(operation) = operations.iter_mut().find(|r| r.id == recovery_id_clone) {
+                    if let Some(operation) =
+                        operations.iter_mut().find(|r| r.id == recovery_id_clone)
+                    {
                         operation.status = RecoveryStatus::Completed;
                         operation.end_time = Some(chrono::Utc::now());
                         operation.progress_percentage = 100.0;
@@ -406,7 +423,9 @@ impl BackupRecoverySystem {
                 Err(e) => {
                     error!("Recovery failed for {}: {}", recovery_id_clone, e);
                     let mut operations = system.recovery_operations.write().await;
-                    if let Some(operation) = operations.iter_mut().find(|r| r.id == recovery_id_clone) {
+                    if let Some(operation) =
+                        operations.iter_mut().find(|r| r.id == recovery_id_clone)
+                    {
                         operation.status = RecoveryStatus::Failed;
                         operation.error_message = Some(e.to_string());
                         operation.end_time = Some(chrono::Utc::now());
@@ -422,7 +441,9 @@ impl BackupRecoverySystem {
     pub async fn execute_disaster_recovery_plan(&self, plan_id: &str) -> Result<String> {
         info!("Executing disaster recovery plan: {}", plan_id);
 
-        let plan = self.get_disaster_recovery_plan(plan_id).await
+        let plan = self
+            .get_disaster_recovery_plan(plan_id)
+            .await
             .ok_or_else(|| anyhow!("Disaster recovery plan not found: {}", plan_id))?;
 
         // Create a recovery operation for the plan
@@ -435,7 +456,11 @@ impl BackupRecoverySystem {
             target_time: None,
             start_time: chrono::Utc::now(),
             end_time: None,
-            components_to_restore: vec![ComponentType::Database, ComponentType::UserData, ComponentType::AssetData],
+            components_to_restore: vec![
+                ComponentType::Database,
+                ComponentType::UserData,
+                ComponentType::AssetData,
+            ],
             progress_percentage: 0.0,
             error_message: None,
             metadata: HashMap::from([
@@ -444,7 +469,10 @@ impl BackupRecoverySystem {
             ]),
         };
 
-        self.recovery_operations.write().await.push(recovery_operation);
+        self.recovery_operations
+            .write()
+            .await
+            .push(recovery_operation);
 
         // Execute recovery steps
         let system = self.clone();
@@ -452,9 +480,15 @@ impl BackupRecoverySystem {
         let recovery_id_clone = recovery_id.clone();
         let plan_id_clone = plan_id.to_string();
         tokio::spawn(async move {
-            match system.execute_recovery_steps(&recovery_id_clone, &plan_clone).await {
+            match system
+                .execute_recovery_steps(&recovery_id_clone, &plan_clone)
+                .await
+            {
                 Ok(_) => {
-                    info!("Disaster recovery plan executed successfully: {}", plan_id_clone);
+                    info!(
+                        "Disaster recovery plan executed successfully: {}",
+                        plan_id_clone
+                    );
                 }
                 Err(e) => {
                     error!("Disaster recovery plan execution failed: {}", e);
@@ -469,24 +503,16 @@ impl BackupRecoverySystem {
     pub async fn get_backup_records(&self, limit: Option<usize>) -> Vec<BackupRecord> {
         let records = self.backup_records.read().await;
         let limit = limit.unwrap_or(100);
-        
-        records.iter()
-            .rev()
-            .take(limit)
-            .cloned()
-            .collect()
+
+        records.iter().rev().take(limit).cloned().collect()
     }
 
     /// Get recovery operations
     pub async fn get_recovery_operations(&self, limit: Option<usize>) -> Vec<RecoveryOperation> {
         let operations = self.recovery_operations.read().await;
         let limit = limit.unwrap_or(50);
-        
-        operations.iter()
-            .rev()
-            .take(limit)
-            .cloned()
-            .collect()
+
+        operations.iter().rev().take(limit).cloned().collect()
     }
 
     /// Get disaster recovery plans
@@ -498,7 +524,9 @@ impl BackupRecoverySystem {
     pub async fn verify_backup(&self, backup_id: &str) -> Result<bool> {
         info!("Verifying backup integrity: {}", backup_id);
 
-        let backup_record = self.get_backup_record(backup_id).await
+        let backup_record = self
+            .get_backup_record(backup_id)
+            .await
             .ok_or_else(|| anyhow!("Backup not found: {}", backup_id))?;
 
         // Check file exists
@@ -514,7 +542,9 @@ impl BackupRecoverySystem {
 
         // Verify checksum if available
         if let Some(expected_checksum) = &backup_record.checksum {
-            let actual_checksum = self.calculate_file_checksum(&backup_record.file_path).await?;
+            let actual_checksum = self
+                .calculate_file_checksum(&backup_record.file_path)
+                .await?;
             if &actual_checksum != expected_checksum {
                 return Ok(false);
             }
@@ -527,7 +557,9 @@ impl BackupRecoverySystem {
     pub async fn test_disaster_recovery_plan(&self, plan_id: &str) -> Result<TestResults> {
         info!("Testing disaster recovery plan: {}", plan_id);
 
-        let plan = self.get_disaster_recovery_plan(plan_id).await
+        let plan = self
+            .get_disaster_recovery_plan(plan_id)
+            .await
             .ok_or_else(|| anyhow!("Disaster recovery plan not found: {}", plan_id))?;
 
         let test_start = chrono::Utc::now();
@@ -539,7 +571,8 @@ impl BackupRecoverySystem {
 
         // Check if required backups are available
         let backup_records = self.backup_records.read().await;
-        let recent_backups = backup_records.iter()
+        let recent_backups = backup_records
+            .iter()
             .filter(|b| b.status == BackupStatus::Completed)
             .filter(|b| {
                 let age = chrono::Utc::now().signed_duration_since(b.start_time);
@@ -578,7 +611,10 @@ impl BackupRecoverySystem {
     async fn ensure_backup_directory(&self) -> Result<()> {
         if !self.config.backup_directory.exists() {
             fs::create_dir_all(&self.config.backup_directory).await?;
-            info!("Created backup directory: {:?}", self.config.backup_directory);
+            info!(
+                "Created backup directory: {:?}",
+                self.config.backup_directory
+            );
         }
         Ok(())
     }
@@ -592,13 +628,39 @@ impl BackupRecoverySystem {
 
     async fn register_backup_metrics(&self) -> Result<()> {
         let labels = HashMap::new();
-        
-        self.metrics_registry.register_counter("backup_operations_total", "Total backup operations", labels.clone()).await?;
-        self.metrics_registry.register_counter("backup_failures_total", "Total backup failures", labels.clone()).await?;
-        self.metrics_registry.register_histogram("backup_duration_minutes", "Backup operation duration", labels.clone()).await?;
-        self.metrics_registry.register_gauge("backup_size_bytes", "Size of latest backup", labels.clone()).await?;
-        self.metrics_registry.register_gauge("recovery_operations_active", "Number of active recovery operations", labels.clone()).await?;
-        
+
+        self.metrics_registry
+            .register_counter(
+                "backup_operations_total",
+                "Total backup operations",
+                labels.clone(),
+            )
+            .await?;
+        self.metrics_registry
+            .register_counter(
+                "backup_failures_total",
+                "Total backup failures",
+                labels.clone(),
+            )
+            .await?;
+        self.metrics_registry
+            .register_histogram(
+                "backup_duration_minutes",
+                "Backup operation duration",
+                labels.clone(),
+            )
+            .await?;
+        self.metrics_registry
+            .register_gauge("backup_size_bytes", "Size of latest backup", labels.clone())
+            .await?;
+        self.metrics_registry
+            .register_gauge(
+                "recovery_operations_active",
+                "Number of active recovery operations",
+                labels.clone(),
+            )
+            .await?;
+
         Ok(())
     }
 
@@ -607,8 +669,12 @@ impl BackupRecoverySystem {
         let system = self.clone();
 
         tokio::spawn(async move {
-            let mut full_backup_interval = tokio::time::interval(Duration::from_secs(config.full_backup_interval_hours as u64 * 3600));
-            let mut incremental_backup_interval = tokio::time::interval(Duration::from_secs(config.incremental_backup_interval_hours as u64 * 3600));
+            let mut full_backup_interval = tokio::time::interval(Duration::from_secs(
+                config.full_backup_interval_hours as u64 * 3600,
+            ));
+            let mut incremental_backup_interval = tokio::time::interval(Duration::from_secs(
+                config.incremental_backup_interval_hours as u64 * 3600,
+            ));
 
             loop {
                 tokio::select! {
@@ -652,18 +718,19 @@ impl BackupRecoverySystem {
 
         tokio::spawn(async move {
             let mut cleanup_interval = tokio::time::interval(Duration::from_secs(24 * 3600)); // Daily cleanup
-            
+
             loop {
                 cleanup_interval.tick().await;
-                
+
                 if !*running.read().await {
                     break;
                 }
 
-                let cutoff_time = chrono::Utc::now() - chrono::Duration::days(config.retention_days as i64);
+                let cutoff_time =
+                    chrono::Utc::now() - chrono::Duration::days(config.retention_days as i64);
                 let mut records = backup_records.write().await;
                 let initial_count = records.len();
-                
+
                 // Remove expired backup records and delete files
                 records.retain(|record| {
                     if record.start_time < cutoff_time {
@@ -689,66 +756,66 @@ impl BackupRecoverySystem {
     }
 
     async fn initialize_default_recovery_plans(&self) -> Result<()> {
-        let default_plans = vec![
-            DisasterRecoveryPlan {
-                id: "critical_system_recovery".to_string(),
-                name: "Critical System Recovery".to_string(),
-                description: "Recover critical system components after a disaster".to_string(),
-                priority: RecoveryPriority::Critical,
-                rto_minutes: 60,
-                rpo_minutes: 15,
-                steps: vec![
-                    RecoveryStep {
-                        id: "step_1".to_string(),
-                        description: "Restore database from latest backup".to_string(),
-                        order: 1,
-                        estimated_duration_minutes: 20,
-                        automated: true,
-                        command: Some("restore_database".to_string()),
-                        verification_command: Some("verify_database".to_string()),
-                        rollback_command: None,
-                    },
-                    RecoveryStep {
-                        id: "step_2".to_string(),
-                        description: "Restore user data".to_string(),
-                        order: 2,
-                        estimated_duration_minutes: 15,
-                        automated: true,
-                        command: Some("restore_user_data".to_string()),
-                        verification_command: Some("verify_user_data".to_string()),
-                        rollback_command: None,
-                    },
-                    RecoveryStep {
-                        id: "step_3".to_string(),
-                        description: "Start core services".to_string(),
-                        order: 3,
-                        estimated_duration_minutes: 10,
-                        automated: true,
-                        command: Some("start_services".to_string()),
-                        verification_command: Some("check_service_health".to_string()),
-                        rollback_command: Some("stop_services".to_string()),
-                    },
-                ],
-                dependencies: vec![],
-                contact_list: vec![
-                    EmergencyContact {
-                        name: "System Administrator".to_string(),
-                        role: "Primary Contact".to_string(),
-                        email: "admin@opensim.org".to_string(),
-                        phone: "+1-555-0123".to_string(),
-                        backup_contact: Some("backup-admin@opensim.org".to_string()),
-                    },
-                ],
-                last_tested: None,
-                test_results: None,
-            },
-        ];
+        let default_plans = vec![DisasterRecoveryPlan {
+            id: "critical_system_recovery".to_string(),
+            name: "Critical System Recovery".to_string(),
+            description: "Recover critical system components after a disaster".to_string(),
+            priority: RecoveryPriority::Critical,
+            rto_minutes: 60,
+            rpo_minutes: 15,
+            steps: vec![
+                RecoveryStep {
+                    id: "step_1".to_string(),
+                    description: "Restore database from latest backup".to_string(),
+                    order: 1,
+                    estimated_duration_minutes: 20,
+                    automated: true,
+                    command: Some("restore_database".to_string()),
+                    verification_command: Some("verify_database".to_string()),
+                    rollback_command: None,
+                },
+                RecoveryStep {
+                    id: "step_2".to_string(),
+                    description: "Restore user data".to_string(),
+                    order: 2,
+                    estimated_duration_minutes: 15,
+                    automated: true,
+                    command: Some("restore_user_data".to_string()),
+                    verification_command: Some("verify_user_data".to_string()),
+                    rollback_command: None,
+                },
+                RecoveryStep {
+                    id: "step_3".to_string(),
+                    description: "Start core services".to_string(),
+                    order: 3,
+                    estimated_duration_minutes: 10,
+                    automated: true,
+                    command: Some("start_services".to_string()),
+                    verification_command: Some("check_service_health".to_string()),
+                    rollback_command: Some("stop_services".to_string()),
+                },
+            ],
+            dependencies: vec![],
+            contact_list: vec![EmergencyContact {
+                name: "System Administrator".to_string(),
+                role: "Primary Contact".to_string(),
+                email: "admin@opensim.org".to_string(),
+                phone: "+1-555-0123".to_string(),
+                backup_contact: Some("backup-admin@opensim.org".to_string()),
+            }],
+            last_tested: None,
+            test_results: None,
+        }];
 
         *self.disaster_recovery_plans.write().await = default_plans;
         Ok(())
     }
 
-    async fn perform_backup(&self, backup_id: &str, components: Vec<ComponentType>) -> Result<BackupRecord> {
+    async fn perform_backup(
+        &self,
+        backup_id: &str,
+        components: Vec<ComponentType>,
+    ) -> Result<BackupRecord> {
         info!("Performing backup: {}", backup_id);
 
         let start_time = std::time::Instant::now();
@@ -758,7 +825,7 @@ impl BackupRecoverySystem {
         // Simulate backing up each component
         for component_type in components {
             let component_size = self.backup_component(&component_type).await?;
-            
+
             backup_components.push(BackupComponent {
                 component_type: component_type.clone(),
                 name: format!("{:?}", component_type),
@@ -766,7 +833,7 @@ impl BackupRecoverySystem {
                 file_count: Some(100), // Simulated
                 metadata: HashMap::new(),
             });
-            
+
             total_size += component_size;
         }
 
@@ -783,9 +850,18 @@ impl BackupRecoverySystem {
         let duration = start_time.elapsed();
 
         // Update metrics
-        let _ = self.metrics_registry.increment_counter("backup_operations_total", 1.0).await;
-        let _ = self.metrics_registry.observe_histogram("backup_duration_minutes", duration.as_secs() as f64 / 60.0).await;
-        let _ = self.metrics_registry.set_gauge("backup_size_bytes", total_size as f64).await;
+        let _ = self
+            .metrics_registry
+            .increment_counter("backup_operations_total", 1.0)
+            .await;
+        let _ = self
+            .metrics_registry
+            .observe_histogram("backup_duration_minutes", duration.as_secs() as f64 / 60.0)
+            .await;
+        let _ = self
+            .metrics_registry
+            .set_gauge("backup_size_bytes", total_size as f64)
+            .await;
 
         Ok(BackupRecord {
             id: backup_id.to_string(),
@@ -796,7 +872,11 @@ impl BackupRecoverySystem {
             file_path: backup_path,
             file_size_bytes: total_size,
             checksum,
-            compression_ratio: if self.config.compression_enabled { Some(0.7) } else { None },
+            compression_ratio: if self.config.compression_enabled {
+                Some(0.7)
+            } else {
+                None
+            },
             components: backup_components,
             metadata: HashMap::new(),
             error_message: None,
@@ -806,14 +886,14 @@ impl BackupRecoverySystem {
     async fn backup_component(&self, component_type: &ComponentType) -> Result<u64> {
         // Simulate component backup
         let size = match component_type {
-            ComponentType::Database => 100_000_000, // 100MB
-            ComponentType::UserData => 50_000_000,  // 50MB
-            ComponentType::AssetData => 200_000_000, // 200MB
-            ComponentType::RegionData => 75_000_000, // 75MB
+            ComponentType::Database => 100_000_000,    // 100MB
+            ComponentType::UserData => 50_000_000,     // 50MB
+            ComponentType::AssetData => 200_000_000,   // 200MB
+            ComponentType::RegionData => 75_000_000,   // 75MB
             ComponentType::Configuration => 1_000_000, // 1MB
-            ComponentType::Logs => 25_000_000,      // 25MB
-            ComponentType::Cache => 10_000_000,     // 10MB
-            ComponentType::SystemState => 5_000_000, // 5MB
+            ComponentType::Logs => 25_000_000,         // 25MB
+            ComponentType::Cache => 10_000_000,        // 10MB
+            ComponentType::SystemState => 5_000_000,   // 5MB
         };
 
         // Simulate backup time
@@ -826,11 +906,11 @@ impl BackupRecoverySystem {
         // Create a simulated backup file
         let mut file = fs::File::create(path).await?;
         let data = vec![0u8; 1024]; // 1KB of dummy data
-        
+
         for _ in 0..(size / 1024) {
             file.write_all(&data).await?;
         }
-        
+
         file.flush().await?;
         Ok(())
     }
@@ -838,17 +918,27 @@ impl BackupRecoverySystem {
     async fn calculate_file_checksum(&self, path: &Path) -> Result<String> {
         // Simulate checksum calculation
         let data = fs::read(path).await?;
-        use sha2::{Sha256, Digest};
+        use sha2::{Digest, Sha256};
         let mut hasher = Sha256::new();
         hasher.update(&data);
         let digest = hasher.finalize();
         Ok(format!("{:x}", digest))
     }
 
-    async fn perform_recovery(&self, recovery_id: &str, backup_id: &str, components: Vec<ComponentType>) -> Result<()> {
-        info!("Performing recovery: {} from backup: {}", recovery_id, backup_id);
+    async fn perform_recovery(
+        &self,
+        recovery_id: &str,
+        backup_id: &str,
+        components: Vec<ComponentType>,
+    ) -> Result<()> {
+        info!(
+            "Performing recovery: {} from backup: {}",
+            recovery_id, backup_id
+        );
 
-        let backup_record = self.get_backup_record(backup_id).await
+        let backup_record = self
+            .get_backup_record(backup_id)
+            .await
             .ok_or_else(|| anyhow!("Backup not found: {}", backup_id))?;
 
         // Verify backup integrity before recovery
@@ -859,14 +949,14 @@ impl BackupRecoverySystem {
         // Simulate recovery process
         for (i, component) in components.iter().enumerate() {
             info!("Restoring component: {:?}", component);
-            
+
             // Update progress
             let progress = ((i + 1) as f64 / components.len() as f64) * 100.0;
             let mut operations = self.recovery_operations.write().await;
             if let Some(operation) = operations.iter_mut().find(|r| r.id == recovery_id) {
                 operation.progress_percentage = progress;
             }
-            
+
             // Simulate component restore time
             tokio::time::sleep(Duration::from_secs(2)).await;
         }
@@ -875,21 +965,28 @@ impl BackupRecoverySystem {
         Ok(())
     }
 
-    async fn execute_recovery_steps(&self, recovery_id: &str, plan: &DisasterRecoveryPlan) -> Result<()> {
+    async fn execute_recovery_steps(
+        &self,
+        recovery_id: &str,
+        plan: &DisasterRecoveryPlan,
+    ) -> Result<()> {
         info!("Executing recovery steps for plan: {}", plan.name);
 
         for step in &plan.steps {
             info!("Executing step {}: {}", step.order, step.description);
-            
+
             if step.automated {
                 // In a real implementation, this would execute the actual command
                 if let Some(command) = &step.command {
                     info!("Would execute command: {}", command);
                 }
-                
+
                 // Simulate step execution time
-                tokio::time::sleep(Duration::from_secs(step.estimated_duration_minutes as u64 * 60 / 10)).await; // Accelerated for demo
-                
+                tokio::time::sleep(Duration::from_secs(
+                    step.estimated_duration_minutes as u64 * 60 / 10,
+                ))
+                .await; // Accelerated for demo
+
                 // Verify step completion
                 if let Some(verification_command) = &step.verification_command {
                     info!("Would verify with command: {}", verification_command);
@@ -902,8 +999,16 @@ impl BackupRecoverySystem {
         Ok(())
     }
 
-    fn generate_backup_path(&self, backup_id: &str, timestamp: &chrono::DateTime<chrono::Utc>) -> PathBuf {
-        let filename = format!("backup_{}_{}.tar.gz", timestamp.format("%Y%m%d_%H%M%S"), backup_id);
+    fn generate_backup_path(
+        &self,
+        backup_id: &str,
+        timestamp: &chrono::DateTime<chrono::Utc>,
+    ) -> PathBuf {
+        let filename = format!(
+            "backup_{}_{}.tar.gz",
+            timestamp.format("%Y%m%d_%H%M%S"),
+            backup_id
+        );
         self.config.backup_directory.join(filename)
     }
 
@@ -943,12 +1048,12 @@ mod tests {
             backup_directory: PathBuf::from("/tmp/test_backups"),
             ..Default::default()
         };
-        
+
         let metrics = Arc::new(super::super::metrics::MetricsRegistry::new());
-        
+
         // Create mock components for testing
         // In a real test, these would be properly initialized
-        
+
         Ok(())
     }
 

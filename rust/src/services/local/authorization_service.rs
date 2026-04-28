@@ -1,7 +1,7 @@
 use anyhow::Result;
 use async_trait::async_trait;
-use uuid::Uuid;
 use tracing::debug;
+use uuid::Uuid;
 
 use crate::services::traits::AuthorizationServiceTrait;
 
@@ -22,7 +22,10 @@ impl AuthorizationServiceTrait for LocalAuthorizationService {
         _last_name: &str,
         region_id: Uuid,
     ) -> Result<(bool, String)> {
-        debug!("[AUTHORIZATION] Checking user {} for region {}", user_id, region_id);
+        debug!(
+            "[AUTHORIZATION] Checking user {} for region {}",
+            user_id, region_id
+        );
         Ok((true, String::new()))
     }
 }

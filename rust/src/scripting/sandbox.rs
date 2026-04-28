@@ -1,9 +1,13 @@
 //! Secure sandboxing environment for LSL script execution
 
-use std::{collections::HashMap, sync::Arc, time::{Duration, Instant}};
 use anyhow::{anyhow, Result};
 use serde::{Deserialize, Serialize};
-use tracing::{info, warn, error, debug};
+use std::{
+    collections::HashMap,
+    sync::Arc,
+    time::{Duration, Instant},
+};
+use tracing::{debug, error, info, warn};
 use uuid::Uuid;
 
 use super::{LSLValue, ScriptContext};
@@ -34,7 +38,7 @@ pub struct ResourceLimits {
 impl Default for ResourceLimits {
     fn default() -> Self {
         Self {
-            max_memory: 64 * 1024, // 64KB
+            max_memory: 64 * 1024,      // 64KB
             max_execution_time_ms: 100, // 100ms
             max_function_calls: 1000,
             max_event_frequency: 100.0, // 100 events per second
@@ -65,7 +69,7 @@ impl SecurityLevel {
     pub fn get_limits(&self) -> ResourceLimits {
         match self {
             SecurityLevel::Trusted => ResourceLimits {
-                max_memory: 1024 * 1024, // 1MB
+                max_memory: 1024 * 1024,     // 1MB
                 max_execution_time_ms: 1000, // 1 second
                 max_function_calls: 10000,
                 max_event_frequency: 1000.0,
@@ -77,7 +81,7 @@ impl SecurityLevel {
             },
             SecurityLevel::Standard => ResourceLimits::default(),
             SecurityLevel::Restricted => ResourceLimits {
-                max_memory: 32 * 1024, // 32KB
+                max_memory: 32 * 1024,     // 32KB
                 max_execution_time_ms: 50, // 50ms
                 max_function_calls: 500,
                 max_event_frequency: 50.0,
@@ -88,7 +92,7 @@ impl SecurityLevel {
                 max_timers: 5,
             },
             SecurityLevel::Quarantined => ResourceLimits {
-                max_memory: 16 * 1024, // 16KB
+                max_memory: 16 * 1024,     // 16KB
                 max_execution_time_ms: 25, // 25ms
                 max_function_calls: 100,
                 max_event_frequency: 10.0,
@@ -106,49 +110,23 @@ impl SecurityLevel {
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub enum SandboxViolation {
     /// Exceeded memory limit
-    MemoryLimit {
-        used: usize,
-        limit: usize,
-    },
+    MemoryLimit { used: usize, limit: usize },
     /// Exceeded execution time limit
-    ExecutionTimeLimit {
-        time_ms: u64,
-        limit_ms: u64,
-    },
+    ExecutionTimeLimit { time_ms: u64, limit_ms: u64 },
     /// Exceeded function call limit
-    FunctionCallLimit {
-        calls: u32,
-        limit: u32,
-    },
+    FunctionCallLimit { calls: u32, limit: u32 },
     /// Exceeded event frequency limit
-    EventFrequencyLimit {
-        frequency: f32,
-        limit: f32,
-    },
+    EventFrequencyLimit { frequency: f32, limit: f32 },
     /// Attempted unauthorized operation
-    UnauthorizedOperation {
-        operation: String,
-        reason: String,
-    },
+    UnauthorizedOperation { operation: String, reason: String },
     /// Attempted to access forbidden resource
-    ForbiddenResource {
-        resource: String,
-        reason: String,
-    },
+    ForbiddenResource { resource: String, reason: String },
     /// Script appears to be in infinite loop
-    InfiniteLoop {
-        duration_ms: u64,
-    },
+    InfiniteLoop { duration_ms: u64 },
     /// Too many HTTP requests
-    HttpRateLimit {
-        requests: u32,
-        limit: u32,
-    },
+    HttpRateLimit { requests: u32, limit: u32 },
     /// Too many email sends
-    EmailRateLimit {
-        emails: u32,
-        limit: u32,
-    },
+    EmailRateLimit { emails: u32, limit: u32 },
 }
 
 /// Script execution statistics
@@ -223,12 +201,17 @@ impl ScriptSandbox {
                 limit: self.limits.max_function_calls,
             };
             self.stats.violations.push(violation.clone());
-            return Err(anyhow!("Exceeded function call limit: {}/{}", 
-                self.stats.function_calls, self.limits.max_function_calls));
+            return Err(anyhow!(
+                "Exceeded function call limit: {}/{}",
+                self.stats.function_calls,
+                self.limits.max_function_calls
+            ));
         }
 
-        debug!("Function call allowed: {} ({}/{})", 
-            function_name, self.stats.function_calls, self.limits.max_function_calls);
+        debug!(
+            "Function call allowed: {} ({}/{})",
+            function_name, self.stats.function_calls, self.limits.max_function_calls
+        );
         Ok(())
     }
 
@@ -253,7 +236,7 @@ impl ScriptSandbox {
     /// Start execution timing
     pub fn start_execution(&mut self) -> ExecutionTimer {
         let now = Instant::now();
-        
+
         // Update event frequency
         if let Some(last_time) = self.stats.last_event_time {
             let elapsed = now.duration_since(last_time).as_secs_f32();
@@ -270,8 +253,10 @@ impl ScriptSandbox {
                 limit: self.limits.max_event_frequency,
             };
             self.stats.violations.push(violation);
-            warn!("Event frequency limit exceeded: {:.2}/{:.2} events/sec",
-                self.stats.event_frequency, self.limits.max_event_frequency);
+            warn!(
+                "Event frequency limit exceeded: {:.2}/{:.2} events/sec",
+                self.stats.event_frequency, self.limits.max_event_frequency
+            );
         }
 
         ExecutionTimer::new(now, self.limits.max_execution_time_ms)
@@ -289,8 +274,11 @@ impl ScriptSandbox {
                 limit_ms: self.limits.max_execution_time_ms,
             };
             self.stats.violations.push(violation.clone());
-            return Err(anyhow!("Execution time limit exceeded: {}ms/{}ms",
-                execution_time, self.limits.max_execution_time_ms));
+            return Err(anyhow!(
+                "Execution time limit exceeded: {}ms/{}ms",
+                execution_time,
+                self.limits.max_execution_time_ms
+            ));
         }
 
         debug!("Execution completed in {}ms", execution_time);
@@ -307,8 +295,11 @@ impl ScriptSandbox {
                 limit: self.limits.max_memory,
             };
             self.stats.violations.push(violation.clone());
-            return Err(anyhow!("Memory limit exceeded: {}/{} bytes",
-                used_memory, self.limits.max_memory));
+            return Err(anyhow!(
+                "Memory limit exceeded: {}/{} bytes",
+                used_memory,
+                self.limits.max_memory
+            ));
         }
 
         Ok(())
@@ -371,22 +362,57 @@ impl ScriptSandbox {
 
         // Basic functions allowed at all levels
         let basic_functions = vec![
-            "llSay", "llWhisper", "llShout", "llOwnerSay",
-            "llGetPos", "llSetPos", "llGetRot", "llSetRot",
-            "llGetObjectName", "llSetObjectName", "llGetObjectDesc", "llSetObjectDesc",
-            "llGetKey", "llGetOwner", "llGetRegionName",
+            "llSay",
+            "llWhisper",
+            "llShout",
+            "llOwnerSay",
+            "llGetPos",
+            "llSetPos",
+            "llGetRot",
+            "llSetRot",
+            "llGetObjectName",
+            "llSetObjectName",
+            "llGetObjectDesc",
+            "llSetObjectDesc",
+            "llGetKey",
+            "llGetOwner",
+            "llGetRegionName",
             // Math functions
-            "llAbs", "llFabs", "llSqrt", "llPow", "llSin", "llCos", "llTan",
-            "llAsin", "llAcos", "llAtan2", "llFloor", "llCeil", "llRound",
-            "llFrand", "llLog", "llLog10",
+            "llAbs",
+            "llFabs",
+            "llSqrt",
+            "llPow",
+            "llSin",
+            "llCos",
+            "llTan",
+            "llAsin",
+            "llAcos",
+            "llAtan2",
+            "llFloor",
+            "llCeil",
+            "llRound",
+            "llFrand",
+            "llLog",
+            "llLog10",
             // Vector/rotation functions
-            "llVecDist", "llVecMag", "llVecNorm", "llEuler2Rot", "llRot2Euler",
+            "llVecDist",
+            "llVecMag",
+            "llVecNorm",
+            "llEuler2Rot",
+            "llRot2Euler",
             // String functions
-            "llStringLength", "llGetSubString", "llToLower", "llToUpper",
+            "llStringLength",
+            "llGetSubString",
+            "llToLower",
+            "llToUpper",
             // List functions
-            "llListLength", "llList2String", "llList2Integer", "llList2Float",
+            "llListLength",
+            "llList2String",
+            "llList2Integer",
+            "llList2Float",
             // Time functions
-            "llGetTimestamp", "llGetUnixTime",
+            "llGetTimestamp",
+            "llGetUnixTime",
         ];
 
         for func in basic_functions {
@@ -398,14 +424,29 @@ impl ScriptSandbox {
             SecurityLevel::Trusted => {
                 // Trusted scripts can use all functions
                 let advanced_functions = vec![
-                    "llHTTPRequest", "llEmail", "llRequestPermissions",
-                    "llTakeControls", "llReleaseControls", "llAttachToAvatar",
-                    "llDetachFromAvatar", "llTeleportAgent", "llMapDestination",
-                    "llGiveInventory", "llGiveMoney", "llTransferLindenDollars",
-                    "llSetScriptState", "llResetOtherScript", "llMessageLinked",
-                    "llCreateLink", "llBreakLink", "llBreakAllLinks",
-                    "llSetLinkPrimitiveParams", "llModifyLand", "llSetParcelMusicURL",
-                    "llSetParcelMediaURL", "llParcelMediaCommandList",
+                    "llHTTPRequest",
+                    "llEmail",
+                    "llRequestPermissions",
+                    "llTakeControls",
+                    "llReleaseControls",
+                    "llAttachToAvatar",
+                    "llDetachFromAvatar",
+                    "llTeleportAgent",
+                    "llMapDestination",
+                    "llGiveInventory",
+                    "llGiveMoney",
+                    "llTransferLindenDollars",
+                    "llSetScriptState",
+                    "llResetOtherScript",
+                    "llMessageLinked",
+                    "llCreateLink",
+                    "llBreakLink",
+                    "llBreakAllLinks",
+                    "llSetLinkPrimitiveParams",
+                    "llModifyLand",
+                    "llSetParcelMusicURL",
+                    "llSetParcelMediaURL",
+                    "llParcelMediaCommandList",
                 ];
                 for func in advanced_functions {
                     whitelist.insert(func.to_string(), true);
@@ -414,9 +455,17 @@ impl ScriptSandbox {
             SecurityLevel::Standard => {
                 // Standard scripts can use most functions except dangerous ones
                 let standard_functions = vec![
-                    "llHTTPRequest", "llListen", "llSetTimerEvent", "llSensor",
-                    "llSetText", "llSetVelocity", "llApplyImpulse", "llSetStatus",
-                    "llRequestPermissions", "llGiveInventory", "llMessageLinked",
+                    "llHTTPRequest",
+                    "llListen",
+                    "llSetTimerEvent",
+                    "llSensor",
+                    "llSetText",
+                    "llSetVelocity",
+                    "llApplyImpulse",
+                    "llSetStatus",
+                    "llRequestPermissions",
+                    "llGiveInventory",
+                    "llMessageLinked",
                     "llSetLinkPrimitiveParams",
                 ];
                 for func in standard_functions {
@@ -425,9 +474,7 @@ impl ScriptSandbox {
             }
             SecurityLevel::Restricted => {
                 // Restricted scripts can only use basic functions
-                let restricted_functions = vec![
-                    "llListen", "llSetTimerEvent", "llSetText",
-                ];
+                let restricted_functions = vec!["llListen", "llSetTimerEvent", "llSetText"];
                 for func in restricted_functions {
                     whitelist.insert(func.to_string(), true);
                 }
@@ -539,16 +586,33 @@ impl SandboxManager {
     }
 
     /// Create a sandbox for a script
-    pub async fn create_sandbox(&self, script_id: Uuid, security_level: SecurityLevel) -> Arc<tokio::sync::RwLock<ScriptSandbox>> {
-        let sandbox = Arc::new(tokio::sync::RwLock::new(ScriptSandbox::new(script_id, security_level)));
-        self.sandboxes.write().await.insert(script_id, sandbox.clone());
-        
-        info!("Created sandbox for script {} with security level {:?}", script_id, sandbox.read().await.security_level);
+    pub async fn create_sandbox(
+        &self,
+        script_id: Uuid,
+        security_level: SecurityLevel,
+    ) -> Arc<tokio::sync::RwLock<ScriptSandbox>> {
+        let sandbox = Arc::new(tokio::sync::RwLock::new(ScriptSandbox::new(
+            script_id,
+            security_level,
+        )));
+        self.sandboxes
+            .write()
+            .await
+            .insert(script_id, sandbox.clone());
+
+        info!(
+            "Created sandbox for script {} with security level {:?}",
+            script_id,
+            sandbox.read().await.security_level
+        );
         sandbox
     }
 
     /// Get sandbox for a script
-    pub async fn get_sandbox(&self, script_id: Uuid) -> Option<Arc<tokio::sync::RwLock<ScriptSandbox>>> {
+    pub async fn get_sandbox(
+        &self,
+        script_id: Uuid,
+    ) -> Option<Arc<tokio::sync::RwLock<ScriptSandbox>>> {
         self.sandboxes.read().await.get(&script_id).cloned()
     }
 
@@ -573,7 +637,7 @@ impl SandboxManager {
         for sandbox_arc in sandboxes.values() {
             let sandbox = sandbox_arc.read().await;
             let stats = sandbox.get_stats();
-            
+
             total_memory += stats.memory_used;
             total_violations += stats.violations.len() as u64;
             total_events += stats.events_processed;
@@ -596,7 +660,7 @@ impl SandboxManager {
     pub async fn cleanup_expired_sandboxes(&self) {
         let mut sandboxes = self.sandboxes.write().await;
         let current_time = Instant::now();
-        
+
         sandboxes.retain(|script_id, sandbox_arc| {
             let sandbox = sandbox_arc.try_read();
             match sandbox {
@@ -628,7 +692,7 @@ mod tests {
     fn test_sandbox_creation() {
         let script_id = Uuid::new_v4();
         let sandbox = ScriptSandbox::new(script_id, SecurityLevel::Standard);
-        
+
         assert_eq!(sandbox.script_id, script_id);
         assert_eq!(sandbox.security_level, SecurityLevel::Standard);
         assert!(sandbox.allowed_functions.contains_key("llSay"));
@@ -638,10 +702,10 @@ mod tests {
     fn test_function_call_checking() {
         let script_id = Uuid::new_v4();
         let mut sandbox = ScriptSandbox::new(script_id, SecurityLevel::Restricted);
-        
+
         // Should allow basic functions
         assert!(sandbox.check_function_call("llSay").is_ok());
-        
+
         // Should block advanced functions at restricted level
         assert!(sandbox.check_function_call("llHTTPRequest").is_err());
     }
@@ -649,10 +713,10 @@ mod tests {
     #[test]
     fn test_execution_timer() {
         let timer = ExecutionTimer::new(Instant::now(), 100);
-        
+
         // Should not be exceeded immediately
         assert!(!timer.is_time_exceeded());
-        
+
         // Should have close to full time remaining
         assert!(timer.remaining_ms() >= 99);
     }
@@ -661,7 +725,7 @@ mod tests {
     fn test_security_levels() {
         let trusted_limits = SecurityLevel::Trusted.get_limits();
         let quarantined_limits = SecurityLevel::Quarantined.get_limits();
-        
+
         // Trusted should have higher limits than quarantined
         assert!(trusted_limits.max_memory > quarantined_limits.max_memory);
         assert!(trusted_limits.max_execution_time_ms > quarantined_limits.max_execution_time_ms);
@@ -672,11 +736,13 @@ mod tests {
     async fn test_sandbox_manager() {
         let manager = SandboxManager::new();
         let script_id = Uuid::new_v4();
-        
+
         // Create sandbox
-        let sandbox = manager.create_sandbox(script_id, SecurityLevel::Standard).await;
+        let sandbox = manager
+            .create_sandbox(script_id, SecurityLevel::Standard)
+            .await;
         assert!(manager.get_sandbox(script_id).await.is_some());
-        
+
         // Remove sandbox
         assert!(manager.remove_sandbox(script_id).await);
         assert!(manager.get_sandbox(script_id).await.is_none());

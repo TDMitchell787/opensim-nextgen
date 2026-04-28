@@ -1,16 +1,16 @@
 use super::super::AIError;
-use super::onnx_predictor::{ONNXPredictor, ContentCategory, AnomalyResult};
+use super::onnx_predictor::{AnomalyResult, ContentCategory, ONNXPredictor};
 use crate::ai::content_validator::{
-    ContentValidator, ValidationConfig, ValidationResult, ValidatableContent,
-    ValidatableObject, ValidatableTexture, ValidatableScript, ValidatableMesh,
+    ContentValidator, ValidatableContent, ValidatableMesh, ValidatableObject, ValidatableScript,
+    ValidatableTexture, ValidationConfig, ValidationResult,
 };
-use std::sync::Arc;
-use std::collections::HashMap;
-use tokio::sync::RwLock;
-use serde::{Deserialize, Serialize};
-use uuid::Uuid;
 use chrono::{DateTime, Utc};
-use tracing::{info, warn, debug};
+use serde::{Deserialize, Serialize};
+use std::collections::HashMap;
+use std::sync::Arc;
+use tokio::sync::RwLock;
+use tracing::{debug, info, warn};
+use uuid::Uuid;
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct QualityServiceConfig {
@@ -218,10 +218,7 @@ pub enum AlertType {
 }
 
 impl QualityService {
-    pub fn new(
-        predictor: Arc<ONNXPredictor>,
-        config: QualityServiceConfig,
-    ) -> Self {
+    pub fn new(predictor: Arc<ONNXPredictor>, config: QualityServiceConfig) -> Self {
         Self {
             config,
             predictor,
@@ -250,7 +247,8 @@ impl QualityService {
             is_anomaly: anomaly_result.is_anomaly,
             anomaly_score: anomaly_result.anomaly_score,
             risk_level: RiskLevel::from_score(anomaly_result.anomaly_score),
-            flags: anomaly_result.contributing_features
+            flags: anomaly_result
+                .contributing_features
                 .iter()
                 .map(|(name, score)| format!("{}: {:.2}", name, score))
                 .collect(),
@@ -264,7 +262,9 @@ impl QualityService {
                 warning_count: result.warnings.len(),
                 suggestion_count: result.suggestions.len(),
                 estimated_land_impact: result.metrics.estimated_land_impact,
-                top_issues: result.errors.iter()
+                top_issues: result
+                    .errors
+                    .iter()
                     .take(3)
                     .map(|e| e.message.clone())
                     .collect(),
@@ -304,14 +304,16 @@ impl QualityService {
         &self,
         request: &RegionQualityRequest,
     ) -> Result<RegionQualityReport, AIError> {
-        let prim_efficiency = 1.0 - (request.total_prims as f32 / request.max_prims as f32).min(1.0);
+        let prim_efficiency =
+            1.0 - (request.total_prims as f32 / request.max_prims as f32).min(1.0);
         let script_load = (request.active_scripts as f32 / 1000.0).min(1.0);
         let texture_efficiency = if request.unique_textures > 0 {
             1.0 - (request.texture_memory_mb / 512.0).min(1.0)
         } else {
             1.0
         };
-        let physics_complexity = (request.physics_objects as f32 / request.total_prims.max(1) as f32).min(1.0);
+        let physics_complexity =
+            (request.physics_objects as f32 / request.total_prims.max(1) as f32).min(1.0);
 
         let features = vec![
             prim_efficiency,
@@ -324,20 +326,24 @@ impl QualityService {
         let overall_score = self.predictor.predict_quality(&features).await?;
         let overall_grade = QualityGrade::from_score(overall_score);
 
-        let fps_impact = script_load * 15.0 + physics_complexity * 10.0 + (1.0 - prim_efficiency) * 5.0;
+        let fps_impact =
+            script_load * 15.0 + physics_complexity * 10.0 + (1.0 - prim_efficiency) * 5.0;
         let memory_mb = request.texture_memory_mb + (request.total_prims as f32 * 0.001);
         let bandwidth = request.active_scripts as f32 * 0.5 + request.total_prims as f32 * 0.01;
 
-        let bottleneck = if script_load > physics_complexity && script_load > (1.0 - prim_efficiency) {
-            "Script Load"
-        } else if physics_complexity > (1.0 - prim_efficiency) {
-            "Physics Complexity"
-        } else {
-            "Prim Count"
-        };
+        let bottleneck =
+            if script_load > physics_complexity && script_load > (1.0 - prim_efficiency) {
+                "Script Load"
+            } else if physics_complexity > (1.0 - prim_efficiency) {
+                "Physics Complexity"
+            } else {
+                "Prim Count"
+            };
 
-        let scalability_score = (prim_efficiency * 0.3 + (1.0 - script_load) * 0.4 + texture_efficiency * 0.3)
-            .max(0.0).min(1.0);
+        let scalability_score =
+            (prim_efficiency * 0.3 + (1.0 - script_load) * 0.4 + texture_efficiency * 0.3)
+                .max(0.0)
+                .min(1.0);
 
         let performance_prediction = PerformancePrediction {
             estimated_fps_impact: fps_impact,
@@ -366,7 +372,9 @@ impl QualityService {
                 category: SuggestionCategory::Optimization,
                 message: format!(
                     "Region is {:.0}% full ({}/{}). Consider removing unused objects",
-                    (1.0 - prim_efficiency) * 100.0, request.total_prims, request.max_prims
+                    (1.0 - prim_efficiency) * 100.0,
+                    request.total_prims,
+                    request.max_prims
                 ),
                 priority: SuggestionPriority::Medium,
                 auto_fixable: false,
@@ -388,7 +396,8 @@ impl QualityService {
         if physics_complexity > 0.5 {
             recommendations.push(QualitySuggestion {
                 category: SuggestionCategory::Performance,
-                message: "High ratio of physics objects. Consider using simpler collision shapes".to_string(),
+                message: "High ratio of physics objects. Consider using simpler collision shapes"
+                    .to_string(),
                 priority: SuggestionPriority::Medium,
                 auto_fixable: false,
             });
@@ -411,11 +420,7 @@ impl QualityService {
 
     pub async fn get_anomaly_alerts(&self, limit: usize) -> Vec<AnomalyAlert> {
         let alerts = self.anomaly_alerts.read().await;
-        alerts.iter()
-            .rev()
-            .take(limit)
-            .cloned()
-            .collect()
+        alerts.iter().rev().take(limit).cloned().collect()
     }
 
     pub async fn acknowledge_alert(&self, alert_id: Uuid) -> bool {
@@ -431,8 +436,10 @@ impl QualityService {
     pub async fn get_user_upload_pattern(&self, user_id: Uuid) -> Option<UploadPattern> {
         let history = self.upload_history.read().await;
         if let Some(records) = history.get(&user_id) {
-            let window_start = Utc::now() - chrono::Duration::minutes(self.config.pattern_window_minutes as i64);
-            let recent: Vec<&UploadRecord> = records.iter()
+            let window_start =
+                Utc::now() - chrono::Duration::minutes(self.config.pattern_window_minutes as i64);
+            let recent: Vec<&UploadRecord> = records
+                .iter()
                 .filter(|r| r.uploaded_at >= window_start)
                 .collect();
 
@@ -440,7 +447,8 @@ impl QualityService {
                 return None;
             }
 
-            let asset_types: Vec<String> = recent.iter()
+            let asset_types: Vec<String> = recent
+                .iter()
                 .map(|r| r.asset_type.clone())
                 .collect::<std::collections::HashSet<_>>()
                 .into_iter()
@@ -481,13 +489,24 @@ impl QualityService {
         let name_len = request.name.len() as f32 / 50.0;
         features.push(name_len.min(1.0));
 
-        let desc_len = request.description.as_ref().map_or(0.0, |d| d.len() as f32 / 500.0);
+        let desc_len = request
+            .description
+            .as_ref()
+            .map_or(0.0, |d| d.len() as f32 / 500.0);
         features.push(desc_len.min(1.0));
 
-        let has_mesh = if request.mesh_count.unwrap_or(0) > 0 { 1.0 } else { 0.0 };
+        let has_mesh = if request.mesh_count.unwrap_or(0) > 0 {
+            1.0
+        } else {
+            0.0
+        };
         features.push(has_mesh);
 
-        let has_scripts = if request.script_count.unwrap_or(0) > 0 { 1.0 } else { 0.0 };
+        let has_scripts = if request.script_count.unwrap_or(0) > 0 {
+            1.0
+        } else {
+            0.0
+        };
         features.push(has_scripts);
 
         let type_factor = match request.asset_type.to_lowercase().as_str() {
@@ -526,7 +545,9 @@ impl QualityService {
             });
         }
 
-        if request.description.is_none() || request.description.as_ref().map_or(true, |d| d.len() < 10) {
+        if request.description.is_none()
+            || request.description.as_ref().map_or(true, |d| d.len() < 10)
+        {
             suggestions.push(QualitySuggestion {
                 category: SuggestionCategory::BestPractice,
                 message: "Add a descriptive description to improve discoverability.".to_string(),
@@ -566,7 +587,8 @@ impl QualityService {
         if anomaly.is_anomaly {
             suggestions.push(QualitySuggestion {
                 category: SuggestionCategory::Security,
-                message: "Content flagged as potentially anomalous. Manual review recommended.".to_string(),
+                message: "Content flagged as potentially anomalous. Manual review recommended."
+                    .to_string(),
                 priority: SuggestionPriority::High,
                 auto_fixable: false,
             });
@@ -590,7 +612,12 @@ impl QualityService {
         suggestions
     }
 
-    async fn record_upload(&self, user_id: Uuid, request: &UploadQualityRequest, quality_score: f32) {
+    async fn record_upload(
+        &self,
+        user_id: Uuid,
+        request: &UploadQualityRequest,
+        quality_score: f32,
+    ) {
         let record = UploadRecord {
             asset_id: request.asset_id,
             uploaded_at: Utc::now(),
@@ -612,8 +639,10 @@ impl QualityService {
     async fn check_upload_patterns(&self, user_id: Uuid) {
         let history = self.upload_history.read().await;
         if let Some(records) = history.get(&user_id) {
-            let window_start = Utc::now() - chrono::Duration::minutes(self.config.pattern_window_minutes as i64);
-            let recent_count = records.iter()
+            let window_start =
+                Utc::now() - chrono::Duration::minutes(self.config.pattern_window_minutes as i64);
+            let recent_count = records
+                .iter()
                 .filter(|r| r.uploaded_at >= window_start)
                 .count();
 
@@ -625,7 +654,8 @@ impl QualityService {
                     alert_type: AlertType::RapidUploads,
                     message: format!(
                         "User uploaded {} items in {} minutes (threshold: {})",
-                        recent_count, self.config.pattern_window_minutes,
+                        recent_count,
+                        self.config.pattern_window_minutes,
                         self.config.max_uploads_per_window
                     ),
                     severity: RiskLevel::Medium,

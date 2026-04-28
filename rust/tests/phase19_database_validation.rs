@@ -2,9 +2,9 @@
 //!
 //! Tests OpenSim.ini database connection strings, SQLx integration, and OpenZiti port configuration
 
+use anyhow::{anyhow, Result};
 use std::collections::HashMap;
-use anyhow::{Result, anyhow};
-use tracing::{info, error};
+use tracing::{error, info};
 
 /// OpenSim.ini database connection string validation
 pub struct DatabaseValidator {
@@ -31,10 +31,10 @@ impl DatabaseValidator {
 
         // Test legacy OpenSim connection string formats
         self.test_legacy_connection_strings().await;
-        
+
         // Test SQLx URL format support
         self.test_sqlx_url_formats().await;
-        
+
         // Test OpenZiti database port configuration
         self.test_openziti_database_ports().await;
 
@@ -45,14 +45,25 @@ impl DatabaseValidator {
         info!("  Testing legacy OpenSim.ini connection string formats");
 
         let legacy_formats = vec![
-            ("MySQL_OpenSim", "Data Source=localhost:3306;Database=opensim;User ID=opensim;Password=opensim123;"),
-            ("MySQL_Standard", "Server=localhost;Port=3306;Database=opensim;Uid=opensim;Pwd=opensim123;"),
-            ("PostgreSQL", "Host=localhost;Port=5432;Database=opensim;Username=opensim;Password=opensim123;"),
+            (
+                "MySQL_OpenSim",
+                "Data Source=localhost:3306;Database=opensim;User ID=opensim;Password=opensim123;",
+            ),
+            (
+                "MySQL_Standard",
+                "Server=localhost;Port=3306;Database=opensim;Uid=opensim;Pwd=opensim123;",
+            ),
+            (
+                "PostgreSQL",
+                "Host=localhost;Port=5432;Database=opensim;Username=opensim;Password=opensim123;",
+            ),
             ("SQLite", "Data Source=opensim.db;Version=3;"),
         ];
 
         for (format_name, connection_string) in legacy_formats {
-            let result = self.validate_connection_string(format_name, connection_string).await;
+            let result = self
+                .validate_connection_string(format_name, connection_string)
+                .await;
             self.record_result(&format!("legacy_{}", format_name.to_lowercase()), result);
         }
     }
@@ -61,11 +72,23 @@ impl DatabaseValidator {
         info!("  Testing SQLx URL format support");
 
         let sqlx_formats = vec![
-            ("MySQL_SQLx", "mysql://opensim:opensim123@localhost:3306/opensim"),
-            ("PostgreSQL_SQLx", "postgresql://opensim:opensim123@localhost:5432/opensim"),
+            (
+                "MySQL_SQLx",
+                "mysql://opensim:opensim123@localhost:3306/opensim",
+            ),
+            (
+                "PostgreSQL_SQLx",
+                "postgresql://opensim:opensim123@localhost:5432/opensim",
+            ),
             ("SQLite_SQLx", "sqlite://opensim.db"),
-            ("MySQL_SSL", "mysql://opensim:opensim123@localhost:3306/opensim?ssl-mode=required"),
-            ("PostgreSQL_SSL", "postgresql://opensim:opensim123@localhost:5432/opensim?sslmode=require"),
+            (
+                "MySQL_SSL",
+                "mysql://opensim:opensim123@localhost:3306/opensim?ssl-mode=required",
+            ),
+            (
+                "PostgreSQL_SSL",
+                "postgresql://opensim:opensim123@localhost:5432/opensim?sslmode=require",
+            ),
         ];
 
         for (format_name, sqlx_url) in sqlx_formats {
@@ -81,9 +104,13 @@ impl DatabaseValidator {
         self.record_result("openziti_database_ports", result);
     }
 
-    async fn validate_connection_string(&self, format_name: &str, connection_string: &str) -> Result<()> {
+    async fn validate_connection_string(
+        &self,
+        format_name: &str,
+        connection_string: &str,
+    ) -> Result<()> {
         let parsed = self.parse_connection_string(connection_string)?;
-        
+
         match format_name {
             name if name.contains("MySQL") => {
                 self.validate_mysql_params(&parsed)?;
@@ -142,19 +169,16 @@ impl DatabaseValidator {
             // Core OpenZiti ports
             ("ziti_controller", 1280, "OpenZiti Controller API"),
             ("ziti_edge_router", 3022, "OpenZiti Edge Router"),
-            
             // OpenSim service ports
             ("opensim_main", 9000, "Second Life Viewer Protocol"),
             ("opensim_websocket", 9001, "Web Client WebSocket"),
             ("opensim_web", 8080, "Web Browser Interface"),
             ("opensim_admin", 8090, "Admin Dashboard"),
             ("opensim_monitoring", 9100, "Prometheus Metrics"),
-            
             // Database ports used by SQLx
             ("mysql_sqlx", 3306, "MySQL Database (SQLx)"),
             ("postgresql_sqlx", 5432, "PostgreSQL Database (SQLx)"),
             ("redis_cache", 6379, "Redis Cache Server"),
-            
             // Additional SQLx database ports
             ("mariadb_sqlx", 3307, "MariaDB Database (SQLx)"),
             ("postgres_alt", 5433, "PostgreSQL Alternative Port"),
@@ -163,12 +187,12 @@ impl DatabaseValidator {
         info!("    🌐 OpenZiti Port Configuration:");
         for (service, port, description) in &openziti_port_config {
             info!("      📡 {}: port {} - {}", service, port, description);
-            
+
             // Validate port range
             if *port < 1024 && !matches!(*port, 80 | 443) {
                 info!("      ⚠️  Port {} requires root privileges", port);
             }
-            
+
             if *port > 65535 {
                 return Err(anyhow!("Invalid port number for {}: {}", service, port));
             }
@@ -183,14 +207,18 @@ impl DatabaseValidator {
     fn generate_openziti_database_services(&self, port_config: &[(&str, u16, &str)]) -> Result<()> {
         info!("    🔒 Generating OpenZiti database service configuration:");
 
-        let database_services = port_config.iter()
+        let database_services = port_config
+            .iter()
             .filter(|(service, _, _)| service.contains("sql") || service.contains("redis"))
             .collect::<Vec<_>>();
 
         for (service, port, description) in database_services {
             let ziti_service_name = format!("opensim-{}", service.replace("_", "-"));
-            
-            info!("      🛡️  Service: {} -> {}:{}", ziti_service_name, "localhost", port);
+
+            info!(
+                "      🛡️  Service: {} -> {}:{}",
+                ziti_service_name, "localhost", port
+            );
             info!("         Type: intercept");
             info!("         Protocol: tcp");
             info!("         Zero Trust: enabled");
@@ -202,26 +230,26 @@ impl DatabaseValidator {
 
     fn parse_connection_string(&self, connection_string: &str) -> Result<HashMap<String, String>> {
         let mut params = HashMap::new();
-        
+
         for part in connection_string.split(';') {
             if part.trim().is_empty() {
                 continue;
             }
-            
+
             if let Some(eq_pos) = part.find('=') {
                 let key = part[..eq_pos].trim().to_lowercase();
                 let value = part[eq_pos + 1..].trim().to_string();
                 params.insert(key, value);
             }
         }
-        
+
         Ok(params)
     }
 
     fn validate_mysql_params(&self, params: &HashMap<String, String>) -> Result<()> {
         let has_server = params.contains_key("data source") || params.contains_key("server");
         let has_user = params.contains_key("user id") || params.contains_key("uid");
-        
+
         if !has_server {
             return Err(anyhow!("MySQL connection missing server specification"));
         }
@@ -231,19 +259,19 @@ impl DatabaseValidator {
         if !params.contains_key("database") {
             return Err(anyhow!("MySQL connection missing database name"));
         }
-        
+
         Ok(())
     }
 
     fn validate_postgresql_params(&self, params: &HashMap<String, String>) -> Result<()> {
         let required = vec!["host", "database", "username"];
-        
+
         for field in required {
             if !params.contains_key(field) {
                 return Err(anyhow!("PostgreSQL connection missing: {}", field));
             }
         }
-        
+
         Ok(())
     }
 
@@ -251,7 +279,7 @@ impl DatabaseValidator {
         if !params.contains_key("data source") {
             return Err(anyhow!("SQLite connection missing data source"));
         }
-        
+
         Ok(())
     }
 
@@ -260,17 +288,17 @@ impl DatabaseValidator {
         if !url_part.contains('@') {
             return Err(anyhow!("MySQL SQLx URL missing @ separator"));
         }
-        
+
         let parts: Vec<&str> = url_part.split('@').collect();
         if parts.len() != 2 {
             return Err(anyhow!("Invalid MySQL SQLx URL format"));
         }
-        
+
         let host_part = parts[1];
         if !host_part.contains('/') {
             return Err(anyhow!("MySQL SQLx URL missing database name"));
         }
-        
+
         Ok(())
     }
 
@@ -279,7 +307,7 @@ impl DatabaseValidator {
         if !url_part.contains('@') {
             return Err(anyhow!("PostgreSQL SQLx URL missing @ separator"));
         }
-        
+
         Ok(())
     }
 
@@ -288,7 +316,7 @@ impl DatabaseValidator {
         if url_part.is_empty() {
             return Err(anyhow!("SQLite SQLx URL missing file path"));
         }
-        
+
         Ok(())
     }
 
@@ -328,8 +356,14 @@ impl DatabaseValidator {
             info!("❌ FAILED VALIDATIONS:");
             for result in &self.results {
                 if !result.success {
-                    info!("  - {}: {}", result.test_name,
-                        result.error_message.as_ref().unwrap_or(&"Unknown error".to_string()));
+                    info!(
+                        "  - {}: {}",
+                        result.test_name,
+                        result
+                            .error_message
+                            .as_ref()
+                            .unwrap_or(&"Unknown error".to_string())
+                    );
                 }
             }
             info!("");
@@ -350,16 +384,20 @@ impl DatabaseValidator {
         info!("  🔒 PostgreSQL Alt: port 5433");
         info!("");
 
-        info!("🎯 DATABASE VALIDATION: {}", 
-            if failed == 0 { "✅ ALL FORMATS SUPPORTED" } else { "❌ ISSUES DETECTED" });
+        info!(
+            "🎯 DATABASE VALIDATION: {}",
+            if failed == 0 {
+                "✅ ALL FORMATS SUPPORTED"
+            } else {
+                "❌ ISSUES DETECTED"
+            }
+        );
     }
 }
 
 #[tokio::test]
 async fn test_phase19_database_validation() -> Result<()> {
-    tracing_subscriber::fmt()
-        .with_env_filter("info")
-        .init();
+    tracing_subscriber::fmt().with_env_filter("info").init();
 
     let mut validator = DatabaseValidator::new();
     validator.validate_opensim_database_config().await?;
@@ -367,7 +405,10 @@ async fn test_phase19_database_validation() -> Result<()> {
 
     let failed_count = validator.results.iter().filter(|r| !r.success).count();
     if failed_count > 0 {
-        return Err(anyhow!("Database validation failed: {} tests failed", failed_count));
+        return Err(anyhow!(
+            "Database validation failed: {} tests failed",
+            failed_count
+        ));
     }
 
     info!("🎉 Phase 19 Database Validation completed successfully!");

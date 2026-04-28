@@ -907,7 +907,8 @@ pub const SIT_FLAG_ALLOW_UNSIT: i32 = 0x02;
 pub const SIT_FLAG_SCRIPTED_ONLY: i32 = 0x04;
 pub const SIT_FLAG_NO_COLLIDE: i32 = 0x10;
 pub const SIT_FLAG_NO_DAMAGE: i32 = 0x20;
-pub const SIT_FLAG_OPENSIMFORCED: i32 = SIT_FLAG_ALLOW_UNSIT | SIT_FLAG_NO_COLLIDE | SIT_FLAG_NO_DAMAGE;
+pub const SIT_FLAG_OPENSIMFORCED: i32 =
+    SIT_FLAG_ALLOW_UNSIT | SIT_FLAG_NO_COLLIDE | SIT_FLAG_NO_DAMAGE;
 
 pub const ERR_GENERIC: i32 = -1;
 pub const ERR_PARCEL_PERMISSIONS: i32 = -2;
@@ -946,7 +947,7 @@ pub const SIM_STAT_AI_MS: i32 = 26;
 use std::collections::HashMap;
 
 pub fn build_constant_map() -> HashMap<&'static str, super::lsl_types::LSLValue> {
-    use super::lsl_types::{LSLValue, LSLVector, LSLRotation};
+    use super::lsl_types::{LSLRotation, LSLValue, LSLVector};
     let mut m = HashMap::new();
 
     m.insert("TRUE", LSLValue::Integer(TRUE));
@@ -959,9 +960,18 @@ pub fn build_constant_map() -> HashMap<&'static str, super::lsl_types::LSLValue>
     m.insert("STATUS_SANDBOX", LSLValue::Integer(STATUS_SANDBOX));
     m.insert("STATUS_BLOCK_GRAB", LSLValue::Integer(STATUS_BLOCK_GRAB));
     m.insert("STATUS_DIE_AT_EDGE", LSLValue::Integer(STATUS_DIE_AT_EDGE));
-    m.insert("STATUS_RETURN_AT_EDGE", LSLValue::Integer(STATUS_RETURN_AT_EDGE));
-    m.insert("STATUS_CAST_SHADOWS", LSLValue::Integer(STATUS_CAST_SHADOWS));
-    m.insert("STATUS_BLOCK_GRAB_OBJECT", LSLValue::Integer(STATUS_BLOCK_GRAB_OBJECT));
+    m.insert(
+        "STATUS_RETURN_AT_EDGE",
+        LSLValue::Integer(STATUS_RETURN_AT_EDGE),
+    );
+    m.insert(
+        "STATUS_CAST_SHADOWS",
+        LSLValue::Integer(STATUS_CAST_SHADOWS),
+    );
+    m.insert(
+        "STATUS_BLOCK_GRAB_OBJECT",
+        LSLValue::Integer(STATUS_BLOCK_GRAB_OBJECT),
+    );
     m.insert("AGENT", LSLValue::Integer(AGENT));
     m.insert("ACTIVE", LSLValue::Integer(ACTIVE));
     m.insert("PASSIVE", LSLValue::Integer(PASSIVE));
@@ -978,14 +988,35 @@ pub fn build_constant_map() -> HashMap<&'static str, super::lsl_types::LSLValue>
     m.insert("CONTROL_LBUTTON", LSLValue::Integer(CONTROL_LBUTTON));
     m.insert("CONTROL_ML_LBUTTON", LSLValue::Integer(CONTROL_ML_LBUTTON));
     m.insert("PERMISSION_DEBIT", LSLValue::Integer(PERMISSION_DEBIT));
-    m.insert("PERMISSION_TAKE_CONTROLS", LSLValue::Integer(PERMISSION_TAKE_CONTROLS));
-    m.insert("PERMISSION_TRIGGER_ANIMATION", LSLValue::Integer(PERMISSION_TRIGGER_ANIMATION));
+    m.insert(
+        "PERMISSION_TAKE_CONTROLS",
+        LSLValue::Integer(PERMISSION_TAKE_CONTROLS),
+    );
+    m.insert(
+        "PERMISSION_TRIGGER_ANIMATION",
+        LSLValue::Integer(PERMISSION_TRIGGER_ANIMATION),
+    );
     m.insert("PERMISSION_ATTACH", LSLValue::Integer(PERMISSION_ATTACH));
-    m.insert("PERMISSION_CHANGE_LINKS", LSLValue::Integer(PERMISSION_CHANGE_LINKS));
-    m.insert("PERMISSION_TRACK_CAMERA", LSLValue::Integer(PERMISSION_TRACK_CAMERA));
-    m.insert("PERMISSION_CONTROL_CAMERA", LSLValue::Integer(PERMISSION_CONTROL_CAMERA));
-    m.insert("PERMISSION_TELEPORT", LSLValue::Integer(PERMISSION_TELEPORT));
-    m.insert("PERMISSION_OVERRIDE_ANIMATIONS", LSLValue::Integer(PERMISSION_OVERRIDE_ANIMATIONS));
+    m.insert(
+        "PERMISSION_CHANGE_LINKS",
+        LSLValue::Integer(PERMISSION_CHANGE_LINKS),
+    );
+    m.insert(
+        "PERMISSION_TRACK_CAMERA",
+        LSLValue::Integer(PERMISSION_TRACK_CAMERA),
+    );
+    m.insert(
+        "PERMISSION_CONTROL_CAMERA",
+        LSLValue::Integer(PERMISSION_CONTROL_CAMERA),
+    );
+    m.insert(
+        "PERMISSION_TELEPORT",
+        LSLValue::Integer(PERMISSION_TELEPORT),
+    );
+    m.insert(
+        "PERMISSION_OVERRIDE_ANIMATIONS",
+        LSLValue::Integer(PERMISSION_OVERRIDE_ANIMATIONS),
+    );
     m.insert("PI", LSLValue::Float(PI as f32));
     m.insert("TWO_PI", LSLValue::Float(TWO_PI as f32));
     m.insert("PI_BY_TWO", LSLValue::Float(PI_BY_TWO as f32));
@@ -1012,18 +1043,42 @@ pub fn build_constant_map() -> HashMap<&'static str, super::lsl_types::LSLValue>
     m.insert("NULL_KEY", LSLValue::String(NULL_KEY.to_string()));
     m.insert("EOF", LSLValue::String(EOF.to_string()));
     m.insert("ZERO_VECTOR", LSLValue::Vector(LSLVector::zero()));
-    m.insert("ZERO_ROTATION", LSLValue::Rotation(LSLRotation::new(0.0, 0.0, 0.0, 1.0)));
+    m.insert(
+        "ZERO_ROTATION",
+        LSLValue::Rotation(LSLRotation::new(0.0, 0.0, 0.0, 1.0)),
+    );
     m.insert("TEXTURE_BLANK", LSLValue::String(TEXTURE_BLANK.to_string()));
-    m.insert("TEXTURE_DEFAULT", LSLValue::String(TEXTURE_DEFAULT.to_string()));
-    m.insert("TEXTURE_PLYWOOD", LSLValue::String(TEXTURE_PLYWOOD.to_string()));
-    m.insert("TEXTURE_TRANSPARENT", LSLValue::String(TEXTURE_TRANSPARENT.to_string()));
+    m.insert(
+        "TEXTURE_DEFAULT",
+        LSLValue::String(TEXTURE_DEFAULT.to_string()),
+    );
+    m.insert(
+        "TEXTURE_PLYWOOD",
+        LSLValue::String(TEXTURE_PLYWOOD.to_string()),
+    );
+    m.insert(
+        "TEXTURE_TRANSPARENT",
+        LSLValue::String(TEXTURE_TRANSPARENT.to_string()),
+    );
     m.insert("TEXTURE_MEDIA", LSLValue::String(TEXTURE_MEDIA.to_string()));
 
-    m.insert("CHANGED_ALLOWED_DROP", LSLValue::Integer(CHANGED_ALLOWED_DROP));
-    m.insert("CHANGED_REGION_RESTART", LSLValue::Integer(CHANGED_REGION_RESTART));
-    m.insert("CHANGED_REGION_START", LSLValue::Integer(CHANGED_REGION_START));
+    m.insert(
+        "CHANGED_ALLOWED_DROP",
+        LSLValue::Integer(CHANGED_ALLOWED_DROP),
+    );
+    m.insert(
+        "CHANGED_REGION_RESTART",
+        LSLValue::Integer(CHANGED_REGION_RESTART),
+    );
+    m.insert(
+        "CHANGED_REGION_START",
+        LSLValue::Integer(CHANGED_REGION_START),
+    );
     m.insert("CHANGED_MEDIA", LSLValue::Integer(CHANGED_MEDIA));
-    m.insert("CHANGED_RENDER_MATERIAL", LSLValue::Integer(CHANGED_RENDER_MATERIAL));
+    m.insert(
+        "CHANGED_RENDER_MATERIAL",
+        LSLValue::Integer(CHANGED_RENDER_MATERIAL),
+    );
     m.insert("CHANGED_ANIMATION", LSLValue::Integer(CHANGED_ANIMATION));
     m.insert("CHANGED_POSITION", LSLValue::Integer(CHANGED_POSITION));
 
@@ -1031,63 +1086,207 @@ pub fn build_constant_map() -> HashMap<&'static str, super::lsl_types::LSLValue>
     m.insert("VEHICLE_TYPE_SLED", LSLValue::Integer(VEHICLE_TYPE_SLED));
     m.insert("VEHICLE_TYPE_CAR", LSLValue::Integer(VEHICLE_TYPE_CAR));
     m.insert("VEHICLE_TYPE_BOAT", LSLValue::Integer(VEHICLE_TYPE_BOAT));
-    m.insert("VEHICLE_TYPE_AIRPLANE", LSLValue::Integer(VEHICLE_TYPE_AIRPLANE));
-    m.insert("VEHICLE_TYPE_BALLOON", LSLValue::Integer(VEHICLE_TYPE_BALLOON));
-    m.insert("VEHICLE_LINEAR_FRICTION_TIMESCALE", LSLValue::Integer(VEHICLE_LINEAR_FRICTION_TIMESCALE));
-    m.insert("VEHICLE_ANGULAR_FRICTION_TIMESCALE", LSLValue::Integer(VEHICLE_ANGULAR_FRICTION_TIMESCALE));
-    m.insert("VEHICLE_LINEAR_MOTOR_DIRECTION", LSLValue::Integer(VEHICLE_LINEAR_MOTOR_DIRECTION));
-    m.insert("VEHICLE_LINEAR_MOTOR_OFFSET", LSLValue::Integer(VEHICLE_LINEAR_MOTOR_OFFSET));
-    m.insert("VEHICLE_ANGULAR_MOTOR_DIRECTION", LSLValue::Integer(VEHICLE_ANGULAR_MOTOR_DIRECTION));
-    m.insert("VEHICLE_HOVER_HEIGHT", LSLValue::Integer(VEHICLE_HOVER_HEIGHT));
-    m.insert("VEHICLE_HOVER_EFFICIENCY", LSLValue::Integer(VEHICLE_HOVER_EFFICIENCY));
-    m.insert("VEHICLE_HOVER_TIMESCALE", LSLValue::Integer(VEHICLE_HOVER_TIMESCALE));
+    m.insert(
+        "VEHICLE_TYPE_AIRPLANE",
+        LSLValue::Integer(VEHICLE_TYPE_AIRPLANE),
+    );
+    m.insert(
+        "VEHICLE_TYPE_BALLOON",
+        LSLValue::Integer(VEHICLE_TYPE_BALLOON),
+    );
+    m.insert(
+        "VEHICLE_LINEAR_FRICTION_TIMESCALE",
+        LSLValue::Integer(VEHICLE_LINEAR_FRICTION_TIMESCALE),
+    );
+    m.insert(
+        "VEHICLE_ANGULAR_FRICTION_TIMESCALE",
+        LSLValue::Integer(VEHICLE_ANGULAR_FRICTION_TIMESCALE),
+    );
+    m.insert(
+        "VEHICLE_LINEAR_MOTOR_DIRECTION",
+        LSLValue::Integer(VEHICLE_LINEAR_MOTOR_DIRECTION),
+    );
+    m.insert(
+        "VEHICLE_LINEAR_MOTOR_OFFSET",
+        LSLValue::Integer(VEHICLE_LINEAR_MOTOR_OFFSET),
+    );
+    m.insert(
+        "VEHICLE_ANGULAR_MOTOR_DIRECTION",
+        LSLValue::Integer(VEHICLE_ANGULAR_MOTOR_DIRECTION),
+    );
+    m.insert(
+        "VEHICLE_HOVER_HEIGHT",
+        LSLValue::Integer(VEHICLE_HOVER_HEIGHT),
+    );
+    m.insert(
+        "VEHICLE_HOVER_EFFICIENCY",
+        LSLValue::Integer(VEHICLE_HOVER_EFFICIENCY),
+    );
+    m.insert(
+        "VEHICLE_HOVER_TIMESCALE",
+        LSLValue::Integer(VEHICLE_HOVER_TIMESCALE),
+    );
     m.insert("VEHICLE_BUOYANCY", LSLValue::Integer(VEHICLE_BUOYANCY));
-    m.insert("VEHICLE_LINEAR_DEFLECTION_EFFICIENCY", LSLValue::Integer(VEHICLE_LINEAR_DEFLECTION_EFFICIENCY));
-    m.insert("VEHICLE_LINEAR_DEFLECTION_TIMESCALE", LSLValue::Integer(VEHICLE_LINEAR_DEFLECTION_TIMESCALE));
-    m.insert("VEHICLE_LINEAR_MOTOR_TIMESCALE", LSLValue::Integer(VEHICLE_LINEAR_MOTOR_TIMESCALE));
-    m.insert("VEHICLE_LINEAR_MOTOR_DECAY_TIMESCALE", LSLValue::Integer(VEHICLE_LINEAR_MOTOR_DECAY_TIMESCALE));
-    m.insert("VEHICLE_ANGULAR_DEFLECTION_EFFICIENCY", LSLValue::Integer(VEHICLE_ANGULAR_DEFLECTION_EFFICIENCY));
-    m.insert("VEHICLE_ANGULAR_DEFLECTION_TIMESCALE", LSLValue::Integer(VEHICLE_ANGULAR_DEFLECTION_TIMESCALE));
-    m.insert("VEHICLE_ANGULAR_MOTOR_TIMESCALE", LSLValue::Integer(VEHICLE_ANGULAR_MOTOR_TIMESCALE));
-    m.insert("VEHICLE_ANGULAR_MOTOR_DECAY_TIMESCALE", LSLValue::Integer(VEHICLE_ANGULAR_MOTOR_DECAY_TIMESCALE));
-    m.insert("VEHICLE_VERTICAL_ATTRACTION_EFFICIENCY", LSLValue::Integer(VEHICLE_VERTICAL_ATTRACTION_EFFICIENCY));
-    m.insert("VEHICLE_VERTICAL_ATTRACTION_TIMESCALE", LSLValue::Integer(VEHICLE_VERTICAL_ATTRACTION_TIMESCALE));
-    m.insert("VEHICLE_BANKING_EFFICIENCY", LSLValue::Integer(VEHICLE_BANKING_EFFICIENCY));
-    m.insert("VEHICLE_BANKING_MIX", LSLValue::Integer(VEHICLE_BANKING_MIX));
-    m.insert("VEHICLE_BANKING_TIMESCALE", LSLValue::Integer(VEHICLE_BANKING_TIMESCALE));
-    m.insert("VEHICLE_REFERENCE_FRAME", LSLValue::Integer(VEHICLE_REFERENCE_FRAME));
-    m.insert("VEHICLE_RANGE_BLOCK", LSLValue::Integer(VEHICLE_RANGE_BLOCK));
+    m.insert(
+        "VEHICLE_LINEAR_DEFLECTION_EFFICIENCY",
+        LSLValue::Integer(VEHICLE_LINEAR_DEFLECTION_EFFICIENCY),
+    );
+    m.insert(
+        "VEHICLE_LINEAR_DEFLECTION_TIMESCALE",
+        LSLValue::Integer(VEHICLE_LINEAR_DEFLECTION_TIMESCALE),
+    );
+    m.insert(
+        "VEHICLE_LINEAR_MOTOR_TIMESCALE",
+        LSLValue::Integer(VEHICLE_LINEAR_MOTOR_TIMESCALE),
+    );
+    m.insert(
+        "VEHICLE_LINEAR_MOTOR_DECAY_TIMESCALE",
+        LSLValue::Integer(VEHICLE_LINEAR_MOTOR_DECAY_TIMESCALE),
+    );
+    m.insert(
+        "VEHICLE_ANGULAR_DEFLECTION_EFFICIENCY",
+        LSLValue::Integer(VEHICLE_ANGULAR_DEFLECTION_EFFICIENCY),
+    );
+    m.insert(
+        "VEHICLE_ANGULAR_DEFLECTION_TIMESCALE",
+        LSLValue::Integer(VEHICLE_ANGULAR_DEFLECTION_TIMESCALE),
+    );
+    m.insert(
+        "VEHICLE_ANGULAR_MOTOR_TIMESCALE",
+        LSLValue::Integer(VEHICLE_ANGULAR_MOTOR_TIMESCALE),
+    );
+    m.insert(
+        "VEHICLE_ANGULAR_MOTOR_DECAY_TIMESCALE",
+        LSLValue::Integer(VEHICLE_ANGULAR_MOTOR_DECAY_TIMESCALE),
+    );
+    m.insert(
+        "VEHICLE_VERTICAL_ATTRACTION_EFFICIENCY",
+        LSLValue::Integer(VEHICLE_VERTICAL_ATTRACTION_EFFICIENCY),
+    );
+    m.insert(
+        "VEHICLE_VERTICAL_ATTRACTION_TIMESCALE",
+        LSLValue::Integer(VEHICLE_VERTICAL_ATTRACTION_TIMESCALE),
+    );
+    m.insert(
+        "VEHICLE_BANKING_EFFICIENCY",
+        LSLValue::Integer(VEHICLE_BANKING_EFFICIENCY),
+    );
+    m.insert(
+        "VEHICLE_BANKING_MIX",
+        LSLValue::Integer(VEHICLE_BANKING_MIX),
+    );
+    m.insert(
+        "VEHICLE_BANKING_TIMESCALE",
+        LSLValue::Integer(VEHICLE_BANKING_TIMESCALE),
+    );
+    m.insert(
+        "VEHICLE_REFERENCE_FRAME",
+        LSLValue::Integer(VEHICLE_REFERENCE_FRAME),
+    );
+    m.insert(
+        "VEHICLE_RANGE_BLOCK",
+        LSLValue::Integer(VEHICLE_RANGE_BLOCK),
+    );
     m.insert("VEHICLE_ROLL_FRAME", LSLValue::Integer(VEHICLE_ROLL_FRAME));
-    m.insert("VEHICLE_FLAG_NO_DEFLECTION_UP", LSLValue::Integer(VEHICLE_FLAG_NO_DEFLECTION_UP));
-    m.insert("VEHICLE_FLAG_NO_FLY_UP", LSLValue::Integer(VEHICLE_FLAG_NO_FLY_UP));
-    m.insert("VEHICLE_FLAG_LIMIT_ROLL_ONLY", LSLValue::Integer(VEHICLE_FLAG_LIMIT_ROLL_ONLY));
-    m.insert("VEHICLE_FLAG_HOVER_WATER_ONLY", LSLValue::Integer(VEHICLE_FLAG_HOVER_WATER_ONLY));
-    m.insert("VEHICLE_FLAG_HOVER_TERRAIN_ONLY", LSLValue::Integer(VEHICLE_FLAG_HOVER_TERRAIN_ONLY));
-    m.insert("VEHICLE_FLAG_HOVER_GLOBAL_HEIGHT", LSLValue::Integer(VEHICLE_FLAG_HOVER_GLOBAL_HEIGHT));
-    m.insert("VEHICLE_FLAG_HOVER_UP_ONLY", LSLValue::Integer(VEHICLE_FLAG_HOVER_UP_ONLY));
-    m.insert("VEHICLE_FLAG_LIMIT_MOTOR_UP", LSLValue::Integer(VEHICLE_FLAG_LIMIT_MOTOR_UP));
-    m.insert("VEHICLE_FLAG_MOUSELOOK_STEER", LSLValue::Integer(VEHICLE_FLAG_MOUSELOOK_STEER));
-    m.insert("VEHICLE_FLAG_MOUSELOOK_BANK", LSLValue::Integer(VEHICLE_FLAG_MOUSELOOK_BANK));
-    m.insert("VEHICLE_FLAG_CAMERA_DECOUPLED", LSLValue::Integer(VEHICLE_FLAG_CAMERA_DECOUPLED));
+    m.insert(
+        "VEHICLE_FLAG_NO_DEFLECTION_UP",
+        LSLValue::Integer(VEHICLE_FLAG_NO_DEFLECTION_UP),
+    );
+    m.insert(
+        "VEHICLE_FLAG_NO_FLY_UP",
+        LSLValue::Integer(VEHICLE_FLAG_NO_FLY_UP),
+    );
+    m.insert(
+        "VEHICLE_FLAG_LIMIT_ROLL_ONLY",
+        LSLValue::Integer(VEHICLE_FLAG_LIMIT_ROLL_ONLY),
+    );
+    m.insert(
+        "VEHICLE_FLAG_HOVER_WATER_ONLY",
+        LSLValue::Integer(VEHICLE_FLAG_HOVER_WATER_ONLY),
+    );
+    m.insert(
+        "VEHICLE_FLAG_HOVER_TERRAIN_ONLY",
+        LSLValue::Integer(VEHICLE_FLAG_HOVER_TERRAIN_ONLY),
+    );
+    m.insert(
+        "VEHICLE_FLAG_HOVER_GLOBAL_HEIGHT",
+        LSLValue::Integer(VEHICLE_FLAG_HOVER_GLOBAL_HEIGHT),
+    );
+    m.insert(
+        "VEHICLE_FLAG_HOVER_UP_ONLY",
+        LSLValue::Integer(VEHICLE_FLAG_HOVER_UP_ONLY),
+    );
+    m.insert(
+        "VEHICLE_FLAG_LIMIT_MOTOR_UP",
+        LSLValue::Integer(VEHICLE_FLAG_LIMIT_MOTOR_UP),
+    );
+    m.insert(
+        "VEHICLE_FLAG_MOUSELOOK_STEER",
+        LSLValue::Integer(VEHICLE_FLAG_MOUSELOOK_STEER),
+    );
+    m.insert(
+        "VEHICLE_FLAG_MOUSELOOK_BANK",
+        LSLValue::Integer(VEHICLE_FLAG_MOUSELOOK_BANK),
+    );
+    m.insert(
+        "VEHICLE_FLAG_CAMERA_DECOUPLED",
+        LSLValue::Integer(VEHICLE_FLAG_CAMERA_DECOUPLED),
+    );
     m.insert("VEHICLE_FLAG_NO_X", LSLValue::Integer(VEHICLE_FLAG_NO_X));
     m.insert("VEHICLE_FLAG_NO_Y", LSLValue::Integer(VEHICLE_FLAG_NO_Y));
     m.insert("VEHICLE_FLAG_NO_Z", LSLValue::Integer(VEHICLE_FLAG_NO_Z));
-    m.insert("VEHICLE_FLAG_LOCK_HOVER_HEIGHT", LSLValue::Integer(VEHICLE_FLAG_LOCK_HOVER_HEIGHT));
-    m.insert("VEHICLE_FLAG_NO_DEFLECTION", LSLValue::Integer(VEHICLE_FLAG_NO_DEFLECTION));
-    m.insert("VEHICLE_FLAG_LOCK_ROTATION", LSLValue::Integer(VEHICLE_FLAG_LOCK_ROTATION));
+    m.insert(
+        "VEHICLE_FLAG_LOCK_HOVER_HEIGHT",
+        LSLValue::Integer(VEHICLE_FLAG_LOCK_HOVER_HEIGHT),
+    );
+    m.insert(
+        "VEHICLE_FLAG_NO_DEFLECTION",
+        LSLValue::Integer(VEHICLE_FLAG_NO_DEFLECTION),
+    );
+    m.insert(
+        "VEHICLE_FLAG_LOCK_ROTATION",
+        LSLValue::Integer(VEHICLE_FLAG_LOCK_ROTATION),
+    );
 
     m.insert("CAMERA_PITCH", LSLValue::Integer(CAMERA_PITCH));
-    m.insert("CAMERA_FOCUS_OFFSET", LSLValue::Integer(CAMERA_FOCUS_OFFSET));
-    m.insert("CAMERA_FOCUS_OFFSET_X", LSLValue::Integer(CAMERA_FOCUS_OFFSET_X));
-    m.insert("CAMERA_FOCUS_OFFSET_Y", LSLValue::Integer(CAMERA_FOCUS_OFFSET_Y));
-    m.insert("CAMERA_FOCUS_OFFSET_Z", LSLValue::Integer(CAMERA_FOCUS_OFFSET_Z));
-    m.insert("CAMERA_POSITION_LAG", LSLValue::Integer(CAMERA_POSITION_LAG));
+    m.insert(
+        "CAMERA_FOCUS_OFFSET",
+        LSLValue::Integer(CAMERA_FOCUS_OFFSET),
+    );
+    m.insert(
+        "CAMERA_FOCUS_OFFSET_X",
+        LSLValue::Integer(CAMERA_FOCUS_OFFSET_X),
+    );
+    m.insert(
+        "CAMERA_FOCUS_OFFSET_Y",
+        LSLValue::Integer(CAMERA_FOCUS_OFFSET_Y),
+    );
+    m.insert(
+        "CAMERA_FOCUS_OFFSET_Z",
+        LSLValue::Integer(CAMERA_FOCUS_OFFSET_Z),
+    );
+    m.insert(
+        "CAMERA_POSITION_LAG",
+        LSLValue::Integer(CAMERA_POSITION_LAG),
+    );
     m.insert("CAMERA_FOCUS_LAG", LSLValue::Integer(CAMERA_FOCUS_LAG));
     m.insert("CAMERA_DISTANCE", LSLValue::Integer(CAMERA_DISTANCE));
-    m.insert("CAMERA_BEHINDNESS_ANGLE", LSLValue::Integer(CAMERA_BEHINDNESS_ANGLE));
-    m.insert("CAMERA_BEHINDNESS_LAG", LSLValue::Integer(CAMERA_BEHINDNESS_LAG));
-    m.insert("CAMERA_POSITION_THRESHOLD", LSLValue::Integer(CAMERA_POSITION_THRESHOLD));
-    m.insert("CAMERA_FOCUS_THRESHOLD", LSLValue::Integer(CAMERA_FOCUS_THRESHOLD));
+    m.insert(
+        "CAMERA_BEHINDNESS_ANGLE",
+        LSLValue::Integer(CAMERA_BEHINDNESS_ANGLE),
+    );
+    m.insert(
+        "CAMERA_BEHINDNESS_LAG",
+        LSLValue::Integer(CAMERA_BEHINDNESS_LAG),
+    );
+    m.insert(
+        "CAMERA_POSITION_THRESHOLD",
+        LSLValue::Integer(CAMERA_POSITION_THRESHOLD),
+    );
+    m.insert(
+        "CAMERA_FOCUS_THRESHOLD",
+        LSLValue::Integer(CAMERA_FOCUS_THRESHOLD),
+    );
     m.insert("CAMERA_ACTIVE", LSLValue::Integer(CAMERA_ACTIVE));
     m.insert("CAMERA_POSITION", LSLValue::Integer(CAMERA_POSITION));
     m.insert("CAMERA_POSITION_X", LSLValue::Integer(CAMERA_POSITION_X));
@@ -1097,8 +1296,14 @@ pub fn build_constant_map() -> HashMap<&'static str, super::lsl_types::LSLValue>
     m.insert("CAMERA_FOCUS_X", LSLValue::Integer(CAMERA_FOCUS_X));
     m.insert("CAMERA_FOCUS_Y", LSLValue::Integer(CAMERA_FOCUS_Y));
     m.insert("CAMERA_FOCUS_Z", LSLValue::Integer(CAMERA_FOCUS_Z));
-    m.insert("CAMERA_POSITION_LOCKED", LSLValue::Integer(CAMERA_POSITION_LOCKED));
-    m.insert("CAMERA_FOCUS_LOCKED", LSLValue::Integer(CAMERA_FOCUS_LOCKED));
+    m.insert(
+        "CAMERA_POSITION_LOCKED",
+        LSLValue::Integer(CAMERA_POSITION_LOCKED),
+    );
+    m.insert(
+        "CAMERA_FOCUS_LOCKED",
+        LSLValue::Integer(CAMERA_FOCUS_LOCKED),
+    );
 
     m.insert("PRIM_MATERIAL", LSLValue::Integer(PRIM_MATERIAL));
     m.insert("PRIM_PHYSICS", LSLValue::Integer(PRIM_PHYSICS));
@@ -1120,7 +1325,10 @@ pub fn build_constant_map() -> HashMap<&'static str, super::lsl_types::LSLValue>
     m.insert("PRIM_NAME", LSLValue::Integer(PRIM_NAME));
     m.insert("PRIM_DESC", LSLValue::Integer(PRIM_DESC));
     m.insert("PRIM_ROT_LOCAL", LSLValue::Integer(PRIM_ROT_LOCAL));
-    m.insert("PRIM_PHYSICS_SHAPE_TYPE", LSLValue::Integer(PRIM_PHYSICS_SHAPE_TYPE));
+    m.insert(
+        "PRIM_PHYSICS_SHAPE_TYPE",
+        LSLValue::Integer(PRIM_PHYSICS_SHAPE_TYPE),
+    );
     m.insert("PRIM_OMEGA", LSLValue::Integer(PRIM_OMEGA));
     m.insert("PRIM_POS_LOCAL", LSLValue::Integer(PRIM_POS_LOCAL));
     m.insert("PRIM_LINK_TARGET", LSLValue::Integer(PRIM_LINK_TARGET));
@@ -1137,32 +1345,92 @@ pub fn build_constant_map() -> HashMap<&'static str, super::lsl_types::LSLValue>
     m.insert("PRIM_TYPE_TUBE", LSLValue::Integer(PRIM_TYPE_TUBE));
     m.insert("PRIM_TYPE_RING", LSLValue::Integer(PRIM_TYPE_RING));
     m.insert("PRIM_TYPE_SCULPT", LSLValue::Integer(PRIM_TYPE_SCULPT));
-    m.insert("PRIM_MATERIAL_STONE", LSLValue::Integer(PRIM_MATERIAL_STONE));
-    m.insert("PRIM_MATERIAL_METAL", LSLValue::Integer(PRIM_MATERIAL_METAL));
-    m.insert("PRIM_MATERIAL_GLASS", LSLValue::Integer(PRIM_MATERIAL_GLASS));
+    m.insert(
+        "PRIM_MATERIAL_STONE",
+        LSLValue::Integer(PRIM_MATERIAL_STONE),
+    );
+    m.insert(
+        "PRIM_MATERIAL_METAL",
+        LSLValue::Integer(PRIM_MATERIAL_METAL),
+    );
+    m.insert(
+        "PRIM_MATERIAL_GLASS",
+        LSLValue::Integer(PRIM_MATERIAL_GLASS),
+    );
     m.insert("PRIM_MATERIAL_WOOD", LSLValue::Integer(PRIM_MATERIAL_WOOD));
-    m.insert("PRIM_MATERIAL_FLESH", LSLValue::Integer(PRIM_MATERIAL_FLESH));
-    m.insert("PRIM_MATERIAL_PLASTIC", LSLValue::Integer(PRIM_MATERIAL_PLASTIC));
-    m.insert("PRIM_MATERIAL_RUBBER", LSLValue::Integer(PRIM_MATERIAL_RUBBER));
-    m.insert("PRIM_MATERIAL_LIGHT", LSLValue::Integer(PRIM_MATERIAL_LIGHT));
+    m.insert(
+        "PRIM_MATERIAL_FLESH",
+        LSLValue::Integer(PRIM_MATERIAL_FLESH),
+    );
+    m.insert(
+        "PRIM_MATERIAL_PLASTIC",
+        LSLValue::Integer(PRIM_MATERIAL_PLASTIC),
+    );
+    m.insert(
+        "PRIM_MATERIAL_RUBBER",
+        LSLValue::Integer(PRIM_MATERIAL_RUBBER),
+    );
+    m.insert(
+        "PRIM_MATERIAL_LIGHT",
+        LSLValue::Integer(PRIM_MATERIAL_LIGHT),
+    );
     m.insert("PRIM_SHINY_NONE", LSLValue::Integer(PRIM_SHINY_NONE));
     m.insert("PRIM_SHINY_LOW", LSLValue::Integer(PRIM_SHINY_LOW));
     m.insert("PRIM_SHINY_MEDIUM", LSLValue::Integer(PRIM_SHINY_MEDIUM));
     m.insert("PRIM_SHINY_HIGH", LSLValue::Integer(PRIM_SHINY_HIGH));
-    m.insert("PRIM_TEXGEN_DEFAULT", LSLValue::Integer(PRIM_TEXGEN_DEFAULT));
+    m.insert(
+        "PRIM_TEXGEN_DEFAULT",
+        LSLValue::Integer(PRIM_TEXGEN_DEFAULT),
+    );
     m.insert("PRIM_TEXGEN_PLANAR", LSLValue::Integer(PRIM_TEXGEN_PLANAR));
-    m.insert("PRIM_PHYSICS_SHAPE_PRIM", LSLValue::Integer(PRIM_PHYSICS_SHAPE_PRIM));
-    m.insert("PRIM_PHYSICS_SHAPE_NONE", LSLValue::Integer(PRIM_PHYSICS_SHAPE_NONE));
-    m.insert("PRIM_PHYSICS_SHAPE_CONVEX", LSLValue::Integer(PRIM_PHYSICS_SHAPE_CONVEX));
-    m.insert("PRIM_SCULPT_TYPE_SPHERE", LSLValue::Integer(PRIM_SCULPT_TYPE_SPHERE));
-    m.insert("PRIM_SCULPT_TYPE_TORUS", LSLValue::Integer(PRIM_SCULPT_TYPE_TORUS));
-    m.insert("PRIM_SCULPT_TYPE_PLANE", LSLValue::Integer(PRIM_SCULPT_TYPE_PLANE));
-    m.insert("PRIM_SCULPT_TYPE_CYLINDER", LSLValue::Integer(PRIM_SCULPT_TYPE_CYLINDER));
-    m.insert("PRIM_SCULPT_TYPE_MESH", LSLValue::Integer(PRIM_SCULPT_TYPE_MESH));
-    m.insert("PRIM_ALPHA_MODE_NONE", LSLValue::Integer(PRIM_ALPHA_MODE_NONE));
-    m.insert("PRIM_ALPHA_MODE_BLEND", LSLValue::Integer(PRIM_ALPHA_MODE_BLEND));
-    m.insert("PRIM_ALPHA_MODE_MASK", LSLValue::Integer(PRIM_ALPHA_MODE_MASK));
-    m.insert("PRIM_ALPHA_MODE_EMISSIVE", LSLValue::Integer(PRIM_ALPHA_MODE_EMISSIVE));
+    m.insert(
+        "PRIM_PHYSICS_SHAPE_PRIM",
+        LSLValue::Integer(PRIM_PHYSICS_SHAPE_PRIM),
+    );
+    m.insert(
+        "PRIM_PHYSICS_SHAPE_NONE",
+        LSLValue::Integer(PRIM_PHYSICS_SHAPE_NONE),
+    );
+    m.insert(
+        "PRIM_PHYSICS_SHAPE_CONVEX",
+        LSLValue::Integer(PRIM_PHYSICS_SHAPE_CONVEX),
+    );
+    m.insert(
+        "PRIM_SCULPT_TYPE_SPHERE",
+        LSLValue::Integer(PRIM_SCULPT_TYPE_SPHERE),
+    );
+    m.insert(
+        "PRIM_SCULPT_TYPE_TORUS",
+        LSLValue::Integer(PRIM_SCULPT_TYPE_TORUS),
+    );
+    m.insert(
+        "PRIM_SCULPT_TYPE_PLANE",
+        LSLValue::Integer(PRIM_SCULPT_TYPE_PLANE),
+    );
+    m.insert(
+        "PRIM_SCULPT_TYPE_CYLINDER",
+        LSLValue::Integer(PRIM_SCULPT_TYPE_CYLINDER),
+    );
+    m.insert(
+        "PRIM_SCULPT_TYPE_MESH",
+        LSLValue::Integer(PRIM_SCULPT_TYPE_MESH),
+    );
+    m.insert(
+        "PRIM_ALPHA_MODE_NONE",
+        LSLValue::Integer(PRIM_ALPHA_MODE_NONE),
+    );
+    m.insert(
+        "PRIM_ALPHA_MODE_BLEND",
+        LSLValue::Integer(PRIM_ALPHA_MODE_BLEND),
+    );
+    m.insert(
+        "PRIM_ALPHA_MODE_MASK",
+        LSLValue::Integer(PRIM_ALPHA_MODE_MASK),
+    );
+    m.insert(
+        "PRIM_ALPHA_MODE_EMISSIVE",
+        LSLValue::Integer(PRIM_ALPHA_MODE_EMISSIVE),
+    );
 
     m.insert("INVENTORY_ALL", LSLValue::Integer(INVENTORY_ALL));
     m.insert("INVENTORY_NONE", LSLValue::Integer(INVENTORY_NONE));
@@ -1174,7 +1442,10 @@ pub fn build_constant_map() -> HashMap<&'static str, super::lsl_types::LSLValue>
     m.insert("INVENTORY_NOTECARD", LSLValue::Integer(INVENTORY_NOTECARD));
     m.insert("INVENTORY_SCRIPT", LSLValue::Integer(INVENTORY_SCRIPT));
     m.insert("INVENTORY_BODYPART", LSLValue::Integer(INVENTORY_BODYPART));
-    m.insert("INVENTORY_ANIMATION", LSLValue::Integer(INVENTORY_ANIMATION));
+    m.insert(
+        "INVENTORY_ANIMATION",
+        LSLValue::Integer(INVENTORY_ANIMATION),
+    );
     m.insert("INVENTORY_GESTURE", LSLValue::Integer(INVENTORY_GESTURE));
 
     m.insert("PERM_TRANSFER", LSLValue::Integer(PERM_TRANSFER));
@@ -1216,8 +1487,14 @@ pub fn build_constant_map() -> HashMap<&'static str, super::lsl_types::LSLValue>
     m.insert("LIST_STAT_MEDIAN", LSLValue::Integer(LIST_STAT_MEDIAN));
     m.insert("LIST_STAT_STD_DEV", LSLValue::Integer(LIST_STAT_STD_DEV));
     m.insert("LIST_STAT_SUM", LSLValue::Integer(LIST_STAT_SUM));
-    m.insert("LIST_STAT_SUM_SQUARES", LSLValue::Integer(LIST_STAT_SUM_SQUARES));
-    m.insert("LIST_STAT_NUM_COUNT", LSLValue::Integer(LIST_STAT_NUM_COUNT));
+    m.insert(
+        "LIST_STAT_SUM_SQUARES",
+        LSLValue::Integer(LIST_STAT_SUM_SQUARES),
+    );
+    m.insert(
+        "LIST_STAT_NUM_COUNT",
+        LSLValue::Integer(LIST_STAT_NUM_COUNT),
+    );
 
     m.insert("CLICK_ACTION_NONE", LSLValue::Integer(CLICK_ACTION_NONE));
     m.insert("CLICK_ACTION_TOUCH", LSLValue::Integer(CLICK_ACTION_TOUCH));
@@ -1230,7 +1507,10 @@ pub fn build_constant_map() -> HashMap<&'static str, super::lsl_types::LSLValue>
 
     m.insert("HTTP_METHOD", LSLValue::Integer(HTTP_METHOD));
     m.insert("HTTP_MIMETYPE", LSLValue::Integer(HTTP_MIMETYPE));
-    m.insert("HTTP_BODY_MAXLENGTH", LSLValue::Integer(HTTP_BODY_MAXLENGTH));
+    m.insert(
+        "HTTP_BODY_MAXLENGTH",
+        LSLValue::Integer(HTTP_BODY_MAXLENGTH),
+    );
     m.insert("HTTP_VERIFY_CERT", LSLValue::Integer(HTTP_VERIFY_CERT));
 
     m.insert("CONTENT_TYPE_TEXT", LSLValue::Integer(CONTENT_TYPE_TEXT));
@@ -1261,7 +1541,10 @@ pub fn build_constant_map() -> HashMap<&'static str, super::lsl_types::LSLValue>
     m.insert("DATA_RATING", LSLValue::Integer(DATA_RATING));
 
     m.insert("AGENT_LIST_PARCEL", LSLValue::Integer(AGENT_LIST_PARCEL));
-    m.insert("AGENT_LIST_PARCEL_OWNER", LSLValue::Integer(AGENT_LIST_PARCEL_OWNER));
+    m.insert(
+        "AGENT_LIST_PARCEL_OWNER",
+        LSLValue::Integer(AGENT_LIST_PARCEL_OWNER),
+    );
     m.insert("AGENT_LIST_REGION", LSLValue::Integer(AGENT_LIST_REGION));
 
     m.insert("JSON_INVALID", LSLValue::String(JSON_INVALID.to_string()));
@@ -1275,8 +1558,14 @@ pub fn build_constant_map() -> HashMap<&'static str, super::lsl_types::LSLValue>
     m.insert("JSON_DELETE", LSLValue::String(JSON_DELETE.to_string()));
     m.insert("JSON_APPEND", LSLValue::String(JSON_APPEND.to_string()));
 
-    m.insert("URL_REQUEST_GRANTED", LSLValue::String(URL_REQUEST_GRANTED.to_string()));
-    m.insert("URL_REQUEST_DENIED", LSLValue::String(URL_REQUEST_DENIED.to_string()));
+    m.insert(
+        "URL_REQUEST_GRANTED",
+        LSLValue::String(URL_REQUEST_GRANTED.to_string()),
+    );
+    m.insert(
+        "URL_REQUEST_DENIED",
+        LSLValue::String(URL_REQUEST_DENIED.to_string()),
+    );
     m.insert("NAK", LSLValue::String(NAK.to_string()));
 
     m

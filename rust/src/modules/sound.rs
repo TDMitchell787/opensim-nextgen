@@ -14,11 +14,26 @@ use super::traits::{ModuleConfig, RegionModule, SceneContext, SharedRegionModule
 use crate::udp::server::AvatarMovementState;
 
 pub trait ISoundModule: Send + Sync + 'static {
-    fn play_sound(&self, object_id: Uuid, sound_id: Uuid, gain: f32, position: [f32; 3], radius: f32);
+    fn play_sound(
+        &self,
+        object_id: Uuid,
+        sound_id: Uuid,
+        gain: f32,
+        position: [f32; 3],
+        radius: f32,
+    );
     fn loop_sound(&self, object_id: Uuid, sound_id: Uuid, gain: f32);
     fn stop_sound(&self, object_id: Uuid);
-    fn trigger_sound(&self, sound_id: Uuid, owner_id: Uuid, object_id: Uuid,
-                     parent_id: Uuid, gain: f32, position: [f32; 3], handle: u64);
+    fn trigger_sound(
+        &self,
+        sound_id: Uuid,
+        owner_id: Uuid,
+        object_id: Uuid,
+        parent_id: Uuid,
+        gain: f32,
+        position: [f32; 3],
+        handle: u64,
+    );
     fn preload_sound(&self, object_id: Uuid, sound_id: Uuid);
 }
 
@@ -48,8 +63,13 @@ const ATTACHED_SOUND_GAIN_CHANGE_ID: u32 = 0x000E; // Medium 14
 const PRELOAD_SOUND_ID: u32 = 0x000F; // Medium 15
 
 fn build_sound_trigger(
-    sound_id: &Uuid, owner_id: &Uuid, object_id: &Uuid,
-    parent_id: &Uuid, handle: u64, position: &[f32; 3], gain: f32,
+    sound_id: &Uuid,
+    owner_id: &Uuid,
+    object_id: &Uuid,
+    parent_id: &Uuid,
+    handle: u64,
+    position: &[f32; 3],
+    gain: f32,
 ) -> Vec<u8> {
     let mut packet = Vec::with_capacity(100);
     packet.push(0x40); // reliable
@@ -73,7 +93,11 @@ fn build_sound_trigger(
 }
 
 fn build_attached_sound(
-    sound_id: &Uuid, object_id: &Uuid, owner_id: &Uuid, gain: f32, flags: u8,
+    sound_id: &Uuid,
+    object_id: &Uuid,
+    owner_id: &Uuid,
+    gain: f32,
+    flags: u8,
 ) -> Vec<u8> {
     let mut packet = Vec::with_capacity(80);
     packet.push(0x40);
@@ -107,18 +131,39 @@ fn build_preload_sound(sound_id: &Uuid, object_id: &Uuid, owner_id: &Uuid) -> Ve
 }
 
 impl ISoundModule for SoundModule {
-    fn play_sound(&self, _object_id: Uuid, _sound_id: Uuid, _gain: f32, _position: [f32; 3], _radius: f32) {}
+    fn play_sound(
+        &self,
+        _object_id: Uuid,
+        _sound_id: Uuid,
+        _gain: f32,
+        _position: [f32; 3],
+        _radius: f32,
+    ) {
+    }
     fn loop_sound(&self, _object_id: Uuid, _sound_id: Uuid, _gain: f32) {}
     fn stop_sound(&self, _object_id: Uuid) {}
-    fn trigger_sound(&self, _sound_id: Uuid, _owner_id: Uuid, _object_id: Uuid,
-                     _parent_id: Uuid, _gain: f32, _position: [f32; 3], _handle: u64) {}
+    fn trigger_sound(
+        &self,
+        _sound_id: Uuid,
+        _owner_id: Uuid,
+        _object_id: Uuid,
+        _parent_id: Uuid,
+        _gain: f32,
+        _position: [f32; 3],
+        _handle: u64,
+    ) {
+    }
     fn preload_sound(&self, _object_id: Uuid, _sound_id: Uuid) {}
 }
 
 #[async_trait]
 impl RegionModule for SoundModule {
-    fn name(&self) -> &'static str { "SoundModule" }
-    fn replaceable_interface(&self) -> Option<&'static str> { Some("ISoundModule") }
+    fn name(&self) -> &'static str {
+        "SoundModule"
+    }
+    fn replaceable_interface(&self) -> Option<&'static str> {
+        Some("ISoundModule")
+    }
 
     async fn initialize(&mut self, _config: &ModuleConfig) -> Result<()> {
         info!("[SOUND MODULE] Initialized");
@@ -139,30 +184,39 @@ impl RegionModule for SoundModule {
         });
         scene.event_bus.subscribe(
             SceneEvent::OnSoundTrigger {
-                sound_id: Uuid::nil(), owner_id: Uuid::nil(),
-                object_id: Uuid::nil(), parent_id: Uuid::nil(),
-                gain: 0.0, position: [0.0; 3], handle: 0,
+                sound_id: Uuid::nil(),
+                owner_id: Uuid::nil(),
+                object_id: Uuid::nil(),
+                parent_id: Uuid::nil(),
+                gain: 0.0,
+                position: [0.0; 3],
+                handle: 0,
             },
             handler,
             100,
         );
 
-        scene.service_registry.write().register::<SoundModule>(
-            Arc::new(SoundModule {
+        scene
+            .service_registry
+            .write()
+            .register::<SoundModule>(Arc::new(SoundModule {
                 region_uuid: self.region_uuid,
                 region_handle: self.region_handle,
                 socket: self.socket.clone(),
                 avatar_states: self.avatar_states.clone(),
                 service_registry: self.service_registry.clone(),
-            }),
-        );
+            }));
 
         info!("[SOUND MODULE] Added to region {:?}", scene.region_name);
         Ok(())
     }
 
-    fn as_any(&self) -> &dyn Any { self }
-    fn as_any_mut(&mut self) -> &mut dyn Any { self }
+    fn as_any(&self) -> &dyn Any {
+        self
+    }
+    fn as_any_mut(&mut self) -> &mut dyn Any {
+        self
+    }
 }
 
 #[async_trait]
@@ -178,11 +232,17 @@ struct SoundEventHandler {
 impl EventHandler for SoundEventHandler {
     async fn handle_event(&self, event: &SceneEvent, _scene: &SceneContext) -> Result<()> {
         if let SceneEvent::OnSoundTrigger {
-            sound_id, owner_id, object_id, parent_id, gain, position, handle,
-        } = event {
+            sound_id,
+            owner_id,
+            object_id,
+            parent_id,
+            gain,
+            position,
+            handle,
+        } = event
+        {
             let packet = build_sound_trigger(
-                sound_id, owner_id, object_id, parent_id,
-                *handle, position, *gain,
+                sound_id, owner_id, object_id, parent_id, *handle, position, *gain,
             );
 
             let clients: Vec<SocketAddr> = {
@@ -194,7 +254,11 @@ impl EventHandler for SoundEventHandler {
                 let _ = self.socket.send_to(&packet, addr).await;
             }
 
-            info!("[SOUND MODULE] Broadcast SoundTrigger {} to {} clients", sound_id, clients.len());
+            info!(
+                "[SOUND MODULE] Broadcast SoundTrigger {} to {} clients",
+                sound_id,
+                clients.len()
+            );
         }
         Ok(())
     }

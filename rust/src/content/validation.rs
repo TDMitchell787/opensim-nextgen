@@ -2,9 +2,9 @@
 //!
 //! Provides content validation, format checking, and quality assessment.
 
-use std::path::Path;
+use super::{ContentError, ContentResult, ContentType, ContentValidationResult};
 use std::fs;
-use super::{ContentResult, ContentValidationResult, ContentType, ContentError};
+use std::path::Path;
 
 const MAX_TEXTURE_SIZE: u64 = 10 * 1024 * 1024;
 const MAX_MODEL_SIZE: u64 = 50 * 1024 * 1024;
@@ -161,7 +161,8 @@ impl ContentValidator {
             ContentType::Model3D => {
                 if data.len() >= 4 && &data[0..4] == b"glTF" {
                     true
-                } else if data.len() >= 4 && (&data[0..4] == b"FBX\x00" || &data[0..4] == b"Fbx\x00")
+                } else if data.len() >= 4
+                    && (&data[0..4] == b"FBX\x00" || &data[0..4] == b"Fbx\x00")
                 {
                     true
                 } else if data.len() >= 6 && data[0..6].windows(5).any(|w| w == b"solid") {

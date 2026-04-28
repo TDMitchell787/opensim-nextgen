@@ -3,23 +3,27 @@
 //! Coordinates data collection, business intelligence, predictive analytics,
 //! and report generation for comprehensive virtual world business intelligence.
 
+use super::{
+    business_intelligence::{
+        BusinessInsight, BusinessIntelligenceConfig, BusinessIntelligenceEngine, DashboardData,
+    },
+    data_collection::{CollectionStatistics, DataCollectionConfig, DataCollector, RealTimeEvent},
+    predictive_analytics::{
+        BusinessImpactAssessment, PredictiveAnalyticsConfig, PredictiveAnalyticsEngine,
+    },
+    report_generation::{Report, ReportGenerationConfig, ReportGenerationEngine, ReportRequest},
+    AnalyticsCategory, AnalyticsDataPoint, BusinessDashboard, BusinessKPI, ForecastResult,
+    KPICategory, OutputFormat, ReportDefinition, ReportType, ReportingError, ReportingResult,
+    ScenarioAnalysis, TimeWindow,
+};
+use crate::database::DatabaseManager;
+use crate::monitoring::MetricsCollector;
+use chrono::{DateTime, Duration, Utc};
+use serde::{Deserialize, Serialize};
 use std::collections::HashMap;
 use std::sync::Arc;
 use tokio::sync::RwLock;
 use uuid::Uuid;
-use chrono::{DateTime, Utc, Duration};
-use serde::{Deserialize, Serialize};
-use crate::database::DatabaseManager;
-use crate::monitoring::MetricsCollector;
-use super::{
-    data_collection::{DataCollector, DataCollectionConfig, RealTimeEvent, CollectionStatistics},
-    business_intelligence::{BusinessIntelligenceEngine, BusinessIntelligenceConfig, BusinessInsight, DashboardData},
-    predictive_analytics::{PredictiveAnalyticsEngine, PredictiveAnalyticsConfig, BusinessImpactAssessment},
-    report_generation::{ReportGenerationEngine, ReportGenerationConfig, Report, ReportRequest},
-    AnalyticsDataPoint, AnalyticsCategory, BusinessKPI, KPICategory, BusinessDashboard,
-    ReportDefinition, ReportType, OutputFormat, TimeWindow, ForecastResult,
-    ReportingError, ReportingResult, ScenarioAnalysis
-};
 
 /// Central reporting manager
 pub struct ReportingManager {
@@ -243,33 +247,37 @@ impl ReportingManager {
                 database.clone(),
                 metrics_collector.clone(),
                 config.data_collection.clone(),
-            ).await?
+            )
+            .await?,
         );
-        
+
         let business_intelligence = Arc::new(
             BusinessIntelligenceEngine::new(
                 database.clone(),
                 metrics_collector.clone(),
                 config.business_intelligence.clone(),
-            ).await?
+            )
+            .await?,
         );
-        
+
         let predictive_analytics = Arc::new(
             PredictiveAnalyticsEngine::new(
                 database.clone(),
                 metrics_collector.clone(),
                 config.predictive_analytics.clone(),
-            ).await?
+            )
+            .await?,
         );
-        
+
         let report_generation = Arc::new(
             ReportGenerationEngine::new(
                 database.clone(),
                 metrics_collector.clone(),
                 config.report_generation.clone(),
-            ).await?
+            )
+            .await?,
         );
-        
+
         let manager = Self {
             data_collector,
             business_intelligence,
@@ -280,26 +288,27 @@ impl ReportingManager {
             system_health: Arc::new(RwLock::new(ReportingSystemHealth::default())),
             config,
         };
-        
+
         // Initialize database tables
         manager.initialize_tables().await?;
-        
+
         // Start health monitoring
         manager.start_health_monitoring().await?;
-        
+
         // Start background tasks
         manager.start_background_tasks().await?;
-        
+
         Ok(manager)
     }
-    
+
     /// Initialize database tables
     async fn initialize_tables(&self) -> ReportingResult<()> {
         let pool_ref = self.database.get_pool()?;
         let pool = pool_ref.as_postgres_pool()?;
-        
+
         // Analytics requests table
-        sqlx::query(r#"
+        sqlx::query(
+            r#"
             CREATE TABLE IF NOT EXISTS analytics_requests (
                 request_id UUID PRIMARY KEY,
                 request_type TEXT NOT NULL,
@@ -318,10 +327,14 @@ impl ReportingManager {
                 processing_time_ms BIGINT,
                 error_message TEXT
             )
-        "#).execute(pool).await?;
-        
+        "#,
+        )
+        .execute(pool)
+        .await?;
+
         // Export requests table
-        sqlx::query(r#"
+        sqlx::query(
+            r#"
             CREATE TABLE IF NOT EXISTS export_requests (
                 export_id UUID PRIMARY KEY,
                 export_type TEXT NOT NULL,
@@ -341,10 +354,14 @@ impl ReportingManager {
                 created_at TIMESTAMP WITH TIME ZONE DEFAULT NOW(),
                 completed_at TIMESTAMP WITH TIME ZONE
             )
-        "#).execute(pool).await?;
-        
+        "#,
+        )
+        .execute(pool)
+        .await?;
+
         // System health log table
-        sqlx::query(r#"
+        sqlx::query(
+            r#"
             CREATE TABLE IF NOT EXISTS system_health_log (
                 log_id UUID PRIMARY KEY,
                 overall_status TEXT NOT NULL,
@@ -352,28 +369,30 @@ impl ReportingManager {
                 system_metrics JSONB NOT NULL,
                 recorded_at TIMESTAMP WITH TIME ZONE DEFAULT NOW()
             )
-        "#).execute(pool).await?;
-        
+        "#,
+        )
+        .execute(pool)
+        .await?;
+
         Ok(())
     }
-    
+
     /// Start health monitoring
     async fn start_health_monitoring(&self) -> ReportingResult<()> {
         let system_health = self.system_health.clone();
         let interval_seconds = self.config.health_check_interval_seconds;
-        
+
         tokio::spawn(async move {
-            let mut interval = tokio::time::interval(
-                std::time::Duration::from_secs(interval_seconds as u64)
-            );
-            
+            let mut interval =
+                tokio::time::interval(std::time::Duration::from_secs(interval_seconds as u64));
+
             loop {
                 interval.tick().await;
-                
+
                 // Update health status
                 let mut health = system_health.write().await;
                 health.last_updated = Utc::now();
-                
+
                 // Check each component (simplified)
                 health.data_collection_status = ComponentHealth {
                     status: SystemHealthStatus::Healthy,
@@ -383,7 +402,7 @@ impl ReportingManager {
                     error_count: 0,
                     uptime_percentage: 99.9,
                 };
-                
+
                 health.business_intelligence_status = ComponentHealth {
                     status: SystemHealthStatus::Healthy,
                     message: "Business intelligence processing normally".to_string(),
@@ -392,7 +411,7 @@ impl ReportingManager {
                     error_count: 0,
                     uptime_percentage: 99.8,
                 };
-                
+
                 health.predictive_analytics_status = ComponentHealth {
                     status: SystemHealthStatus::Healthy,
                     message: "Predictive analytics models operational".to_string(),
@@ -401,7 +420,7 @@ impl ReportingManager {
                     error_count: 0,
                     uptime_percentage: 99.5,
                 };
-                
+
                 health.report_generation_status = ComponentHealth {
                     status: SystemHealthStatus::Healthy,
                     message: "Report generation system available".to_string(),
@@ -410,10 +429,10 @@ impl ReportingManager {
                     error_count: 0,
                     uptime_percentage: 99.7,
                 };
-                
+
                 // Determine overall status
                 health.overall_status = SystemHealthStatus::Healthy;
-                
+
                 // Update system metrics (would get from actual monitoring)
                 health.system_metrics = SystemMetrics {
                     cpu_usage_percent: 25.5,
@@ -427,65 +446,74 @@ impl ReportingManager {
                 };
             }
         });
-        
+
         Ok(())
     }
-    
+
     /// Start background tasks
     async fn start_background_tasks(&self) -> ReportingResult<()> {
         // Start backup task if enabled
         if self.config.backup_enabled {
             self.start_backup_task().await;
         }
-        
+
         // Start performance monitoring if enabled
         if self.config.performance_monitoring_enabled {
             self.start_performance_monitoring().await;
         }
-        
+
         Ok(())
     }
-    
+
     /// Process comprehensive analytics request
-    pub async fn process_analytics_request(&self, request: AnalyticsRequest) -> ReportingResult<AnalyticsResponse> {
+    pub async fn process_analytics_request(
+        &self,
+        request: AnalyticsRequest,
+    ) -> ReportingResult<AnalyticsResponse> {
         let start_time = Utc::now();
-        
+
         // Collect analytics data
         let analytics_data = self.collect_analytics_data(&request).await?;
-        
+
         // Generate business insights if requested
         let business_insights = if request.include_insights {
-            self.business_intelligence.generate_insights(request.time_period.clone()).await?
+            self.business_intelligence
+                .generate_insights(request.time_period.clone())
+                .await?
         } else {
             Vec::new()
         };
-        
+
         // Generate predictions if requested
         let predictions = if request.include_predictions {
             self.generate_predictions(&request).await?
         } else {
             Vec::new()
         };
-        
+
         // Generate impact assessments
         let impact_assessments = if request.include_predictions && !predictions.is_empty() {
             self.generate_impact_assessments(&predictions).await?
         } else {
             Vec::new()
         };
-        
+
         // Generate scenario analysis if requested
-        let scenario_analysis = if request.include_predictions && request.request_type == AnalyticsRequestType::PredictiveForecasting {
+        let scenario_analysis = if request.include_predictions
+            && request.request_type == AnalyticsRequestType::PredictiveForecasting
+        {
             Some(self.generate_scenario_analysis(&request).await?)
         } else {
             None
         };
-        
+
         // Generate reports if requested
-        let generated_reports = self.generate_reports(&request, &analytics_data, &business_insights).await?;
-        
+        let generated_reports = self
+            .generate_reports(&request, &analytics_data, &business_insights)
+            .await?;
+
         let processing_time = Utc::now().signed_duration_since(start_time);
-        
+
         let response = AnalyticsResponse {
             response_id: Uuid::new_v4(),
             request_id: request.request_id,
@@ -500,32 +528,36 @@ impl ReportingManager {
             confidence_score: 0.85,   // Would calculate actual confidence
             generated_at: Utc::now(),
         };
-        
+
         // Update metrics
         let mut tags = HashMap::new();
         tags.insert("type".to_string(), format!("{:?}", request.request_type));
         tags.insert("priority".to_string(), format!("{:?}", request.priority));
-        self.metrics_collector.increment_counter("analytics_requests_processed", tags).await?;
-        
-        self.metrics_collector.record_histogram(
-            "analytics_processing_time_ms",
-            response.processing_time_ms as f64,
-            HashMap::new()
-        ).await?;
-        
+        self.metrics_collector
+            .increment_counter("analytics_requests_processed", tags)
+            .await?;
+
+        self.metrics_collector
+            .record_histogram(
+                "analytics_processing_time_ms",
+                response.processing_time_ms as f64,
+                HashMap::new(),
+            )
+            .await?;
+
         Ok(response)
     }
-    
+
     /// Collect analytics data point
     pub async fn collect_data_point(&self, data_point: AnalyticsDataPoint) -> ReportingResult<()> {
         self.data_collector.collect_data_point(data_point).await
     }
-    
+
     /// Process real-time event
     pub async fn process_real_time_event(&self, event: RealTimeEvent) -> ReportingResult<()> {
         self.data_collector.process_real_time_event(event).await
     }
-    
+
     /// Generate forecast for metric
     pub async fn generate_forecast(
         &self,
@@ -533,56 +565,72 @@ impl ReportingManager {
         forecast_horizon: Duration,
         confidence_levels: Vec<f32>,
     ) -> ReportingResult<ForecastResult> {
-        self.predictive_analytics.generate_forecast(metric_name, forecast_horizon, confidence_levels).await
+        self.predictive_analytics
+            .generate_forecast(metric_name, forecast_horizon, confidence_levels)
+            .await
     }
-    
+
     /// Get business KPIs
-    pub async fn get_business_kpis(&self, category: Option<KPICategory>) -> ReportingResult<Vec<BusinessKPI>> {
+    pub async fn get_business_kpis(
+        &self,
+        category: Option<KPICategory>,
+    ) -> ReportingResult<Vec<BusinessKPI>> {
         self.business_intelligence.get_business_kpis(category).await
     }
-    
+
     /// Generate business report
     pub async fn generate_report(&self, report_request: ReportRequest) -> ReportingResult<Uuid> {
         self.report_generation.generate_report(report_request).await
     }
-    
+
     /// Get dashboard data
     pub async fn get_dashboard_data(&self, dashboard_id: Uuid) -> ReportingResult<DashboardData> {
-        self.business_intelligence.get_dashboard_data(dashboard_id).await
+        self.business_intelligence
+            .get_dashboard_data(dashboard_id)
+            .await
     }
-    
+
     /// Export analytics data
-    pub async fn export_data(&self, export_request: ExportRequest) -> ReportingResult<ExportResult> {
+    pub async fn export_data(
+        &self,
+        export_request: ExportRequest,
+    ) -> ReportingResult<ExportResult> {
         let start_time = Utc::now();
-        
+
         // Collect data based on selection criteria
-        let data = self.collect_export_data(&export_request.data_selection).await?;
-        
+        let data = self
+            .collect_export_data(&export_request.data_selection)
+            .await?;
+
         // Process and format data
-        let formatted_data = self.format_export_data(&data, &export_request.output_format).await?;
-        
+        let formatted_data = self
+            .format_export_data(&data, &export_request.output_format)
+            .await?;
+
         // Store formatted data size before potential move
         let formatted_data_size = formatted_data.len();
-        
+
         // Compress if enabled
         let final_data = if export_request.compression_enabled {
             self.compress_data(&formatted_data).await?
         } else {
             formatted_data
         };
-        
+
         // Encrypt if enabled
         let encrypted_data = if export_request.encryption_enabled {
             self.encrypt_data(&final_data).await?
         } else {
             final_data
         };
-        
+
         // Save to destination
-        let file_path = self.save_export_data(&export_request, &encrypted_data).await?;
-        
+        let file_path = self
+            .save_export_data(&export_request, &encrypted_data)
+            .await?;
+
         let export_time = Utc::now().signed_duration_since(start_time);
-        
+
         let result = ExportResult {
             export_id: export_request.export_id,
             status: ExportStatus::Completed,
@@ -598,56 +646,63 @@ impl ReportingManager {
             error_message: None,
             completed_at: Utc::now(),
         };
-        
+
         // Store export record
         self.store_export_result(&result).await?;
-        
+
         Ok(result)
     }
-    
+
     /// Get system health status
     pub async fn get_system_health(&self) -> ReportingSystemHealth {
         self.system_health.read().await.clone()
     }
-    
+
     /// Get collection statistics
     pub async fn get_collection_statistics(&self) -> ReportingResult<CollectionStatistics> {
         self.data_collector.get_collection_statistics().await
     }
-    
+
     /// Collect analytics data for request
-    async fn collect_analytics_data(&self, request: &AnalyticsRequest) -> ReportingResult<Vec<AnalyticsDataPoint>> {
+    async fn collect_analytics_data(
+        &self,
+        request: &AnalyticsRequest,
+    ) -> ReportingResult<Vec<AnalyticsDataPoint>> {
         let mut analytics_data = Vec::new();
-        
+
         // Get data for each requested category
         if let Some(categories) = &request.categories {
             for category in categories {
-                let category_data = self.data_collector.get_analytics_data(
-                    Some(category.clone()),
-                    None,
-                    request.time_period.clone(),
-                    Some(1000),
-                ).await?;
+                let category_data = self
+                    .data_collector
+                    .get_analytics_data(
+                        Some(category.clone()),
+                        None,
+                        request.time_period.clone(),
+                        Some(1000),
+                    )
+                    .await?;
                 analytics_data.extend(category_data);
             }
         } else {
             // Get all data for time period
-            let all_data = self.data_collector.get_analytics_data(
-                None,
-                None,
-                request.time_period.clone(),
-                Some(5000),
-            ).await?;
+            let all_data = self
+                .data_collector
+                .get_analytics_data(None, None, request.time_period.clone(), Some(5000))
+                .await?;
             analytics_data.extend(all_data);
         }
-        
+
         Ok(analytics_data)
     }
-    
+
     /// Generate predictions for request
-    async fn generate_predictions(&self, request: &AnalyticsRequest) -> ReportingResult<Vec<ForecastResult>> {
+    async fn generate_predictions(
+        &self,
+        request: &AnalyticsRequest,
+    ) -> ReportingResult<Vec<ForecastResult>> {
         let mut predictions = Vec::new();
-        
+
         let forecast_horizon = match request.time_period {
             TimeWindow::LastHour => Duration::hours(24),
             TimeWindow::Last24Hours => Duration::days(7),
@@ -655,48 +710,60 @@ impl ReportingManager {
             TimeWindow::Last30Days => Duration::days(90),
             _ => Duration::days(30),
         };
-        
+
         if let Some(metrics) = &request.metrics {
             for metric in metrics {
-                let forecast = self.predictive_analytics.generate_forecast(
-                    metric.clone(),
-                    forecast_horizon,
-                    vec![0.8, 0.9, 0.95],
-                ).await?;
+                let forecast = self
+                    .predictive_analytics
+                    .generate_forecast(metric.clone(), forecast_horizon, vec![0.8, 0.9, 0.95])
+                    .await?;
                 predictions.push(forecast);
             }
         }
-        
+
         Ok(predictions)
     }
-    
+
     /// Generate impact assessments
-    async fn generate_impact_assessments(&self, predictions: &[ForecastResult]) -> ReportingResult<Vec<BusinessImpactAssessment>> {
+    async fn generate_impact_assessments(
+        &self,
+        predictions: &[ForecastResult],
+    ) -> ReportingResult<Vec<BusinessImpactAssessment>> {
         let mut assessments = Vec::new();
-        
+
         for prediction in predictions {
-            let assessment = self.predictive_analytics.generate_business_impact_assessment(
-                prediction,
-                "revenue".to_string(), // Would determine appropriate business metric
-            ).await?;
+            let assessment = self
+                .predictive_analytics
+                .generate_business_impact_assessment(
+                    prediction,
+                    "revenue".to_string(), // Would determine appropriate business metric
+                )
+                .await?;
             assessments.push(assessment);
         }
-        
+
         Ok(assessments)
     }
-    
+
     /// Generate scenario analysis
-    async fn generate_scenario_analysis(&self, request: &AnalyticsRequest) -> ReportingResult<ScenarioAnalysis> {
-        let metric_name = request.metrics.as_ref()
+    async fn generate_scenario_analysis(
+        &self,
+        request: &AnalyticsRequest,
+    ) -> ReportingResult<ScenarioAnalysis> {
+        let metric_name = request
+            .metrics
+            .as_ref()
             .and_then(|m| m.first())
             .unwrap_or(&"default_metric".to_string())
             .clone();
-        
+
         let scenarios = HashMap::new(); // Would build scenarios based on request
-        
-        self.predictive_analytics.perform_scenario_analysis(metric_name, scenarios).await
+
+        self.predictive_analytics
+            .perform_scenario_analysis(metric_name, scenarios)
+            .await
     }
-    
+
     /// Generate reports for request
     async fn generate_reports(
         &self,
@@ -705,7 +772,7 @@ impl ReportingManager {
         _insights: &[BusinessInsight],
     ) -> ReportingResult<Vec<Uuid>> {
         let mut generated_reports = Vec::new();
-        
+
         for output_format in &request.output_formats {
             let report_definition = ReportDefinition {
                 report_id: Uuid::new_v4(),
@@ -722,37 +789,52 @@ impl ReportingManager {
                 created_at: Utc::now(),
                 is_active: true,
             };
-            
+
             let report_request = super::report_generation::ReportRequest {
                 definition: report_definition,
                 priority: Some(super::report_generation::TaskPriority::Normal),
                 requested_by: request.requested_by,
             };
-            
-            let report_id = self.report_generation.generate_report(report_request).await?;
+
+            let report_id = self
+                .report_generation
+                .generate_report(report_request)
+                .await?;
             generated_reports.push(report_id);
         }
-        
+
         Ok(generated_reports)
     }
-    
+
     /// Collect data for export
-    async fn collect_export_data(&self, selection: &DataSelection) -> ReportingResult<Vec<AnalyticsDataPoint>> {
-        self.data_collector.get_analytics_data(
-            selection.categories.as_ref().and_then(|c| c.first().cloned()),
-            selection.metrics.as_ref().and_then(|m| m.first().cloned()),
-            selection.time_range.clone(),
-            None,
-        ).await
+    async fn collect_export_data(
+        &self,
+        selection: &DataSelection,
+    ) -> ReportingResult<Vec<AnalyticsDataPoint>> {
+        self.data_collector
+            .get_analytics_data(
+                selection
+                    .categories
+                    .as_ref()
+                    .and_then(|c| c.first().cloned()),
+                selection.metrics.as_ref().and_then(|m| m.first().cloned()),
+                selection.time_range.clone(),
+                None,
+            )
+            .await
     }
-    
+
     /// Format export data
-    async fn format_export_data(&self, data: &[AnalyticsDataPoint], format: &OutputFormat) -> ReportingResult<Vec<u8>> {
+    async fn format_export_data(
+        &self,
+        data: &[AnalyticsDataPoint],
+        format: &OutputFormat,
+    ) -> ReportingResult<Vec<u8>> {
         match format {
             OutputFormat::JSON => {
                 let json_data = serde_json::to_string_pretty(data)?;
                 Ok(json_data.into_bytes())
-            },
+            }
             OutputFormat::CSV => {
                 let mut csv_content = String::from("id,timestamp,category,metric_name,value\n");
                 for point in data {
@@ -766,34 +848,41 @@ impl ReportingManager {
                     ));
                 }
                 Ok(csv_content.into_bytes())
-            },
+            }
             _ => Err(ReportingError::ExportFailed {
                 format: format.clone(),
                 reason: "Unsupported export format".to_string(),
-            })
+            }),
         }
     }
-    
+
     /// Compress data
     async fn compress_data(&self, data: &[u8]) -> ReportingResult<Vec<u8>> {
-        use flate2::Compression;
         use flate2::write::GzEncoder;
+        use flate2::Compression;
         use std::io::Write;
-        
+
         let mut encoder = GzEncoder::new(Vec::new(), Compression::default());
-        encoder.write_all(data).map_err(|e| ReportingError::IoError(e))?;
+        encoder
+            .write_all(data)
+            .map_err(|e| ReportingError::IoError(e))?;
         encoder.finish().map_err(|e| ReportingError::IoError(e))
     }
-    
+
     /// Encrypt data
     async fn encrypt_data(&self, data: &[u8]) -> ReportingResult<Vec<u8>> {
         // Simplified encryption - would use proper encryption in production
         Ok(data.to_vec())
     }
-    
+
     /// Save export data to destination
-    async fn save_export_data(&self, request: &ExportRequest, data: &[u8]) -> ReportingResult<String> {
-        let file_name = format!("export_{}_{}.{}", 
+    async fn save_export_data(
+        &self,
+        request: &ExportRequest,
+        data: &[u8],
+    ) -> ReportingResult<String> {
+        let file_name = format!(
+            "export_{}_{}.{}",
             request.export_id,
             Utc::now().format("%Y%m%d_%H%M%S"),
             match request.output_format {
@@ -802,14 +891,15 @@ impl ReportingManager {
                 _ => "bin",
             }
         );
-        
+
         let file_path = match &request.destination.destination_type {
             DestinationType::Local => {
                 let path = format!("/var/exports/{}", file_name);
-                tokio::fs::write(&path, data).await
+                tokio::fs::write(&path, data)
+                    .await
                     .map_err(|e| ReportingError::IoError(e))?;
                 path
-            },
+            }
             _ => {
                 return Err(ReportingError::ExportFailed {
                     format: request.output_format.clone(),
@@ -817,21 +907,23 @@ impl ReportingManager {
                 });
             }
         };
-        
+
         Ok(file_path)
     }
-    
+
     /// Store export result in database
     async fn store_export_result(&self, result: &ExportResult) -> ReportingResult<()> {
         let pool_ref = self.database.get_pool()?;
         let pool = pool_ref.as_postgres_pool()?;
-        
-        sqlx::query(r#"
+
+        sqlx::query(
+            r#"
             UPDATE export_requests 
             SET status = $1, file_path = $2, file_size_bytes = $3, records_exported = $4,
                 compression_ratio = $5, export_time_ms = $6, completed_at = $7
             WHERE export_id = $8
-        "#)
+        "#,
+        )
         .bind(&format!("{:?}", result.status))
         .bind(&result.file_path)
         .bind(result.file_size_bytes as i64)
@@ -840,48 +932,57 @@ impl ReportingManager {
         .bind(result.export_time_ms as i64)
         .bind(&result.completed_at)
         .bind(&result.export_id)
-        .execute(pool).await?;
-        
+        .execute(pool)
+        .await?;
+
         Ok(())
     }
-    
+
     /// Start backup task
     async fn start_backup_task(&self) {
         let interval_hours = self.config.backup_interval_hours;
-        
+
         tokio::spawn(async move {
-            let mut interval = tokio::time::interval(
-                std::time::Duration::from_secs(interval_hours as u64 * 3600)
-            );
-            
+            let mut interval =
+                tokio::time::interval(std::time::Duration::from_secs(interval_hours as u64 * 3600));
+
             loop {
                 interval.tick().await;
-                
+
                 // Perform backup
                 tracing::info!("Starting reporting system backup...");
                 // Would implement actual backup logic
             }
         });
     }
-    
+
     /// Start performance monitoring
     async fn start_performance_monitoring(&self) {
         let metrics_collector = self.metrics_collector.clone();
-        
+
         tokio::spawn(async move {
             let mut interval = tokio::time::interval(std::time::Duration::from_secs(60));
-            
+
             loop {
                 interval.tick().await;
-                
+
                 // Collect performance metrics
-                if let Err(e) = metrics_collector.record_gauge("reporting_memory_usage_mb", 512.0, HashMap::new()).await {
+                if let Err(e) = metrics_collector
+                    .record_gauge("reporting_memory_usage_mb", 512.0, HashMap::new())
+                    .await
+                {
                     tracing::error!("Failed to record memory usage metric: {}", e);
                 }
-                if let Err(e) = metrics_collector.record_gauge("reporting_cpu_usage_percent", 15.5, HashMap::new()).await {
+                if let Err(e) = metrics_collector
+                    .record_gauge("reporting_cpu_usage_percent", 15.5, HashMap::new())
+                    .await
+                {
                     tracing::error!("Failed to record CPU usage metric: {}", e);
                 }
-                if let Err(e) = metrics_collector.record_gauge("reporting_active_requests", 25.0, HashMap::new()).await {
+                if let Err(e) = metrics_collector
+                    .record_gauge("reporting_active_requests", 25.0, HashMap::new())
+                    .await
+                {
                     tracing::error!("Failed to record active requests metric: {}", e);
                 }
             }

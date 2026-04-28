@@ -11,16 +11,16 @@ use axum::{
     routing::{get, post},
     Router,
 };
-use tower_http::cors::{CorsLayer, Any};
 use serde::{Deserialize, Serialize};
 use std::sync::Arc;
 use std::time::{SystemTime, UNIX_EPOCH};
+use tower_http::cors::{Any, CorsLayer};
 use tracing::{debug, error, info, warn};
 use uuid::Uuid;
 
-use crate::database::DatabaseAdmin;
 use crate::database::multi_backend::DatabaseConnection;
-use crate::region::terrain_storage::{TerrainStorage, TerrainRevision};
+use crate::database::DatabaseAdmin;
+use crate::region::terrain_storage::{TerrainRevision, TerrainStorage};
 
 #[derive(Clone)]
 pub struct ConsoleApiState {
@@ -110,7 +110,10 @@ pub fn create_console_api_router() -> Router<ConsoleApiState> {
         .route("/console/info", get(server_info_endpoint))
         .route("/console/regions", get(list_regions_endpoint))
         .route("/console/regions/:name", get(show_region_endpoint))
-        .route("/console/regions/:name/restart", post(restart_region_endpoint))
+        .route(
+            "/console/regions/:name/restart",
+            post(restart_region_endpoint),
+        )
         .route("/console/terrain/stats", get(terrain_stats_endpoint))
         .route("/console/terrain/load", post(terrain_load_endpoint))
         .route("/console/terrain/save", post(terrain_save_endpoint))
@@ -130,13 +133,25 @@ pub fn create_console_api_router() -> Router<ConsoleApiState> {
         .route("/console/scene/translate", post(translate_scene_endpoint))
         .route("/console/scene/force-update", post(force_update_endpoint))
         .route("/console/estates/create", post(estate_create_endpoint))
-        .route("/console/estates/set-owner", post(estate_set_owner_endpoint))
+        .route(
+            "/console/estates/set-owner",
+            post(estate_set_owner_endpoint),
+        )
         .route("/console/estates/set-name", post(estate_set_name_endpoint))
-        .route("/console/estates/link-region", post(estate_link_region_endpoint))
+        .route(
+            "/console/estates/link-region",
+            post(estate_link_region_endpoint),
+        )
         .route("/console/hypergrid/link", post(hypergrid_link_endpoint))
         .route("/console/hypergrid/unlink", post(hypergrid_unlink_endpoint))
-        .route("/console/hypergrid/links", get(hypergrid_show_links_endpoint))
-        .route("/console/hypergrid/mapping", post(hypergrid_mapping_endpoint))
+        .route(
+            "/console/hypergrid/links",
+            get(hypergrid_show_links_endpoint),
+        )
+        .route(
+            "/console/hypergrid/mapping",
+            post(hypergrid_mapping_endpoint),
+        )
         .route("/console/assets/show", post(show_asset_endpoint))
         .route("/console/assets/dump", post(dump_asset_endpoint))
         .route("/console/assets/delete", post(delete_asset_endpoint))
@@ -152,8 +167,14 @@ pub fn create_console_api_router() -> Router<ConsoleApiState> {
         .route("/console/regions/neighbours", get(show_neighbours_endpoint))
         .route("/console/regions/inview", get(show_regions_inview_endpoint))
         .route("/console/regions/change", post(change_region_endpoint))
-        .route("/console/terrain/load-tile", post(terrain_load_tile_endpoint))
-        .route("/console/terrain/save-tile", post(terrain_save_tile_endpoint))
+        .route(
+            "/console/terrain/load-tile",
+            post(terrain_load_tile_endpoint),
+        )
+        .route(
+            "/console/terrain/save-tile",
+            post(terrain_save_tile_endpoint),
+        )
         .route("/console/terrain/elevate", post(terrain_elevate_endpoint))
         .route("/console/terrain/lower", post(terrain_lower_endpoint))
         .route("/console/terrain/multiply", post(terrain_multiply_endpoint))
@@ -168,26 +189,44 @@ pub fn create_console_api_router() -> Router<ConsoleApiState> {
         .route("/console/terrain/modify", post(terrain_modify_endpoint))
         .route("/console/general/quit", post(quit_endpoint))
         .route("/console/general/modules", get(show_modules_endpoint))
-        .route("/console/general/command-script", post(command_script_endpoint))
+        .route(
+            "/console/general/command-script",
+            post(command_script_endpoint),
+        )
         .route("/console/config/show", get(config_show_endpoint))
         .route("/console/config/get", post(config_get_endpoint))
         .route("/console/config/set", post(config_set_endpoint))
         .route("/console/log/level", post(set_log_level_endpoint))
         .route("/console/general/force-gc", post(force_gc_endpoint))
         .route("/console/users/grid-user", post(show_grid_user_endpoint))
-        .route("/console/users/grid-users-online", get(show_grid_users_online_endpoint))
-        .route("/console/fcache/clearnegatives", post(fcache_clearnegatives_endpoint))
-        .route("/console/fcache/cachedefaultassets", post(fcache_cachedefaultassets_endpoint))
-        .route("/console/fcache/deletedefaultassets", post(fcache_deletedefaultassets_endpoint))
+        .route(
+            "/console/users/grid-users-online",
+            get(show_grid_users_online_endpoint),
+        )
+        .route(
+            "/console/fcache/clearnegatives",
+            post(fcache_clearnegatives_endpoint),
+        )
+        .route(
+            "/console/fcache/cachedefaultassets",
+            post(fcache_cachedefaultassets_endpoint),
+        )
+        .route(
+            "/console/fcache/deletedefaultassets",
+            post(fcache_deletedefaultassets_endpoint),
+        )
         .route("/console/parts/show", post(show_part_endpoint))
         .route("/console/objects/dump", post(dump_object_endpoint))
         .route("/console/objects/edit-scale", post(edit_scale_endpoint))
-        .route("/console/comms/pending-objects", get(show_pending_objects_endpoint))
+        .route(
+            "/console/comms/pending-objects",
+            get(show_pending_objects_endpoint),
+        )
         .layer(
             CorsLayer::new()
                 .allow_origin(Any)
                 .allow_methods(Any)
-                .allow_headers(Any)
+                .allow_headers(Any),
         )
 }
 
@@ -200,7 +239,10 @@ async fn execute_command_endpoint(
     State(state): State<ConsoleApiState>,
     Json(request): Json<ConsoleCommandRequest>,
 ) -> impl IntoResponse {
-    info!("Console API: Executing command {} in group {}", request.command, request.group);
+    info!(
+        "Console API: Executing command {} in group {}",
+        request.command, request.group
+    );
 
     let result = match (request.group.as_str(), request.command.as_str()) {
         ("general", "show info") => execute_show_info(&state).await,
@@ -224,7 +266,9 @@ async fn execute_command_endpoint(
         ("objects", "delete object name") => execute_delete_object("name", &request.params).await,
         ("objects", "delete object owner") => execute_delete_object("owner", &request.params).await,
         ("objects", "delete object pos") => execute_delete_object("pos", &request.params).await,
-        ("objects", "delete object outside") => execute_delete_object("outside", &request.params).await,
+        ("objects", "delete object outside") => {
+            execute_delete_object("outside", &request.params).await
+        }
         ("objects", "backup") => execute_backup().await,
         ("objects", "rotate scene") => execute_rotate_scene(&request.params).await,
         ("objects", "scale scene") => execute_scale_scene(&request.params).await,
@@ -263,12 +307,27 @@ async fn execute_command_endpoint(
         ("terrain", "terrain save") => execute_terrain_save(&request.params).await,
         ("terrain", "terrain save-tile") => execute_terrain_save_tile(&request.params).await,
         ("terrain", "terrain fill") => execute_terrain_fill(&request.params).await,
-        ("terrain", "terrain elevate") => ConsoleCommandResponse::error("Use /console/terrain/elevate endpoint", "POST with {amount, region}"),
-        ("terrain", "terrain lower") => ConsoleCommandResponse::error("Use /console/terrain/lower endpoint", "POST with {amount, region}"),
-        ("terrain", "terrain multiply") => ConsoleCommandResponse::error("Use /console/terrain/multiply endpoint", "POST with {factor, region}"),
-        ("terrain", "terrain bake") => ConsoleCommandResponse::error("Use /console/terrain/bake endpoint", "POST"),
-        ("terrain", "terrain revert") => ConsoleCommandResponse::error("Use /console/terrain/revert endpoint", "POST"),
-        ("terrain", "terrain show") => ConsoleCommandResponse::error("Use /console/terrain/show endpoint", "GET"),
+        ("terrain", "terrain elevate") => ConsoleCommandResponse::error(
+            "Use /console/terrain/elevate endpoint",
+            "POST with {amount, region}",
+        ),
+        ("terrain", "terrain lower") => ConsoleCommandResponse::error(
+            "Use /console/terrain/lower endpoint",
+            "POST with {amount, region}",
+        ),
+        ("terrain", "terrain multiply") => ConsoleCommandResponse::error(
+            "Use /console/terrain/multiply endpoint",
+            "POST with {factor, region}",
+        ),
+        ("terrain", "terrain bake") => {
+            ConsoleCommandResponse::error("Use /console/terrain/bake endpoint", "POST")
+        }
+        ("terrain", "terrain revert") => {
+            ConsoleCommandResponse::error("Use /console/terrain/revert endpoint", "POST")
+        }
+        ("terrain", "terrain show") => {
+            ConsoleCommandResponse::error("Use /console/terrain/show endpoint", "GET")
+        }
         ("terrain", "terrain effect") => execute_terrain_effect(&request.params).await,
         ("terrain", "terrain flip") => execute_terrain_flip(&request.params).await,
         ("terrain", "terrain rescale") => execute_terrain_rescale(&request.params).await,
@@ -297,19 +356,24 @@ async fn execute_command_endpoint(
         ("comms", "show pending-objects") => execute_show_pending_objects().await,
         _ => ConsoleCommandResponse::error(
             "Command not implemented",
-            format!("Command '{}' in group '{}' is not yet implemented", request.command, request.group)
+            format!(
+                "Command '{}' in group '{}' is not yet implemented",
+                request.command, request.group
+            ),
         ),
     };
 
     (
-        if result.success { StatusCode::OK } else { StatusCode::BAD_REQUEST },
-        Json(result)
+        if result.success {
+            StatusCode::OK
+        } else {
+            StatusCode::BAD_REQUEST
+        },
+        Json(result),
     )
 }
 
-async fn server_info_endpoint(
-    State(state): State<ConsoleApiState>,
-) -> impl IntoResponse {
+async fn server_info_endpoint(State(state): State<ConsoleApiState>) -> impl IntoResponse {
     let user_count = match state.db_admin.list_users(None).await {
         Ok(result) => {
             if let Some(data) = result.data {
@@ -317,7 +381,7 @@ async fn server_info_endpoint(
             } else {
                 0
             }
-        },
+        }
         Err(_) => 0,
     };
 
@@ -332,9 +396,7 @@ async fn server_info_endpoint(
     Json(info)
 }
 
-async fn list_regions_endpoint(
-    State(state): State<ConsoleApiState>,
-) -> impl IntoResponse {
+async fn list_regions_endpoint(State(state): State<ConsoleApiState>) -> impl IntoResponse {
     match state.db_admin.list_regions(Some(100)).await {
         Ok(result) => {
             if let Some(data) = &result.data {
@@ -354,21 +416,19 @@ async fn list_regions_endpoint(
                         .collect();
                     return Json(ConsoleCommandResponse::success(
                         "Regions listed",
-                        Some(serde_json::json!({ "regions": mapped }))
+                        Some(serde_json::json!({ "regions": mapped })),
                     ));
                 }
             }
             Json(ConsoleCommandResponse::success(
                 "Regions listed",
-                Some(serde_json::json!({ "regions": [] }))
+                Some(serde_json::json!({ "regions": [] })),
             ))
         }
-        Err(_) => {
-            Json(ConsoleCommandResponse::success(
-                "Regions listed",
-                Some(serde_json::json!({ "regions": [] }))
-            ))
-        }
+        Err(_) => Json(ConsoleCommandResponse::success(
+            "Regions listed",
+            Some(serde_json::json!({ "regions": [] })),
+        )),
     }
 }
 
@@ -392,7 +452,7 @@ async fn show_region_endpoint(
             "agents": 0,
             "objects": 0,
             "scripts": 0
-        }))
+        })),
     ))
 }
 
@@ -403,11 +463,14 @@ async fn restart_region_endpoint(
     info!("Console API: Restart region '{}'", params.name);
     Json(ConsoleCommandResponse::success(
         format!("Region '{}' restart initiated", params.name),
-        None
+        None,
     ))
 }
 
-async fn get_region_uuids(state: &ConsoleApiState, region_name: Option<&str>) -> Result<Vec<(Uuid, String)>> {
+async fn get_region_uuids(
+    state: &ConsoleApiState,
+    region_name: Option<&str>,
+) -> Result<Vec<(Uuid, String)>> {
     match state.db_admin.list_regions(Some(500)).await {
         Ok(result) => {
             if let Some(data) = &result.data {
@@ -435,17 +498,25 @@ async fn get_region_uuids(state: &ConsoleApiState, region_name: Option<&str>) ->
     }
 }
 
-async fn terrain_stats_endpoint(
-    State(state): State<ConsoleApiState>,
-) -> impl IntoResponse {
+async fn terrain_stats_endpoint(State(state): State<ConsoleApiState>) -> impl IntoResponse {
     let conn = match &state.db_connection {
         Some(c) => c.clone(),
-        None => return Json(ConsoleCommandResponse::error("No database connection", "Database not available")),
+        None => {
+            return Json(ConsoleCommandResponse::error(
+                "No database connection",
+                "Database not available",
+            ))
+        }
     };
     let storage = TerrainStorage::new(conn);
     let regions = match get_region_uuids(&state, None).await {
         Ok(r) => r,
-        Err(e) => return Json(ConsoleCommandResponse::error("Failed to list regions", &e.to_string())),
+        Err(e) => {
+            return Json(ConsoleCommandResponse::error(
+                "Failed to list regions",
+                &e.to_string(),
+            ))
+        }
     };
 
     let mut region_stats = Vec::new();
@@ -468,7 +539,7 @@ async fn terrain_stats_endpoint(
 
     Json(ConsoleCommandResponse::success(
         format!("Terrain statistics for {} regions", region_stats.len()),
-        Some(serde_json::json!({ "regions": region_stats }))
+        Some(serde_json::json!({ "regions": region_stats })),
     ))
 }
 
@@ -484,7 +555,7 @@ async fn terrain_load_endpoint(
     info!("Console API: Load terrain from '{}'", request.filename);
     Json(ConsoleCommandResponse::error(
         "Terrain load not implemented",
-        "Terrain loading from file not yet implemented"
+        "Terrain loading from file not yet implemented",
     ))
 }
 
@@ -500,7 +571,7 @@ async fn terrain_save_endpoint(
     info!("Console API: Save terrain to '{}'", request.filename);
     Json(ConsoleCommandResponse::error(
         "Terrain save not implemented",
-        "Terrain saving to file not yet implemented"
+        "Terrain saving to file not yet implemented",
     ))
 }
 
@@ -518,52 +589,78 @@ async fn terrain_fill_endpoint(
     info!("Console API: Fill terrain with height {}", request.height);
     let conn = match &state.db_connection {
         Some(c) => c.clone(),
-        None => return Json(ConsoleCommandResponse::error("No database connection", "Database not available")),
+        None => {
+            return Json(ConsoleCommandResponse::error(
+                "No database connection",
+                "Database not available",
+            ))
+        }
     };
     let storage = TerrainStorage::new(conn);
     let regions = match get_region_uuids(&state, request.region.as_deref()).await {
         Ok(r) => r,
-        Err(e) => return Json(ConsoleCommandResponse::error("Failed to list regions", &e.to_string())),
+        Err(e) => {
+            return Json(ConsoleCommandResponse::error(
+                "Failed to list regions",
+                &e.to_string(),
+            ))
+        }
     };
     if regions.is_empty() {
-        return Json(ConsoleCommandResponse::error("No matching regions found", "Specify a valid region name filter"));
+        return Json(ConsoleCommandResponse::error(
+            "No matching regions found",
+            "Specify a valid region name filter",
+        ));
     }
 
     let mut modified = 0;
     for (uuid, name) in &regions {
         if let Ok(Some(heightmap)) = storage.load_terrain(*uuid).await {
             let new_heightmap: Vec<f32> = vec![request.height; heightmap.len()];
-            if let Err(e) = storage.store_terrain(*uuid, &new_heightmap, TerrainRevision::Variable2D).await {
+            if let Err(e) = storage
+                .store_terrain(*uuid, &new_heightmap, TerrainRevision::Variable2D)
+                .await
+            {
                 warn!("Failed to store terrain for {}: {}", name, e);
                 continue;
             }
-            info!("[TERRAIN] Filled region '{}' to height {}", name, request.height);
+            info!(
+                "[TERRAIN] Filled region '{}' to height {}",
+                name, request.height
+            );
             modified += 1;
         } else {
             let side: usize = 256;
             let new_heightmap: Vec<f32> = vec![request.height; side * side];
-            if let Err(e) = storage.store_terrain(*uuid, &new_heightmap, TerrainRevision::Variable2D).await {
+            if let Err(e) = storage
+                .store_terrain(*uuid, &new_heightmap, TerrainRevision::Variable2D)
+                .await
+            {
                 warn!("Failed to store terrain for {}: {}", name, e);
                 continue;
             }
-            info!("[TERRAIN] Created and filled region '{}' to height {}", name, request.height);
+            info!(
+                "[TERRAIN] Created and filled region '{}' to height {}",
+                name, request.height
+            );
             modified += 1;
         }
     }
 
     Json(ConsoleCommandResponse::success(
-        format!("Terrain filled to {} in {} regions (restart server to apply)", request.height, modified),
-        Some(serde_json::json!({ "height": request.height, "regions_modified": modified }))
+        format!(
+            "Terrain filled to {} in {} regions (restart server to apply)",
+            request.height, modified
+        ),
+        Some(serde_json::json!({ "height": request.height, "regions_modified": modified })),
     ))
 }
 
-async fn shutdown_endpoint(
-    State(_state): State<ConsoleApiState>,
-) -> impl IntoResponse {
+async fn shutdown_endpoint(State(_state): State<ConsoleApiState>) -> impl IntoResponse {
     warn!("Console API: Shutdown requested");
     Json(ConsoleCommandResponse::error(
         "Shutdown disabled",
-        "Server shutdown via API is disabled for safety"
+        "Server shutdown via API is disabled for safety",
     ))
 }
 
@@ -578,16 +675,24 @@ async fn kick_user_endpoint(
     State(_state): State<ConsoleApiState>,
     Json(request): Json<KickUserRequest>,
 ) -> impl IntoResponse {
-    info!("Console API: Kick user {} {}", request.firstname, request.lastname);
-    let message = request.message.unwrap_or_else(|| "You have been kicked".to_string());
+    info!(
+        "Console API: Kick user {} {}",
+        request.firstname, request.lastname
+    );
+    let message = request
+        .message
+        .unwrap_or_else(|| "You have been kicked".to_string());
     Json(ConsoleCommandResponse::success(
-        format!("Kick request sent for {} {} with message: {}", request.firstname, request.lastname, message),
+        format!(
+            "Kick request sent for {} {} with message: {}",
+            request.firstname, request.lastname, message
+        ),
         Some(serde_json::json!({
             "firstname": request.firstname,
             "lastname": request.lastname,
             "message": message,
             "status": "pending"
-        }))
+        })),
     ))
 }
 
@@ -612,13 +717,11 @@ async fn login_level_endpoint(
         Some(serde_json::json!({
             "level": request.level,
             "description": level_desc
-        }))
+        })),
     ))
 }
 
-async fn login_reset_endpoint(
-    State(_state): State<ConsoleApiState>,
-) -> impl IntoResponse {
+async fn login_reset_endpoint(State(_state): State<ConsoleApiState>) -> impl IntoResponse {
     info!("Console API: Reset login restrictions");
     Json(ConsoleCommandResponse::success(
         "Login restrictions reset - all users can now login",
@@ -626,7 +729,7 @@ async fn login_reset_endpoint(
             "level": 0,
             "text": null,
             "status": "reset"
-        }))
+        })),
     ))
 }
 
@@ -644,33 +747,29 @@ async fn login_text_endpoint(
         format!("Login message set: {}", request.message),
         Some(serde_json::json!({
             "message": request.message
-        }))
+        })),
     ))
 }
 
-async fn show_connections_endpoint(
-    State(_state): State<ConsoleApiState>,
-) -> impl IntoResponse {
+async fn show_connections_endpoint(State(_state): State<ConsoleApiState>) -> impl IntoResponse {
     Json(ConsoleCommandResponse::success(
         "Active connections",
         Some(serde_json::json!({
             "connections": [],
             "total": 0,
             "note": "Connection tracking requires session manager integration"
-        }))
+        })),
     ))
 }
 
-async fn show_circuits_endpoint(
-    State(_state): State<ConsoleApiState>,
-) -> impl IntoResponse {
+async fn show_circuits_endpoint(State(_state): State<ConsoleApiState>) -> impl IntoResponse {
     Json(ConsoleCommandResponse::success(
         "Active circuits",
         Some(serde_json::json!({
             "circuits": [],
             "total": 0,
             "note": "Circuit tracking requires UDP server integration"
-        }))
+        })),
     ))
 }
 
@@ -685,7 +784,10 @@ async fn show_object_endpoint(
     State(_state): State<ConsoleApiState>,
     Json(request): Json<ShowObjectRequest>,
 ) -> impl IntoResponse {
-    info!("Console API: Show object by {} = {}", request.by, request.value);
+    info!(
+        "Console API: Show object by {} = {}",
+        request.by, request.value
+    );
     let full = request.full.unwrap_or(false);
     Json(ConsoleCommandResponse::success(
         format!("Object lookup by {}", request.by),
@@ -696,7 +798,7 @@ async fn show_object_endpoint(
             "objects": [],
             "total": 0,
             "note": "Object queries require region scene access"
-        }))
+        })),
     ))
 }
 
@@ -710,7 +812,10 @@ async fn delete_object_endpoint(
     State(_state): State<ConsoleApiState>,
     Json(request): Json<DeleteObjectRequest>,
 ) -> impl IntoResponse {
-    info!("Console API: Delete object by {} = {}", request.by, request.value);
+    info!(
+        "Console API: Delete object by {} = {}",
+        request.by, request.value
+    );
     Json(ConsoleCommandResponse::success(
         format!("Delete request for objects by {}", request.by),
         Some(serde_json::json!({
@@ -718,20 +823,18 @@ async fn delete_object_endpoint(
             "value": request.value,
             "deleted": 0,
             "note": "Object deletion requires region scene access"
-        }))
+        })),
     ))
 }
 
-async fn backup_endpoint(
-    State(_state): State<ConsoleApiState>,
-) -> impl IntoResponse {
+async fn backup_endpoint(State(_state): State<ConsoleApiState>) -> impl IntoResponse {
     info!("Console API: Backup requested");
     Json(ConsoleCommandResponse::success(
         "Backup initiated",
         Some(serde_json::json!({
             "status": "pending",
             "note": "Backup requires region persistence module"
-        }))
+        })),
     ))
 }
 
@@ -748,7 +851,10 @@ async fn rotate_scene_endpoint(
 ) -> impl IntoResponse {
     let cx = request.center_x.unwrap_or(128.0);
     let cy = request.center_y.unwrap_or(128.0);
-    info!("Console API: Rotate scene {} degrees around ({}, {})", request.degrees, cx, cy);
+    info!(
+        "Console API: Rotate scene {} degrees around ({}, {})",
+        request.degrees, cx, cy
+    );
     Json(ConsoleCommandResponse::success(
         format!("Rotate scene {} degrees", request.degrees),
         Some(serde_json::json!({
@@ -756,7 +862,7 @@ async fn rotate_scene_endpoint(
             "center_x": cx,
             "center_y": cy,
             "note": "Scene rotation requires region scene access"
-        }))
+        })),
     ))
 }
 
@@ -775,7 +881,7 @@ async fn scale_scene_endpoint(
         Some(serde_json::json!({
             "factor": request.factor,
             "note": "Scene scaling requires region scene access"
-        }))
+        })),
     ))
 }
 
@@ -790,28 +896,32 @@ async fn translate_scene_endpoint(
     State(_state): State<ConsoleApiState>,
     Json(request): Json<TranslateSceneRequest>,
 ) -> impl IntoResponse {
-    info!("Console API: Translate scene by ({}, {}, {})", request.x, request.y, request.z);
+    info!(
+        "Console API: Translate scene by ({}, {}, {})",
+        request.x, request.y, request.z
+    );
     Json(ConsoleCommandResponse::success(
-        format!("Translate scene by ({}, {}, {})", request.x, request.y, request.z),
+        format!(
+            "Translate scene by ({}, {}, {})",
+            request.x, request.y, request.z
+        ),
         Some(serde_json::json!({
             "x": request.x,
             "y": request.y,
             "z": request.z,
             "note": "Scene translation requires region scene access"
-        }))
+        })),
     ))
 }
 
-async fn force_update_endpoint(
-    State(_state): State<ConsoleApiState>,
-) -> impl IntoResponse {
+async fn force_update_endpoint(State(_state): State<ConsoleApiState>) -> impl IntoResponse {
     info!("Console API: Force update requested");
     Json(ConsoleCommandResponse::success(
         "Force update initiated",
         Some(serde_json::json!({
             "status": "completed",
             "note": "Force update requires region scene access"
-        }))
+        })),
     ))
 }
 
@@ -831,7 +941,7 @@ async fn estate_create_endpoint(
             "name": request.name,
             "estate_id": 1,
             "note": "Estate creation requires estate manager integration"
-        }))
+        })),
     ))
 }
 
@@ -846,14 +956,20 @@ async fn estate_set_owner_endpoint(
     State(_state): State<ConsoleApiState>,
     Json(request): Json<EstateSetOwnerRequest>,
 ) -> impl IntoResponse {
-    info!("Console API: Set estate '{}' owner to {} {}", request.estate, request.firstname, request.lastname);
+    info!(
+        "Console API: Set estate '{}' owner to {} {}",
+        request.estate, request.firstname, request.lastname
+    );
     Json(ConsoleCommandResponse::success(
-        format!("Estate '{}' owner set to {} {}", request.estate, request.firstname, request.lastname),
+        format!(
+            "Estate '{}' owner set to {} {}",
+            request.estate, request.firstname, request.lastname
+        ),
         Some(serde_json::json!({
             "estate": request.estate,
             "owner": format!("{} {}", request.firstname, request.lastname),
             "note": "Estate owner change requires estate manager integration"
-        }))
+        })),
     ))
 }
 
@@ -867,14 +983,20 @@ async fn estate_set_name_endpoint(
     State(_state): State<ConsoleApiState>,
     Json(request): Json<EstateSetNameRequest>,
 ) -> impl IntoResponse {
-    info!("Console API: Rename estate '{}' to '{}'", request.estate, request.new_name);
+    info!(
+        "Console API: Rename estate '{}' to '{}'",
+        request.estate, request.new_name
+    );
     Json(ConsoleCommandResponse::success(
-        format!("Estate '{}' renamed to '{}'", request.estate, request.new_name),
+        format!(
+            "Estate '{}' renamed to '{}'",
+            request.estate, request.new_name
+        ),
         Some(serde_json::json!({
             "old_name": request.estate,
             "new_name": request.new_name,
             "note": "Estate rename requires estate manager integration"
-        }))
+        })),
     ))
 }
 
@@ -888,14 +1010,20 @@ async fn estate_link_region_endpoint(
     State(_state): State<ConsoleApiState>,
     Json(request): Json<EstateLinkRegionRequest>,
 ) -> impl IntoResponse {
-    info!("Console API: Link region '{}' to estate '{}'", request.region, request.estate);
+    info!(
+        "Console API: Link region '{}' to estate '{}'",
+        request.region, request.estate
+    );
     Json(ConsoleCommandResponse::success(
-        format!("Region '{}' linked to estate '{}'", request.region, request.estate),
+        format!(
+            "Region '{}' linked to estate '{}'",
+            request.region, request.estate
+        ),
         Some(serde_json::json!({
             "estate": request.estate,
             "region": request.region,
             "note": "Estate-region linking requires estate manager integration"
-        }))
+        })),
     ))
 }
 
@@ -912,16 +1040,22 @@ async fn hypergrid_link_endpoint(
     Json(request): Json<HypergridLinkRequest>,
 ) -> impl IntoResponse {
     let name = request.name.unwrap_or_else(|| "Remote Region".to_string());
-    info!("Console API: Link region at ({},{}) to {} as '{}'", request.xloc, request.yloc, request.host, name);
+    info!(
+        "Console API: Link region at ({},{}) to {} as '{}'",
+        request.xloc, request.yloc, request.host, name
+    );
     Json(ConsoleCommandResponse::success(
-        format!("Hypergrid link created to {} at ({},{})", request.host, request.xloc, request.yloc),
+        format!(
+            "Hypergrid link created to {} at ({},{})",
+            request.host, request.xloc, request.yloc
+        ),
         Some(serde_json::json!({
             "xloc": request.xloc,
             "yloc": request.yloc,
             "host": request.host,
             "name": name,
             "note": "Hypergrid linking requires grid services integration"
-        }))
+        })),
     ))
 }
 
@@ -940,20 +1074,18 @@ async fn hypergrid_unlink_endpoint(
         Some(serde_json::json!({
             "name": request.name,
             "note": "Hypergrid unlinking requires grid services integration"
-        }))
+        })),
     ))
 }
 
-async fn hypergrid_show_links_endpoint(
-    State(_state): State<ConsoleApiState>,
-) -> impl IntoResponse {
+async fn hypergrid_show_links_endpoint(State(_state): State<ConsoleApiState>) -> impl IntoResponse {
     Json(ConsoleCommandResponse::success(
         "Hypergrid links",
         Some(serde_json::json!({
             "links": [],
             "total": 0,
             "note": "Hypergrid link listing requires grid services integration"
-        }))
+        })),
     ))
 }
 
@@ -967,14 +1099,17 @@ async fn hypergrid_mapping_endpoint(
     State(_state): State<ConsoleApiState>,
     Json(request): Json<HypergridMappingRequest>,
 ) -> impl IntoResponse {
-    info!("Console API: Set link mapping to ({},{})", request.x, request.y);
+    info!(
+        "Console API: Set link mapping to ({},{})",
+        request.x, request.y
+    );
     Json(ConsoleCommandResponse::success(
         format!("Link mapping set to ({},{})", request.x, request.y),
         Some(serde_json::json!({
             "x": request.x,
             "y": request.y,
             "note": "Link mapping requires grid services integration"
-        }))
+        })),
     ))
 }
 
@@ -993,7 +1128,7 @@ async fn show_asset_endpoint(
         Some(serde_json::json!({
             "uuid": request.uuid,
             "note": "Asset lookup requires asset manager integration"
-        }))
+        })),
     ))
 }
 
@@ -1007,14 +1142,17 @@ async fn dump_asset_endpoint(
     State(_state): State<ConsoleApiState>,
     Json(request): Json<DumpAssetRequest>,
 ) -> impl IntoResponse {
-    info!("Console API: Dump asset {} to {:?}", request.uuid, request.filename);
+    info!(
+        "Console API: Dump asset {} to {:?}",
+        request.uuid, request.filename
+    );
     Json(ConsoleCommandResponse::success(
         format!("Dumping asset {}", request.uuid),
         Some(serde_json::json!({
             "uuid": request.uuid,
             "filename": request.filename,
             "note": "Asset dump requires asset manager and file system access"
-        }))
+        })),
     ))
 }
 
@@ -1030,13 +1168,11 @@ async fn delete_asset_endpoint(
     info!("Console API: Delete asset {}", request.uuid);
     Json(ConsoleCommandResponse::error(
         "Asset deletion disabled",
-        "Direct asset deletion is disabled for safety"
+        "Direct asset deletion is disabled for safety",
     ))
 }
 
-async fn fcache_status_endpoint(
-    State(_state): State<ConsoleApiState>,
-) -> impl IntoResponse {
+async fn fcache_status_endpoint(State(_state): State<ConsoleApiState>) -> impl IntoResponse {
     Json(ConsoleCommandResponse::success(
         "Asset cache status",
         Some(serde_json::json!({
@@ -1050,7 +1186,7 @@ async fn fcache_status_endpoint(
                 "size_mb": 0
             },
             "note": "Cache status requires asset cache integration"
-        }))
+        })),
     ))
 }
 
@@ -1071,20 +1207,18 @@ async fn fcache_clear_endpoint(
             "target": target,
             "cleared": true,
             "note": "Cache clearing requires asset cache integration"
-        }))
+        })),
     ))
 }
 
-async fn fcache_assets_endpoint(
-    State(_state): State<ConsoleApiState>,
-) -> impl IntoResponse {
+async fn fcache_assets_endpoint(State(_state): State<ConsoleApiState>) -> impl IntoResponse {
     Json(ConsoleCommandResponse::success(
         "Cached assets",
         Some(serde_json::json!({
             "assets": [],
             "total": 0,
             "note": "Asset listing requires asset cache integration"
-        }))
+        })),
     ))
 }
 
@@ -1105,7 +1239,7 @@ async fn fcache_expire_endpoint(
             "datetime": datetime,
             "expired_count": 0,
             "note": "Cache expiration requires asset cache integration"
-        }))
+        })),
     ))
 }
 
@@ -1121,7 +1255,7 @@ async fn xml_load_endpoint(
     info!("Console API: Load XML from {}", request.filename);
     Json(ConsoleCommandResponse::error(
         "XML load not implemented",
-        "XML loading requires file system and scene access"
+        "XML loading requires file system and scene access",
     ))
 }
 
@@ -1137,7 +1271,7 @@ async fn xml_save_endpoint(
     info!("Console API: Save XML to {}", request.filename);
     Json(ConsoleCommandResponse::error(
         "XML save not implemented",
-        "XML saving requires file system and scene access"
+        "XML saving requires file system and scene access",
     ))
 }
 
@@ -1149,7 +1283,7 @@ async fn execute_show_info(state: &ConsoleApiState) -> ConsoleCommandResponse {
             } else {
                 0
             }
-        },
+        }
         Err(_) => 0,
     };
 
@@ -1162,7 +1296,7 @@ async fn execute_show_info(state: &ConsoleApiState) -> ConsoleCommandResponse {
             "regions": 1,
             "users": user_count,
             "active_sessions": 0
-        }))
+        })),
     )
 }
 
@@ -1172,7 +1306,7 @@ async fn execute_show_version() -> ConsoleCommandResponse {
         Some(serde_json::json!({
             "version": env!("CARGO_PKG_VERSION"),
             "build": "release"
-        }))
+        })),
     )
 }
 
@@ -1182,7 +1316,7 @@ async fn execute_show_uptime() -> ConsoleCommandResponse {
         Some(serde_json::json!({
             "uptime": "Not tracked yet",
             "start_time": "Unknown"
-        }))
+        })),
     )
 }
 
@@ -1197,14 +1331,19 @@ async fn execute_show_regions(_state: &ConsoleApiState) -> ConsoleCommandRespons
                     "status": "running"
                 }
             ]
-        }))
+        })),
     )
 }
 
 async fn execute_terrain_stats(state: &ConsoleApiState) -> ConsoleCommandResponse {
     let conn = match &state.db_connection {
         Some(c) => c.clone(),
-        None => return ConsoleCommandResponse::error("No database connection", "Database not available"),
+        None => {
+            return ConsoleCommandResponse::error(
+                "No database connection",
+                "Database not available",
+            )
+        }
     };
     let storage = TerrainStorage::new(conn);
     let regions = match get_region_uuids(state, None).await {
@@ -1219,8 +1358,12 @@ async fn execute_terrain_stats(state: &ConsoleApiState) -> ConsoleCommandRespons
             total_with_terrain += 1;
             let min = hm.iter().cloned().fold(f32::INFINITY, f32::min);
             let max = hm.iter().cloned().fold(f32::NEG_INFINITY, f32::max);
-            if min < global_min { global_min = min; }
-            if max > global_max { global_max = max; }
+            if min < global_min {
+                global_min = min;
+            }
+            if max > global_max {
+                global_max = max;
+            }
         }
     }
     ConsoleCommandResponse::success(
@@ -1230,45 +1373,49 @@ async fn execute_terrain_stats(state: &ConsoleApiState) -> ConsoleCommandRespons
             "regions_with_terrain": total_with_terrain,
             "global_min_height": format!("{:.1}", global_min),
             "global_max_height": format!("{:.1}", global_max),
-        }))
+        })),
     )
 }
 
 async fn execute_database_stats(state: &ConsoleApiState) -> ConsoleCommandResponse {
     match state.db_admin.get_database_stats().await {
-        Ok(result) => ConsoleCommandResponse::success(
-            &result.message,
-            result.data
-        ),
-        Err(e) => ConsoleCommandResponse::error(
-            "Failed to get database stats",
-            e.to_string()
-        ),
+        Ok(result) => ConsoleCommandResponse::success(&result.message, result.data),
+        Err(e) => ConsoleCommandResponse::error("Failed to get database stats", e.to_string()),
     }
 }
 
 async fn execute_database_health(state: &ConsoleApiState) -> ConsoleCommandResponse {
     match state.db_admin.get_database_health().await {
         Ok(result) => ConsoleCommandResponse::success(
-            if result.success { "Database is healthy" } else { "Database has issues" },
-            result.data
+            if result.success {
+                "Database is healthy"
+            } else {
+                "Database has issues"
+            },
+            result.data,
         ),
-        Err(e) => ConsoleCommandResponse::error(
-            "Failed to check database health",
-            e.to_string()
-        ),
+        Err(e) => ConsoleCommandResponse::error("Failed to check database health", e.to_string()),
     }
 }
 
 async fn execute_kick_user(params: &serde_json::Value) -> ConsoleCommandResponse {
-    let firstname = params.get("firstname").and_then(|v| v.as_str()).unwrap_or("");
-    let lastname = params.get("lastname").and_then(|v| v.as_str()).unwrap_or("");
-    let message = params.get("message").and_then(|v| v.as_str()).unwrap_or("You have been kicked");
+    let firstname = params
+        .get("firstname")
+        .and_then(|v| v.as_str())
+        .unwrap_or("");
+    let lastname = params
+        .get("lastname")
+        .and_then(|v| v.as_str())
+        .unwrap_or("");
+    let message = params
+        .get("message")
+        .and_then(|v| v.as_str())
+        .unwrap_or("You have been kicked");
 
     if firstname.is_empty() || lastname.is_empty() {
         return ConsoleCommandResponse::error(
             "Missing parameters",
-            "firstname and lastname are required"
+            "firstname and lastname are required",
         );
     }
 
@@ -1279,7 +1426,7 @@ async fn execute_kick_user(params: &serde_json::Value) -> ConsoleCommandResponse
             "lastname": lastname,
             "message": message,
             "status": "pending"
-        }))
+        })),
     )
 }
 
@@ -1298,7 +1445,7 @@ async fn execute_login_level(params: &serde_json::Value) -> ConsoleCommandRespon
         Some(serde_json::json!({
             "level": level,
             "description": level_desc
-        }))
+        })),
     )
 }
 
@@ -1309,7 +1456,7 @@ async fn execute_login_reset() -> ConsoleCommandResponse {
             "level": 0,
             "text": null,
             "status": "reset"
-        }))
+        })),
     )
 }
 
@@ -1317,17 +1464,14 @@ async fn execute_login_text(params: &serde_json::Value) -> ConsoleCommandRespons
     let message = params.get("message").and_then(|v| v.as_str()).unwrap_or("");
 
     if message.is_empty() {
-        return ConsoleCommandResponse::error(
-            "Missing parameter",
-            "message is required"
-        );
+        return ConsoleCommandResponse::error("Missing parameter", "message is required");
     }
 
     ConsoleCommandResponse::success(
         format!("Login message set: {}", message),
         Some(serde_json::json!({
             "message": message
-        }))
+        })),
     )
 }
 
@@ -1338,7 +1482,7 @@ async fn execute_show_connections() -> ConsoleCommandResponse {
             "connections": [],
             "total": 0,
             "note": "Connection tracking requires session manager integration"
-        }))
+        })),
     )
 }
 
@@ -1349,13 +1493,16 @@ async fn execute_show_circuits() -> ConsoleCommandResponse {
             "circuits": [],
             "total": 0,
             "note": "Circuit tracking requires UDP server integration"
-        }))
+        })),
     )
 }
 
 async fn execute_show_object(by: &str, params: &serde_json::Value) -> ConsoleCommandResponse {
     let value = params.get("value").and_then(|v| v.as_str()).unwrap_or("");
-    let full = params.get("full").and_then(|v| v.as_bool()).unwrap_or(false);
+    let full = params
+        .get("full")
+        .and_then(|v| v.as_bool())
+        .unwrap_or(false);
 
     ConsoleCommandResponse::success(
         format!("Show objects by {}", by),
@@ -1366,7 +1513,7 @@ async fn execute_show_object(by: &str, params: &serde_json::Value) -> ConsoleCom
             "objects": [],
             "total": 0,
             "note": "Object queries require region scene access"
-        }))
+        })),
     )
 }
 
@@ -1380,7 +1527,7 @@ async fn execute_delete_object(by: &str, params: &serde_json::Value) -> ConsoleC
             "value": value,
             "deleted": 0,
             "note": "Object deletion requires region scene access"
-        }))
+        })),
     )
 }
 
@@ -1390,14 +1537,23 @@ async fn execute_backup() -> ConsoleCommandResponse {
         Some(serde_json::json!({
             "status": "pending",
             "note": "Backup requires region persistence module"
-        }))
+        })),
     )
 }
 
 async fn execute_rotate_scene(params: &serde_json::Value) -> ConsoleCommandResponse {
-    let degrees = params.get("degrees").and_then(|v| v.as_f64()).unwrap_or(0.0) as f32;
-    let center_x = params.get("center_x").and_then(|v| v.as_f64()).unwrap_or(128.0) as f32;
-    let center_y = params.get("center_y").and_then(|v| v.as_f64()).unwrap_or(128.0) as f32;
+    let degrees = params
+        .get("degrees")
+        .and_then(|v| v.as_f64())
+        .unwrap_or(0.0) as f32;
+    let center_x = params
+        .get("center_x")
+        .and_then(|v| v.as_f64())
+        .unwrap_or(128.0) as f32;
+    let center_y = params
+        .get("center_y")
+        .and_then(|v| v.as_f64())
+        .unwrap_or(128.0) as f32;
 
     ConsoleCommandResponse::success(
         format!("Rotate scene {} degrees", degrees),
@@ -1406,7 +1562,7 @@ async fn execute_rotate_scene(params: &serde_json::Value) -> ConsoleCommandRespo
             "center_x": center_x,
             "center_y": center_y,
             "note": "Scene rotation requires region scene access"
-        }))
+        })),
     )
 }
 
@@ -1418,7 +1574,7 @@ async fn execute_scale_scene(params: &serde_json::Value) -> ConsoleCommandRespon
         Some(serde_json::json!({
             "factor": factor,
             "note": "Scene scaling requires region scene access"
-        }))
+        })),
     )
 }
 
@@ -1434,7 +1590,7 @@ async fn execute_translate_scene(params: &serde_json::Value) -> ConsoleCommandRe
             "y": y,
             "z": z,
             "note": "Scene translation requires region scene access"
-        }))
+        })),
     )
 }
 
@@ -1444,7 +1600,7 @@ async fn execute_force_update() -> ConsoleCommandResponse {
         Some(serde_json::json!({
             "status": "completed",
             "note": "Force update requires region scene access"
-        }))
+        })),
     )
 }
 
@@ -1452,10 +1608,7 @@ async fn execute_estate_create(params: &serde_json::Value) -> ConsoleCommandResp
     let name = params.get("name").and_then(|v| v.as_str()).unwrap_or("");
 
     if name.is_empty() {
-        return ConsoleCommandResponse::error(
-            "Missing parameter",
-            "estate name is required"
-        );
+        return ConsoleCommandResponse::error("Missing parameter", "estate name is required");
     }
 
     ConsoleCommandResponse::success(
@@ -1464,40 +1617,52 @@ async fn execute_estate_create(params: &serde_json::Value) -> ConsoleCommandResp
             "name": name,
             "estate_id": 1,
             "note": "Estate creation requires estate manager integration"
-        }))
+        })),
     )
 }
 
 async fn execute_estate_set_owner(params: &serde_json::Value) -> ConsoleCommandResponse {
     let estate = params.get("estate").and_then(|v| v.as_str()).unwrap_or("");
-    let firstname = params.get("firstname").and_then(|v| v.as_str()).unwrap_or("");
-    let lastname = params.get("lastname").and_then(|v| v.as_str()).unwrap_or("");
+    let firstname = params
+        .get("firstname")
+        .and_then(|v| v.as_str())
+        .unwrap_or("");
+    let lastname = params
+        .get("lastname")
+        .and_then(|v| v.as_str())
+        .unwrap_or("");
 
     if estate.is_empty() || firstname.is_empty() || lastname.is_empty() {
         return ConsoleCommandResponse::error(
             "Missing parameters",
-            "estate, firstname, and lastname are required"
+            "estate, firstname, and lastname are required",
         );
     }
 
     ConsoleCommandResponse::success(
-        format!("Estate '{}' owner set to {} {}", estate, firstname, lastname),
+        format!(
+            "Estate '{}' owner set to {} {}",
+            estate, firstname, lastname
+        ),
         Some(serde_json::json!({
             "estate": estate,
             "owner": format!("{} {}", firstname, lastname),
             "note": "Estate owner change requires estate manager integration"
-        }))
+        })),
     )
 }
 
 async fn execute_estate_set_name(params: &serde_json::Value) -> ConsoleCommandResponse {
     let estate = params.get("estate").and_then(|v| v.as_str()).unwrap_or("");
-    let new_name = params.get("new_name").and_then(|v| v.as_str()).unwrap_or("");
+    let new_name = params
+        .get("new_name")
+        .and_then(|v| v.as_str())
+        .unwrap_or("");
 
     if estate.is_empty() || new_name.is_empty() {
         return ConsoleCommandResponse::error(
             "Missing parameters",
-            "estate and new_name are required"
+            "estate and new_name are required",
         );
     }
 
@@ -1507,7 +1672,7 @@ async fn execute_estate_set_name(params: &serde_json::Value) -> ConsoleCommandRe
             "old_name": estate,
             "new_name": new_name,
             "note": "Estate rename requires estate manager integration"
-        }))
+        })),
     )
 }
 
@@ -1518,7 +1683,7 @@ async fn execute_estate_link_region(params: &serde_json::Value) -> ConsoleComman
     if estate.is_empty() || region.is_empty() {
         return ConsoleCommandResponse::error(
             "Missing parameters",
-            "estate and region are required"
+            "estate and region are required",
         );
     }
 
@@ -1528,7 +1693,7 @@ async fn execute_estate_link_region(params: &serde_json::Value) -> ConsoleComman
             "estate": estate,
             "region": region,
             "note": "Estate-region linking requires estate manager integration"
-        }))
+        })),
     )
 }
 
@@ -1536,13 +1701,13 @@ async fn execute_hypergrid_link(params: &serde_json::Value) -> ConsoleCommandRes
     let xloc = params.get("xloc").and_then(|v| v.as_i64()).unwrap_or(0) as i32;
     let yloc = params.get("yloc").and_then(|v| v.as_i64()).unwrap_or(0) as i32;
     let host = params.get("host").and_then(|v| v.as_str()).unwrap_or("");
-    let name = params.get("name").and_then(|v| v.as_str()).unwrap_or("Remote Region");
+    let name = params
+        .get("name")
+        .and_then(|v| v.as_str())
+        .unwrap_or("Remote Region");
 
     if host.is_empty() {
-        return ConsoleCommandResponse::error(
-            "Missing parameter",
-            "host is required"
-        );
+        return ConsoleCommandResponse::error("Missing parameter", "host is required");
     }
 
     ConsoleCommandResponse::success(
@@ -1553,7 +1718,7 @@ async fn execute_hypergrid_link(params: &serde_json::Value) -> ConsoleCommandRes
             "host": host,
             "name": name,
             "note": "Hypergrid linking requires grid services integration"
-        }))
+        })),
     )
 }
 
@@ -1561,10 +1726,7 @@ async fn execute_hypergrid_unlink(params: &serde_json::Value) -> ConsoleCommandR
     let name = params.get("name").and_then(|v| v.as_str()).unwrap_or("");
 
     if name.is_empty() {
-        return ConsoleCommandResponse::error(
-            "Missing parameter",
-            "region name is required"
-        );
+        return ConsoleCommandResponse::error("Missing parameter", "region name is required");
     }
 
     ConsoleCommandResponse::success(
@@ -1572,7 +1734,7 @@ async fn execute_hypergrid_unlink(params: &serde_json::Value) -> ConsoleCommandR
         Some(serde_json::json!({
             "name": name,
             "note": "Hypergrid unlinking requires grid services integration"
-        }))
+        })),
     )
 }
 
@@ -1583,7 +1745,7 @@ async fn execute_show_hyperlinks() -> ConsoleCommandResponse {
             "links": [],
             "total": 0,
             "note": "Hypergrid link listing requires grid services integration"
-        }))
+        })),
     )
 }
 
@@ -1597,7 +1759,7 @@ async fn execute_link_mapping(params: &serde_json::Value) -> ConsoleCommandRespo
             "x": x,
             "y": y,
             "note": "Link mapping requires grid services integration"
-        }))
+        })),
     )
 }
 
@@ -1605,10 +1767,7 @@ async fn execute_show_asset(params: &serde_json::Value) -> ConsoleCommandRespons
     let uuid = params.get("uuid").and_then(|v| v.as_str()).unwrap_or("");
 
     if uuid.is_empty() {
-        return ConsoleCommandResponse::error(
-            "Missing parameter",
-            "asset uuid is required"
-        );
+        return ConsoleCommandResponse::error("Missing parameter", "asset uuid is required");
     }
 
     ConsoleCommandResponse::success(
@@ -1618,7 +1777,7 @@ async fn execute_show_asset(params: &serde_json::Value) -> ConsoleCommandRespons
             "type": "unknown",
             "size": 0,
             "note": "Asset lookup requires asset manager integration"
-        }))
+        })),
     )
 }
 
@@ -1627,10 +1786,7 @@ async fn execute_dump_asset(params: &serde_json::Value) -> ConsoleCommandRespons
     let filename = params.get("filename").and_then(|v| v.as_str());
 
     if uuid.is_empty() {
-        return ConsoleCommandResponse::error(
-            "Missing parameter",
-            "asset uuid is required"
-        );
+        return ConsoleCommandResponse::error("Missing parameter", "asset uuid is required");
     }
 
     ConsoleCommandResponse::success(
@@ -1639,7 +1795,7 @@ async fn execute_dump_asset(params: &serde_json::Value) -> ConsoleCommandRespons
             "uuid": uuid,
             "filename": filename,
             "note": "Asset dump requires asset manager and file system access"
-        }))
+        })),
     )
 }
 
@@ -1647,15 +1803,12 @@ async fn execute_delete_asset(params: &serde_json::Value) -> ConsoleCommandRespo
     let uuid = params.get("uuid").and_then(|v| v.as_str()).unwrap_or("");
 
     if uuid.is_empty() {
-        return ConsoleCommandResponse::error(
-            "Missing parameter",
-            "asset uuid is required"
-        );
+        return ConsoleCommandResponse::error("Missing parameter", "asset uuid is required");
     }
 
     ConsoleCommandResponse::error(
         "Asset deletion disabled",
-        "Direct asset deletion is disabled for safety"
+        "Direct asset deletion is disabled for safety",
     )
 }
 
@@ -1673,12 +1826,15 @@ async fn execute_fcache_status() -> ConsoleCommandResponse {
                 "size_mb": 0
             },
             "note": "Cache status requires asset cache integration"
-        }))
+        })),
     )
 }
 
 async fn execute_fcache_clear(params: &serde_json::Value) -> ConsoleCommandResponse {
-    let target = params.get("target").and_then(|v| v.as_str()).unwrap_or("all");
+    let target = params
+        .get("target")
+        .and_then(|v| v.as_str())
+        .unwrap_or("all");
 
     ConsoleCommandResponse::success(
         format!("Cache cleared: {}", target),
@@ -1686,7 +1842,7 @@ async fn execute_fcache_clear(params: &serde_json::Value) -> ConsoleCommandRespo
             "target": target,
             "cleared": true,
             "note": "Cache clearing requires asset cache integration"
-        }))
+        })),
     )
 }
 
@@ -1697,12 +1853,15 @@ async fn execute_fcache_assets() -> ConsoleCommandResponse {
             "assets": [],
             "total": 0,
             "note": "Asset listing requires asset cache integration"
-        }))
+        })),
     )
 }
 
 async fn execute_fcache_expire(params: &serde_json::Value) -> ConsoleCommandResponse {
-    let datetime = params.get("datetime").and_then(|v| v.as_str()).unwrap_or("now");
+    let datetime = params
+        .get("datetime")
+        .and_then(|v| v.as_str())
+        .unwrap_or("now");
 
     ConsoleCommandResponse::success(
         format!("Cache expired before: {}", datetime),
@@ -1710,55 +1869,55 @@ async fn execute_fcache_expire(params: &serde_json::Value) -> ConsoleCommandResp
             "datetime": datetime,
             "expired_count": 0,
             "note": "Cache expiration requires asset cache integration"
-        }))
+        })),
     )
 }
 
 async fn execute_xml_load(params: &serde_json::Value) -> ConsoleCommandResponse {
-    let filename = params.get("filename").and_then(|v| v.as_str()).unwrap_or("");
+    let filename = params
+        .get("filename")
+        .and_then(|v| v.as_str())
+        .unwrap_or("");
 
     if filename.is_empty() {
-        return ConsoleCommandResponse::error(
-            "Missing parameter",
-            "filename is required"
-        );
+        return ConsoleCommandResponse::error("Missing parameter", "filename is required");
     }
 
     ConsoleCommandResponse::error(
         "XML load not implemented",
-        "XML loading requires file system and scene access"
+        "XML loading requires file system and scene access",
     )
 }
 
 async fn execute_xml_save(params: &serde_json::Value) -> ConsoleCommandResponse {
-    let filename = params.get("filename").and_then(|v| v.as_str()).unwrap_or("");
+    let filename = params
+        .get("filename")
+        .and_then(|v| v.as_str())
+        .unwrap_or("");
 
     if filename.is_empty() {
-        return ConsoleCommandResponse::error(
-            "Missing parameter",
-            "filename is required"
-        );
+        return ConsoleCommandResponse::error("Missing parameter", "filename is required");
     }
 
     ConsoleCommandResponse::error(
         "XML save not implemented",
-        "XML saving requires file system and scene access"
+        "XML saving requires file system and scene access",
     )
 }
 
 async fn execute_save_prims_xml2(params: &serde_json::Value) -> ConsoleCommandResponse {
-    let filename = params.get("filename").and_then(|v| v.as_str()).unwrap_or("");
+    let filename = params
+        .get("filename")
+        .and_then(|v| v.as_str())
+        .unwrap_or("");
 
     if filename.is_empty() {
-        return ConsoleCommandResponse::error(
-            "Missing parameter",
-            "filename is required"
-        );
+        return ConsoleCommandResponse::error("Missing parameter", "filename is required");
     }
 
     ConsoleCommandResponse::error(
         "Save prims XML2 not implemented",
-        "XML saving requires file system and scene access"
+        "XML saving requires file system and scene access",
     )
 }
 
@@ -1773,15 +1932,21 @@ async fn create_region_endpoint(
     Json(request): Json<CreateRegionRequest>,
 ) -> impl IntoResponse {
     info!("Console API: Create region '{}'", request.name);
-    Json(execute_create_region(&serde_json::json!({
-        "name": request.name,
-        "template": request.template
-    })).await)
+    Json(
+        execute_create_region(&serde_json::json!({
+            "name": request.name,
+            "template": request.template
+        }))
+        .await,
+    )
 }
 
 async fn execute_create_region(params: &serde_json::Value) -> ConsoleCommandResponse {
     let name = params.get("name").and_then(|v| v.as_str()).unwrap_or("");
-    let template = params.get("template").and_then(|v| v.as_str()).unwrap_or("default");
+    let template = params
+        .get("template")
+        .and_then(|v| v.as_str())
+        .unwrap_or("default");
 
     if name.is_empty() {
         return ConsoleCommandResponse::error("Missing parameter", "name is required");
@@ -1794,7 +1959,7 @@ async fn execute_create_region(params: &serde_json::Value) -> ConsoleCommandResp
             "template": template,
             "uuid": Uuid::new_v4().to_string(),
             "note": "Region creation requires region manager integration"
-        }))
+        })),
     )
 }
 
@@ -1823,27 +1988,31 @@ async fn execute_delete_region(params: &serde_json::Value) -> ConsoleCommandResp
         Some(serde_json::json!({
             "name": name,
             "note": "Region deletion requires region manager integration"
-        }))
+        })),
     )
 }
 
 async fn execute_restart_region(params: &serde_json::Value) -> ConsoleCommandResponse {
-    let name = params.get("region_name").and_then(|v| v.as_str()).unwrap_or("current");
+    let name = params
+        .get("region_name")
+        .and_then(|v| v.as_str())
+        .unwrap_or("current");
     let delay = params.get("delay").and_then(|v| v.as_i64()).unwrap_or(0);
 
     ConsoleCommandResponse::success(
-        format!("Region '{}' restart initiated with {} second delay", name, delay),
+        format!(
+            "Region '{}' restart initiated with {} second delay",
+            name, delay
+        ),
         Some(serde_json::json!({
             "region": name,
             "delay": delay,
             "note": "Region restart requires region manager integration"
-        }))
+        })),
     )
 }
 
-async fn show_ratings_endpoint(
-    State(_state): State<ConsoleApiState>,
-) -> impl IntoResponse {
+async fn show_ratings_endpoint(State(_state): State<ConsoleApiState>) -> impl IntoResponse {
     Json(execute_show_ratings().await)
 }
 
@@ -1854,13 +2023,11 @@ async fn execute_show_ratings() -> ConsoleCommandResponse {
             "regions": [
                 {"name": "Default Region", "rating": "Mature", "access": "PG"}
             ]
-        }))
+        })),
     )
 }
 
-async fn show_neighbours_endpoint(
-    State(_state): State<ConsoleApiState>,
-) -> impl IntoResponse {
+async fn show_neighbours_endpoint(State(_state): State<ConsoleApiState>) -> impl IntoResponse {
     Json(execute_show_neighbours().await)
 }
 
@@ -1870,13 +2037,11 @@ async fn execute_show_neighbours() -> ConsoleCommandResponse {
         Some(serde_json::json!({
             "region": "Default Region",
             "neighbours": []
-        }))
+        })),
     )
 }
 
-async fn show_regions_inview_endpoint(
-    State(_state): State<ConsoleApiState>,
-) -> impl IntoResponse {
+async fn show_regions_inview_endpoint(State(_state): State<ConsoleApiState>) -> impl IntoResponse {
     Json(execute_show_regions_inview().await)
 }
 
@@ -1886,7 +2051,7 @@ async fn execute_show_regions_inview() -> ConsoleCommandResponse {
         Some(serde_json::json!({
             "region": "Default Region",
             "regions_in_view": []
-        }))
+        })),
     )
 }
 
@@ -1912,7 +2077,7 @@ async fn execute_change_region(params: &serde_json::Value) -> ConsoleCommandResp
 
     ConsoleCommandResponse::success(
         format!("Changed to region '{}'", name),
-        Some(serde_json::json!({"current_region": name}))
+        Some(serde_json::json!({"current_region": name})),
     )
 }
 
@@ -1927,14 +2092,23 @@ async fn terrain_load_tile_endpoint(
     State(_state): State<ConsoleApiState>,
     Json(request): Json<TerrainLoadTileRequest>,
 ) -> impl IntoResponse {
-    info!("Console API: Load terrain tile from '{}' at {},{}", request.filename, request.x, request.y);
-    Json(execute_terrain_load_tile(&serde_json::json!({
-        "filename": request.filename, "x": request.x, "y": request.y
-    })).await)
+    info!(
+        "Console API: Load terrain tile from '{}' at {},{}",
+        request.filename, request.x, request.y
+    );
+    Json(
+        execute_terrain_load_tile(&serde_json::json!({
+            "filename": request.filename, "x": request.x, "y": request.y
+        }))
+        .await,
+    )
 }
 
 async fn execute_terrain_load(params: &serde_json::Value) -> ConsoleCommandResponse {
-    let filename = params.get("filename").and_then(|v| v.as_str()).unwrap_or("");
+    let filename = params
+        .get("filename")
+        .and_then(|v| v.as_str())
+        .unwrap_or("");
 
     if filename.is_empty() {
         return ConsoleCommandResponse::error("Missing parameter", "filename is required");
@@ -1945,12 +2119,15 @@ async fn execute_terrain_load(params: &serde_json::Value) -> ConsoleCommandRespo
         Some(serde_json::json!({
             "filename": filename,
             "note": "Terrain loading requires terrain manager integration"
-        }))
+        })),
     )
 }
 
 async fn execute_terrain_load_tile(params: &serde_json::Value) -> ConsoleCommandResponse {
-    let filename = params.get("filename").and_then(|v| v.as_str()).unwrap_or("");
+    let filename = params
+        .get("filename")
+        .and_then(|v| v.as_str())
+        .unwrap_or("");
     let x = params.get("x").and_then(|v| v.as_i64()).unwrap_or(0);
     let y = params.get("y").and_then(|v| v.as_i64()).unwrap_or(0);
 
@@ -1963,7 +2140,7 @@ async fn execute_terrain_load_tile(params: &serde_json::Value) -> ConsoleCommand
         Some(serde_json::json!({
             "filename": filename, "x": x, "y": y,
             "note": "Terrain tile loading requires terrain manager integration"
-        }))
+        })),
     )
 }
 
@@ -1978,14 +2155,23 @@ async fn terrain_save_tile_endpoint(
     State(_state): State<ConsoleApiState>,
     Json(request): Json<TerrainSaveTileRequest>,
 ) -> impl IntoResponse {
-    info!("Console API: Save terrain tile to '{}' at {},{}", request.filename, request.x, request.y);
-    Json(execute_terrain_save_tile(&serde_json::json!({
-        "filename": request.filename, "x": request.x, "y": request.y
-    })).await)
+    info!(
+        "Console API: Save terrain tile to '{}' at {},{}",
+        request.filename, request.x, request.y
+    );
+    Json(
+        execute_terrain_save_tile(&serde_json::json!({
+            "filename": request.filename, "x": request.x, "y": request.y
+        }))
+        .await,
+    )
 }
 
 async fn execute_terrain_save(params: &serde_json::Value) -> ConsoleCommandResponse {
-    let filename = params.get("filename").and_then(|v| v.as_str()).unwrap_or("");
+    let filename = params
+        .get("filename")
+        .and_then(|v| v.as_str())
+        .unwrap_or("");
 
     if filename.is_empty() {
         return ConsoleCommandResponse::error("Missing parameter", "filename is required");
@@ -1996,12 +2182,15 @@ async fn execute_terrain_save(params: &serde_json::Value) -> ConsoleCommandRespo
         Some(serde_json::json!({
             "filename": filename,
             "note": "Terrain saving requires terrain manager integration"
-        }))
+        })),
     )
 }
 
 async fn execute_terrain_save_tile(params: &serde_json::Value) -> ConsoleCommandResponse {
-    let filename = params.get("filename").and_then(|v| v.as_str()).unwrap_or("");
+    let filename = params
+        .get("filename")
+        .and_then(|v| v.as_str())
+        .unwrap_or("");
     let x = params.get("x").and_then(|v| v.as_i64()).unwrap_or(0);
     let y = params.get("y").and_then(|v| v.as_i64()).unwrap_or(0);
 
@@ -2014,7 +2203,7 @@ async fn execute_terrain_save_tile(params: &serde_json::Value) -> ConsoleCommand
         Some(serde_json::json!({
             "filename": filename, "x": x, "y": y,
             "note": "Terrain tile saving requires terrain manager integration"
-        }))
+        })),
     )
 }
 
@@ -2040,7 +2229,12 @@ async fn modify_terrain_heights(
 ) -> ConsoleCommandResponse {
     let conn = match &state.db_connection {
         Some(c) => c.clone(),
-        None => return ConsoleCommandResponse::error("No database connection", "Database not available"),
+        None => {
+            return ConsoleCommandResponse::error(
+                "No database connection",
+                "Database not available",
+            )
+        }
     };
     let storage = TerrainStorage::new(conn);
     let regions = match get_region_uuids(state, region_filter).await {
@@ -2048,7 +2242,10 @@ async fn modify_terrain_heights(
         Err(e) => return ConsoleCommandResponse::error("Failed to list regions", &e.to_string()),
     };
     if regions.is_empty() {
-        return ConsoleCommandResponse::error("No matching regions found", "Specify a valid region name filter");
+        return ConsoleCommandResponse::error(
+            "No matching regions found",
+            "Specify a valid region name filter",
+        );
     }
 
     let mut modified = 0;
@@ -2065,26 +2262,42 @@ async fn modify_terrain_heights(
         };
         let new_heightmap: Vec<f32> = heightmap.iter().map(|h| transform(*h)).collect();
         let min = new_heightmap.iter().cloned().fold(f32::INFINITY, f32::min);
-        let max = new_heightmap.iter().cloned().fold(f32::NEG_INFINITY, f32::max);
-        if min < sample_min { sample_min = min; }
-        if max > sample_max { sample_max = max; }
+        let max = new_heightmap
+            .iter()
+            .cloned()
+            .fold(f32::NEG_INFINITY, f32::max);
+        if min < sample_min {
+            sample_min = min;
+        }
+        if max > sample_max {
+            sample_max = max;
+        }
 
-        if let Err(e) = storage.store_terrain(*uuid, &new_heightmap, TerrainRevision::Variable2D).await {
+        if let Err(e) = storage
+            .store_terrain(*uuid, &new_heightmap, TerrainRevision::Variable2D)
+            .await
+        {
             warn!("[TERRAIN] Failed to store terrain for '{}': {}", name, e);
             continue;
         }
-        info!("[TERRAIN] {} region '{}' — new range {:.1}..{:.1}", operation, name, min, max);
+        info!(
+            "[TERRAIN] {} region '{}' — new range {:.1}..{:.1}",
+            operation, name, min, max
+        );
         modified += 1;
     }
 
     ConsoleCommandResponse::success(
-        format!("Terrain {} applied to {} regions (restart server to apply)", operation, modified),
+        format!(
+            "Terrain {} applied to {} regions (restart server to apply)",
+            operation, modified
+        ),
         Some(serde_json::json!({
             "operation": operation,
             "regions_modified": modified,
             "new_min_height": format!("{:.1}", sample_min),
             "new_max_height": format!("{:.1}", sample_max),
-        }))
+        })),
     )
 }
 
@@ -2093,13 +2306,19 @@ async fn terrain_elevate_endpoint(
     Json(request): Json<TerrainModifyRequest>,
 ) -> impl IntoResponse {
     let amount = request.amount as f32;
-    info!("Console API: Elevate terrain by {} (region: {:?})", amount, request.region);
-    Json(modify_terrain_heights(
-        &state,
-        request.region.as_deref(),
-        &format!("elevated by {}", amount),
-        move |h| h + amount,
-    ).await)
+    info!(
+        "Console API: Elevate terrain by {} (region: {:?})",
+        amount, request.region
+    );
+    Json(
+        modify_terrain_heights(
+            &state,
+            request.region.as_deref(),
+            &format!("elevated by {}", amount),
+            move |h| h + amount,
+        )
+        .await,
+    )
 }
 
 async fn terrain_lower_endpoint(
@@ -2107,13 +2326,19 @@ async fn terrain_lower_endpoint(
     Json(request): Json<TerrainModifyRequest>,
 ) -> impl IntoResponse {
     let amount = request.amount as f32;
-    info!("Console API: Lower terrain by {} (region: {:?})", amount, request.region);
-    Json(modify_terrain_heights(
-        &state,
-        request.region.as_deref(),
-        &format!("lowered by {}", amount),
-        move |h| (h - amount).max(0.0),
-    ).await)
+    info!(
+        "Console API: Lower terrain by {} (region: {:?})",
+        amount, request.region
+    );
+    Json(
+        modify_terrain_heights(
+            &state,
+            request.region.as_deref(),
+            &format!("lowered by {}", amount),
+            move |h| (h - amount).max(0.0),
+        )
+        .await,
+    )
 }
 
 #[derive(Debug, Deserialize)]
@@ -2128,32 +2353,49 @@ async fn terrain_multiply_endpoint(
     Json(request): Json<TerrainFactorRequest>,
 ) -> impl IntoResponse {
     let factor = request.factor as f32;
-    info!("Console API: Multiply terrain by {} (region: {:?})", factor, request.region);
-    Json(modify_terrain_heights(
-        &state,
-        request.region.as_deref(),
-        &format!("multiplied by {}", factor),
-        move |h| h * factor,
-    ).await)
+    info!(
+        "Console API: Multiply terrain by {} (region: {:?})",
+        factor, request.region
+    );
+    Json(
+        modify_terrain_heights(
+            &state,
+            request.region.as_deref(),
+            &format!("multiplied by {}", factor),
+            move |h| h * factor,
+        )
+        .await,
+    )
 }
 
-async fn terrain_bake_endpoint(
-    State(state): State<ConsoleApiState>,
-) -> impl IntoResponse {
+async fn terrain_bake_endpoint(State(state): State<ConsoleApiState>) -> impl IntoResponse {
     let conn = match &state.db_connection {
         Some(c) => c.clone(),
-        None => return Json(ConsoleCommandResponse::error("No database connection", "Database not available")),
+        None => {
+            return Json(ConsoleCommandResponse::error(
+                "No database connection",
+                "Database not available",
+            ))
+        }
     };
     let storage = TerrainStorage::new(conn);
     let regions = match get_region_uuids(&state, None).await {
         Ok(r) => r,
-        Err(e) => return Json(ConsoleCommandResponse::error("Failed to list regions", &e.to_string())),
+        Err(e) => {
+            return Json(ConsoleCommandResponse::error(
+                "Failed to list regions",
+                &e.to_string(),
+            ))
+        }
     };
 
     let mut baked = 0;
     for (uuid, name) in &regions {
         if let Ok(Some(heightmap)) = storage.load_terrain(*uuid).await {
-            if let Ok(()) = storage.store_terrain(*uuid, &heightmap, TerrainRevision::Variable2D).await {
+            if let Ok(()) = storage
+                .store_terrain(*uuid, &heightmap, TerrainRevision::Variable2D)
+                .await
+            {
                 info!("[TERRAIN] Baked region '{}'", name);
                 baked += 1;
             }
@@ -2162,30 +2404,36 @@ async fn terrain_bake_endpoint(
 
     Json(ConsoleCommandResponse::success(
         format!("Terrain baked for {} regions", baked),
-        Some(serde_json::json!({ "regions_baked": baked }))
+        Some(serde_json::json!({ "regions_baked": baked })),
     ))
 }
 
-async fn terrain_revert_endpoint(
-    State(_state): State<ConsoleApiState>,
-) -> impl IntoResponse {
+async fn terrain_revert_endpoint(State(_state): State<ConsoleApiState>) -> impl IntoResponse {
     Json(ConsoleCommandResponse::error(
         "Terrain revert not implemented",
-        "Revert requires a separate baked terrain snapshot — not yet implemented"
+        "Revert requires a separate baked terrain snapshot — not yet implemented",
     ))
 }
 
-async fn terrain_show_endpoint(
-    State(state): State<ConsoleApiState>,
-) -> impl IntoResponse {
+async fn terrain_show_endpoint(State(state): State<ConsoleApiState>) -> impl IntoResponse {
     let conn = match &state.db_connection {
         Some(c) => c.clone(),
-        None => return Json(ConsoleCommandResponse::error("No database connection", "Database not available")),
+        None => {
+            return Json(ConsoleCommandResponse::error(
+                "No database connection",
+                "Database not available",
+            ))
+        }
     };
     let storage = TerrainStorage::new(conn);
     let regions = match get_region_uuids(&state, None).await {
         Ok(r) => r,
-        Err(e) => return Json(ConsoleCommandResponse::error("Failed to list regions", &e.to_string())),
+        Err(e) => {
+            return Json(ConsoleCommandResponse::error(
+                "Failed to list regions",
+                &e.to_string(),
+            ))
+        }
     };
 
     let mut region_info = Vec::new();
@@ -2218,7 +2466,7 @@ async fn terrain_show_endpoint(
 
     Json(ConsoleCommandResponse::success(
         format!("Terrain info for {} regions", region_info.len()),
-        Some(serde_json::json!({ "regions": region_info }))
+        Some(serde_json::json!({ "regions": region_info })),
     ))
 }
 
@@ -2246,7 +2494,7 @@ async fn execute_terrain_effect(params: &serde_json::Value) -> ConsoleCommandRes
         Some(serde_json::json!({
             "effect": effect,
             "note": "Terrain effects require terrain manager integration"
-        }))
+        })),
     )
 }
 
@@ -2263,14 +2511,17 @@ async fn terrain_flip_endpoint(
 }
 
 async fn execute_terrain_flip(params: &serde_json::Value) -> ConsoleCommandResponse {
-    let direction = params.get("direction").and_then(|v| v.as_str()).unwrap_or("x");
+    let direction = params
+        .get("direction")
+        .and_then(|v| v.as_str())
+        .unwrap_or("x");
 
     ConsoleCommandResponse::success(
         format!("Terrain flipped along {} axis", direction),
         Some(serde_json::json!({
             "direction": direction,
             "note": "Terrain flip requires terrain manager integration"
-        }))
+        })),
     )
 }
 
@@ -2284,7 +2535,9 @@ async fn terrain_rescale_endpoint(
     State(_state): State<ConsoleApiState>,
     Json(request): Json<TerrainRescaleRequest>,
 ) -> impl IntoResponse {
-    Json(execute_terrain_rescale(&serde_json::json!({"min": request.min, "max": request.max})).await)
+    Json(
+        execute_terrain_rescale(&serde_json::json!({"min": request.min, "max": request.max})).await,
+    )
 }
 
 async fn execute_terrain_rescale(params: &serde_json::Value) -> ConsoleCommandResponse {
@@ -2296,7 +2549,7 @@ async fn execute_terrain_rescale(params: &serde_json::Value) -> ConsoleCommandRe
         Some(serde_json::json!({
             "min": min, "max": max,
             "note": "Terrain rescale requires terrain manager integration"
-        }))
+        })),
     )
 }
 
@@ -2320,7 +2573,7 @@ async fn execute_terrain_min(params: &serde_json::Value) -> ConsoleCommandRespon
         Some(serde_json::json!({
             "min_height": height,
             "note": "Terrain min requires terrain manager integration"
-        }))
+        })),
     )
 }
 
@@ -2332,14 +2585,17 @@ async fn terrain_max_endpoint(
 }
 
 async fn execute_terrain_max(params: &serde_json::Value) -> ConsoleCommandResponse {
-    let height = params.get("height").and_then(|v| v.as_f64()).unwrap_or(100.0);
+    let height = params
+        .get("height")
+        .and_then(|v| v.as_f64())
+        .unwrap_or(100.0);
 
     ConsoleCommandResponse::success(
         format!("Terrain maximum height set to {}", height),
         Some(serde_json::json!({
             "max_height": height,
             "note": "Terrain max requires terrain manager integration"
-        }))
+        })),
     )
 }
 
@@ -2353,14 +2609,20 @@ async fn terrain_modify_endpoint(
     State(_state): State<ConsoleApiState>,
     Json(request): Json<TerrainModifyOpRequest>,
 ) -> impl IntoResponse {
-    Json(execute_terrain_modify(&serde_json::json!({
-        "operation": request.operation,
-        "params": request.params
-    })).await)
+    Json(
+        execute_terrain_modify(&serde_json::json!({
+            "operation": request.operation,
+            "params": request.params
+        }))
+        .await,
+    )
 }
 
 async fn execute_terrain_modify(params: &serde_json::Value) -> ConsoleCommandResponse {
-    let operation = params.get("operation").and_then(|v| v.as_str()).unwrap_or("");
+    let operation = params
+        .get("operation")
+        .and_then(|v| v.as_str())
+        .unwrap_or("");
     let op_params = params.get("params").and_then(|v| v.as_str()).unwrap_or("");
 
     if operation.is_empty() {
@@ -2373,33 +2635,29 @@ async fn execute_terrain_modify(params: &serde_json::Value) -> ConsoleCommandRes
             "operation": operation,
             "params": op_params,
             "note": "Terrain modify requires terrain manager integration"
-        }))
+        })),
     )
 }
 
-async fn quit_endpoint(
-    State(_state): State<ConsoleApiState>,
-) -> impl IntoResponse {
+async fn quit_endpoint(State(_state): State<ConsoleApiState>) -> impl IntoResponse {
     Json(execute_quit().await)
 }
 
 async fn execute_quit() -> ConsoleCommandResponse {
     ConsoleCommandResponse::error(
         "Quit disabled",
-        "Server quit via API is disabled for safety"
+        "Server quit via API is disabled for safety",
     )
 }
 
 async fn execute_shutdown() -> ConsoleCommandResponse {
     ConsoleCommandResponse::error(
         "Shutdown disabled",
-        "Server shutdown via API is disabled for safety"
+        "Server shutdown via API is disabled for safety",
     )
 }
 
-async fn show_modules_endpoint(
-    State(_state): State<ConsoleApiState>,
-) -> impl IntoResponse {
+async fn show_modules_endpoint(State(_state): State<ConsoleApiState>) -> impl IntoResponse {
     Json(execute_show_modules().await)
 }
 
@@ -2415,7 +2673,7 @@ async fn execute_show_modules() -> ConsoleCommandResponse {
                 {"name": "RegionModule", "status": "loaded"},
                 {"name": "TerrainModule", "status": "loaded"}
             ]
-        }))
+        })),
     )
 }
 
@@ -2443,7 +2701,7 @@ async fn execute_command_script(params: &serde_json::Value) -> ConsoleCommandRes
         Some(serde_json::json!({
             "path": path,
             "note": "Command script execution requires file system access"
-        }))
+        })),
     )
 }
 
@@ -2460,7 +2718,10 @@ async fn config_show_endpoint(
 }
 
 async fn execute_config_show(params: &serde_json::Value) -> ConsoleCommandResponse {
-    let section = params.get("section").and_then(|v| v.as_str()).unwrap_or("all");
+    let section = params
+        .get("section")
+        .and_then(|v| v.as_str())
+        .unwrap_or("all");
 
     ConsoleCommandResponse::success(
         format!("Configuration for section '{}'", section),
@@ -2468,7 +2729,7 @@ async fn execute_config_show(params: &serde_json::Value) -> ConsoleCommandRespon
             "section": section,
             "settings": {},
             "note": "Config show requires configuration manager integration"
-        }))
+        })),
     )
 }
 
@@ -2482,10 +2743,13 @@ async fn config_get_endpoint(
     State(_state): State<ConsoleApiState>,
     Json(request): Json<ConfigGetRequest>,
 ) -> impl IntoResponse {
-    Json(execute_config_get(&serde_json::json!({
-        "section": request.section,
-        "key": request.key
-    })).await)
+    Json(
+        execute_config_get(&serde_json::json!({
+            "section": request.section,
+            "key": request.key
+        }))
+        .await,
+    )
 }
 
 async fn execute_config_get(params: &serde_json::Value) -> ConsoleCommandResponse {
@@ -2503,7 +2767,7 @@ async fn execute_config_get(params: &serde_json::Value) -> ConsoleCommandRespons
             "key": key,
             "value": null,
             "note": "Config get requires configuration manager integration"
-        }))
+        })),
     )
 }
 
@@ -2518,11 +2782,14 @@ async fn config_set_endpoint(
     State(_state): State<ConsoleApiState>,
     Json(request): Json<ConfigSetRequest>,
 ) -> impl IntoResponse {
-    Json(execute_config_set(&serde_json::json!({
-        "section": request.section,
-        "key": request.key,
-        "value": request.value
-    })).await)
+    Json(
+        execute_config_set(&serde_json::json!({
+            "section": request.section,
+            "key": request.key,
+            "value": request.value
+        }))
+        .await,
+    )
 }
 
 async fn execute_config_set(params: &serde_json::Value) -> ConsoleCommandResponse {
@@ -2531,7 +2798,10 @@ async fn execute_config_set(params: &serde_json::Value) -> ConsoleCommandRespons
     let value = params.get("value").and_then(|v| v.as_str()).unwrap_or("");
 
     if section.is_empty() || key.is_empty() {
-        return ConsoleCommandResponse::error("Missing parameters", "section, key, and value are required");
+        return ConsoleCommandResponse::error(
+            "Missing parameters",
+            "section, key, and value are required",
+        );
     }
 
     ConsoleCommandResponse::success(
@@ -2541,7 +2811,7 @@ async fn execute_config_set(params: &serde_json::Value) -> ConsoleCommandRespons
             "key": key,
             "value": value,
             "note": "Config set requires configuration manager integration"
-        }))
+        })),
     )
 }
 
@@ -2555,28 +2825,35 @@ async fn set_log_level_endpoint(
     State(_state): State<ConsoleApiState>,
     Json(request): Json<SetLogLevelRequest>,
 ) -> impl IntoResponse {
-    Json(execute_set_log_level(&serde_json::json!({
-        "module": request.module,
-        "level": request.level
-    })).await)
+    Json(
+        execute_set_log_level(&serde_json::json!({
+            "module": request.module,
+            "level": request.level
+        }))
+        .await,
+    )
 }
 
 async fn execute_set_log_level(params: &serde_json::Value) -> ConsoleCommandResponse {
-    let module = params.get("module").and_then(|v| v.as_str()).unwrap_or("all");
-    let level = params.get("level").and_then(|v| v.as_str()).unwrap_or("info");
+    let module = params
+        .get("module")
+        .and_then(|v| v.as_str())
+        .unwrap_or("all");
+    let level = params
+        .get("level")
+        .and_then(|v| v.as_str())
+        .unwrap_or("info");
 
     ConsoleCommandResponse::success(
         format!("Log level for '{}' set to '{}'", module, level),
         Some(serde_json::json!({
             "module": module,
             "level": level
-        }))
+        })),
     )
 }
 
-async fn force_gc_endpoint(
-    State(_state): State<ConsoleApiState>,
-) -> impl IntoResponse {
+async fn force_gc_endpoint(State(_state): State<ConsoleApiState>) -> impl IntoResponse {
     Json(execute_force_gc().await)
 }
 
@@ -2586,7 +2863,7 @@ async fn execute_force_gc() -> ConsoleCommandResponse {
         Some(serde_json::json!({
             "status": "completed",
             "note": "Rust uses automatic memory management"
-        }))
+        })),
     )
 }
 
@@ -2600,18 +2877,30 @@ async fn show_grid_user_endpoint(
     State(_state): State<ConsoleApiState>,
     Json(request): Json<ShowGridUserRequest>,
 ) -> impl IntoResponse {
-    Json(execute_show_grid_user(&serde_json::json!({
-        "firstname": request.firstname,
-        "lastname": request.lastname
-    })).await)
+    Json(
+        execute_show_grid_user(&serde_json::json!({
+            "firstname": request.firstname,
+            "lastname": request.lastname
+        }))
+        .await,
+    )
 }
 
 async fn execute_show_grid_user(params: &serde_json::Value) -> ConsoleCommandResponse {
-    let firstname = params.get("firstname").and_then(|v| v.as_str()).unwrap_or("");
-    let lastname = params.get("lastname").and_then(|v| v.as_str()).unwrap_or("");
+    let firstname = params
+        .get("firstname")
+        .and_then(|v| v.as_str())
+        .unwrap_or("");
+    let lastname = params
+        .get("lastname")
+        .and_then(|v| v.as_str())
+        .unwrap_or("");
 
     if firstname.is_empty() || lastname.is_empty() {
-        return ConsoleCommandResponse::error("Missing parameters", "firstname and lastname are required");
+        return ConsoleCommandResponse::error(
+            "Missing parameters",
+            "firstname and lastname are required",
+        );
     }
 
     ConsoleCommandResponse::success(
@@ -2623,7 +2912,7 @@ async fn execute_show_grid_user(params: &serde_json::Value) -> ConsoleCommandRes
             "last_login": null,
             "last_region": null,
             "note": "Grid user lookup requires grid services integration"
-        }))
+        })),
     )
 }
 
@@ -2640,7 +2929,7 @@ async fn execute_show_grid_users_online() -> ConsoleCommandResponse {
             "total": 0,
             "users": [],
             "note": "Grid users online requires presence service integration"
-        }))
+        })),
     )
 }
 
@@ -2656,7 +2945,7 @@ async fn execute_fcache_clearnegatives() -> ConsoleCommandResponse {
         Some(serde_json::json!({
             "cleared_count": 0,
             "note": "Fcache clear negatives requires asset cache integration"
-        }))
+        })),
     )
 }
 
@@ -2672,7 +2961,7 @@ async fn execute_fcache_cachedefaultassets() -> ConsoleCommandResponse {
         Some(serde_json::json!({
             "cached_count": 0,
             "note": "Fcache default assets requires asset cache integration"
-        }))
+        })),
     )
 }
 
@@ -2688,7 +2977,7 @@ async fn execute_fcache_deletedefaultassets() -> ConsoleCommandResponse {
         Some(serde_json::json!({
             "deleted_count": 0,
             "note": "Fcache delete default assets requires asset cache integration"
-        }))
+        })),
     )
 }
 
@@ -2723,12 +3012,18 @@ async fn show_part_endpoint(
     Json(execute_show_part(&request.filter_type, &params).await)
 }
 
-async fn execute_show_part(filter_type: &str, params: &serde_json::Value) -> ConsoleCommandResponse {
+async fn execute_show_part(
+    filter_type: &str,
+    params: &serde_json::Value,
+) -> ConsoleCommandResponse {
     match filter_type {
         "id" => {
             let id = params.get("value").and_then(|v| v.as_str()).unwrap_or("");
             if id.is_empty() {
-                return ConsoleCommandResponse::error("Missing parameter", "Part UUID or local ID is required");
+                return ConsoleCommandResponse::error(
+                    "Missing parameter",
+                    "Part UUID or local ID is required",
+                );
             }
             ConsoleCommandResponse::success(
                 format!("Part details for: {}", id),
@@ -2742,12 +3037,15 @@ async fn execute_show_part(filter_type: &str, params: &serde_json::Value) -> Con
                     "rotation": {"x": 0.0, "y": 0.0, "z": 0.0, "w": 1.0},
                     "scale": {"x": 1.0, "y": 1.0, "z": 1.0},
                     "note": "Part lookup requires scene integration"
-                }))
+                })),
             )
-        },
+        }
         "name" => {
             let name = params.get("value").and_then(|v| v.as_str()).unwrap_or("");
-            let use_regex = params.get("regex").and_then(|v| v.as_bool()).unwrap_or(false);
+            let use_regex = params
+                .get("regex")
+                .and_then(|v| v.as_bool())
+                .unwrap_or(false);
             if name.is_empty() {
                 return ConsoleCommandResponse::error("Missing parameter", "Part name is required");
             }
@@ -2759,9 +3057,9 @@ async fn execute_show_part(filter_type: &str, params: &serde_json::Value) -> Con
                     "count": 0,
                     "parts": [],
                     "note": "Part search requires scene integration"
-                }))
+                })),
             )
-        },
+        }
         "pos" => {
             let x1 = params.get("x1").and_then(|v| v.as_f64()).unwrap_or(0.0);
             let y1 = params.get("y1").and_then(|v| v.as_f64()).unwrap_or(0.0);
@@ -2770,7 +3068,10 @@ async fn execute_show_part(filter_type: &str, params: &serde_json::Value) -> Con
             let y2 = params.get("y2").and_then(|v| v.as_f64()).unwrap_or(256.0);
             let z2 = params.get("z2").and_then(|v| v.as_f64()).unwrap_or(4096.0);
             ConsoleCommandResponse::success(
-                format!("Parts in region ({},{},{}) to ({},{},{})", x1, y1, z1, x2, y2, z2),
+                format!(
+                    "Parts in region ({},{},{}) to ({},{},{})",
+                    x1, y1, z1, x2, y2, z2
+                ),
                 Some(serde_json::json!({
                     "bounds": {
                         "min": {"x": x1, "y": y1, "z": z1},
@@ -2779,10 +3080,13 @@ async fn execute_show_part(filter_type: &str, params: &serde_json::Value) -> Con
                     "count": 0,
                     "parts": [],
                     "note": "Part position search requires scene integration"
-                }))
+                })),
             )
-        },
-        _ => ConsoleCommandResponse::error("Invalid filter type", "Filter must be 'id', 'name', or 'pos'")
+        }
+        _ => ConsoleCommandResponse::error(
+            "Invalid filter type",
+            "Filter must be 'id', 'name', or 'pos'",
+        ),
     }
 }
 
@@ -2799,10 +3103,16 @@ async fn dump_object_endpoint(
 }
 
 async fn execute_dump_object(params: &serde_json::Value) -> ConsoleCommandResponse {
-    let object_id = params.get("object_id").and_then(|v| v.as_str()).unwrap_or("");
+    let object_id = params
+        .get("object_id")
+        .and_then(|v| v.as_str())
+        .unwrap_or("");
 
     if object_id.is_empty() {
-        return ConsoleCommandResponse::error("Missing parameter", "Object UUID or local ID is required");
+        return ConsoleCommandResponse::error(
+            "Missing parameter",
+            "Object UUID or local ID is required",
+        );
     }
 
     ConsoleCommandResponse::success(
@@ -2813,7 +3123,7 @@ async fn execute_dump_object(params: &serde_json::Value) -> ConsoleCommandRespon
             "format": "OpenSim XML",
             "success": true,
             "note": "Object dump requires scene integration"
-        }))
+        })),
     )
 }
 
@@ -2829,12 +3139,15 @@ async fn edit_scale_endpoint(
     State(_state): State<ConsoleApiState>,
     Json(request): Json<EditScaleRequest>,
 ) -> impl IntoResponse {
-    Json(execute_edit_scale(&serde_json::json!({
-        "prim_id": request.prim_id,
-        "x": request.x,
-        "y": request.y,
-        "z": request.z
-    })).await)
+    Json(
+        execute_edit_scale(&serde_json::json!({
+            "prim_id": request.prim_id,
+            "x": request.x,
+            "y": request.y,
+            "z": request.z
+        }))
+        .await,
+    )
 }
 
 async fn execute_edit_scale(params: &serde_json::Value) -> ConsoleCommandResponse {
@@ -2844,7 +3157,10 @@ async fn execute_edit_scale(params: &serde_json::Value) -> ConsoleCommandRespons
     let z = params.get("z").and_then(|v| v.as_f64()).unwrap_or(1.0);
 
     if prim_id.is_empty() {
-        return ConsoleCommandResponse::error("Missing parameter", "Prim UUID or local ID is required");
+        return ConsoleCommandResponse::error(
+            "Missing parameter",
+            "Prim UUID or local ID is required",
+        );
     }
 
     if x <= 0.0 || y <= 0.0 || z <= 0.0 {
@@ -2858,13 +3174,11 @@ async fn execute_edit_scale(params: &serde_json::Value) -> ConsoleCommandRespons
             "new_scale": {"x": x, "y": y, "z": z},
             "success": true,
             "note": "Edit scale requires scene integration"
-        }))
+        })),
     )
 }
 
-async fn show_pending_objects_endpoint(
-    State(_state): State<ConsoleApiState>,
-) -> impl IntoResponse {
+async fn show_pending_objects_endpoint(State(_state): State<ConsoleApiState>) -> impl IntoResponse {
     Json(execute_show_pending_objects().await)
 }
 
@@ -2877,7 +3191,7 @@ async fn execute_show_pending_objects() -> ConsoleCommandResponse {
             "queued_updates": 0,
             "queued_deletes": 0,
             "note": "Pending objects display requires network integration"
-        }))
+        })),
     )
 }
 
@@ -2953,16 +3267,14 @@ fn get_all_command_definitions() -> Vec<CommandDefinition> {
             group: "terrain".to_string(),
             description: "Load terrain from file".to_string(),
             syntax: "terrain load [filename]".to_string(),
-            params: vec![
-                ParamDefinition {
-                    name: "filename".to_string(),
-                    description: "Path to terrain file (.raw, .r32, .png)".to_string(),
-                    param_type: "file".to_string(),
-                    required: true,
-                    default_value: None,
-                    choices: None,
-                },
-            ],
+            params: vec![ParamDefinition {
+                name: "filename".to_string(),
+                description: "Path to terrain file (.raw, .r32, .png)".to_string(),
+                param_type: "file".to_string(),
+                required: true,
+                default_value: None,
+                choices: None,
+            }],
             implemented: false,
         },
         CommandDefinition {
@@ -2970,16 +3282,14 @@ fn get_all_command_definitions() -> Vec<CommandDefinition> {
             group: "terrain".to_string(),
             description: "Save terrain to file".to_string(),
             syntax: "terrain save [filename]".to_string(),
-            params: vec![
-                ParamDefinition {
-                    name: "filename".to_string(),
-                    description: "Path to save terrain file".to_string(),
-                    param_type: "path".to_string(),
-                    required: true,
-                    default_value: None,
-                    choices: None,
-                },
-            ],
+            params: vec![ParamDefinition {
+                name: "filename".to_string(),
+                description: "Path to save terrain file".to_string(),
+                param_type: "path".to_string(),
+                required: true,
+                default_value: None,
+                choices: None,
+            }],
             implemented: false,
         },
         CommandDefinition {
@@ -2987,16 +3297,14 @@ fn get_all_command_definitions() -> Vec<CommandDefinition> {
             group: "terrain".to_string(),
             description: "Fill terrain with uniform height".to_string(),
             syntax: "terrain fill [height]".to_string(),
-            params: vec![
-                ParamDefinition {
-                    name: "height".to_string(),
-                    description: "Height value to fill terrain with".to_string(),
-                    param_type: "number".to_string(),
-                    required: true,
-                    default_value: None,
-                    choices: None,
-                },
-            ],
+            params: vec![ParamDefinition {
+                name: "height".to_string(),
+                description: "Height value to fill terrain with".to_string(),
+                param_type: "number".to_string(),
+                required: true,
+                default_value: None,
+                choices: None,
+            }],
             implemented: false,
         },
         CommandDefinition {
@@ -3053,16 +3361,14 @@ fn get_all_command_definitions() -> Vec<CommandDefinition> {
             group: "users".to_string(),
             description: "Set minimum login level".to_string(),
             syntax: "login level [level]".to_string(),
-            params: vec![
-                ParamDefinition {
-                    name: "level".to_string(),
-                    description: "Minimum user level (0=all, 100=admin, 200=god)".to_string(),
-                    param_type: "integer".to_string(),
-                    required: true,
-                    default_value: None,
-                    choices: Some(vec!["0".to_string(), "100".to_string(), "200".to_string()]),
-                },
-            ],
+            params: vec![ParamDefinition {
+                name: "level".to_string(),
+                description: "Minimum user level (0=all, 100=admin, 200=god)".to_string(),
+                param_type: "integer".to_string(),
+                required: true,
+                default_value: None,
+                choices: Some(vec!["0".to_string(), "100".to_string(), "200".to_string()]),
+            }],
             implemented: true,
         },
         CommandDefinition {
@@ -3078,16 +3384,14 @@ fn get_all_command_definitions() -> Vec<CommandDefinition> {
             group: "users".to_string(),
             description: "Set login message".to_string(),
             syntax: "login text [message]".to_string(),
-            params: vec![
-                ParamDefinition {
-                    name: "message".to_string(),
-                    description: "Message shown during login".to_string(),
-                    param_type: "string".to_string(),
-                    required: true,
-                    default_value: None,
-                    choices: None,
-                },
-            ],
+            params: vec![ParamDefinition {
+                name: "message".to_string(),
+                description: "Message shown during login".to_string(),
+                param_type: "string".to_string(),
+                required: true,
+                default_value: None,
+                choices: None,
+            }],
             implemented: true,
         },
         CommandDefinition {
@@ -3211,16 +3515,14 @@ fn get_all_command_definitions() -> Vec<CommandDefinition> {
             group: "objects".to_string(),
             description: "Delete object by UUID or local ID".to_string(),
             syntax: "delete object id [UUID-or-localID]".to_string(),
-            params: vec![
-                ParamDefinition {
-                    name: "value".to_string(),
-                    description: "UUID or local ID of the object".to_string(),
-                    param_type: "string".to_string(),
-                    required: true,
-                    default_value: None,
-                    choices: None,
-                },
-            ],
+            params: vec![ParamDefinition {
+                name: "value".to_string(),
+                description: "UUID or local ID of the object".to_string(),
+                param_type: "string".to_string(),
+                required: true,
+                default_value: None,
+                choices: None,
+            }],
             implemented: true,
         },
         CommandDefinition {
@@ -3228,16 +3530,14 @@ fn get_all_command_definitions() -> Vec<CommandDefinition> {
             group: "objects".to_string(),
             description: "Delete objects by name".to_string(),
             syntax: "delete object name [--regex] [name]".to_string(),
-            params: vec![
-                ParamDefinition {
-                    name: "value".to_string(),
-                    description: "Name or regex pattern".to_string(),
-                    param_type: "string".to_string(),
-                    required: true,
-                    default_value: None,
-                    choices: None,
-                },
-            ],
+            params: vec![ParamDefinition {
+                name: "value".to_string(),
+                description: "Name or regex pattern".to_string(),
+                param_type: "string".to_string(),
+                required: true,
+                default_value: None,
+                choices: None,
+            }],
             implemented: true,
         },
         CommandDefinition {
@@ -3245,16 +3545,14 @@ fn get_all_command_definitions() -> Vec<CommandDefinition> {
             group: "objects".to_string(),
             description: "Delete all objects by owner".to_string(),
             syntax: "delete object owner [UUID]".to_string(),
-            params: vec![
-                ParamDefinition {
-                    name: "value".to_string(),
-                    description: "Owner UUID".to_string(),
-                    param_type: "uuid".to_string(),
-                    required: true,
-                    default_value: None,
-                    choices: None,
-                },
-            ],
+            params: vec![ParamDefinition {
+                name: "value".to_string(),
+                description: "Owner UUID".to_string(),
+                param_type: "uuid".to_string(),
+                required: true,
+                default_value: None,
+                choices: None,
+            }],
             implemented: true,
         },
         CommandDefinition {
@@ -3262,16 +3560,14 @@ fn get_all_command_definitions() -> Vec<CommandDefinition> {
             group: "objects".to_string(),
             description: "Delete objects in position range".to_string(),
             syntax: "delete object pos [x1,y1,z1] [x2,y2,z2]".to_string(),
-            params: vec![
-                ParamDefinition {
-                    name: "value".to_string(),
-                    description: "Position range".to_string(),
-                    param_type: "string".to_string(),
-                    required: true,
-                    default_value: None,
-                    choices: None,
-                },
-            ],
+            params: vec![ParamDefinition {
+                name: "value".to_string(),
+                description: "Position range".to_string(),
+                param_type: "string".to_string(),
+                required: true,
+                default_value: None,
+                choices: None,
+            }],
             implemented: true,
         },
         CommandDefinition {
@@ -3328,16 +3624,14 @@ fn get_all_command_definitions() -> Vec<CommandDefinition> {
             group: "objects".to_string(),
             description: "Scale all scene objects".to_string(),
             syntax: "scale scene [factor]".to_string(),
-            params: vec![
-                ParamDefinition {
-                    name: "factor".to_string(),
-                    description: "Scale factor".to_string(),
-                    param_type: "number".to_string(),
-                    required: true,
-                    default_value: None,
-                    choices: None,
-                },
-            ],
+            params: vec![ParamDefinition {
+                name: "factor".to_string(),
+                description: "Scale factor".to_string(),
+                param_type: "number".to_string(),
+                required: true,
+                default_value: None,
+                choices: None,
+            }],
             implemented: true,
         },
         CommandDefinition {
@@ -3386,16 +3680,14 @@ fn get_all_command_definitions() -> Vec<CommandDefinition> {
             group: "estates".to_string(),
             description: "Create a new estate".to_string(),
             syntax: "estate create [name]".to_string(),
-            params: vec![
-                ParamDefinition {
-                    name: "name".to_string(),
-                    description: "Name for the new estate".to_string(),
-                    param_type: "string".to_string(),
-                    required: true,
-                    default_value: None,
-                    choices: None,
-                },
-            ],
+            params: vec![ParamDefinition {
+                name: "name".to_string(),
+                description: "Name for the new estate".to_string(),
+                param_type: "string".to_string(),
+                required: true,
+                default_value: None,
+                choices: None,
+            }],
             implemented: true,
         },
         CommandDefinition {
@@ -3527,16 +3819,14 @@ fn get_all_command_definitions() -> Vec<CommandDefinition> {
             group: "hypergrid".to_string(),
             description: "Remove a hypergrid link".to_string(),
             syntax: "unlink-region [name]".to_string(),
-            params: vec![
-                ParamDefinition {
-                    name: "name".to_string(),
-                    description: "Name of the linked region to remove".to_string(),
-                    param_type: "string".to_string(),
-                    required: true,
-                    default_value: None,
-                    choices: None,
-                },
-            ],
+            params: vec![ParamDefinition {
+                name: "name".to_string(),
+                description: "Name of the linked region to remove".to_string(),
+                param_type: "string".to_string(),
+                required: true,
+                default_value: None,
+                choices: None,
+            }],
             implemented: true,
         },
         CommandDefinition {
@@ -3577,16 +3867,14 @@ fn get_all_command_definitions() -> Vec<CommandDefinition> {
             group: "assets".to_string(),
             description: "Show asset information by UUID".to_string(),
             syntax: "show asset [UUID]".to_string(),
-            params: vec![
-                ParamDefinition {
-                    name: "uuid".to_string(),
-                    description: "Asset UUID".to_string(),
-                    param_type: "uuid".to_string(),
-                    required: true,
-                    default_value: None,
-                    choices: None,
-                },
-            ],
+            params: vec![ParamDefinition {
+                name: "uuid".to_string(),
+                description: "Asset UUID".to_string(),
+                param_type: "uuid".to_string(),
+                required: true,
+                default_value: None,
+                choices: None,
+            }],
             implemented: true,
         },
         CommandDefinition {
@@ -3619,16 +3907,14 @@ fn get_all_command_definitions() -> Vec<CommandDefinition> {
             group: "assets".to_string(),
             description: "Delete asset (disabled for safety)".to_string(),
             syntax: "delete asset [UUID]".to_string(),
-            params: vec![
-                ParamDefinition {
-                    name: "uuid".to_string(),
-                    description: "Asset UUID".to_string(),
-                    param_type: "uuid".to_string(),
-                    required: true,
-                    default_value: None,
-                    choices: None,
-                },
-            ],
+            params: vec![ParamDefinition {
+                name: "uuid".to_string(),
+                description: "Asset UUID".to_string(),
+                param_type: "uuid".to_string(),
+                required: true,
+                default_value: None,
+                choices: None,
+            }],
             implemented: true,
         },
         CommandDefinition {
@@ -3644,16 +3930,18 @@ fn get_all_command_definitions() -> Vec<CommandDefinition> {
             group: "assets".to_string(),
             description: "Clear asset cache".to_string(),
             syntax: "fcache clear [file|memory]".to_string(),
-            params: vec![
-                ParamDefinition {
-                    name: "target".to_string(),
-                    description: "Cache to clear".to_string(),
-                    param_type: "choice".to_string(),
-                    required: false,
-                    default_value: Some("all".to_string()),
-                    choices: Some(vec!["all".to_string(), "file".to_string(), "memory".to_string()]),
-                },
-            ],
+            params: vec![ParamDefinition {
+                name: "target".to_string(),
+                description: "Cache to clear".to_string(),
+                param_type: "choice".to_string(),
+                required: false,
+                default_value: Some("all".to_string()),
+                choices: Some(vec![
+                    "all".to_string(),
+                    "file".to_string(),
+                    "memory".to_string(),
+                ]),
+            }],
             implemented: true,
         },
         CommandDefinition {
@@ -3669,16 +3957,14 @@ fn get_all_command_definitions() -> Vec<CommandDefinition> {
             group: "assets".to_string(),
             description: "Expire old cache entries".to_string(),
             syntax: "fcache expire [datetime]".to_string(),
-            params: vec![
-                ParamDefinition {
-                    name: "datetime".to_string(),
-                    description: "Expire entries older than this".to_string(),
-                    param_type: "string".to_string(),
-                    required: false,
-                    default_value: Some("now".to_string()),
-                    choices: None,
-                },
-            ],
+            params: vec![ParamDefinition {
+                name: "datetime".to_string(),
+                description: "Expire entries older than this".to_string(),
+                param_type: "string".to_string(),
+                required: false,
+                default_value: Some("now".to_string()),
+                choices: None,
+            }],
             implemented: true,
         },
         CommandDefinition {
@@ -3686,16 +3972,14 @@ fn get_all_command_definitions() -> Vec<CommandDefinition> {
             group: "archiving".to_string(),
             description: "Load scene from XML file".to_string(),
             syntax: "load xml [filename]".to_string(),
-            params: vec![
-                ParamDefinition {
-                    name: "filename".to_string(),
-                    description: "XML file path".to_string(),
-                    param_type: "file".to_string(),
-                    required: true,
-                    default_value: None,
-                    choices: None,
-                },
-            ],
+            params: vec![ParamDefinition {
+                name: "filename".to_string(),
+                description: "XML file path".to_string(),
+                param_type: "file".to_string(),
+                required: true,
+                default_value: None,
+                choices: None,
+            }],
             implemented: true,
         },
         CommandDefinition {
@@ -3703,16 +3987,14 @@ fn get_all_command_definitions() -> Vec<CommandDefinition> {
             group: "archiving".to_string(),
             description: "Save scene to XML file".to_string(),
             syntax: "save xml [filename]".to_string(),
-            params: vec![
-                ParamDefinition {
-                    name: "filename".to_string(),
-                    description: "Output XML file path".to_string(),
-                    param_type: "path".to_string(),
-                    required: true,
-                    default_value: None,
-                    choices: None,
-                },
-            ],
+            params: vec![ParamDefinition {
+                name: "filename".to_string(),
+                description: "Output XML file path".to_string(),
+                param_type: "path".to_string(),
+                required: true,
+                default_value: None,
+                choices: None,
+            }],
             implemented: true,
         },
         CommandDefinition {
@@ -3720,16 +4002,14 @@ fn get_all_command_definitions() -> Vec<CommandDefinition> {
             group: "archiving".to_string(),
             description: "Load scene from XML2 file".to_string(),
             syntax: "load xml2 [filename]".to_string(),
-            params: vec![
-                ParamDefinition {
-                    name: "filename".to_string(),
-                    description: "XML2 file path".to_string(),
-                    param_type: "file".to_string(),
-                    required: true,
-                    default_value: None,
-                    choices: None,
-                },
-            ],
+            params: vec![ParamDefinition {
+                name: "filename".to_string(),
+                description: "XML2 file path".to_string(),
+                param_type: "file".to_string(),
+                required: true,
+                default_value: None,
+                choices: None,
+            }],
             implemented: true,
         },
         CommandDefinition {
@@ -3737,16 +4017,14 @@ fn get_all_command_definitions() -> Vec<CommandDefinition> {
             group: "archiving".to_string(),
             description: "Save scene to XML2 file".to_string(),
             syntax: "save xml2 [filename]".to_string(),
-            params: vec![
-                ParamDefinition {
-                    name: "filename".to_string(),
-                    description: "Output XML2 file path".to_string(),
-                    param_type: "path".to_string(),
-                    required: true,
-                    default_value: None,
-                    choices: None,
-                },
-            ],
+            params: vec![ParamDefinition {
+                name: "filename".to_string(),
+                description: "Output XML2 file path".to_string(),
+                param_type: "path".to_string(),
+                required: true,
+                default_value: None,
+                choices: None,
+            }],
             implemented: true,
         },
         CommandDefinition {
@@ -3754,16 +4032,14 @@ fn get_all_command_definitions() -> Vec<CommandDefinition> {
             group: "archiving".to_string(),
             description: "Save prims to XML2 file".to_string(),
             syntax: "save prims xml2 [filename]".to_string(),
-            params: vec![
-                ParamDefinition {
-                    name: "filename".to_string(),
-                    description: "Output XML2 file path".to_string(),
-                    param_type: "path".to_string(),
-                    required: true,
-                    default_value: None,
-                    choices: None,
-                },
-            ],
+            params: vec![ParamDefinition {
+                name: "filename".to_string(),
+                description: "Output XML2 file path".to_string(),
+                param_type: "path".to_string(),
+                required: true,
+                default_value: None,
+                choices: None,
+            }],
             implemented: true,
         },
         CommandDefinition {
@@ -3796,16 +4072,14 @@ fn get_all_command_definitions() -> Vec<CommandDefinition> {
             group: "regions".to_string(),
             description: "Delete a region".to_string(),
             syntax: "delete-region [name]".to_string(),
-            params: vec![
-                ParamDefinition {
-                    name: "name".to_string(),
-                    description: "Name of the region to delete".to_string(),
-                    param_type: "string".to_string(),
-                    required: true,
-                    default_value: None,
-                    choices: None,
-                },
-            ],
+            params: vec![ParamDefinition {
+                name: "name".to_string(),
+                description: "Name of the region to delete".to_string(),
+                param_type: "string".to_string(),
+                required: true,
+                default_value: None,
+                choices: None,
+            }],
             implemented: true,
         },
         CommandDefinition {
@@ -3837,16 +4111,14 @@ fn get_all_command_definitions() -> Vec<CommandDefinition> {
             group: "regions".to_string(),
             description: "Change current region".to_string(),
             syntax: "change region [name]".to_string(),
-            params: vec![
-                ParamDefinition {
-                    name: "name".to_string(),
-                    description: "Name of region to switch to".to_string(),
-                    param_type: "string".to_string(),
-                    required: true,
-                    default_value: None,
-                    choices: None,
-                },
-            ],
+            params: vec![ParamDefinition {
+                name: "name".to_string(),
+                description: "Name of region to switch to".to_string(),
+                param_type: "string".to_string(),
+                required: true,
+                default_value: None,
+                choices: None,
+            }],
             implemented: true,
         },
         CommandDefinition {
@@ -3920,16 +4192,14 @@ fn get_all_command_definitions() -> Vec<CommandDefinition> {
             group: "terrain".to_string(),
             description: "Elevate terrain".to_string(),
             syntax: "terrain elevate [amount]".to_string(),
-            params: vec![
-                ParamDefinition {
-                    name: "amount".to_string(),
-                    description: "Amount to elevate".to_string(),
-                    param_type: "number".to_string(),
-                    required: true,
-                    default_value: None,
-                    choices: None,
-                },
-            ],
+            params: vec![ParamDefinition {
+                name: "amount".to_string(),
+                description: "Amount to elevate".to_string(),
+                param_type: "number".to_string(),
+                required: true,
+                default_value: None,
+                choices: None,
+            }],
             implemented: true,
         },
         CommandDefinition {
@@ -3937,16 +4207,14 @@ fn get_all_command_definitions() -> Vec<CommandDefinition> {
             group: "terrain".to_string(),
             description: "Lower terrain".to_string(),
             syntax: "terrain lower [amount]".to_string(),
-            params: vec![
-                ParamDefinition {
-                    name: "amount".to_string(),
-                    description: "Amount to lower".to_string(),
-                    param_type: "number".to_string(),
-                    required: true,
-                    default_value: None,
-                    choices: None,
-                },
-            ],
+            params: vec![ParamDefinition {
+                name: "amount".to_string(),
+                description: "Amount to lower".to_string(),
+                param_type: "number".to_string(),
+                required: true,
+                default_value: None,
+                choices: None,
+            }],
             implemented: true,
         },
         CommandDefinition {
@@ -3954,16 +4222,14 @@ fn get_all_command_definitions() -> Vec<CommandDefinition> {
             group: "terrain".to_string(),
             description: "Multiply terrain height".to_string(),
             syntax: "terrain multiply [factor]".to_string(),
-            params: vec![
-                ParamDefinition {
-                    name: "factor".to_string(),
-                    description: "Multiplication factor".to_string(),
-                    param_type: "number".to_string(),
-                    required: true,
-                    default_value: None,
-                    choices: None,
-                },
-            ],
+            params: vec![ParamDefinition {
+                name: "factor".to_string(),
+                description: "Multiplication factor".to_string(),
+                param_type: "number".to_string(),
+                required: true,
+                default_value: None,
+                choices: None,
+            }],
             implemented: true,
         },
         CommandDefinition {
@@ -3995,16 +4261,14 @@ fn get_all_command_definitions() -> Vec<CommandDefinition> {
             group: "terrain".to_string(),
             description: "Apply terrain effect".to_string(),
             syntax: "terrain effect [name]".to_string(),
-            params: vec![
-                ParamDefinition {
-                    name: "name".to_string(),
-                    description: "Effect name".to_string(),
-                    param_type: "string".to_string(),
-                    required: true,
-                    default_value: None,
-                    choices: None,
-                },
-            ],
+            params: vec![ParamDefinition {
+                name: "name".to_string(),
+                description: "Effect name".to_string(),
+                param_type: "string".to_string(),
+                required: true,
+                default_value: None,
+                choices: None,
+            }],
             implemented: true,
         },
         CommandDefinition {
@@ -4012,16 +4276,14 @@ fn get_all_command_definitions() -> Vec<CommandDefinition> {
             group: "terrain".to_string(),
             description: "Flip terrain".to_string(),
             syntax: "terrain flip [direction]".to_string(),
-            params: vec![
-                ParamDefinition {
-                    name: "direction".to_string(),
-                    description: "Flip direction (x or y)".to_string(),
-                    param_type: "choice".to_string(),
-                    required: true,
-                    default_value: None,
-                    choices: Some(vec!["x".to_string(), "y".to_string()]),
-                },
-            ],
+            params: vec![ParamDefinition {
+                name: "direction".to_string(),
+                description: "Flip direction (x or y)".to_string(),
+                param_type: "choice".to_string(),
+                required: true,
+                default_value: None,
+                choices: Some(vec!["x".to_string(), "y".to_string()]),
+            }],
             implemented: true,
         },
         CommandDefinition {
@@ -4054,16 +4316,14 @@ fn get_all_command_definitions() -> Vec<CommandDefinition> {
             group: "terrain".to_string(),
             description: "Set terrain minimum height".to_string(),
             syntax: "terrain min [height]".to_string(),
-            params: vec![
-                ParamDefinition {
-                    name: "height".to_string(),
-                    description: "Minimum height".to_string(),
-                    param_type: "number".to_string(),
-                    required: true,
-                    default_value: None,
-                    choices: None,
-                },
-            ],
+            params: vec![ParamDefinition {
+                name: "height".to_string(),
+                description: "Minimum height".to_string(),
+                param_type: "number".to_string(),
+                required: true,
+                default_value: None,
+                choices: None,
+            }],
             implemented: true,
         },
         CommandDefinition {
@@ -4071,16 +4331,14 @@ fn get_all_command_definitions() -> Vec<CommandDefinition> {
             group: "terrain".to_string(),
             description: "Set terrain maximum height".to_string(),
             syntax: "terrain max [height]".to_string(),
-            params: vec![
-                ParamDefinition {
-                    name: "height".to_string(),
-                    description: "Maximum height".to_string(),
-                    param_type: "number".to_string(),
-                    required: true,
-                    default_value: None,
-                    choices: None,
-                },
-            ],
+            params: vec![ParamDefinition {
+                name: "height".to_string(),
+                description: "Maximum height".to_string(),
+                param_type: "number".to_string(),
+                required: true,
+                default_value: None,
+                choices: None,
+            }],
             implemented: true,
         },
         CommandDefinition {
@@ -4137,16 +4395,14 @@ fn get_all_command_definitions() -> Vec<CommandDefinition> {
             group: "general".to_string(),
             description: "Execute command script".to_string(),
             syntax: "command-script [path]".to_string(),
-            params: vec![
-                ParamDefinition {
-                    name: "path".to_string(),
-                    description: "Script file path".to_string(),
-                    param_type: "file".to_string(),
-                    required: true,
-                    default_value: None,
-                    choices: None,
-                },
-            ],
+            params: vec![ParamDefinition {
+                name: "path".to_string(),
+                description: "Script file path".to_string(),
+                param_type: "file".to_string(),
+                required: true,
+                default_value: None,
+                choices: None,
+            }],
             implemented: true,
         },
         CommandDefinition {
@@ -4154,16 +4410,14 @@ fn get_all_command_definitions() -> Vec<CommandDefinition> {
             group: "general".to_string(),
             description: "Show configuration".to_string(),
             syntax: "config show [section]".to_string(),
-            params: vec![
-                ParamDefinition {
-                    name: "section".to_string(),
-                    description: "Configuration section".to_string(),
-                    param_type: "string".to_string(),
-                    required: false,
-                    default_value: Some("all".to_string()),
-                    choices: None,
-                },
-            ],
+            params: vec![ParamDefinition {
+                name: "section".to_string(),
+                description: "Configuration section".to_string(),
+                param_type: "string".to_string(),
+                required: false,
+                default_value: Some("all".to_string()),
+                choices: None,
+            }],
             implemented: true,
         },
         CommandDefinition {
@@ -4244,7 +4498,13 @@ fn get_all_command_definitions() -> Vec<CommandDefinition> {
                     param_type: "choice".to_string(),
                     required: true,
                     default_value: None,
-                    choices: Some(vec!["trace".to_string(), "debug".to_string(), "info".to_string(), "warn".to_string(), "error".to_string()]),
+                    choices: Some(vec![
+                        "trace".to_string(),
+                        "debug".to_string(),
+                        "info".to_string(),
+                        "warn".to_string(),
+                        "error".to_string(),
+                    ]),
                 },
             ],
             implemented: true,
@@ -4319,16 +4579,14 @@ fn get_all_command_definitions() -> Vec<CommandDefinition> {
             group: "objects".to_string(),
             description: "Show part details by UUID or local ID".to_string(),
             syntax: "show part id [UUID-or-localID]".to_string(),
-            params: vec![
-                ParamDefinition {
-                    name: "id".to_string(),
-                    description: "Part UUID or local ID".to_string(),
-                    param_type: "string".to_string(),
-                    required: true,
-                    default_value: None,
-                    choices: None,
-                },
-            ],
+            params: vec![ParamDefinition {
+                name: "id".to_string(),
+                description: "Part UUID or local ID".to_string(),
+                param_type: "string".to_string(),
+                required: true,
+                default_value: None,
+                choices: None,
+            }],
             implemented: true,
         },
         CommandDefinition {
@@ -4418,16 +4676,14 @@ fn get_all_command_definitions() -> Vec<CommandDefinition> {
             group: "objects".to_string(),
             description: "Dump object to XML file".to_string(),
             syntax: "dump object id [UUID-or-localID]".to_string(),
-            params: vec![
-                ParamDefinition {
-                    name: "object_id".to_string(),
-                    description: "Object UUID or local ID".to_string(),
-                    param_type: "string".to_string(),
-                    required: true,
-                    default_value: None,
-                    choices: None,
-                },
-            ],
+            params: vec![ParamDefinition {
+                name: "object_id".to_string(),
+                description: "Object UUID or local ID".to_string(),
+                param_type: "string".to_string(),
+                required: true,
+                default_value: None,
+                choices: None,
+            }],
             implemented: true,
         },
         CommandDefinition {

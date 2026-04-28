@@ -1,23 +1,23 @@
 #[cfg(feature = "jit")]
 mod jit_impl {
+    use anyhow::{anyhow, Result};
     use std::collections::HashMap;
     use std::sync::Arc;
-    use anyhow::{anyhow, Result};
+    use tracing::{debug, info, warn};
     use uuid::Uuid;
-    use tracing::{info, debug, warn};
 
     use cranelift::prelude::*;
-    use cranelift_jit::{JITBuilder, JITModule};
-    use cranelift_module::{DataDescription, Module, Linkage};
     use cranelift_codegen::ir::types;
+    use cranelift_jit::{JITBuilder, JITModule};
+    use cranelift_module::{DataDescription, Linkage, Module};
 
-    use crate::scripting::lsl_interpreter::{ASTNode, LSLLexer, LSLParser, Token};
-    use crate::scripting::{LSLValue, LSLVector, LSLRotation};
-    use crate::scripting::executor::{
-        CompiledScript, ExecutionResult, ScriptExecutor, ScriptInstance,
-        UserFunction, StateDefinition, EventHandler,
-    };
     use crate::scripting::executor::tree_walk::TreeWalkExecutor;
+    use crate::scripting::executor::{
+        CompiledScript, EventHandler, ExecutionResult, ScriptExecutor, ScriptInstance,
+        StateDefinition, UserFunction,
+    };
+    use crate::scripting::lsl_interpreter::{ASTNode, LSLLexer, LSLParser, Token};
+    use crate::scripting::{LSLRotation, LSLValue, LSLVector};
 
     struct JitCompiledFunction {
         func_ptr: *const u8,
@@ -46,15 +46,23 @@ mod jit_impl {
             func: &UserFunction,
         ) -> Result<Option<JitCompiledFunction>> {
             let mut flag_builder = settings::builder();
-            flag_builder.set("use_colocated_libcalls", "false").map_err(|e| anyhow!("{}", e))?;
-            flag_builder.set("is_pic", "false").map_err(|e| anyhow!("{}", e))?;
-            flag_builder.set("opt_level", "speed").map_err(|e| anyhow!("{}", e))?;
+            flag_builder
+                .set("use_colocated_libcalls", "false")
+                .map_err(|e| anyhow!("{}", e))?;
+            flag_builder
+                .set("is_pic", "false")
+                .map_err(|e| anyhow!("{}", e))?;
+            flag_builder
+                .set("opt_level", "speed")
+                .map_err(|e| anyhow!("{}", e))?;
 
             let isa_builder = cranelift_codegen::isa::lookup(target_lexicon::Triple::host())
                 .map_err(|e| anyhow!("Failed to create ISA builder: {}", e))?;
 
             let flags = settings::Flags::new(flag_builder);
-            let isa = isa_builder.finish(flags).map_err(|e| anyhow!("Failed to build ISA: {}", e))?;
+            let isa = isa_builder
+                .finish(flags)
+                .map_err(|e| anyhow!("Failed to build ISA: {}", e))?;
 
             let mut builder = JITBuilder::with_isa(isa, cranelift_module::default_libcall_names());
             let mut module = JITModule::new(builder);
@@ -72,11 +80,9 @@ mod jit_impl {
             }
             sig.returns.push(AbiParam::new(int_type));
 
-            let func_id = module.declare_function(
-                &func.name,
-                Linkage::Export,
-                &sig,
-            ).map_err(|e| anyhow!("declare_function: {}", e))?;
+            let func_id = module
+                .declare_function(&func.name, Linkage::Export, &sig)
+                .map_err(|e| anyhow!("declare_function: {}", e))?;
 
             let mut ctx = module.make_context();
             ctx.func.signature = sig;
@@ -96,16 +102,19 @@ mod jit_impl {
                     local_vars.insert(pname.clone(), params[i]);
                 }
 
-                let result = self.compile_body_to_ir(&mut builder, &func.body, &mut local_vars, int_type)?;
+                let result =
+                    self.compile_body_to_ir(&mut builder, &func.body, &mut local_vars, int_type)?;
 
                 builder.ins().return_(&[result]);
                 builder.finalize();
             }
 
-            module.define_function(func_id, &mut ctx)
+            module
+                .define_function(func_id, &mut ctx)
                 .map_err(|e| anyhow!("define_function: {}", e))?;
             module.clear_context(&mut ctx);
-            module.finalize_definitions()
+            module
+                .finalize_definitions()
                 .map_err(|e| anyhow!("finalize: {}", e))?;
 
             let code = module.get_finalized_function(func_id);
@@ -141,35 +150,63 @@ mod jit_impl {
             match node {
                 ASTNode::Literal(LSLValue::Integer(_)) => true,
                 ASTNode::Identifier(_) => true,
-                ASTNode::Variable { var_type, value, .. } => {
-                    var_type == "integer" && value.as_ref().map_or(true, |v| self.node_is_integer_safe(v))
+                ASTNode::Variable {
+                    var_type, value, ..
+                } => {
+                    var_type == "integer"
+                        && value
+                            .as_ref()
+                            .map_or(true, |v| self.node_is_integer_safe(v))
                 }
                 ASTNode::Assignment { target, value } => {
                     self.node_is_integer_safe(target) && self.node_is_integer_safe(value)
                 }
-                ASTNode::BinaryOp { left, operator, right } => {
-                    matches!(operator,
-                        Token::Plus | Token::Minus | Token::Multiply | Token::Divide |
-                        Token::Modulo | Token::BitAnd | Token::BitOr | Token::BitXor |
-                        Token::ShiftLeft | Token::ShiftRight |
-                        Token::Equal | Token::NotEqual | Token::Less | Token::Greater |
-                        Token::LessEqual | Token::GreaterEqual
-                    ) && self.node_is_integer_safe(left) && self.node_is_integer_safe(right)
+                ASTNode::BinaryOp {
+                    left,
+                    operator,
+                    right,
+                } => {
+                    matches!(
+                        operator,
+                        Token::Plus
+                            | Token::Minus
+                            | Token::Multiply
+                            | Token::Divide
+                            | Token::Modulo
+                            | Token::BitAnd
+                            | Token::BitOr
+                            | Token::BitXor
+                            | Token::ShiftLeft
+                            | Token::ShiftRight
+                            | Token::Equal
+                            | Token::NotEqual
+                            | Token::Less
+                            | Token::Greater
+                            | Token::LessEqual
+                            | Token::GreaterEqual
+                    ) && self.node_is_integer_safe(left)
+                        && self.node_is_integer_safe(right)
                 }
                 ASTNode::UnaryOp { operator, operand } => {
                     matches!(operator, Token::Minus | Token::Not | Token::BitNot)
                         && self.node_is_integer_safe(operand)
                 }
-                ASTNode::PreIncrement(e) | ASTNode::PreDecrement(e) |
-                ASTNode::PostIncrement(e) | ASTNode::PostDecrement(e) => {
-                    self.node_is_integer_safe(e)
-                }
+                ASTNode::PreIncrement(e)
+                | ASTNode::PreDecrement(e)
+                | ASTNode::PostIncrement(e)
+                | ASTNode::PostDecrement(e) => self.node_is_integer_safe(e),
                 ASTNode::Return(Some(e)) => self.node_is_integer_safe(e),
                 ASTNode::Return(None) => true,
-                ASTNode::If { condition, then_body, else_body } => {
+                ASTNode::If {
+                    condition,
+                    then_body,
+                    else_body,
+                } => {
                     self.node_is_integer_safe(condition)
                         && self.body_is_integer_only(then_body)
-                        && else_body.as_ref().map_or(true, |b| self.body_is_integer_only(b))
+                        && else_body
+                            .as_ref()
+                            .map_or(true, |b| self.body_is_integer_only(b))
                 }
                 ASTNode::While { condition, body } => {
                     self.node_is_integer_safe(condition) && self.body_is_integer_only(body)
@@ -239,7 +276,11 @@ mod jit_impl {
                     Ok(val)
                 }
 
-                ASTNode::BinaryOp { left, operator, right } => {
+                ASTNode::BinaryOp {
+                    left,
+                    operator,
+                    right,
+                } => {
                     let lhs = self.compile_node_to_ir(builder, left, locals, int_type)?;
                     let rhs = self.compile_node_to_ir(builder, right, locals, int_type)?;
 
@@ -275,7 +316,9 @@ mod jit_impl {
                             builder.ins().uextend(int_type, cmp)
                         }
                         Token::GreaterEqual => {
-                            let cmp = builder.ins().icmp(IntCC::SignedGreaterThanOrEqual, lhs, rhs);
+                            let cmp = builder
+                                .ins()
+                                .icmp(IntCC::SignedGreaterThanOrEqual, lhs, rhs);
                             builder.ins().uextend(int_type, cmp)
                         }
                         _ => return Err(anyhow!("Unsupported operator in JIT")),
@@ -300,7 +343,9 @@ mod jit_impl {
 
                 ASTNode::PreIncrement(expr) => {
                     if let ASTNode::Identifier(name) = expr.as_ref() {
-                        let val = locals.get(name).copied()
+                        let val = locals
+                            .get(name)
+                            .copied()
                             .ok_or_else(|| anyhow!("Undefined: {}", name))?;
                         let one = builder.ins().iconst(int_type, 1);
                         let result = builder.ins().iadd(val, one);
@@ -313,7 +358,9 @@ mod jit_impl {
 
                 ASTNode::PreDecrement(expr) => {
                     if let ASTNode::Identifier(name) = expr.as_ref() {
-                        let val = locals.get(name).copied()
+                        let val = locals
+                            .get(name)
+                            .copied()
                             .ok_or_else(|| anyhow!("Undefined: {}", name))?;
                         let one = builder.ins().iconst(int_type, 1);
                         let result = builder.ins().isub(val, one);
@@ -328,9 +375,7 @@ mod jit_impl {
                     self.compile_node_to_ir(builder, expr, locals, int_type)
                 }
 
-                ASTNode::Return(None) => {
-                    Ok(builder.ins().iconst(int_type, 0))
-                }
+                ASTNode::Return(None) => Ok(builder.ins().iconst(int_type, 0)),
 
                 _ => Ok(builder.ins().iconst(int_type, 0)),
             }
@@ -364,14 +409,14 @@ pub use jit_impl::CraneliftExecutor;
 #[cfg(not(feature = "jit"))]
 pub mod fallback {
     use anyhow::Result;
-    use uuid::Uuid;
     use tracing::warn;
+    use uuid::Uuid;
 
-    use crate::scripting::{LSLValue};
+    use crate::scripting::executor::tree_walk::TreeWalkExecutor;
     use crate::scripting::executor::{
         CompiledScript, ExecutionResult, ScriptExecutor, ScriptInstance,
     };
-    use crate::scripting::executor::tree_walk::TreeWalkExecutor;
+    use crate::scripting::LSLValue;
 
     pub struct CraneliftExecutor {
         fallback: TreeWalkExecutor,

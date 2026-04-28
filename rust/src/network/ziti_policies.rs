@@ -123,7 +123,11 @@ pub fn generate_setup_script() -> String {
         ));
     }
 
-    for identity_type in &[IdentityType::RegionServer, IdentityType::GridAdmin, IdentityType::Monitoring] {
+    for identity_type in &[
+        IdentityType::RegionServer,
+        IdentityType::GridAdmin,
+        IdentityType::Monitoring,
+    ] {
         script.push_str(&format!(
             "echo \"Creating identity: {}\"\n\
              ziti edge create identity device {} -o {}.jwt\n\

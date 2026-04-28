@@ -1,10 +1,10 @@
 use anyhow::{Context, Result};
+use chrono::{DateTime, Utc};
 use serde::{Deserialize, Serialize};
 use std::collections::HashMap;
 use std::sync::Arc;
 use tokio::sync::RwLock;
 use uuid::Uuid;
-use chrono::{DateTime, Utc};
 
 use crate::database::{DatabaseManager, DatabasePoolRef};
 
@@ -197,7 +197,9 @@ impl FeedbackRepository {
     }
 
     pub async fn save_feedback(&self, feedback: &UserFeedback) -> Result<i64> {
-        let context_json = feedback.context_data.as_ref()
+        let context_json = feedback
+            .context_data
+            .as_ref()
             .map(|c| serde_json::to_string(c).unwrap_or_default());
 
         let pool = self.db.get_pool()?;
@@ -270,7 +272,7 @@ impl FeedbackRepository {
                      time_to_decision_ms, subsequent_satisfaction, context_data, created_at)
                     VALUES ($1, $2, $3, $4, $5, $6, $7, $8)
                     RETURNING id
-                    "#
+                    "#,
                 )
                 .bind(outcome.recommendation_id.to_string())
                 .bind(outcome.user_id.to_string())
@@ -292,7 +294,7 @@ impl FeedbackRepository {
                     (recommendation_id, user_id, recommendation_type, was_accepted,
                      time_to_decision_ms, subsequent_satisfaction, context_data, created_at)
                     VALUES (?, ?, ?, ?, ?, ?, ?, ?)
-                    "#
+                    "#,
                 )
                 .bind(outcome.recommendation_id.to_string())
                 .bind(outcome.user_id.to_string())
@@ -309,7 +311,10 @@ impl FeedbackRepository {
             }
         };
 
-        tracing::debug!("Saved outcome for recommendation {}", outcome.recommendation_id);
+        tracing::debug!(
+            "Saved outcome for recommendation {}",
+            outcome.recommendation_id
+        );
         Ok(last_id)
     }
 
@@ -318,7 +323,16 @@ impl FeedbackRepository {
 
         let feedback = match pool {
             DatabasePoolRef::PostgreSQL(pg_pool) => {
-                let rows: Vec<(i64, String, String, String, Option<f64>, Option<String>, Option<String>, DateTime<Utc>)> = sqlx::query_as(
+                let rows: Vec<(
+                    i64,
+                    String,
+                    String,
+                    String,
+                    Option<f64>,
+                    Option<String>,
+                    Option<String>,
+                    DateTime<Utc>,
+                )> = sqlx::query_as(
                     r#"
                     SELECT id, user_id, content_id, feedback_type, feedback_value,
                            feedback_text, context_data, created_at
@@ -326,7 +340,7 @@ impl FeedbackRepository {
                     WHERE user_id = $1
                     ORDER BY created_at DESC
                     LIMIT $2
-                    "#
+                    "#,
                 )
                 .bind(user_id.to_string())
                 .bind(limit as i64)
@@ -337,7 +351,16 @@ impl FeedbackRepository {
                 self.rows_to_feedback(rows)
             }
             DatabasePoolRef::MySQL(mysql_pool) => {
-                let rows: Vec<(i64, String, String, String, Option<f64>, Option<String>, Option<String>, DateTime<Utc>)> = sqlx::query_as(
+                let rows: Vec<(
+                    i64,
+                    String,
+                    String,
+                    String,
+                    Option<f64>,
+                    Option<String>,
+                    Option<String>,
+                    DateTime<Utc>,
+                )> = sqlx::query_as(
                     r#"
                     SELECT id, user_id, content_id, feedback_type, feedback_value,
                            feedback_text, context_data, created_at
@@ -345,7 +368,7 @@ impl FeedbackRepository {
                     WHERE user_id = ?
                     ORDER BY created_at DESC
                     LIMIT ?
-                    "#
+                    "#,
                 )
                 .bind(user_id.to_string())
                 .bind(limit)
@@ -360,20 +383,34 @@ impl FeedbackRepository {
         Ok(feedback)
     }
 
-    fn rows_to_feedback(&self, rows: Vec<(i64, String, String, String, Option<f64>, Option<String>, Option<String>, DateTime<Utc>)>) -> Vec<UserFeedback> {
-        rows.into_iter().map(|row| {
-            let context_data = row.6.as_ref().and_then(|s| serde_json::from_str(s).ok());
-            UserFeedback {
-                id: Some(row.0),
-                user_id: Uuid::parse_str(&row.1).unwrap_or_default(),
-                content_id: Uuid::parse_str(&row.2).unwrap_or_default(),
-                feedback_type: FeedbackType::from_str(&row.3),
-                feedback_value: row.4,
-                feedback_text: row.5,
-                context_data,
-                created_at: row.7,
-            }
-        }).collect()
+    fn rows_to_feedback(
+        &self,
+        rows: Vec<(
+            i64,
+            String,
+            String,
+            String,
+            Option<f64>,
+            Option<String>,
+            Option<String>,
+            DateTime<Utc>,
+        )>,
+    ) -> Vec<UserFeedback> {
+        rows.into_iter()
+            .map(|row| {
+                let context_data = row.6.as_ref().and_then(|s| serde_json::from_str(s).ok());
+                UserFeedback {
+                    id: Some(row.0),
+                    user_id: Uuid::parse_str(&row.1).unwrap_or_default(),
+                    content_id: Uuid::parse_str(&row.2).unwrap_or_default(),
+                    feedback_type: FeedbackType::from_str(&row.3),
+                    feedback_value: row.4,
+                    feedback_text: row.5,
+                    context_data,
+                    created_at: row.7,
+                }
+            })
+            .collect()
     }
 
     pub async fn get_user_preferences(&self, user_id: Uuid) -> Result<Option<UserPreferences>> {
@@ -387,47 +424,66 @@ impl FeedbackRepository {
         let pool = self.db.get_pool()?;
 
         let row = match pool {
-            DatabasePoolRef::PostgreSQL(pg_pool) => {
-                sqlx::query_as::<_, (String, String, i64, Option<DateTime<Utc>>, f64, DateTime<Utc>)>(
-                    r#"
+            DatabasePoolRef::PostgreSQL(pg_pool) => sqlx::query_as::<
+                _,
+                (
+                    String,
+                    String,
+                    i64,
+                    Option<DateTime<Utc>>,
+                    f64,
+                    DateTime<Utc>,
+                ),
+            >(
+                r#"
                     SELECT user_id, preference_data, total_interactions,
                            last_interaction_at, preference_score, updated_at
                     FROM ai_user_preferences
                     WHERE user_id = $1
-                    "#
-                )
-                .bind(user_id.to_string())
-                .fetch_optional(pg_pool)
-                .await
-                .context("Failed to get preferences from PostgreSQL")?
-            }
-            DatabasePoolRef::MySQL(mysql_pool) => {
-                sqlx::query_as::<_, (String, String, i64, Option<DateTime<Utc>>, f64, DateTime<Utc>)>(
-                    r#"
+                    "#,
+            )
+            .bind(user_id.to_string())
+            .fetch_optional(pg_pool)
+            .await
+            .context("Failed to get preferences from PostgreSQL")?,
+            DatabasePoolRef::MySQL(mysql_pool) => sqlx::query_as::<
+                _,
+                (
+                    String,
+                    String,
+                    i64,
+                    Option<DateTime<Utc>>,
+                    f64,
+                    DateTime<Utc>,
+                ),
+            >(
+                r#"
                     SELECT user_id, preference_data, total_interactions,
                            last_interaction_at, preference_score, updated_at
                     FROM ai_user_preferences
                     WHERE user_id = ?
-                    "#
-                )
-                .bind(user_id.to_string())
-                .fetch_optional(mysql_pool)
-                .await
-                .context("Failed to get preferences from MySQL")?
-            }
+                    "#,
+            )
+            .bind(user_id.to_string())
+            .fetch_optional(mysql_pool)
+            .await
+            .context("Failed to get preferences from MySQL")?,
         };
 
         if let Some(row) = row {
             let pref_data: serde_json::Value = serde_json::from_str(&row.1).unwrap_or_default();
             let prefs = UserPreferences {
                 user_id,
-                preferred_categories: pref_data.get("categories")
+                preferred_categories: pref_data
+                    .get("categories")
                     .and_then(|v| serde_json::from_value(v.clone()).ok())
                     .unwrap_or_default(),
-                preferred_styles: pref_data.get("styles")
+                preferred_styles: pref_data
+                    .get("styles")
                     .and_then(|v| serde_json::from_value(v.clone()).ok())
                     .unwrap_or_default(),
-                interaction_history_summary: pref_data.get("summary")
+                interaction_history_summary: pref_data
+                    .get("summary")
                     .and_then(|v| serde_json::from_value(v.clone()).ok())
                     .unwrap_or_default(),
                 preference_score: row.4,
@@ -523,34 +579,30 @@ impl FeedbackRepository {
         let pool = self.db.get_pool()?;
 
         let existing = match &pool {
-            DatabasePoolRef::PostgreSQL(pg_pool) => {
-                sqlx::query_as::<_, (f64, i64)>(
-                    r#"
+            DatabasePoolRef::PostgreSQL(pg_pool) => sqlx::query_as::<_, (f64, i64)>(
+                r#"
                     SELECT affinity_score, interaction_count
                     FROM ai_pattern_affinity
                     WHERE user_id = $1 AND pattern_id = $2
-                    "#
-                )
-                .bind(user_id.to_string())
-                .bind(pattern_id.to_string())
-                .fetch_optional(*pg_pool)
-                .await
-                .context("Failed to get affinity from PostgreSQL")?
-            }
-            DatabasePoolRef::MySQL(mysql_pool) => {
-                sqlx::query_as::<_, (f64, i64)>(
-                    r#"
+                    "#,
+            )
+            .bind(user_id.to_string())
+            .bind(pattern_id.to_string())
+            .fetch_optional(*pg_pool)
+            .await
+            .context("Failed to get affinity from PostgreSQL")?,
+            DatabasePoolRef::MySQL(mysql_pool) => sqlx::query_as::<_, (f64, i64)>(
+                r#"
                     SELECT affinity_score, interaction_count
                     FROM ai_pattern_affinity
                     WHERE user_id = ? AND pattern_id = ?
-                    "#
-                )
-                .bind(user_id.to_string())
-                .bind(pattern_id.to_string())
-                .fetch_optional(*mysql_pool)
-                .await
-                .context("Failed to get affinity from MySQL")?
-            }
+                    "#,
+            )
+            .bind(user_id.to_string())
+            .bind(pattern_id.to_string())
+            .fetch_optional(*mysql_pool)
+            .await
+            .context("Failed to get affinity from MySQL")?,
         };
 
         let (new_score, new_count) = if let Some((old_score, old_count)) = existing {
@@ -663,19 +715,26 @@ impl FeedbackRepository {
         Ok(affinities)
     }
 
-    fn rows_to_affinities(&self, rows: Vec<(String, String, f64, i64, DateTime<Utc>)>) -> Vec<PatternAffinity> {
-        rows.into_iter().map(|row| {
-            PatternAffinity {
+    fn rows_to_affinities(
+        &self,
+        rows: Vec<(String, String, f64, i64, DateTime<Utc>)>,
+    ) -> Vec<PatternAffinity> {
+        rows.into_iter()
+            .map(|row| PatternAffinity {
                 user_id: Uuid::parse_str(&row.0).unwrap_or_default(),
                 pattern_id: Uuid::parse_str(&row.1).unwrap_or_default(),
                 affinity_score: row.2,
                 interaction_count: row.3 as u64,
                 last_interaction_at: row.4,
-            }
-        }).collect()
+            })
+            .collect()
     }
 
-    pub async fn get_acceptance_rate(&self, user_id: Uuid, rec_type: Option<&RecommendationType>) -> Result<f64> {
+    pub async fn get_acceptance_rate(
+        &self,
+        user_id: Uuid,
+        rec_type: Option<&RecommendationType>,
+    ) -> Result<f64> {
         let pool = self.db.get_pool()?;
 
         let (accepted, total): (i64, i64) = match pool {
@@ -688,7 +747,7 @@ impl FeedbackRepository {
                             COUNT(*)
                         FROM ai_recommendation_outcomes
                         WHERE user_id = $1 AND recommendation_type = $2
-                        "#
+                        "#,
                     )
                     .bind(user_id.to_string())
                     .bind(rt.as_str())
@@ -703,7 +762,7 @@ impl FeedbackRepository {
                             COUNT(*)
                         FROM ai_recommendation_outcomes
                         WHERE user_id = $1
-                        "#
+                        "#,
                     )
                     .bind(user_id.to_string())
                     .fetch_one(pg_pool)
@@ -720,7 +779,7 @@ impl FeedbackRepository {
                             COUNT(*)
                         FROM ai_recommendation_outcomes
                         WHERE user_id = ? AND recommendation_type = ?
-                        "#
+                        "#,
                     )
                     .bind(user_id.to_string())
                     .bind(rt.as_str())
@@ -735,7 +794,7 @@ impl FeedbackRepository {
                             COUNT(*)
                         FROM ai_recommendation_outcomes
                         WHERE user_id = ?
-                        "#
+                        "#,
                     )
                     .bind(user_id.to_string())
                     .fetch_one(mysql_pool)
@@ -778,7 +837,8 @@ impl FeedbackProcessor {
     pub async fn record_feedback(&self, feedback: UserFeedback) -> Result<()> {
         self.repository.save_feedback(&feedback).await?;
 
-        self.update_pattern_affinity_from_feedback(&feedback).await?;
+        self.update_pattern_affinity_from_feedback(&feedback)
+            .await?;
 
         let mut count = self.feedback_count.write().await;
         *count += 1;
@@ -832,7 +892,9 @@ impl FeedbackProcessor {
         }
 
         let feedback = self.repository.get_user_feedback(user_id, 100).await?;
-        let prefs = self.build_preferences_from_feedback(user_id, &feedback).await;
+        let prefs = self
+            .build_preferences_from_feedback(user_id, &feedback)
+            .await;
 
         self.repository.save_user_preferences(&prefs).await?;
 

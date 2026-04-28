@@ -3,14 +3,14 @@ use std::collections::HashMap;
 
 use anyhow::Result;
 use async_trait::async_trait;
-use base64::{Engine as _, engine::general_purpose::STANDARD};
+use base64::{engine::general_purpose::STANDARD, Engine as _};
 use parking_lot::Mutex;
 use tracing::{info, warn};
 use uuid::Uuid;
 
-use crate::modules::traits::{RegionModule, SharedRegionModule, SceneContext, ModuleConfig};
 use super::common::*;
-use super::traits::{VoiceHandler, IVoiceModule};
+use super::traits::{IVoiceModule, VoiceHandler};
+use crate::modules::traits::{ModuleConfig, RegionModule, SceneContext, SharedRegionModule};
 
 pub struct FreeSwitchVoiceModule {
     enabled: bool,
@@ -93,7 +93,10 @@ impl FreeSwitchVoiceModule {
 
     pub fn handle_signin(&self, userid: &str, _pwd: &str) -> String {
         let map = self.uuid_name_map.lock();
-        let display_name = map.get(userid).cloned().unwrap_or_else(|| "Unknown".to_string());
+        let display_name = map
+            .get(userid)
+            .cloned()
+            .unwrap_or_else(|| "Unknown".to_string());
         let position = map.keys().position(|k| k == userid).unwrap_or(0);
         format!(
             r#"<response xsi:schemaLocation="/xsd/signin.xsd">
@@ -209,10 +212,18 @@ impl VoiceHandler for FreeSwitchVoiceModule {
         }
 
         if !estate_allow_voice {
-            return Ok(build_parcel_voice_response(parcel_local_id, region_name, ""));
+            return Ok(build_parcel_voice_response(
+                parcel_local_id,
+                region_name,
+                "",
+            ));
         }
         if (parcel_flags & ALLOW_VOICE_CHAT) == 0 {
-            return Ok(build_parcel_voice_response(parcel_local_id, region_name, ""));
+            return Ok(build_parcel_voice_response(
+                parcel_local_id,
+                region_name,
+                "",
+            ));
         }
 
         let land_uuid = if is_estate_channel(parcel_flags) {
@@ -222,7 +233,11 @@ impl VoiceHandler for FreeSwitchVoiceModule {
         };
 
         let uri = self.channel_uri(land_uuid);
-        Ok(build_parcel_voice_response(parcel_local_id, region_name, &uri))
+        Ok(build_parcel_voice_response(
+            parcel_local_id,
+            region_name,
+            &uri,
+        ))
     }
 
     fn voice_enabled(&self) -> bool {
@@ -277,11 +292,17 @@ impl RegionModule for FreeSwitchVoiceModule {
         self.echo_server = config.get_or("EchoServer", &server);
         self.echo_port = config.get_or("EchoPort", "50505").parse().unwrap_or(50505);
         self.attempt_stun = config.get_bool("AttemptUseSTUN", false);
-        self.default_timeout = config.get_or("DefaultTimeout", "5000").parse().unwrap_or(5000);
+        self.default_timeout = config
+            .get_or("DefaultTimeout", "5000")
+            .parse()
+            .unwrap_or(5000);
         self.well_known_ip = server.clone();
         self.account_url = format!("http://{}:9000{}/", server, self.api_prefix);
 
-        info!("[FreeSWITCH] FreeSwitchVoiceModule initialized (realm={})", self.realm);
+        info!(
+            "[FreeSWITCH] FreeSwitchVoiceModule initialized (realm={})",
+            self.realm
+        );
         Ok(())
     }
 
@@ -295,8 +316,12 @@ impl RegionModule for FreeSwitchVoiceModule {
         Ok(())
     }
 
-    fn as_any(&self) -> &dyn Any { self }
-    fn as_any_mut(&mut self) -> &mut dyn Any { self }
+    fn as_any(&self) -> &dyn Any {
+        self
+    }
+    fn as_any_mut(&mut self) -> &mut dyn Any {
+        self
+    }
 }
 
 #[async_trait]

@@ -1,5 +1,5 @@
-use bytes::{Bytes, Buf};
-use anyhow::{Result, anyhow};
+use anyhow::{anyhow, Result};
+use bytes::{Buf, Bytes};
 use tracing::debug;
 use uuid::Uuid;
 
@@ -19,7 +19,10 @@ pub struct AnimationEntry {
 impl AgentAnimationMessage {
     pub fn parse(data: &Bytes) -> Result<Self> {
         if data.len() < 33 {
-            return Err(anyhow!("AgentAnimation message too short: {} bytes", data.len()));
+            return Err(anyhow!(
+                "AgentAnimation message too short: {} bytes",
+                data.len()
+            ));
         }
 
         let mut cursor = std::io::Cursor::new(data);
@@ -43,12 +46,16 @@ impl AgentAnimationMessage {
             cursor.copy_to_slice(&mut anim_id_bytes);
             let anim_id = Uuid::from_bytes(anim_id_bytes);
             let start_anim = cursor.get_u8() != 0;
-            animation_list.push(AnimationEntry { anim_id, start_anim });
+            animation_list.push(AnimationEntry {
+                anim_id,
+                start_anim,
+            });
         }
 
         debug!(
             "Parsed AgentAnimation: agent={}, animations={}",
-            agent_id, animation_list.len()
+            agent_id,
+            animation_list.len()
         );
 
         Ok(Self {
@@ -95,7 +102,10 @@ pub struct AgentHeightWidthMessage {
 impl AgentHeightWidthMessage {
     pub fn parse(data: &Bytes) -> Result<Self> {
         if data.len() < 40 {
-            return Err(anyhow!("AgentHeightWidth message too short: {} bytes", data.len()));
+            return Err(anyhow!(
+                "AgentHeightWidth message too short: {} bytes",
+                data.len()
+            ));
         }
 
         let mut cursor = std::io::Cursor::new(data);
@@ -137,7 +147,10 @@ pub struct SetAlwaysRunMessage {
 impl SetAlwaysRunMessage {
     pub fn parse(data: &Bytes) -> Result<Self> {
         if data.len() < 33 {
-            return Err(anyhow!("SetAlwaysRun message too short: {} bytes", data.len()));
+            return Err(anyhow!(
+                "SetAlwaysRun message too short: {} bytes",
+                data.len()
+            ));
         }
 
         let mut cursor = std::io::Cursor::new(data);
@@ -214,7 +227,11 @@ impl UUIDNameReplyMessage {
     }
 
     pub fn add_entry(&mut self, id: Uuid, first_name: String, last_name: String) {
-        self.entries.push(UUIDNameEntry { id, first_name, last_name });
+        self.entries.push(UUIDNameEntry {
+            id,
+            first_name,
+            last_name,
+        });
     }
 
     pub fn serialize(&self) -> Vec<u8> {
@@ -394,8 +411,8 @@ impl AgentWearablesUpdateMessage {
         let mut data = Vec::with_capacity(36 + 1 + self.wearables.len() * 33);
 
         // AgentData block (Single)
-        data.extend_from_slice(self.agent_id.as_bytes());     // AgentID: 16 bytes
-        data.extend_from_slice(self.session_id.as_bytes());   // SessionID: 16 bytes
+        data.extend_from_slice(self.agent_id.as_bytes()); // AgentID: 16 bytes
+        data.extend_from_slice(self.session_id.as_bytes()); // SessionID: 16 bytes
         data.extend_from_slice(&self.serial_num.to_le_bytes()); // SerialNum: 4 bytes
 
         // WearableData block count (Variable block)
@@ -403,9 +420,9 @@ impl AgentWearablesUpdateMessage {
 
         // WearableData entries
         for wearable in &self.wearables {
-            data.extend_from_slice(wearable.item_id.as_bytes());   // ItemID: 16 bytes
-            data.extend_from_slice(wearable.asset_id.as_bytes());  // AssetID: 16 bytes
-            data.push(wearable.wearable_type);                      // WearableType: 1 byte
+            data.extend_from_slice(wearable.item_id.as_bytes()); // ItemID: 16 bytes
+            data.extend_from_slice(wearable.asset_id.as_bytes()); // AssetID: 16 bytes
+            data.push(wearable.wearable_type); // WearableType: 1 byte
         }
 
         data

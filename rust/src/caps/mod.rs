@@ -1,12 +1,12 @@
+use crate::baking::cache::{BakedTextureCache, SharedBakedTextureCache};
+use crate::login_stage_tracker::LoginStageTracker;
+use serde_json::json;
 use std::collections::HashMap;
 use std::sync::Arc;
 use std::time::{Duration, Instant};
 use tokio::sync::RwLock;
-use uuid::Uuid;
-use serde_json::json;
 use tracing::{info, warn};
-use crate::baking::cache::{BakedTextureCache, SharedBakedTextureCache};
-use crate::login_stage_tracker::LoginStageTracker;
+use uuid::Uuid;
 
 pub mod event_queue;
 pub mod handlers;
@@ -139,7 +139,12 @@ impl CapsManager {
         self.baked_texture_cache.get_texture(texture_id)
     }
 
-    pub async fn create_session(&self, agent_id: String, circuit_code: u32, region_uuid: Option<String>) -> String {
+    pub async fn create_session(
+        &self,
+        agent_id: String,
+        circuit_code: u32,
+        region_uuid: Option<String>,
+    ) -> String {
         let session_id = Uuid::new_v4().to_string();
         let mut session = CapsSession::new(session_id.clone(), agent_id.clone(), circuit_code);
         session.region_uuid = region_uuid.unwrap_or_else(|| self.default_region_uuid.clone());
@@ -149,59 +154,212 @@ impl CapsManager {
 
         // EventQueueGet uses OpenSim-compatible /CE/{uuid} format
         let eqg_uuid = Uuid::new_v4().to_string();
-        session.capabilities.insert("EventQueueGet".to_string(), format!("{}/CE/{}", self.base_url, eqg_uuid));
-        session.capabilities.insert("FetchInventory2".to_string(), format!("{}/FetchInventory2", cap_base));
-        session.capabilities.insert("FetchInventoryDescendents2".to_string(), format!("{}/FetchInventoryDescendents2", cap_base));
-        session.capabilities.insert("FetchLibDescendents2".to_string(), format!("{}/FetchLibDescendents2", cap_base));
-        session.capabilities.insert("FetchLib2".to_string(), format!("{}/FetchLib2", cap_base));
-        session.capabilities.insert("UpdateAvatarAppearance".to_string(), format!("{}/UpdateAvatarAppearance", cap_base));
-        session.capabilities.insert("GetTexture".to_string(), format!("{}/GetTexture", cap_base));
-        session.capabilities.insert("ViewerStats".to_string(), format!("{}/ViewerStats", cap_base));
-        session.capabilities.insert("UpdateAgentInformation".to_string(), format!("{}/UpdateAgentInformation", cap_base));
-        session.capabilities.insert("UpdateAgentLanguage".to_string(), format!("{}/UpdateAgentLanguage", cap_base));
-        session.capabilities.insert("AgentPreferences".to_string(), format!("{}/AgentPreferences", cap_base));
-        session.capabilities.insert("HomeLocation".to_string(), format!("{}/HomeLocation", cap_base));
-        session.capabilities.insert("GetDisplayNames".to_string(), format!("{}/GetDisplayNames", cap_base));
-        session.capabilities.insert("SetDisplayName".to_string(), format!("{}/SetDisplayName", cap_base));
-        session.capabilities.insert("CreateInventoryCategory".to_string(), format!("{}/CreateInventoryCategory", cap_base));
-        session.capabilities.insert("NewFileAgentInventory".to_string(), format!("{}/NewFileAgentInventory", cap_base));
-        session.capabilities.insert("UpdateNotecardAgentInventory".to_string(), format!("{}/UpdateNotecardAgentInventory", cap_base));
-        session.capabilities.insert("UpdateScriptAgentInventory".to_string(), format!("{}/UpdateScriptAgentInventory", cap_base));
-        session.capabilities.insert("UpdateScriptTask".to_string(), format!("{}/UpdateScriptTask", cap_base));
-        session.capabilities.insert("UpdateNotecardTaskInventory".to_string(), format!("{}/UpdateNotecardTaskInventory", cap_base));
-        session.capabilities.insert("ParcelPropertiesUpdate".to_string(), format!("{}/ParcelPropertiesUpdate", cap_base));
-        session.capabilities.insert("MapLayer".to_string(), format!("{}/MapLayer", cap_base));
-        session.capabilities.insert("SimulatorFeatures".to_string(), format!("{}/SimulatorFeatures", cap_base));
-        session.capabilities.insert("EnvironmentSettings".to_string(), format!("{}/EnvironmentSettings", cap_base));
-        session.capabilities.insert("ExtEnvironment".to_string(), format!("{}/ExtEnvironment", cap_base));
-        session.capabilities.insert("UploadBakedTexture".to_string(), format!("{}/UploadBakedTexture", cap_base));
-        session.capabilities.insert("GetMesh".to_string(), format!("{}/GetMesh", cap_base));
-        session.capabilities.insert("GetMesh2".to_string(), format!("{}/GetMesh2", cap_base));
-        session.capabilities.insert("ViewerAsset".to_string(), format!("{}/ViewerAsset", cap_base));
-        session.capabilities.insert("MeshUploadFlag".to_string(), format!("{}/MeshUploadFlag", cap_base));
-        session.capabilities.insert("GetObjectCost".to_string(), format!("{}/GetObjectCost", cap_base));
-        session.capabilities.insert("GetObjectPhysicsData".to_string(), format!("{}/GetObjectPhysicsData", cap_base));
-        session.capabilities.insert("ResourceCostSelected".to_string(), format!("{}/ResourceCostSelected", cap_base));
-        session.capabilities.insert("ProvisionVoiceAccountRequest".to_string(), format!("{}/ProvisionVoiceAccountRequest", cap_base));
-        session.capabilities.insert("ParcelVoiceInfoRequest".to_string(), format!("{}/ParcelVoiceInfoRequest", cap_base));
-        session.capabilities.insert("AgentProfile".to_string(), format!("{}/AgentProfile", cap_base));
-        session.capabilities.insert("RenderMaterials".to_string(), format!("{}/RenderMaterials", cap_base));
-        session.capabilities.insert("ModifyMaterialParams".to_string(), format!("{}/ModifyMaterialParams", cap_base));
-        session.capabilities.insert("ObjectMedia".to_string(), format!("{}/ObjectMedia", cap_base));
-        session.capabilities.insert("ObjectMediaNavigate".to_string(), format!("{}/ObjectMediaNavigate", cap_base));
-        session.capabilities.insert("SearchStatRequest".to_string(), format!("{}/SearchStatRequest", cap_base));
-        session.capabilities.insert("LandResources".to_string(), format!("{}/LandResources", cap_base));
-        session.capabilities.insert("AvatarPickerSearch".to_string(), format!("{}/AvatarPickerSearch", cap_base));
-        session.capabilities.insert("DispatchRegionInfo".to_string(), format!("{}/DispatchRegionInfo", cap_base));
-        session.capabilities.insert("ProductInfoRequest".to_string(), format!("{}/ProductInfoRequest", cap_base));
-        session.capabilities.insert("ServerReleaseNotes".to_string(), format!("{}/ServerReleaseNotes", cap_base));
-        session.capabilities.insert("CopyInventoryFromNotecard".to_string(), format!("{}/CopyInventoryFromNotecard", cap_base));
-        session.capabilities.insert("UpdateGestureAgentInventory".to_string(), format!("{}/UpdateGestureAgentInventory", cap_base));
-        session.capabilities.insert("UpdateGestureTaskInventory".to_string(), format!("{}/UpdateGestureTaskInventory", cap_base));
-        session.capabilities.insert("LSLSyntax".to_string(), format!("{}/LSLSyntax", cap_base));
-        session.capabilities.insert("ScriptResourceSummary".to_string(), format!("{}/ScriptResourceSummary", cap_base));
-        session.capabilities.insert("ScriptResourceDetails".to_string(), format!("{}/ScriptResourceDetails", cap_base));
-        session.capabilities.insert("NewFileAgentInventoryVariablePrice".to_string(), format!("{}/NewFileAgentInventoryVariablePrice", cap_base));
+        session.capabilities.insert(
+            "EventQueueGet".to_string(),
+            format!("{}/CE/{}", self.base_url, eqg_uuid),
+        );
+        session.capabilities.insert(
+            "FetchInventory2".to_string(),
+            format!("{}/FetchInventory2", cap_base),
+        );
+        session.capabilities.insert(
+            "FetchInventoryDescendents2".to_string(),
+            format!("{}/FetchInventoryDescendents2", cap_base),
+        );
+        session.capabilities.insert(
+            "FetchLibDescendents2".to_string(),
+            format!("{}/FetchLibDescendents2", cap_base),
+        );
+        session
+            .capabilities
+            .insert("FetchLib2".to_string(), format!("{}/FetchLib2", cap_base));
+        session.capabilities.insert(
+            "UpdateAvatarAppearance".to_string(),
+            format!("{}/UpdateAvatarAppearance", cap_base),
+        );
+        session
+            .capabilities
+            .insert("GetTexture".to_string(), format!("{}/GetTexture", cap_base));
+        session.capabilities.insert(
+            "ViewerStats".to_string(),
+            format!("{}/ViewerStats", cap_base),
+        );
+        session.capabilities.insert(
+            "UpdateAgentInformation".to_string(),
+            format!("{}/UpdateAgentInformation", cap_base),
+        );
+        session.capabilities.insert(
+            "UpdateAgentLanguage".to_string(),
+            format!("{}/UpdateAgentLanguage", cap_base),
+        );
+        session.capabilities.insert(
+            "AgentPreferences".to_string(),
+            format!("{}/AgentPreferences", cap_base),
+        );
+        session.capabilities.insert(
+            "HomeLocation".to_string(),
+            format!("{}/HomeLocation", cap_base),
+        );
+        session.capabilities.insert(
+            "GetDisplayNames".to_string(),
+            format!("{}/GetDisplayNames", cap_base),
+        );
+        session.capabilities.insert(
+            "SetDisplayName".to_string(),
+            format!("{}/SetDisplayName", cap_base),
+        );
+        session.capabilities.insert(
+            "CreateInventoryCategory".to_string(),
+            format!("{}/CreateInventoryCategory", cap_base),
+        );
+        session.capabilities.insert(
+            "NewFileAgentInventory".to_string(),
+            format!("{}/NewFileAgentInventory", cap_base),
+        );
+        session.capabilities.insert(
+            "UpdateNotecardAgentInventory".to_string(),
+            format!("{}/UpdateNotecardAgentInventory", cap_base),
+        );
+        session.capabilities.insert(
+            "UpdateScriptAgentInventory".to_string(),
+            format!("{}/UpdateScriptAgentInventory", cap_base),
+        );
+        session.capabilities.insert(
+            "UpdateScriptTask".to_string(),
+            format!("{}/UpdateScriptTask", cap_base),
+        );
+        session.capabilities.insert(
+            "UpdateNotecardTaskInventory".to_string(),
+            format!("{}/UpdateNotecardTaskInventory", cap_base),
+        );
+        session.capabilities.insert(
+            "ParcelPropertiesUpdate".to_string(),
+            format!("{}/ParcelPropertiesUpdate", cap_base),
+        );
+        session
+            .capabilities
+            .insert("MapLayer".to_string(), format!("{}/MapLayer", cap_base));
+        session.capabilities.insert(
+            "SimulatorFeatures".to_string(),
+            format!("{}/SimulatorFeatures", cap_base),
+        );
+        session.capabilities.insert(
+            "EnvironmentSettings".to_string(),
+            format!("{}/EnvironmentSettings", cap_base),
+        );
+        session.capabilities.insert(
+            "ExtEnvironment".to_string(),
+            format!("{}/ExtEnvironment", cap_base),
+        );
+        session.capabilities.insert(
+            "UploadBakedTexture".to_string(),
+            format!("{}/UploadBakedTexture", cap_base),
+        );
+        session
+            .capabilities
+            .insert("GetMesh".to_string(), format!("{}/GetMesh", cap_base));
+        session
+            .capabilities
+            .insert("GetMesh2".to_string(), format!("{}/GetMesh2", cap_base));
+        session.capabilities.insert(
+            "ViewerAsset".to_string(),
+            format!("{}/ViewerAsset", cap_base),
+        );
+        session.capabilities.insert(
+            "MeshUploadFlag".to_string(),
+            format!("{}/MeshUploadFlag", cap_base),
+        );
+        session.capabilities.insert(
+            "GetObjectCost".to_string(),
+            format!("{}/GetObjectCost", cap_base),
+        );
+        session.capabilities.insert(
+            "GetObjectPhysicsData".to_string(),
+            format!("{}/GetObjectPhysicsData", cap_base),
+        );
+        session.capabilities.insert(
+            "ResourceCostSelected".to_string(),
+            format!("{}/ResourceCostSelected", cap_base),
+        );
+        session.capabilities.insert(
+            "ProvisionVoiceAccountRequest".to_string(),
+            format!("{}/ProvisionVoiceAccountRequest", cap_base),
+        );
+        session.capabilities.insert(
+            "ParcelVoiceInfoRequest".to_string(),
+            format!("{}/ParcelVoiceInfoRequest", cap_base),
+        );
+        session.capabilities.insert(
+            "AgentProfile".to_string(),
+            format!("{}/AgentProfile", cap_base),
+        );
+        session.capabilities.insert(
+            "RenderMaterials".to_string(),
+            format!("{}/RenderMaterials", cap_base),
+        );
+        session.capabilities.insert(
+            "ModifyMaterialParams".to_string(),
+            format!("{}/ModifyMaterialParams", cap_base),
+        );
+        session.capabilities.insert(
+            "ObjectMedia".to_string(),
+            format!("{}/ObjectMedia", cap_base),
+        );
+        session.capabilities.insert(
+            "ObjectMediaNavigate".to_string(),
+            format!("{}/ObjectMediaNavigate", cap_base),
+        );
+        session.capabilities.insert(
+            "SearchStatRequest".to_string(),
+            format!("{}/SearchStatRequest", cap_base),
+        );
+        session.capabilities.insert(
+            "LandResources".to_string(),
+            format!("{}/LandResources", cap_base),
+        );
+        session.capabilities.insert(
+            "AvatarPickerSearch".to_string(),
+            format!("{}/AvatarPickerSearch", cap_base),
+        );
+        session.capabilities.insert(
+            "DispatchRegionInfo".to_string(),
+            format!("{}/DispatchRegionInfo", cap_base),
+        );
+        session.capabilities.insert(
+            "ProductInfoRequest".to_string(),
+            format!("{}/ProductInfoRequest", cap_base),
+        );
+        session.capabilities.insert(
+            "ServerReleaseNotes".to_string(),
+            format!("{}/ServerReleaseNotes", cap_base),
+        );
+        session.capabilities.insert(
+            "CopyInventoryFromNotecard".to_string(),
+            format!("{}/CopyInventoryFromNotecard", cap_base),
+        );
+        session.capabilities.insert(
+            "UpdateGestureAgentInventory".to_string(),
+            format!("{}/UpdateGestureAgentInventory", cap_base),
+        );
+        session.capabilities.insert(
+            "UpdateGestureTaskInventory".to_string(),
+            format!("{}/UpdateGestureTaskInventory", cap_base),
+        );
+        session
+            .capabilities
+            .insert("LSLSyntax".to_string(), format!("{}/LSLSyntax", cap_base));
+        session.capabilities.insert(
+            "ScriptResourceSummary".to_string(),
+            format!("{}/ScriptResourceSummary", cap_base),
+        );
+        session.capabilities.insert(
+            "ScriptResourceDetails".to_string(),
+            format!("{}/ScriptResourceDetails", cap_base),
+        );
+        session.capabilities.insert(
+            "NewFileAgentInventoryVariablePrice".to_string(),
+            format!("{}/NewFileAgentInventoryVariablePrice", cap_base),
+        );
 
         // Initialize event queue for this session
         self.event_queue.create_session(session_id.clone()).await;
@@ -224,7 +382,10 @@ impl CapsManager {
             eqg_map.insert(eqg_uuid.clone(), session_id.clone());
         }
 
-        info!("Created CAPS session {} for agent {} with circuit_code {} and EQG UUID {}", session_id, agent_id, circuit_code, eqg_uuid);
+        info!(
+            "Created CAPS session {} for agent {} with circuit_code {} and EQG UUID {}",
+            session_id, agent_id, circuit_code, eqg_uuid
+        );
         session_id
     }
 
@@ -265,7 +426,9 @@ impl CapsManager {
 
     pub async fn get_capabilities(&self, session_id: &str) -> Option<HashMap<String, String>> {
         let sessions = self.sessions.read().await;
-        sessions.get(session_id).map(|session| session.capabilities.clone())
+        sessions
+            .get(session_id)
+            .map(|session| session.capabilities.clone())
     }
 
     pub async fn update_session_activity(&self, session_id: &str) {
@@ -282,11 +445,16 @@ impl CapsManager {
             if let Some(session) = sessions.get_mut(session_id) {
                 session.udp_circuit_ready = true;
                 let agent_id = session.agent_id.clone();
-                info!("[CAPS] ✅ UDP circuit marked ready for session {} (circuit_code: {})", session_id, circuit_code);
+                info!(
+                    "[CAPS] ✅ UDP circuit marked ready for session {} (circuit_code: {})",
+                    session_id, circuit_code
+                );
                 drop(sessions);
 
                 // Trigger EventQueue to send pending login events if viewer is waiting
-                self.event_queue.notify_udp_circuit_ready(session_id, &agent_id).await;
+                self.event_queue
+                    .notify_udp_circuit_ready(session_id, &agent_id)
+                    .await;
             }
         }
     }
@@ -295,9 +463,14 @@ impl CapsManager {
         let mut sessions = self.sessions.write().await;
         if let Some(session) = sessions.get_mut(session_id) {
             session.sent_seeds = true;
-            info!("[CAPS] 🌱 SentSeeds marked for session {} (circuit_code: {})", session_id, session.circuit_code);
+            info!(
+                "[CAPS] 🌱 SentSeeds marked for session {} (circuit_code: {})",
+                session_id, session.circuit_code
+            );
 
-            let both_ready = session.sent_seeds && session.region_handshake_reply_received && !session.initial_data_sent;
+            let both_ready = session.sent_seeds
+                && session.region_handshake_reply_received
+                && !session.initial_data_sent;
             if both_ready && session.initial_data_ready_time.is_none() {
                 session.initial_data_ready_time = Some(Instant::now());
                 info!("[CAPS] ⏱️ Both conditions met! Initial data will be sent after delay (session: {})", session_id);
@@ -309,7 +482,10 @@ impl CapsManager {
         }
     }
 
-    pub async fn mark_region_handshake_reply_received(&self, circuit_code: u32) -> Option<(bool, String, String)> {
+    pub async fn mark_region_handshake_reply_received(
+        &self,
+        circuit_code: u32,
+    ) -> Option<(bool, String, String)> {
         let circuit_map = self.circuit_code_map.read().await;
         if let Some(session_id) = circuit_map.get(&circuit_code) {
             let session_id = session_id.clone();
@@ -318,9 +494,14 @@ impl CapsManager {
             let mut sessions = self.sessions.write().await;
             if let Some(session) = sessions.get_mut(&session_id) {
                 session.region_handshake_reply_received = true;
-                info!("[CAPS] 📬 RegionHandshakeReply received for session {} (circuit_code: {})", session_id, circuit_code);
+                info!(
+                    "[CAPS] 📬 RegionHandshakeReply received for session {} (circuit_code: {})",
+                    session_id, circuit_code
+                );
 
-                let both_ready = session.sent_seeds && session.region_handshake_reply_received && !session.initial_data_sent;
+                let both_ready = session.sent_seeds
+                    && session.region_handshake_reply_received
+                    && !session.initial_data_sent;
                 if both_ready && session.initial_data_ready_time.is_none() {
                     session.initial_data_ready_time = Some(Instant::now());
                     info!("[CAPS] ⏱️ Both conditions met! Initial data will be sent after delay (session: {})", session_id);
@@ -344,7 +525,10 @@ impl CapsManager {
                 session.region_handshake_reply_received = false;
                 session.initial_data_sent = false;
                 session.initial_data_ready_time = None;
-                info!("[CAPS] Reset session {} flags for cross-region teleport (circuit_code: {})", session_id, circuit_code);
+                info!(
+                    "[CAPS] Reset session {} flags for cross-region teleport (circuit_code: {})",
+                    session_id, circuit_code
+                );
             }
         }
     }
@@ -355,24 +539,38 @@ impl CapsManager {
             let mut sessions = self.sessions.write().await;
             if let Some(session) = sessions.get_mut(session_id) {
                 if session.initial_data_sent {
-                    info!("[CAPS] ⚠️ Initial data already sent for session {} - skipping duplicate", session_id);
+                    info!(
+                        "[CAPS] ⚠️ Initial data already sent for session {} - skipping duplicate",
+                        session_id
+                    );
                     return false;
                 }
                 session.initial_data_sent = true;
-                info!("[CAPS] ✅ Initial data marked as sent for session {} (circuit_code: {})", session_id, circuit_code);
+                info!(
+                    "[CAPS] ✅ Initial data marked as sent for session {} (circuit_code: {})",
+                    session_id, circuit_code
+                );
                 return true;
             }
         }
         false
     }
 
-    pub async fn check_initial_data_readiness(&self, circuit_code: u32) -> Option<(bool, Duration)> {
+    pub async fn check_initial_data_readiness(
+        &self,
+        circuit_code: u32,
+    ) -> Option<(bool, Duration)> {
         let circuit_map = self.circuit_code_map.read().await;
         if let Some(session_id) = circuit_map.get(&circuit_code) {
             let sessions = self.sessions.read().await;
             if let Some(session) = sessions.get(session_id) {
-                let ready = session.sent_seeds && session.region_handshake_reply_received && !session.initial_data_sent;
-                let elapsed = session.initial_data_ready_time.map(|t| t.elapsed()).unwrap_or(Duration::ZERO);
+                let ready = session.sent_seeds
+                    && session.region_handshake_reply_received
+                    && !session.initial_data_sent;
+                let elapsed = session
+                    .initial_data_ready_time
+                    .map(|t| t.elapsed())
+                    .unwrap_or(Duration::ZERO);
                 return Some((ready, elapsed));
             }
         }
@@ -394,7 +592,10 @@ impl CapsManager {
             let mut circuit_map = self.circuit_code_map.write().await;
             circuit_map.remove(&circuit_code);
 
-            info!("Removed expired CAPS session: {} (circuit_code: {})", session_id, circuit_code);
+            info!(
+                "Removed expired CAPS session: {} (circuit_code: {})",
+                session_id, circuit_code
+            );
         }
     }
 
@@ -420,7 +621,9 @@ pub struct CapsHandlerState {
     pub stage_tracker: Arc<LoginStageTracker>,
     pub avatar_factory: Option<Arc<crate::avatar::factory::AvatarFactory>>,
     pub voice_module: Option<Arc<dyn crate::modules::voice::VoiceHandler>>,
-    pub scene_objects: Option<Arc<parking_lot::RwLock<std::collections::HashMap<u32, crate::udp::server::SceneObject>>>>,
+    pub scene_objects: Option<
+        Arc<parking_lot::RwLock<std::collections::HashMap<u32, crate::udp::server::SceneObject>>>,
+    >,
     pub yengine: Option<Arc<parking_lot::RwLock<crate::scripting::yengine_module::YEngineModule>>>,
     pub parcels: Option<Arc<parking_lot::RwLock<Vec<crate::modules::land::Parcel>>>>,
     pub asset_fetcher: Option<Arc<crate::asset::AssetFetcher>>,
@@ -443,7 +646,11 @@ impl std::fmt::Debug for CapsHandlerState {
 }
 
 impl CapsHandlerState {
-    pub fn new(caps_manager: Arc<CapsManager>, db_pool: Arc<sqlx::PgPool>, stage_tracker: Arc<LoginStageTracker>) -> Self {
+    pub fn new(
+        caps_manager: Arc<CapsManager>,
+        db_pool: Arc<sqlx::PgPool>,
+        stage_tracker: Arc<LoginStageTracker>,
+    ) -> Self {
         Self {
             caps_manager,
             db_pool,
@@ -457,17 +664,28 @@ impl CapsHandlerState {
         }
     }
 
-    pub fn with_avatar_factory(mut self, factory: Arc<crate::avatar::factory::AvatarFactory>) -> Self {
+    pub fn with_avatar_factory(
+        mut self,
+        factory: Arc<crate::avatar::factory::AvatarFactory>,
+    ) -> Self {
         self.avatar_factory = Some(factory);
         self
     }
 
-    pub fn with_voice_module(mut self, module: Arc<dyn crate::modules::voice::VoiceHandler>) -> Self {
+    pub fn with_voice_module(
+        mut self,
+        module: Arc<dyn crate::modules::voice::VoiceHandler>,
+    ) -> Self {
         self.voice_module = Some(module);
         self
     }
 
-    pub fn with_scene_objects(mut self, objects: Arc<parking_lot::RwLock<std::collections::HashMap<u32, crate::udp::server::SceneObject>>>) -> Self {
+    pub fn with_scene_objects(
+        mut self,
+        objects: Arc<
+            parking_lot::RwLock<std::collections::HashMap<u32, crate::udp::server::SceneObject>>,
+        >,
+    ) -> Self {
         self.scene_objects = Some(objects);
         self
     }

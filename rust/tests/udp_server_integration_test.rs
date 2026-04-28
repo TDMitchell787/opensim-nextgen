@@ -1,13 +1,13 @@
 use anyhow::Result;
-use std::sync::Arc;
+use bytes::{BufMut, BytesMut};
 use std::net::SocketAddr;
+use std::sync::Arc;
 use uuid::Uuid;
-use bytes::{BytesMut, BufMut};
 
-use opensim_next::session::SessionManager;
-use opensim_next::udp::UdpServer;
 use opensim_next::database::multi_backend::DatabaseConnection;
 use opensim_next::login_stage_tracker::LoginStageTracker;
+use opensim_next::session::SessionManager;
+use opensim_next::udp::UdpServer;
 
 const TEST_PORT_BASE: u16 = 19000;
 
@@ -19,8 +19,9 @@ async fn test_udp_server_creation() -> Result<()> {
     let server = UdpServer::new(
         &format!("127.0.0.1:{}", TEST_PORT_BASE),
         session_manager,
-        stage_tracker
-    ).await?;
+        stage_tracker,
+    )
+    .await?;
 
     assert!(server.get_session_manager().get_active_session_count() == 0);
 
@@ -64,7 +65,11 @@ async fn test_use_circuit_code_message_handling() -> Result<()> {
         9000,
     )?;
 
-    assert!(session_manager.validate_session(agent_id, login_session.session_id, login_session.circuit_code));
+    assert!(session_manager.validate_session(
+        agent_id,
+        login_session.session_id,
+        login_session.circuit_code
+    ));
     assert_eq!(session_manager.get_active_session_count(), 1);
 
     Ok(())
@@ -163,10 +168,15 @@ async fn test_message_routing() -> Result<()> {
     let server = UdpServer::new(
         &format!("127.0.0.1:{}", TEST_PORT_BASE + 1),
         session_manager.clone(),
-        stage_tracker
-    ).await?;
+        stage_tracker,
+    )
+    .await?;
 
-    assert!(session_manager.validate_session(agent_id, login_session.session_id, login_session.circuit_code));
+    assert!(session_manager.validate_session(
+        agent_id,
+        login_session.session_id,
+        login_session.circuit_code
+    ));
     assert_eq!(server.get_session_manager().get_active_session_count(), 1);
 
     Ok(())
@@ -189,7 +199,8 @@ async fn test_terrain_transmission_on_complete_agent_movement() -> Result<()> {
         9000,
     )?;
 
-    let db_config = MultiDatabaseConfig::postgresql("localhost", 5432, "opensim_db", "opensim", "password123");
+    let db_config =
+        MultiDatabaseConfig::postgresql("localhost", 5432, "opensim_db", "opensim", "password123");
 
     let db_connection = DatabaseConnection::new(&db_config).await?;
     let db_arc = Arc::new(db_connection);
@@ -198,8 +209,9 @@ async fn test_terrain_transmission_on_complete_agent_movement() -> Result<()> {
     let mut server = UdpServer::new(
         &format!("127.0.0.1:{}", TEST_PORT_BASE + 2),
         session_manager.clone(),
-        stage_tracker
-    ).await?;
+        stage_tracker,
+    )
+    .await?;
 
     server = server.with_database(db_arc.clone());
 
@@ -223,7 +235,11 @@ async fn test_concurrent_sessions() -> Result<()> {
             9000,
         )?;
 
-        assert!(session_manager.validate_session(agent_id, login_session.session_id, login_session.circuit_code));
+        assert!(session_manager.validate_session(
+            agent_id,
+            login_session.session_id,
+            login_session.circuit_code
+        ));
     }
 
     assert_eq!(session_manager.get_active_session_count(), 10);

@@ -1,11 +1,11 @@
-use crate::database::DatabaseManager;
 use super::AIError;
-use std::sync::Arc;
-use std::collections::HashMap;
-use tokio::sync::RwLock;
-use serde::{Deserialize, Serialize};
-use uuid::Uuid;
+use crate::database::DatabaseManager;
 use chrono::{DateTime, Utc};
+use serde::{Deserialize, Serialize};
+use std::collections::HashMap;
+use std::sync::Arc;
+use tokio::sync::RwLock;
+use uuid::Uuid;
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct UserInteraction {
@@ -93,11 +93,13 @@ impl InteractionMatrix {
     fn record_interaction(&mut self, user_id: Uuid, item_id: Uuid, score: f32) {
         self.user_item_ratings.insert((user_id, item_id), score);
 
-        self.user_interactions.entry(user_id)
+        self.user_interactions
+            .entry(user_id)
             .or_insert_with(Vec::new)
             .push(item_id);
 
-        self.item_interactions.entry(item_id)
+        self.item_interactions
+            .entry(item_id)
             .or_insert_with(Vec::new)
             .push(user_id);
 
@@ -105,11 +107,17 @@ impl InteractionMatrix {
     }
 
     fn get_user_items(&self, user_id: &Uuid) -> Vec<Uuid> {
-        self.user_interactions.get(user_id).cloned().unwrap_or_default()
+        self.user_interactions
+            .get(user_id)
+            .cloned()
+            .unwrap_or_default()
     }
 
     fn get_item_users(&self, item_id: &Uuid) -> Vec<Uuid> {
-        self.item_interactions.get(item_id).cloned().unwrap_or_default()
+        self.item_interactions
+            .get(item_id)
+            .cloned()
+            .unwrap_or_default()
     }
 
     fn get_rating(&self, user_id: &Uuid, item_id: &Uuid) -> Option<f32> {
@@ -117,14 +125,16 @@ impl InteractionMatrix {
     }
 
     fn get_user_ratings(&self, user_id: &Uuid) -> HashMap<Uuid, f32> {
-        self.user_item_ratings.iter()
+        self.user_item_ratings
+            .iter()
             .filter(|((uid, _), _)| uid == user_id)
             .map(|((_, iid), score)| (*iid, *score))
             .collect()
     }
 
     fn get_item_ratings(&self, item_id: &Uuid) -> HashMap<Uuid, f32> {
-        self.user_item_ratings.iter()
+        self.user_item_ratings
+            .iter()
             .filter(|((_, iid), _)| iid == item_id)
             .map(|((uid, _), score)| (*uid, *score))
             .collect()
@@ -138,7 +148,8 @@ impl InteractionMatrix {
             return 0.0;
         }
 
-        let common_users: Vec<Uuid> = users_a.iter()
+        let common_users: Vec<Uuid> = users_a
+            .iter()
             .filter(|u| users_b.contains(u))
             .cloned()
             .collect();
@@ -147,10 +158,12 @@ impl InteractionMatrix {
             return 0.0;
         }
 
-        let ratings_a: Vec<f32> = common_users.iter()
+        let ratings_a: Vec<f32> = common_users
+            .iter()
             .filter_map(|u| self.get_rating(u, item_a))
             .collect();
-        let ratings_b: Vec<f32> = common_users.iter()
+        let ratings_b: Vec<f32> = common_users
+            .iter()
             .filter_map(|u| self.get_rating(u, item_b))
             .collect();
 
@@ -165,7 +178,8 @@ impl InteractionMatrix {
             return 0.0;
         }
 
-        let common_items: Vec<Uuid> = items_a.iter()
+        let common_items: Vec<Uuid> = items_a
+            .iter()
             .filter(|i| items_b.contains(i))
             .cloned()
             .collect();
@@ -174,10 +188,12 @@ impl InteractionMatrix {
             return 0.0;
         }
 
-        let ratings_a: Vec<f32> = common_items.iter()
+        let ratings_a: Vec<f32> = common_items
+            .iter()
             .filter_map(|i| self.get_rating(user_a, i))
             .collect();
-        let ratings_b: Vec<f32> = common_items.iter()
+        let ratings_b: Vec<f32> = common_items
+            .iter()
             .filter_map(|i| self.get_rating(user_b, i))
             .collect();
 
@@ -215,22 +231,38 @@ impl InteractionMatrix {
     }
 
     fn cache_item_similarity(&mut self, item_a: Uuid, item_b: Uuid, similarity: f32) {
-        let key = if item_a < item_b { (item_a, item_b) } else { (item_b, item_a) };
+        let key = if item_a < item_b {
+            (item_a, item_b)
+        } else {
+            (item_b, item_a)
+        };
         self.item_similarity_cache.insert(key, similarity);
     }
 
     fn cache_user_similarity(&mut self, user_a: Uuid, user_b: Uuid, similarity: f32) {
-        let key = if user_a < user_b { (user_a, user_b) } else { (user_b, user_a) };
+        let key = if user_a < user_b {
+            (user_a, user_b)
+        } else {
+            (user_b, user_a)
+        };
         self.user_similarity_cache.insert(key, similarity);
     }
 
     fn get_cached_item_similarity(&self, item_a: &Uuid, item_b: &Uuid) -> Option<f32> {
-        let key = if item_a < item_b { (*item_a, *item_b) } else { (*item_b, *item_a) };
+        let key = if item_a < item_b {
+            (*item_a, *item_b)
+        } else {
+            (*item_b, *item_a)
+        };
         self.item_similarity_cache.get(&key).copied()
     }
 
     fn get_cached_user_similarity(&self, user_a: &Uuid, user_b: &Uuid) -> Option<f32> {
-        let key = if user_a < user_b { (*user_a, *user_b) } else { (*user_b, *user_a) };
+        let key = if user_a < user_b {
+            (*user_a, *user_b)
+        } else {
+            (*user_b, *user_a)
+        };
         self.user_similarity_cache.get(&key).copied()
     }
 }
@@ -318,8 +350,12 @@ impl CollaborativeRecommender {
             return self.cold_start_recommendations(n).await;
         }
 
-        let user_based = self.user_based_recommendations(&matrix, &user_id, &user_items, n).await?;
-        let item_based = self.item_based_recommendations(&matrix, &user_id, &user_items, n).await?;
+        let user_based = self
+            .user_based_recommendations(&matrix, &user_id, &user_items, n)
+            .await?;
+        let item_based = self
+            .item_based_recommendations(&matrix, &user_id, &user_items, n)
+            .await?;
 
         let recommendations = self.merge_recommendations(
             user_based,
@@ -346,7 +382,8 @@ impl CollaborativeRecommender {
                 continue;
             }
 
-            let similarity = matrix.get_cached_user_similarity(user_id, &other_user)
+            let similarity = matrix
+                .get_cached_user_similarity(user_id, &other_user)
                 .unwrap_or_else(|| matrix.compute_user_similarity(user_id, &other_user));
 
             if similarity > 0.1 {
@@ -375,11 +412,13 @@ impl CollaborativeRecommender {
             }
         }
 
-        let mut recommendations: Vec<ContentRecommendation> = item_scores.into_iter()
+        let mut recommendations: Vec<ContentRecommendation> = item_scores
+            .into_iter()
             .filter(|(_, (_, weight_sum))| *weight_sum > 0.0)
             .map(|(item_id, (weighted_sum, weight_sum))| {
                 let predicted_score = weighted_sum / weight_sum;
-                let confidence = (weight_sum / self.config.max_similar_users_to_consider as f32).min(1.0);
+                let confidence =
+                    (weight_sum / self.config.max_similar_users_to_consider as f32).min(1.0);
 
                 ContentRecommendation {
                     item_id,
@@ -392,7 +431,11 @@ impl CollaborativeRecommender {
             })
             .collect();
 
-        recommendations.sort_by(|a, b| b.predicted_score.partial_cmp(&a.predicted_score).unwrap_or(std::cmp::Ordering::Equal));
+        recommendations.sort_by(|a, b| {
+            b.predicted_score
+                .partial_cmp(&a.predicted_score)
+                .unwrap_or(std::cmp::Ordering::Equal)
+        });
         recommendations.truncate(n);
 
         Ok(recommendations)
@@ -415,12 +458,15 @@ impl CollaborativeRecommender {
                     continue;
                 }
 
-                let similarity = matrix.get_cached_item_similarity(user_item, &candidate_item)
+                let similarity = matrix
+                    .get_cached_item_similarity(user_item, &candidate_item)
                     .unwrap_or_else(|| matrix.compute_item_similarity(user_item, &candidate_item));
 
                 if similarity > 0.1 {
-                    let entry = candidate_scores.entry(candidate_item)
-                        .or_insert((0.0, 0.0, Vec::new()));
+                    let entry =
+                        candidate_scores
+                            .entry(candidate_item)
+                            .or_insert((0.0, 0.0, Vec::new()));
                     entry.0 += similarity * user_rating;
                     entry.1 += similarity.abs();
                     entry.2.push(*user_item);
@@ -428,11 +474,13 @@ impl CollaborativeRecommender {
             }
         }
 
-        let mut recommendations: Vec<ContentRecommendation> = candidate_scores.into_iter()
+        let mut recommendations: Vec<ContentRecommendation> = candidate_scores
+            .into_iter()
             .filter(|(_, (_, weight_sum, _))| *weight_sum > 0.0)
             .map(|(item_id, (weighted_sum, weight_sum, similar))| {
                 let predicted_score = weighted_sum / weight_sum;
-                let confidence = (weight_sum / self.config.max_similar_items_to_consider as f32).min(1.0);
+                let confidence =
+                    (weight_sum / self.config.max_similar_items_to_consider as f32).min(1.0);
 
                 ContentRecommendation {
                     item_id,
@@ -445,7 +493,11 @@ impl CollaborativeRecommender {
             })
             .collect();
 
-        recommendations.sort_by(|a, b| b.predicted_score.partial_cmp(&a.predicted_score).unwrap_or(std::cmp::Ordering::Equal));
+        recommendations.sort_by(|a, b| {
+            b.predicted_score
+                .partial_cmp(&a.predicted_score)
+                .unwrap_or(std::cmp::Ordering::Equal)
+        });
         recommendations.truncate(n);
 
         Ok(recommendations)
@@ -463,22 +515,27 @@ impl CollaborativeRecommender {
 
         for rec in user_based {
             let combined_score = rec.predicted_score * user_weight;
-            merged.insert(rec.item_id, ContentRecommendation {
-                predicted_score: combined_score,
-                recommendation_type: RecommendationType::Hybrid,
-                explanation: "Recommended based on similar users".to_string(),
-                ..rec
-            });
+            merged.insert(
+                rec.item_id,
+                ContentRecommendation {
+                    predicted_score: combined_score,
+                    recommendation_type: RecommendationType::Hybrid,
+                    explanation: "Recommended based on similar users".to_string(),
+                    ..rec
+                },
+            );
         }
 
         for rec in item_based {
             let combined_score = rec.predicted_score * item_weight;
 
-            merged.entry(rec.item_id)
+            merged
+                .entry(rec.item_id)
                 .and_modify(|existing| {
                     existing.predicted_score += combined_score;
                     existing.confidence = (existing.confidence + rec.confidence) / 2.0;
-                    existing.explanation = "Recommended based on similar users and items".to_string();
+                    existing.explanation =
+                        "Recommended based on similar users and items".to_string();
                     existing.similar_items.extend(rec.similar_items.clone());
                 })
                 .or_insert(ContentRecommendation {
@@ -490,17 +547,26 @@ impl CollaborativeRecommender {
         }
 
         let mut recommendations: Vec<ContentRecommendation> = merged.into_values().collect();
-        recommendations.sort_by(|a, b| b.predicted_score.partial_cmp(&a.predicted_score).unwrap_or(std::cmp::Ordering::Equal));
+        recommendations.sort_by(|a, b| {
+            b.predicted_score
+                .partial_cmp(&a.predicted_score)
+                .unwrap_or(std::cmp::Ordering::Equal)
+        });
         recommendations.truncate(n);
 
         recommendations
     }
 
-    async fn cold_start_recommendations(&self, n: usize) -> Result<Vec<ContentRecommendation>, AIError> {
+    async fn cold_start_recommendations(
+        &self,
+        n: usize,
+    ) -> Result<Vec<ContentRecommendation>, AIError> {
         let matrix = self.matrix.read().await;
-        let popular_items = matrix.get_popular_items(self.config.cold_start_popular_items_count.max(n));
+        let popular_items =
+            matrix.get_popular_items(self.config.cold_start_popular_items_count.max(n));
 
-        let recommendations = popular_items.into_iter()
+        let recommendations = popular_items
+            .into_iter()
             .take(n)
             .enumerate()
             .map(|(i, item_id)| ContentRecommendation {
@@ -535,7 +601,10 @@ impl CollaborativeRecommender {
             if similarity > 0.0 {
                 let item_users = matrix.get_item_users(&item_id);
                 let other_users = matrix.get_item_users(&other_item);
-                let common = item_users.iter().filter(|u| other_users.contains(u)).count();
+                let common = item_users
+                    .iter()
+                    .filter(|u| other_users.contains(u))
+                    .count();
 
                 similarities.push(SimilarityScore {
                     entity_a: item_id,
@@ -547,7 +616,11 @@ impl CollaborativeRecommender {
             }
         }
 
-        similarities.sort_by(|a, b| b.similarity.partial_cmp(&a.similarity).unwrap_or(std::cmp::Ordering::Equal));
+        similarities.sort_by(|a, b| {
+            b.similarity
+                .partial_cmp(&a.similarity)
+                .unwrap_or(std::cmp::Ordering::Equal)
+        });
         similarities.truncate(n);
 
         Ok(similarities)
@@ -572,7 +645,10 @@ impl CollaborativeRecommender {
             if similarity > 0.0 {
                 let user_items = matrix.get_user_items(&user_id);
                 let other_items = matrix.get_user_items(&other_user);
-                let common = user_items.iter().filter(|i| other_items.contains(i)).count();
+                let common = user_items
+                    .iter()
+                    .filter(|i| other_items.contains(i))
+                    .count();
 
                 similarities.push(SimilarityScore {
                     entity_a: user_id,
@@ -584,7 +660,11 @@ impl CollaborativeRecommender {
             }
         }
 
-        similarities.sort_by(|a, b| b.similarity.partial_cmp(&a.similarity).unwrap_or(std::cmp::Ordering::Equal));
+        similarities.sort_by(|a, b| {
+            b.similarity
+                .partial_cmp(&a.similarity)
+                .unwrap_or(std::cmp::Ordering::Equal)
+        });
         similarities.truncate(n);
 
         Ok(similarities)
@@ -634,7 +714,8 @@ impl CollaborativeRecommender {
             total_interactions: items.len(),
             unique_items: ratings.len(),
             average_rating: avg_rating,
-            can_receive_personalized: items.len() >= self.config.min_interactions_for_recommendation,
+            can_receive_personalized: items.len()
+                >= self.config.min_interactions_for_recommendation,
         }
     }
 
@@ -652,7 +733,11 @@ impl CollaborativeRecommender {
         let popularity_rank = {
             let mut items: Vec<_> = matrix.item_popularity.iter().collect();
             items.sort_by(|a, b| b.1.cmp(a.1));
-            items.iter().position(|(id, _)| *id == &item_id).unwrap_or(items.len()) + 1
+            items
+                .iter()
+                .position(|(id, _)| *id == &item_id)
+                .unwrap_or(items.len())
+                + 1
         };
 
         ItemStats {
@@ -668,9 +753,7 @@ impl CollaborativeRecommender {
         tokio::spawn({
             let recommender = self.clone();
             async move {
-                let mut interval = tokio::time::interval(
-                    tokio::time::Duration::from_secs(3600)
-                );
+                let mut interval = tokio::time::interval(tokio::time::Duration::from_secs(3600));
                 loop {
                     interval.tick().await;
                     if let Err(e) = recommender.update_similarity_cache().await {

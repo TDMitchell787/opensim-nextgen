@@ -23,26 +23,31 @@ pub enum StorageBackendType {
 #[async_trait]
 pub trait StorageBackend: Send + Sync {
     /// Store asset data
-    async fn store_asset(&self, asset_id: &Uuid, asset_type: AssetType, data: &AssetData) -> Result<()>;
-    
+    async fn store_asset(
+        &self,
+        asset_id: &Uuid,
+        asset_type: AssetType,
+        data: &AssetData,
+    ) -> Result<()>;
+
     /// Retrieve asset data
     async fn retrieve_asset(&self, asset_id: &Uuid) -> Result<Option<(AssetType, AssetData)>>;
-    
+
     /// Delete asset
     async fn delete_asset(&self, asset_id: &Uuid) -> Result<bool>;
-    
+
     /// Check if asset exists
     async fn asset_exists(&self, asset_id: &Uuid) -> Result<bool>;
-    
+
     /// List all asset IDs
     async fn list_assets(&self) -> Result<Vec<Uuid>>;
-    
+
     /// Get storage statistics
     async fn get_stats(&self) -> Result<StorageStats>;
-    
+
     /// Load asset data from storage path
     async fn load(&self, storage_path: &str) -> Result<AssetData>;
-    
+
     /// Store asset data to storage and return path
     async fn store(&self, asset_id: &Uuid, data: &AssetData) -> Result<String>;
 }
@@ -71,12 +76,17 @@ impl FileSystemStorage {
 
 #[async_trait]
 impl StorageBackend for FileSystemStorage {
-    async fn store_asset(&self, asset_id: &Uuid, asset_type: AssetType, data: &AssetData) -> Result<()> {
+    async fn store_asset(
+        &self,
+        asset_id: &Uuid,
+        asset_type: AssetType,
+        data: &AssetData,
+    ) -> Result<()> {
         let path = self.base_path.join(format!("{}.asset", asset_id));
         tokio::fs::write(path, data).await?;
         Ok(())
     }
-    
+
     async fn retrieve_asset(&self, asset_id: &Uuid) -> Result<Option<(AssetType, AssetData)>> {
         let path = self.base_path.join(format!("{}.asset", asset_id));
         match tokio::fs::read(path).await {
@@ -84,7 +94,7 @@ impl StorageBackend for FileSystemStorage {
             Err(_) => Ok(None),
         }
     }
-    
+
     async fn delete_asset(&self, asset_id: &Uuid) -> Result<bool> {
         let path = self.base_path.join(format!("{}.asset", asset_id));
         match tokio::fs::remove_file(path).await {
@@ -92,12 +102,12 @@ impl StorageBackend for FileSystemStorage {
             Err(_) => Ok(false),
         }
     }
-    
+
     async fn asset_exists(&self, asset_id: &Uuid) -> Result<bool> {
         let path = self.base_path.join(format!("{}.asset", asset_id));
         Ok(path.exists())
     }
-    
+
     async fn list_assets(&self) -> Result<Vec<Uuid>> {
         let mut assets = Vec::new();
         let mut entries = tokio::fs::read_dir(&self.base_path).await?;
@@ -113,7 +123,7 @@ impl StorageBackend for FileSystemStorage {
         }
         Ok(assets)
     }
-    
+
     async fn get_stats(&self) -> Result<StorageStats> {
         let assets = self.list_assets().await?;
         Ok(StorageStats {
@@ -124,15 +134,15 @@ impl StorageBackend for FileSystemStorage {
             available_space_bytes: None,
         })
     }
-    
+
     async fn load(&self, storage_path: &str) -> Result<AssetData> {
         let data = tokio::fs::read(storage_path).await?;
         Ok(data)
     }
-    
+
     async fn store(&self, asset_id: &Uuid, data: &AssetData) -> Result<String> {
         let path = self.base_path.join(format!("{}.asset", asset_id));
         tokio::fs::write(&path, data).await?;
         Ok(path.to_string_lossy().to_string())
     }
-} 
+}

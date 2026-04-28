@@ -1,13 +1,13 @@
 //! Performance profiling for OpenSim
-//! 
+//!
 //! Tracks execution times, memory usage, and performance bottlenecks.
 
+use anyhow::Result;
 use std::{
     collections::HashMap,
     sync::Arc,
     time::{Duration, Instant},
 };
-use anyhow::Result;
 use tokio::sync::RwLock;
 use tracing::debug;
 
@@ -162,16 +162,20 @@ impl PerformanceProfiler {
         // Update performance profile
         self.update_profile(event.clone()).await?;
 
-        debug!("Recorded performance event: {} ({:?})", event.name, event.duration);
+        debug!(
+            "Recorded performance event: {} ({:?})",
+            event.name, event.duration
+        );
         Ok(())
     }
 
     /// Update performance profile for an event
     async fn update_profile(&self, event: PerformanceEvent) -> Result<()> {
         let mut profiles = self.profiles.write().await;
-        
-        let profile = profiles.entry(event.name.clone()).or_insert_with(|| {
-            PerformanceProfile {
+
+        let profile = profiles
+            .entry(event.name.clone())
+            .or_insert_with(|| PerformanceProfile {
                 name: event.name.clone(),
                 total_count: 0,
                 total_time: Duration::ZERO,
@@ -180,14 +184,14 @@ impl PerformanceProfiler {
                 max_time: Duration::ZERO,
                 std_dev: 0.0,
                 recent_events: Vec::new(),
-            }
-        });
+            });
 
         // Update statistics
         profile.total_count += 1;
         profile.total_time += event.duration;
-        profile.avg_time = Duration::from_nanos(profile.total_time.as_nanos() as u64 / profile.total_count);
-        
+        profile.avg_time =
+            Duration::from_nanos(profile.total_time.as_nanos() as u64 / profile.total_count);
+
         if event.duration < profile.min_time {
             profile.min_time = event.duration;
         }
@@ -215,13 +219,15 @@ impl PerformanceProfiler {
         }
 
         let avg_nanos = profile.avg_time.as_nanos() as f64;
-        let variance: f64 = profile.recent_events
+        let variance: f64 = profile
+            .recent_events
             .iter()
             .map(|event| {
                 let diff = event.duration.as_nanos() as f64 - avg_nanos;
                 diff * diff
             })
-            .sum::<f64>() / profile.recent_events.len() as f64;
+            .sum::<f64>()
+            / profile.recent_events.len() as f64;
 
         profile.std_dev = variance.sqrt();
     }
@@ -246,7 +252,10 @@ impl PerformanceProfiler {
     }
 
     /// Get events for a specific operation
-    pub async fn get_events_for_operation(&self, operation_name: &str) -> Result<Vec<PerformanceEvent>> {
+    pub async fn get_events_for_operation(
+        &self,
+        operation_name: &str,
+    ) -> Result<Vec<PerformanceEvent>> {
         let events = self.events.read().await;
         Ok(events
             .iter()
@@ -388,4 +397,4 @@ impl Default for PerformanceProfiler {
     fn default() -> Self {
         Self::new(0.1).expect("Failed to create PerformanceProfiler")
     }
-} 
+}

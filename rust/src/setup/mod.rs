@@ -1,24 +1,24 @@
 //! OpenSim Next Setup Wizard
-//! 
+//!
 //! Interactive setup system for configuring OpenSim Next instances.
 //! Provides step-by-step guidance for both standalone and grid configurations.
 
-pub mod wizard;
-pub mod questions;
 pub mod config_generator;
-pub mod validation;
-pub mod scenario_manager;
 pub mod file_organizer;
+pub mod questions;
+pub mod scenario_manager;
+pub mod validation;
+pub mod wizard;
 
-pub use wizard::SetupWizard;
-pub use questions::{SetupQuestion, QuestionType, SetupConfig};
 pub use config_generator::ConfigGenerator;
+pub use file_organizer::{ArchiveEntry, FileOrganizer};
+pub use questions::{QuestionType, SetupConfig, SetupQuestion};
+pub use scenario_manager::{ScenarioManager, ScenarioPrompt, UserLevel};
 pub use validation::Validator;
-pub use scenario_manager::{ScenarioManager, UserLevel, ScenarioPrompt};
-pub use file_organizer::{FileOrganizer, ArchiveEntry};
+pub use wizard::SetupWizard;
 
-use std::path::PathBuf;
 use serde::{Deserialize, Serialize};
+use std::path::PathBuf;
 
 /// Setup wizard result
 #[derive(Debug, Clone)]
@@ -82,11 +82,17 @@ pub enum SetupPreset {
 impl SetupPreset {
     pub fn description(&self) -> String {
         match self {
-            Self::Standalone => "Complete standalone grid with all services in one instance".to_string(),
+            Self::Standalone => {
+                "Complete standalone grid with all services in one instance".to_string()
+            }
             Self::GridRegion => "Region server connecting to an existing grid".to_string(),
             Self::GridRobust => "Grid services server (Robust) for multi-region grids".to_string(),
-            Self::Development => "Development setup with debugging enabled and relaxed security".to_string(),
-            Self::Production => "Production-ready setup with security hardening and optimization".to_string(),
+            Self::Development => {
+                "Development setup with debugging enabled and relaxed security".to_string()
+            }
+            Self::Production => {
+                "Production-ready setup with security hardening and optimization".to_string()
+            }
             Self::CustomScenario(name) => format!("Custom scenario: {}", name),
         }
     }

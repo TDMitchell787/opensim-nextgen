@@ -1,9 +1,9 @@
-use axum::extract::{State, Path};
-use axum::response::IntoResponse;
-use axum::http::{StatusCode, header};
 use axum::body::Bytes;
-use tracing::{info, warn, debug};
+use axum::extract::{Path, State};
+use axum::http::{header, StatusCode};
+use axum::response::IntoResponse;
 use std::path::PathBuf;
+use tracing::{debug, info, warn};
 
 use super::RobustState;
 
@@ -38,11 +38,21 @@ pub async fn handle_bakes_get(
     match tokio::fs::read(&file_path).await {
         Ok(data) => {
             debug!("[BAKES] GET {}: {} bytes", id, data.len());
-            (StatusCode::OK, [(header::CONTENT_TYPE, "application/octet-stream")], data).into_response()
+            (
+                StatusCode::OK,
+                [(header::CONTENT_TYPE, "application/octet-stream")],
+                data,
+            )
+                .into_response()
         }
         Err(_) => {
             debug!("[BAKES] GET {}: not found at {:?}", id, file_path);
-            (StatusCode::OK, [(header::CONTENT_TYPE, "application/octet-stream")], Vec::<u8>::new()).into_response()
+            (
+                StatusCode::OK,
+                [(header::CONTENT_TYPE, "application/octet-stream")],
+                Vec::<u8>::new(),
+            )
+                .into_response()
         }
     }
 }
@@ -72,7 +82,12 @@ pub async fn handle_bakes_post(
 
     match tokio::fs::write(&file_path, &body).await {
         Ok(_) => {
-            debug!("[BAKES] POST {}: {} bytes stored at {:?}", id, body.len(), file_path);
+            debug!(
+                "[BAKES] POST {}: {} bytes stored at {:?}",
+                id,
+                body.len(),
+                file_path
+            );
             StatusCode::OK.into_response()
         }
         Err(e) => {

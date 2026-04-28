@@ -1,8 +1,8 @@
-use std::sync::atomic::{AtomicU32, AtomicU64, Ordering};
-use std::time::SystemTime;
-use std::collections::VecDeque;
 use dashmap::DashMap;
 use parking_lot::Mutex;
+use std::collections::VecDeque;
+use std::sync::atomic::{AtomicU32, AtomicU64, Ordering};
+use std::time::SystemTime;
 use tracing::warn;
 use uuid::Uuid;
 
@@ -61,7 +61,9 @@ impl SpamProtection {
             agents: DashMap::new(),
             max_chat_per_second: 5,
             max_chat_per_minute: std::env::var("OPENSIM_CHAT_RATE_LIMIT")
-                .ok().and_then(|v| v.parse().ok()).unwrap_or(60),
+                .ok()
+                .and_then(|v| v.parse().ok())
+                .unwrap_or(60),
             max_sound_per_second: 10,
             max_effect_per_second: 20,
             repeat_threshold: 3,
@@ -86,7 +88,10 @@ impl SpamProtection {
 
     pub fn check_chat(&self, agent_id: Uuid, text: &str) -> SpamAction {
         let now = Self::now_secs();
-        let state = self.agents.entry(agent_id).or_insert_with(AgentSpamState::new);
+        let state = self
+            .agents
+            .entry(agent_id)
+            .or_insert_with(AgentSpamState::new);
 
         let muted_until = state.muted_until.load(Ordering::Relaxed);
         if now < muted_until {
@@ -115,13 +120,18 @@ impl SpamProtection {
             let hash = Self::text_hash(text);
             let mut recent = state.chat_recent_texts.lock();
             recent.push_back((now, hash));
-            while recent.front().map_or(false, |&(t, _)| now - t > self.repeat_window_secs) {
+            while recent
+                .front()
+                .map_or(false, |&(t, _)| now - t > self.repeat_window_secs)
+            {
                 recent.pop_front();
             }
             let repeat_count = recent.iter().filter(|&&(_, h)| h == hash).count();
             if repeat_count >= self.repeat_threshold as usize {
-                warn!("[SPAM] Agent {} repeating same text {} times in {}s",
-                      agent_id, repeat_count, self.repeat_window_secs);
+                warn!(
+                    "[SPAM] Agent {} repeating same text {} times in {}s",
+                    agent_id, repeat_count, self.repeat_window_secs
+                );
                 return self.escalate(&state, agent_id, now, SpamCategory::Chat);
             }
         }
@@ -131,7 +141,10 @@ impl SpamProtection {
 
     pub fn check_sound(&self, agent_id: Uuid) -> SpamAction {
         let now = Self::now_secs();
-        let state = self.agents.entry(agent_id).or_insert_with(AgentSpamState::new);
+        let state = self
+            .agents
+            .entry(agent_id)
+            .or_insert_with(AgentSpamState::new);
 
         let muted_until = state.muted_until.load(Ordering::Relaxed);
         if now < muted_until {
@@ -155,7 +168,10 @@ impl SpamProtection {
 
     pub fn check_viewer_effect(&self, agent_id: Uuid) -> SpamAction {
         let now = Self::now_secs();
-        let state = self.agents.entry(agent_id).or_insert_with(AgentSpamState::new);
+        let state = self
+            .agents
+            .entry(agent_id)
+            .or_insert_with(AgentSpamState::new);
 
         let muted_until = state.muted_until.load(Ordering::Relaxed);
         if now < muted_until {
@@ -177,22 +193,37 @@ impl SpamProtection {
         SpamAction::Allow
     }
 
-    fn escalate(&self, state: &AgentSpamState, agent_id: Uuid, now: u64, category: SpamCategory) -> SpamAction {
+    fn escalate(
+        &self,
+        state: &AgentSpamState,
+        agent_id: Uuid,
+        now: u64,
+        category: SpamCategory,
+    ) -> SpamAction {
         let warnings = state.warning_count.fetch_add(1, Ordering::Relaxed) + 1;
 
         match warnings {
             1..=2 => {
                 state.muted_until.store(now + 30, Ordering::Relaxed);
-                warn!("[SPAM] Agent {} muted 30s for {:?} spam (warning {})", agent_id, category, warnings);
+                warn!(
+                    "[SPAM] Agent {} muted 30s for {:?} spam (warning {})",
+                    agent_id, category, warnings
+                );
                 SpamAction::Mute30s
             }
             3..=5 => {
                 state.muted_until.store(now + 300, Ordering::Relaxed);
-                warn!("[SPAM] Agent {} muted 5min for {:?} spam (warning {})", agent_id, category, warnings);
+                warn!(
+                    "[SPAM] Agent {} muted 5min for {:?} spam (warning {})",
+                    agent_id, category, warnings
+                );
                 SpamAction::Mute5m
             }
             _ => {
-                warn!("[SPAM] Agent {} kicked for repeated {:?} spam (warning {})", agent_id, category, warnings);
+                warn!(
+                    "[SPAM] Agent {} kicked for repeated {:?} spam (warning {})",
+                    agent_id, category, warnings
+                );
                 SpamAction::Kick
             }
         }

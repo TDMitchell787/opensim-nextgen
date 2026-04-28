@@ -31,7 +31,10 @@ impl Baker {
     }
 
     pub fn bake(&mut self) -> Result<(), String> {
-        info!("🎨 Starting bake for {:?} ({}x{})", self.bake_type, self.bake_width, self.bake_height);
+        info!(
+            "🎨 Starting bake for {:?} ({}x{})",
+            self.bake_type, self.bake_width, self.bake_height
+        );
 
         let mut baked = ManagedImage::new(
             self.bake_width,
@@ -85,7 +88,8 @@ impl Baker {
                     if let Some(alpha_resource) = StaticAssets::load_resource("head_alpha.tga") {
                         self.add_alpha(&mut baked, &alpha_resource);
                     }
-                    if let Some(grain_resource) = StaticAssets::load_resource("head_skingrain.tga") {
+                    if let Some(grain_resource) = StaticAssets::load_resource("head_skingrain.tga")
+                    {
                         self.multiply_layer_from_alpha(&mut baked, &grain_resource);
                     }
                     debug!("[Bake]: created head master bake");
@@ -172,7 +176,8 @@ impl Baker {
                 }
             }
 
-            let use_alpha = i == 0 && (self.bake_type == BakeType::Skirt || self.bake_type == BakeType::Hair);
+            let use_alpha =
+                i == 0 && (self.bake_type == BakeType::Skirt || self.bake_type == BakeType::Hair);
             self.draw_layer(&mut baked, &texture, use_alpha);
         }
 
@@ -200,7 +205,10 @@ impl Baker {
             }
         }
 
-        debug!("[XBakes]: Number of alpha wearable textures: {}", alpha_wearable_textures.len());
+        debug!(
+            "[XBakes]: Number of alpha wearable textures: {}",
+            alpha_wearable_textures.len()
+        );
         for alpha_img in &alpha_wearable_textures {
             self.add_alpha(&mut baked, alpha_img);
         }
@@ -237,7 +245,12 @@ impl Baker {
         dest.fill_dithered(color.r, color.g, color.b);
     }
 
-    fn draw_layer(&self, dest: &mut ManagedImage, source: &ManagedImage, add_source_alpha: bool) -> bool {
+    fn draw_layer(
+        &self,
+        dest: &mut ManagedImage,
+        source: &ManagedImage,
+        add_source_alpha: bool,
+    ) -> bool {
         let source_has_color = source.channels.has_color() && !source.red.is_empty();
         let source_has_alpha = source.channels.has_alpha() && !source.alpha.is_empty();
         let add_source_alpha = add_source_alpha && source_has_alpha;
@@ -264,9 +277,15 @@ impl Baker {
                     && i < source.blue.len()
                 {
                     if loaded_alpha {
-                        dest.red[i] = ((dest.red[i] as u16 * alpha_inv as u16 + source.red[i] as u16 * alpha as u16) >> 8) as u8;
-                        dest.green[i] = ((dest.green[i] as u16 * alpha_inv as u16 + source.green[i] as u16 * alpha as u16) >> 8) as u8;
-                        dest.blue[i] = ((dest.blue[i] as u16 * alpha_inv as u16 + source.blue[i] as u16 * alpha as u16) >> 8) as u8;
+                        dest.red[i] = ((dest.red[i] as u16 * alpha_inv as u16
+                            + source.red[i] as u16 * alpha as u16)
+                            >> 8) as u8;
+                        dest.green[i] = ((dest.green[i] as u16 * alpha_inv as u16
+                            + source.green[i] as u16 * alpha as u16)
+                            >> 8) as u8;
+                        dest.blue[i] = ((dest.blue[i] as u16 * alpha_inv as u16
+                            + source.blue[i] as u16 * alpha as u16)
+                            >> 8) as u8;
                     } else {
                         dest.red[i] = source.red[i];
                         dest.green[i] = source.green[i];

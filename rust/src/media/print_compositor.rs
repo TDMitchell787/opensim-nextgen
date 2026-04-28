@@ -1,11 +1,14 @@
-use std::path::PathBuf;
 use anyhow::Result;
-use uuid::Uuid;
+use std::path::PathBuf;
 use tracing::info;
+use uuid::Uuid;
 
-use super::{MediaDirector, MediaRecipe, RecipeCamera, PrintLayout, SceneExportObject, RenderJob, RenderSettings, OutputMode};
-use crate::ai::npc_avatar::CinemaLight;
+use super::{
+    MediaDirector, MediaRecipe, OutputMode, PrintLayout, RecipeCamera, RenderJob, RenderSettings,
+    SceneExportObject,
+};
 use crate::ai::cinematography;
+use crate::ai::npc_avatar::CinemaLight;
 
 #[derive(Debug, Clone)]
 pub struct PrintJob {
@@ -47,7 +50,10 @@ impl MediaDirector {
     ) -> Result<PathBuf> {
         self.ensure_directories()?;
 
-        let job_dir = self.output_base.join("temp").join(Uuid::new_v4().to_string());
+        let job_dir = self
+            .output_base
+            .join("temp")
+            .join(Uuid::new_v4().to_string());
         std::fs::create_dir_all(&job_dir)?;
         let meshes_dir = job_dir.join("meshes");
         std::fs::create_dir_all(&meshes_dir)?;
@@ -98,7 +104,9 @@ impl MediaDirector {
         super::renderer::run_blender(&self.blender_path, &photo_script_path).await?;
 
         let timestamp = chrono::Local::now().format("%Y%m%d_%H%M%S");
-        let output_path = self.output_base.join("print")
+        let output_path = self
+            .output_base
+            .join("print")
             .join(format!("{}_poster_{}.png", print_job.name, timestamp));
 
         let compositor_script = super::render_script::generate_compositor_script(
@@ -145,7 +153,10 @@ impl MediaDirector {
             tracing::warn!("[MEDIA] Failed to clean temp: {}", e);
         }
 
-        info!("[MEDIA] Print composition complete: {}", output_path.display());
+        info!(
+            "[MEDIA] Print composition complete: {}",
+            output_path.display()
+        );
         Ok(output_path)
     }
 }

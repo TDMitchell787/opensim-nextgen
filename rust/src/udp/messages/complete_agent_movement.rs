@@ -1,7 +1,7 @@
-use uuid::Uuid;
-use bytes::{Bytes, Buf};
-use anyhow::{Result, anyhow};
+use anyhow::{anyhow, Result};
+use bytes::{Buf, Bytes};
 use tracing::debug;
+use uuid::Uuid;
 
 #[derive(Debug, Clone)]
 pub struct CompleteAgentMovementMessage {
@@ -13,7 +13,10 @@ pub struct CompleteAgentMovementMessage {
 impl CompleteAgentMovementMessage {
     pub fn parse(data: &Bytes) -> Result<Self> {
         if data.len() < 36 {
-            return Err(anyhow!("CompleteAgentMovement message too short: {} bytes", data.len()));
+            return Err(anyhow!(
+                "CompleteAgentMovement message too short: {} bytes",
+                data.len()
+            ));
         }
 
         let mut cursor = std::io::Cursor::new(data);
@@ -30,19 +33,19 @@ impl CompleteAgentMovementMessage {
 
         // Read Circuit Code (4 bytes, little endian for CompleteAgentMovement)
         let circuit_code = cursor.get_u32_le();
-        
+
         debug!(
             "Parsed CompleteAgentMovement: agent={}, session={}, circuit={}",
             agent_id, session_id, circuit_code
         );
-        
+
         Ok(Self {
             agent_id,
             session_id,
             circuit_code,
         })
     }
-    
+
     pub fn serialize(&self) -> Vec<u8> {
         let mut data = Vec::with_capacity(36);
 
@@ -68,22 +71,22 @@ mod tests {
         let agent_id = Uuid::new_v4();
         let session_id = Uuid::new_v4();
         let circuit_code = 12345u32;
-        
+
         let original = CompleteAgentMovementMessage {
             agent_id,
             session_id,
             circuit_code,
         };
-        
+
         let serialized = original.serialize();
         let data = Bytes::from(serialized);
         let parsed = CompleteAgentMovementMessage::parse(&data).unwrap();
-        
+
         assert_eq!(parsed.agent_id, agent_id);
         assert_eq!(parsed.session_id, session_id);
         assert_eq!(parsed.circuit_code, circuit_code);
     }
-    
+
     #[test]
     fn test_complete_agent_movement_short_data() {
         let data = Bytes::from(vec![1, 2, 3]); // Too short

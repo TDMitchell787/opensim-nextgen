@@ -1,12 +1,12 @@
 use super::super::AIError;
-use super::embeddings::{EmbeddingService, ContentEmbedding};
-use std::sync::Arc;
-use std::collections::HashMap;
-use tokio::sync::RwLock;
-use serde::{Deserialize, Serialize};
-use uuid::Uuid;
+use super::embeddings::{ContentEmbedding, EmbeddingService};
 use chrono::{DateTime, Utc};
-use tracing::{info, warn, debug};
+use serde::{Deserialize, Serialize};
+use std::collections::HashMap;
+use std::sync::Arc;
+use tokio::sync::RwLock;
+use tracing::{debug, info, warn};
+use uuid::Uuid;
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Hash, Serialize, Deserialize)]
 pub enum ContentType {
@@ -128,7 +128,10 @@ impl VectorStore {
             }
         }
 
-        info!("VectorStore initialized with max {} entries", store.config.max_entries);
+        info!(
+            "VectorStore initialized with max {} entries",
+            store.config.max_entries
+        );
         Ok(Arc::new(store))
     }
 
@@ -168,7 +171,10 @@ impl VectorStore {
             .or_insert_with(Vec::new)
             .push(id);
 
-        debug!("Added entry {} of type {:?} to vector store", id, content_type);
+        debug!(
+            "Added entry {} of type {:?} to vector store",
+            id, content_type
+        );
         Ok(())
     }
 
@@ -237,7 +243,10 @@ impl VectorStore {
             entry.updated_at = Utc::now();
             Ok(())
         } else {
-            Err(AIError::EngineNotAvailable(format!("Entry {} not found", id)))
+            Err(AIError::EngineNotAvailable(format!(
+                "Entry {} not found",
+                id
+            )))
         }
     }
 
@@ -267,7 +276,8 @@ impl VectorStore {
         limit: usize,
     ) -> Result<Vec<SearchResult>, AIError> {
         let query_embedding = self.embedding_service.embed_text(query).await?;
-        self.search_by_embedding(&query_embedding, content_type, limit).await
+        self.search_by_embedding(&query_embedding, content_type, limit)
+            .await
     }
 
     pub async fn search_by_embedding(
@@ -281,9 +291,7 @@ impl VectorStore {
         let candidates: Vec<&VectorEntry> = if let Some(ct) = content_type {
             let type_index = self.type_index.read().await;
             if let Some(ids) = type_index.get(&ct) {
-                ids.iter()
-                    .filter_map(|id| entries.get(id))
-                    .collect()
+                ids.iter().filter_map(|id| entries.get(id)).collect()
             } else {
                 Vec::new()
             }
@@ -291,9 +299,12 @@ impl VectorStore {
             entries.values().collect()
         };
 
-        let mut scored: Vec<SearchResult> = candidates.iter()
+        let mut scored: Vec<SearchResult> = candidates
+            .iter()
             .map(|entry| {
-                let similarity = self.embedding_service.similarity(query_embedding, &entry.embedding);
+                let similarity = self
+                    .embedding_service
+                    .similarity(query_embedding, &entry.embedding);
                 SearchResult {
                     id: entry.id,
                     content_type: entry.content_type,
@@ -306,27 +317,30 @@ impl VectorStore {
             .filter(|result| result.similarity >= self.config.similarity_threshold)
             .collect();
 
-        scored.sort_by(|a, b| b.similarity.partial_cmp(&a.similarity).unwrap_or(std::cmp::Ordering::Equal));
+        scored.sort_by(|a, b| {
+            b.similarity
+                .partial_cmp(&a.similarity)
+                .unwrap_or(std::cmp::Ordering::Equal)
+        });
         scored.truncate(limit);
 
         Ok(scored)
     }
 
-    pub async fn find_similar(
-        &self,
-        id: Uuid,
-        limit: usize,
-    ) -> Result<Vec<SearchResult>, AIError> {
+    pub async fn find_similar(&self, id: Uuid, limit: usize) -> Result<Vec<SearchResult>, AIError> {
         let entries = self.entries.read().await;
 
-        let entry = entries.get(&id)
+        let entry = entries
+            .get(&id)
             .ok_or_else(|| AIError::EngineNotAvailable(format!("Entry {} not found", id)))?;
 
         let query_embedding = entry.embedding.clone();
         let content_type = entry.content_type;
         drop(entries);
 
-        let mut results = self.search_by_embedding(&query_embedding, Some(content_type), limit + 1).await?;
+        let mut results = self
+            .search_by_embedding(&query_embedding, Some(content_type), limit + 1)
+            .await?;
         results.retain(|r| r.id != id);
         results.truncate(limit);
 
@@ -352,12 +366,13 @@ impl VectorStore {
             total_dimension / entries.len()
         };
 
-        let memory_bytes = entries.values()
+        let memory_bytes = entries
+            .values()
             .map(|e| {
-                std::mem::size_of::<VectorEntry>() +
-                e.embedding.len() * std::mem::size_of::<f32>() +
-                e.name.len() +
-                e.description.len()
+                std::mem::size_of::<VectorEntry>()
+                    + e.embedding.len() * std::mem::size_of::<f32>()
+                    + e.name.len()
+                    + e.description.len()
             })
             .sum();
 
@@ -409,7 +424,8 @@ impl VectorStore {
     async fn evict_oldest_entries(&self, entries: &mut HashMap<Uuid, VectorEntry>) {
         let evict_count = entries.len() / 10;
 
-        let mut by_age: Vec<(Uuid, DateTime<Utc>)> = entries.iter()
+        let mut by_age: Vec<(Uuid, DateTime<Utc>)> = entries
+            .iter()
             .map(|(id, entry)| (*id, entry.updated_at))
             .collect();
 
@@ -431,7 +447,8 @@ impl VectorStore {
         let data = serde_json::to_string(&*entries)
             .map_err(|e| AIError::ConfigurationError(format!("Failed to serialize: {}", e)))?;
 
-        tokio::fs::write(path, data).await
+        tokio::fs::write(path, data)
+            .await
             .map_err(|e| AIError::ConfigurationError(format!("Failed to write: {}", e)))?;
 
         info!("Saved {} entries to {}", entries.len(), path);
@@ -468,13 +485,17 @@ impl EmbeddingPipeline {
 
         for chunk in assets.chunks(self.batch_size) {
             for asset in chunk {
-                match self.vector_store.add_entry(
-                    asset.asset_id,
-                    ContentType::Asset,
-                    asset.name.clone(),
-                    asset.description.clone(),
-                    asset.metadata.clone(),
-                ).await {
+                match self
+                    .vector_store
+                    .add_entry(
+                        asset.asset_id,
+                        ContentType::Asset,
+                        asset.name.clone(),
+                        asset.description.clone(),
+                        asset.metadata.clone(),
+                    )
+                    .await
+                {
                     Ok(_) => success_count += 1,
                     Err(e) => {
                         error_count += 1;
@@ -484,8 +505,12 @@ impl EmbeddingPipeline {
             }
         }
 
-        info!("Processed {} assets: {} success, {} errors",
-              success_count + error_count, success_count, error_count);
+        info!(
+            "Processed {} assets: {} success, {} errors",
+            success_count + error_count,
+            success_count,
+            error_count
+        );
 
         Ok(EmbeddingBatchResult {
             success_count,
@@ -507,18 +532,20 @@ impl EmbeddingPipeline {
             for region in chunk {
                 let description = format!(
                     "{} Located at ({}, {}). {}",
-                    region.name,
-                    region.x, region.y,
-                    region.description
+                    region.name, region.x, region.y, region.description
                 );
 
-                match self.vector_store.add_entry(
-                    region.region_id,
-                    ContentType::Region,
-                    region.name.clone(),
-                    description,
-                    region.metadata.clone(),
-                ).await {
+                match self
+                    .vector_store
+                    .add_entry(
+                        region.region_id,
+                        ContentType::Region,
+                        region.name.clone(),
+                        description,
+                        region.metadata.clone(),
+                    )
+                    .await
+                {
                     Ok(_) => success_count += 1,
                     Err(e) => {
                         error_count += 1;
@@ -528,8 +555,12 @@ impl EmbeddingPipeline {
             }
         }
 
-        info!("Processed {} regions: {} success, {} errors",
-              success_count + error_count, success_count, error_count);
+        info!(
+            "Processed {} regions: {} success, {} errors",
+            success_count + error_count,
+            success_count,
+            error_count
+        );
 
         Ok(EmbeddingBatchResult {
             success_count,
@@ -550,18 +581,20 @@ impl EmbeddingPipeline {
         for landmark in landmarks {
             let description = format!(
                 "{} in region {}. {}",
-                landmark.name,
-                landmark.region_name,
-                landmark.description
+                landmark.name, landmark.region_name, landmark.description
             );
 
-            match self.vector_store.add_entry(
-                landmark.landmark_id,
-                ContentType::Landmark,
-                landmark.name.clone(),
-                description,
-                landmark.metadata.clone(),
-            ).await {
+            match self
+                .vector_store
+                .add_entry(
+                    landmark.landmark_id,
+                    ContentType::Landmark,
+                    landmark.name.clone(),
+                    description,
+                    landmark.metadata.clone(),
+                )
+                .await
+            {
                 Ok(_) => success_count += 1,
                 Err(e) => {
                     error_count += 1;
@@ -594,13 +627,17 @@ impl EmbeddingPipeline {
                 profile.about_text
             );
 
-            match self.vector_store.add_entry(
-                profile.user_id,
-                ContentType::UserProfile,
-                profile.display_name.clone(),
-                description,
-                profile.metadata.clone(),
-            ).await {
+            match self
+                .vector_store
+                .add_entry(
+                    profile.user_id,
+                    ContentType::UserProfile,
+                    profile.display_name.clone(),
+                    description,
+                    profile.metadata.clone(),
+                )
+                .await
+            {
                 Ok(_) => success_count += 1,
                 Err(e) => {
                     error_count += 1;

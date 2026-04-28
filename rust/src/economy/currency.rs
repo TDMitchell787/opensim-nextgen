@@ -1,5 +1,5 @@
 //! Virtual Currency System for OpenSim Next
-//! 
+//!
 //! Provides multi-currency virtual currency management with secure
 //! balance tracking, currency conversion, and transaction processing.
 
@@ -10,7 +10,7 @@ use sqlx::Row;
 use std::collections::HashMap;
 use std::sync::Arc;
 use tokio::sync::RwLock;
-use tracing::{debug, info, warn, error};
+use tracing::{debug, error, info, warn};
 use uuid::Uuid;
 
 /// Virtual currency management system
@@ -26,17 +26,19 @@ impl CurrencySystem {
     /// Create new currency system
     pub fn new(database: Arc<DatabaseManager>, config: EconomyConfig) -> Self {
         let currency_definitions = Arc::new(RwLock::new(
-            config.supported_currencies
+            config
+                .supported_currencies
                 .iter()
                 .map(|c| (c.currency_code.clone(), c.clone()))
-                .collect()
+                .collect(),
         ));
 
         let exchange_rates = Arc::new(RwLock::new(
-            config.supported_currencies
+            config
+                .supported_currencies
                 .iter()
                 .map(|c| (c.currency_code.clone(), c.exchange_rate_to_base))
-                .collect()
+                .collect(),
         ));
 
         Self {
@@ -66,8 +68,15 @@ impl CurrencySystem {
     }
 
     /// Get user balance for currency
-    pub async fn get_balance(&self, user_id: Uuid, currency_code: &str) -> EconomyResult<CurrencyBalance> {
-        debug!("Getting balance for user {} currency {}", user_id, currency_code);
+    pub async fn get_balance(
+        &self,
+        user_id: Uuid,
+        currency_code: &str,
+    ) -> EconomyResult<CurrencyBalance> {
+        debug!(
+            "Getting balance for user {} currency {}",
+            user_id, currency_code
+        );
 
         // Check cache first
         {
@@ -120,8 +129,16 @@ impl CurrencySystem {
     }
 
     /// Create or update user balance
-    pub async fn create_balance(&self, user_id: Uuid, currency_code: &str, initial_amount: i64) -> EconomyResult<CurrencyBalance> {
-        info!("Creating balance for user {} currency {} amount {}", user_id, currency_code, initial_amount);
+    pub async fn create_balance(
+        &self,
+        user_id: Uuid,
+        currency_code: &str,
+        initial_amount: i64,
+    ) -> EconomyResult<CurrencyBalance> {
+        info!(
+            "Creating balance for user {} currency {} amount {}",
+            user_id, currency_code, initial_amount
+        );
 
         // Validate currency
         self.validate_currency(currency_code).await?;
@@ -130,13 +147,19 @@ impl CurrencySystem {
         let currency_def = self.get_currency_definition(currency_code).await?;
         if initial_amount < currency_def.minimum_balance {
             return Err(EconomyError::TransactionFailed {
-                reason: format!("Initial amount {} below minimum {}", initial_amount, currency_def.minimum_balance),
+                reason: format!(
+                    "Initial amount {} below minimum {}",
+                    initial_amount, currency_def.minimum_balance
+                ),
             });
         }
 
         if initial_amount > currency_def.maximum_balance {
             return Err(EconomyError::TransactionFailed {
-                reason: format!("Initial amount {} above maximum {}", initial_amount, currency_def.maximum_balance),
+                reason: format!(
+                    "Initial amount {} above maximum {}",
+                    initial_amount, currency_def.maximum_balance
+                ),
             });
         }
 
@@ -164,8 +187,17 @@ impl CurrencySystem {
     }
 
     /// Add currency to user balance
-    pub async fn add_currency(&self, user_id: Uuid, currency_code: &str, amount: i64, description: String) -> EconomyResult<CurrencyBalance> {
-        info!("Adding {} {} to user {} ({})", amount, currency_code, user_id, description);
+    pub async fn add_currency(
+        &self,
+        user_id: Uuid,
+        currency_code: &str,
+        amount: i64,
+        description: String,
+    ) -> EconomyResult<CurrencyBalance> {
+        info!(
+            "Adding {} {} to user {} ({})",
+            amount, currency_code, user_id, description
+        );
 
         if amount <= 0 {
             return Err(EconomyError::TransactionFailed {
@@ -188,7 +220,10 @@ impl CurrencySystem {
         let new_balance = current_balance.balance + amount;
         if new_balance > currency_def.maximum_balance {
             return Err(EconomyError::TransactionFailed {
-                reason: format!("New balance {} would exceed maximum {}", new_balance, currency_def.maximum_balance),
+                reason: format!(
+                    "New balance {} would exceed maximum {}",
+                    new_balance, currency_def.maximum_balance
+                ),
             });
         }
 
@@ -204,16 +239,31 @@ impl CurrencySystem {
         // Update cache
         {
             let mut cache = self.balance_cache.write().await;
-            cache.insert((user_id, currency_code.to_string()), current_balance.clone());
+            cache.insert(
+                (user_id, currency_code.to_string()),
+                current_balance.clone(),
+            );
         }
 
-        info!("Successfully added {} {} to user {}", amount, currency_code, user_id);
+        info!(
+            "Successfully added {} {} to user {}",
+            amount, currency_code, user_id
+        );
         Ok(current_balance)
     }
 
     /// Subtract currency from user balance
-    pub async fn subtract_currency(&self, user_id: Uuid, currency_code: &str, amount: i64, description: String) -> EconomyResult<CurrencyBalance> {
-        info!("Subtracting {} {} from user {} ({})", amount, currency_code, user_id, description);
+    pub async fn subtract_currency(
+        &self,
+        user_id: Uuid,
+        currency_code: &str,
+        amount: i64,
+        description: String,
+    ) -> EconomyResult<CurrencyBalance> {
+        info!(
+            "Subtracting {} {} from user {} ({})",
+            amount, currency_code, user_id, description
+        );
 
         if amount <= 0 {
             return Err(EconomyError::TransactionFailed {
@@ -244,16 +294,30 @@ impl CurrencySystem {
         // Update cache
         {
             let mut cache = self.balance_cache.write().await;
-            cache.insert((user_id, currency_code.to_string()), current_balance.clone());
+            cache.insert(
+                (user_id, currency_code.to_string()),
+                current_balance.clone(),
+            );
         }
 
-        info!("Successfully subtracted {} {} from user {}", amount, currency_code, user_id);
+        info!(
+            "Successfully subtracted {} {} from user {}",
+            amount, currency_code, user_id
+        );
         Ok(current_balance)
     }
 
     /// Reserve currency for pending transaction
-    pub async fn reserve_currency(&self, user_id: Uuid, currency_code: &str, amount: i64) -> EconomyResult<CurrencyBalance> {
-        debug!("Reserving {} {} for user {}", amount, currency_code, user_id);
+    pub async fn reserve_currency(
+        &self,
+        user_id: Uuid,
+        currency_code: &str,
+        amount: i64,
+    ) -> EconomyResult<CurrencyBalance> {
+        debug!(
+            "Reserving {} {} for user {}",
+            amount, currency_code, user_id
+        );
 
         if amount <= 0 {
             return Err(EconomyError::TransactionFailed {
@@ -284,16 +348,30 @@ impl CurrencySystem {
         // Update cache
         {
             let mut cache = self.balance_cache.write().await;
-            cache.insert((user_id, currency_code.to_string()), current_balance.clone());
+            cache.insert(
+                (user_id, currency_code.to_string()),
+                current_balance.clone(),
+            );
         }
 
-        debug!("Successfully reserved {} {} for user {}", amount, currency_code, user_id);
+        debug!(
+            "Successfully reserved {} {} for user {}",
+            amount, currency_code, user_id
+        );
         Ok(current_balance)
     }
 
     /// Release reserved currency
-    pub async fn release_reservation(&self, user_id: Uuid, currency_code: &str, amount: i64) -> EconomyResult<CurrencyBalance> {
-        debug!("Releasing {} {} reservation for user {}", amount, currency_code, user_id);
+    pub async fn release_reservation(
+        &self,
+        user_id: Uuid,
+        currency_code: &str,
+        amount: i64,
+    ) -> EconomyResult<CurrencyBalance> {
+        debug!(
+            "Releasing {} {} reservation for user {}",
+            amount, currency_code, user_id
+        );
 
         if amount <= 0 {
             return Err(EconomyError::TransactionFailed {
@@ -307,7 +385,10 @@ impl CurrencySystem {
         // Validate reservation amount
         if current_balance.reserved < amount {
             return Err(EconomyError::TransactionFailed {
-                reason: format!("Cannot release {} - only {} reserved", amount, current_balance.reserved),
+                reason: format!(
+                    "Cannot release {} - only {} reserved",
+                    amount, current_balance.reserved
+                ),
             });
         }
 
@@ -323,10 +404,16 @@ impl CurrencySystem {
         // Update cache
         {
             let mut cache = self.balance_cache.write().await;
-            cache.insert((user_id, currency_code.to_string()), current_balance.clone());
+            cache.insert(
+                (user_id, currency_code.to_string()),
+                current_balance.clone(),
+            );
         }
 
-        debug!("Successfully released {} {} reservation for user {}", amount, currency_code, user_id);
+        debug!(
+            "Successfully released {} {} reservation for user {}",
+            amount, currency_code, user_id
+        );
         Ok(current_balance)
     }
 
@@ -338,7 +425,10 @@ impl CurrencySystem {
         to_currency: &str,
         amount: i64,
     ) -> EconomyResult<(CurrencyBalance, CurrencyBalance)> {
-        info!("Converting {} {} to {} for user {}", amount, from_currency, to_currency, user_id);
+        info!(
+            "Converting {} {} to {} for user {}",
+            amount, from_currency, to_currency, user_id
+        );
 
         // Validate currencies
         self.validate_currency(from_currency).await?;
@@ -354,7 +444,7 @@ impl CurrencySystem {
         let exchange_rates = self.exchange_rates.read().await;
         let from_rate = exchange_rates.get(from_currency).copied().unwrap_or(1.0);
         let to_rate = exchange_rates.get(to_currency).copied().unwrap_or(1.0);
-        
+
         // Calculate conversion
         let base_amount = (amount as f64) * from_rate;
         let converted_amount = (base_amount / to_rate) as i64;
@@ -370,17 +460,38 @@ impl CurrencySystem {
         }
 
         // Perform the conversion
-        let from_balance = self.subtract_currency(user_id, from_currency, amount, format!("Currency conversion to {}", to_currency)).await?;
-        let to_balance = self.add_currency(user_id, to_currency, final_amount, format!("Currency conversion from {}", from_currency)).await?;
+        let from_balance = self
+            .subtract_currency(
+                user_id,
+                from_currency,
+                amount,
+                format!("Currency conversion to {}", to_currency),
+            )
+            .await?;
+        let to_balance = self
+            .add_currency(
+                user_id,
+                to_currency,
+                final_amount,
+                format!("Currency conversion from {}", from_currency),
+            )
+            .await?;
 
-        info!("Successfully converted {} {} to {} {} for user {}", amount, from_currency, final_amount, to_currency, user_id);
+        info!(
+            "Successfully converted {} {} to {} {} for user {}",
+            amount, from_currency, final_amount, to_currency, user_id
+        );
         Ok((from_balance, to_balance))
     }
 
     /// Get currency definition
-    pub async fn get_currency_definition(&self, currency_code: &str) -> EconomyResult<CurrencyDefinition> {
+    pub async fn get_currency_definition(
+        &self,
+        currency_code: &str,
+    ) -> EconomyResult<CurrencyDefinition> {
         let definitions = self.currency_definitions.read().await;
-        definitions.get(currency_code)
+        definitions
+            .get(currency_code)
             .cloned()
             .ok_or_else(|| EconomyError::InvalidCurrency {
                 currency: currency_code.to_string(),
@@ -388,7 +499,10 @@ impl CurrencySystem {
     }
 
     /// Add new currency definition
-    pub async fn add_currency_definition(&self, definition: CurrencyDefinition) -> EconomyResult<()> {
+    pub async fn add_currency_definition(
+        &self,
+        definition: CurrencyDefinition,
+    ) -> EconomyResult<()> {
         info!("Adding currency definition: {}", definition.currency_code);
 
         // Validate definition
@@ -415,15 +529,25 @@ impl CurrencySystem {
 
         {
             let mut rates = self.exchange_rates.write().await;
-            rates.insert(definition.currency_code.clone(), definition.exchange_rate_to_base);
+            rates.insert(
+                definition.currency_code.clone(),
+                definition.exchange_rate_to_base,
+            );
         }
 
-        info!("Currency definition added successfully: {}", definition.currency_code);
+        info!(
+            "Currency definition added successfully: {}",
+            definition.currency_code
+        );
         Ok(())
     }
 
     /// Update exchange rate
-    pub async fn update_exchange_rate(&self, currency_code: &str, new_rate: f64) -> EconomyResult<()> {
+    pub async fn update_exchange_rate(
+        &self,
+        currency_code: &str,
+        new_rate: f64,
+    ) -> EconomyResult<()> {
         info!("Updating exchange rate for {}: {}", currency_code, new_rate);
 
         // Validate currency exists
@@ -436,7 +560,8 @@ impl CurrencySystem {
         }
 
         // Update database
-        self.update_currency_exchange_rate(currency_code, new_rate).await?;
+        self.update_currency_exchange_rate(currency_code, new_rate)
+            .await?;
 
         // Update cache
         {
@@ -456,7 +581,10 @@ impl CurrencySystem {
     }
 
     /// Get currency statistics
-    pub async fn get_currency_statistics(&self, currency_code: &str) -> EconomyResult<CurrencyStatistics> {
+    pub async fn get_currency_statistics(
+        &self,
+        currency_code: &str,
+    ) -> EconomyResult<CurrencyStatistics> {
         self.validate_currency(currency_code).await?;
 
         let stats = CurrencyStatistics {
@@ -500,7 +628,12 @@ impl CurrencySystem {
             });
         }
 
-        if !self.config.supported_currencies.iter().any(|c| c.currency_code == self.config.default_currency) {
+        if !self
+            .config
+            .supported_currencies
+            .iter()
+            .any(|c| c.currency_code == self.config.default_currency)
+        {
             return Err(EconomyError::SystemError {
                 message: "Default currency not in supported currencies".to_string(),
             });
@@ -510,7 +643,7 @@ impl CurrencySystem {
     }
 
     // Database operations (simplified implementations)
-    
+
     async fn create_tables(&self) -> EconomyResult<()> {
         info!("Economy tables managed by migration 042_economy_tables.sql — skipping runtime creation");
         Ok(())
@@ -528,7 +661,10 @@ impl CurrencySystem {
         let rows = match rows {
             Ok(r) => r,
             Err(e) => {
-                warn!("No currency_definitions in DB yet ({}), using config defaults", e);
+                warn!(
+                    "No currency_definitions in DB yet ({}), using config defaults",
+                    e
+                );
                 return Ok(());
             }
         };
@@ -560,12 +696,22 @@ impl CurrencySystem {
             definitions.insert(currency_code, definition);
         }
 
-        info!("Loaded {} currency definitions from database", definitions.len());
+        info!(
+            "Loaded {} currency definitions from database",
+            definitions.len()
+        );
         Ok(())
     }
 
-    async fn load_balance_from_db(&self, user_id: Uuid, currency_code: &str) -> EconomyResult<CurrencyBalance> {
-        debug!("Loading balance from database: {} {}", user_id, currency_code);
+    async fn load_balance_from_db(
+        &self,
+        user_id: Uuid,
+        currency_code: &str,
+    ) -> EconomyResult<CurrencyBalance> {
+        debug!(
+            "Loading balance from database: {} {}",
+            user_id, currency_code
+        );
 
         let row = sqlx::query(
             "SELECT balance, reserved, available, updated_at, version FROM currency_balances WHERE user_id = $1 AND currency_code = $2"
@@ -576,7 +722,8 @@ impl CurrencySystem {
         .await?;
 
         if let Some(row) = row {
-            let last_updated: chrono::DateTime<chrono::Utc> = row.try_get("updated_at")
+            let last_updated: chrono::DateTime<chrono::Utc> = row
+                .try_get("updated_at")
                 .unwrap_or_else(|_| chrono::Utc::now());
 
             Ok(CurrencyBalance {
@@ -605,7 +752,10 @@ impl CurrencySystem {
     }
 
     async fn save_balance_to_db(&self, balance: &CurrencyBalance) -> EconomyResult<()> {
-        debug!("Saving balance to database: {} {} = {}", balance.user_id, balance.currency_code, balance.balance);
+        debug!(
+            "Saving balance to database: {} {} = {}",
+            balance.user_id, balance.currency_code, balance.balance
+        );
 
         sqlx::query(
             r#"
@@ -634,7 +784,10 @@ impl CurrencySystem {
     }
 
     async fn update_balance_with_version(&self, balance: &CurrencyBalance) -> EconomyResult<()> {
-        debug!("Updating balance with version check: {} {} v{}", balance.user_id, balance.currency_code, balance.version);
+        debug!(
+            "Updating balance with version check: {} {} v{}",
+            balance.user_id, balance.currency_code, balance.version
+        );
 
         let old_version = balance.version - 1;
         let result = sqlx::query(
@@ -642,7 +795,7 @@ impl CurrencySystem {
             UPDATE currency_balances
             SET balance = $1, reserved = $2, available = $3, updated_at = $4, version = $5
             WHERE user_id = $6 AND currency_code = $7 AND version = $8
-            "#
+            "#,
         )
         .bind(balance.balance)
         .bind(balance.reserved)
@@ -697,11 +850,15 @@ impl CurrencySystem {
         Ok(())
     }
 
-    async fn update_currency_exchange_rate(&self, currency_code: &str, rate: f64) -> EconomyResult<()> {
+    async fn update_currency_exchange_rate(
+        &self,
+        currency_code: &str,
+        rate: f64,
+    ) -> EconomyResult<()> {
         debug!("Updating exchange rate for {}: {}", currency_code, rate);
 
         let result = sqlx::query(
-            "UPDATE currency_definitions SET exchange_rate_to_base = $1 WHERE currency_code = $2"
+            "UPDATE currency_definitions SET exchange_rate_to_base = $1 WHERE currency_code = $2",
         )
         .bind(rate)
         .bind(currency_code)
@@ -734,7 +891,10 @@ impl CurrencySystem {
     }
 
     async fn get_circulating_supply(&self, currency_code: &str) -> EconomyResult<i64> {
-        debug!("Calculating circulating supply for currency: {}", currency_code);
+        debug!(
+            "Calculating circulating supply for currency: {}",
+            currency_code
+        );
 
         let row = sqlx::query(
             "SELECT COALESCE(SUM(available), 0) as circulating FROM currency_balances WHERE currency_code = $1"
@@ -764,7 +924,10 @@ impl CurrencySystem {
     }
 
     async fn get_average_balance(&self, currency_code: &str) -> EconomyResult<f64> {
-        debug!("Calculating average balance for currency: {}", currency_code);
+        debug!(
+            "Calculating average balance for currency: {}",
+            currency_code
+        );
 
         let row = sqlx::query(
             "SELECT COALESCE(AVG(balance::double precision), 0.0) as average FROM currency_balances WHERE currency_code = $1 AND balance > 0"
@@ -779,7 +942,10 @@ impl CurrencySystem {
     }
 
     async fn get_transaction_volume_24h(&self, currency_code: &str) -> EconomyResult<i64> {
-        debug!("Calculating 24h transaction volume for currency: {}", currency_code);
+        debug!(
+            "Calculating 24h transaction volume for currency: {}",
+            currency_code
+        );
 
         let twenty_four_hours_ago = chrono::Utc::now() - chrono::Duration::hours(24);
 
@@ -790,7 +956,7 @@ impl CurrencySystem {
             WHERE currency_code = $1
               AND created_at >= $2
               AND status = 'Completed'
-            "#
+            "#,
         )
         .bind(currency_code)
         .bind(twenty_four_hours_ago)

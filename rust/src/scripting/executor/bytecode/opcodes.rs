@@ -204,7 +204,8 @@ impl BytecodeProgram {
     }
 
     pub fn find_event(&self, state: &str, event: &str) -> Option<&CompiledEvent> {
-        self.states.iter()
+        self.states
+            .iter()
             .find(|(s, _)| s == state)
             .and_then(|(_, events)| events.iter().find(|e| e.name == event))
     }

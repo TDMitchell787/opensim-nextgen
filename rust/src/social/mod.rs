@@ -1,63 +1,63 @@
 //! Advanced Social Features for OpenSim Next
-//! 
+//!
 //! Provides comprehensive social networking capabilities including community management,
 //! friend systems, group functionality, communication tools, and moderation features.
 
+use chrono::{DateTime, Utc};
 use serde::{Deserialize, Serialize};
 use std::collections::HashMap;
 use uuid::Uuid;
-use chrono::{DateTime, Utc};
 
 pub mod community;
 pub mod friends;
 pub mod groups;
+pub mod manager;
 pub mod messaging;
 pub mod moderation;
 pub mod notifications;
-pub mod manager;
 
 // Re-export main components
 pub use community::*;
 pub use friends::*;
 pub use groups::*;
+pub use manager::*;
 pub use messaging::*;
 pub use moderation::*;
 pub use notifications::*;
-pub use manager::*;
 
 /// Social feature error types
 #[derive(Debug, thiserror::Error)]
 pub enum SocialError {
     #[error("User not found: {user_id}")]
     UserNotFound { user_id: Uuid },
-    
+
     #[error("Group not found: {group_id}")]
     GroupNotFound { group_id: Uuid },
-    
+
     #[error("Community not found: {community_id}")]
     CommunityNotFound { community_id: Uuid },
-    
+
     #[error("Access denied: {reason}")]
     AccessDenied { reason: String },
-    
+
     #[error("Friendship already exists")]
     FriendshipExists,
-    
+
     #[error("Group membership limit exceeded")]
     GroupMembershipLimitExceeded,
-    
+
     #[error("Invalid invitation: {reason}")]
     InvalidInvitation { reason: String },
-    
+
     #[error("Moderation action failed: {reason}")]
     ModerationFailed { reason: String },
-    
+
     #[error("Database error: {source}")]
     DatabaseError { source: anyhow::Error },
-    
+
     #[error("Validation error: {message}")]
     ValidationError { message: String },
-    
+
     #[error("Rate limit exceeded for user {user_id}")]
     RateLimitExceeded { user_id: Uuid },
 }
@@ -296,7 +296,7 @@ impl Default for SocialConfig {
             enable_recommendations: true,
             enable_activity_feeds: true,
             enable_social_search: true,
-            message_rate_limit: 60, // messages per minute
+            message_rate_limit: 60,        // messages per minute
             friend_request_rate_limit: 10, // requests per hour
             auto_cleanup_inactive_days: 365,
             moderation_enabled: true,

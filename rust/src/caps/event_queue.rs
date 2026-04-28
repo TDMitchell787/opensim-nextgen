@@ -1,17 +1,17 @@
+use crate::login_stage_tracker::LoginStage;
+use axum::{
+    extract::{Path, Query, State},
+    http::StatusCode,
+    response::Json,
+};
+use serde::{Deserialize, Serialize};
+use serde_json::{json, Value};
 use std::collections::{HashMap, VecDeque};
 use std::sync::Arc;
 use std::time::{Duration, Instant};
-use tokio::sync::{RwLock, mpsc, oneshot};
-use tokio::time::{timeout, sleep};
-use serde_json::{json, Value};
-use axum::{
-    extract::{Path, Query, State},
-    response::Json,
-    http::StatusCode,
-};
-use tracing::{info, warn, error, debug};
-use serde::{Deserialize, Serialize};
-use crate::login_stage_tracker::LoginStage;
+use tokio::sync::{mpsc, oneshot, RwLock};
+use tokio::time::{sleep, timeout};
+use tracing::{debug, error, info, warn};
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct EventQueueEvent {
@@ -46,7 +46,10 @@ impl SessionEventQueue {
         if let Some(sender) = self.pending_request.take() {
             let response = self.create_response();
             if let Err(failed_response) = sender.send(response) {
-                warn!("Failed to send EQ response to waiting client, re-queuing {} events", failed_response.events.len());
+                warn!(
+                    "Failed to send EQ response to waiting client, re-queuing {} events",
+                    failed_response.events.len()
+                );
                 for evt in failed_response.events {
                     self.events.push_back(evt);
                 }
@@ -64,7 +67,10 @@ impl SessionEventQueue {
         if let Some(sender) = self.pending_request.take() {
             let response = self.create_response();
             if let Err(failed_response) = sender.send(response) {
-                warn!("Failed to send EQ batch response to waiting client, re-queuing {} events", failed_response.events.len());
+                warn!(
+                    "Failed to send EQ batch response to waiting client, re-queuing {} events",
+                    failed_response.events.len()
+                );
                 for evt in failed_response.events {
                     self.events.push_back(evt);
                 }
@@ -171,22 +177,37 @@ impl EventQueueManager {
         let mut sessions = self.sessions.write().await;
         if let Some(queue) = sessions.get_mut(session_id) {
             let has_pending = queue.pending_request.is_some();
-            info!("📡 [EQ] Queueing event '{}' to session: {} (pending_request: {})",
-                  event.message, session_id, has_pending);
+            info!(
+                "📡 [EQ] Queueing event '{}' to session: {} (pending_request: {})",
+                event.message, session_id, has_pending
+            );
             queue.add_event(event);
-            info!("📡 [EQ] Event queued successfully, queue now has {} events", queue.events.len());
+            info!(
+                "📡 [EQ] Event queued successfully, queue now has {} events",
+                queue.events.len()
+            );
         } else {
-            warn!("📡 [EQ] ❌ Attempted to send event to non-existent session: {}", session_id);
+            warn!(
+                "📡 [EQ] ❌ Attempted to send event to non-existent session: {}",
+                session_id
+            );
         }
     }
 
     pub async fn send_events_batch(&self, session_id: &str, events: Vec<EventQueueEvent>) {
         let mut sessions = self.sessions.write().await;
         if let Some(queue) = sessions.get_mut(session_id) {
-            debug!("Sending {} events as batch to session: {}", events.len(), session_id);
+            debug!(
+                "Sending {} events as batch to session: {}",
+                events.len(),
+                session_id
+            );
             queue.add_events_batch(events);
         } else {
-            warn!("Attempted to send events to non-existent session: {}", session_id);
+            warn!(
+                "Attempted to send events to non-existent session: {}",
+                session_id
+            );
         }
     }
 
@@ -204,7 +225,11 @@ impl EventQueueManager {
         }
     }
 
-    pub async fn get_events(&self, session_id: &str, ack: Option<u64>) -> Result<EventQueueResponse, StatusCode> {
+    pub async fn get_events(
+        &self,
+        session_id: &str,
+        ack: Option<u64>,
+    ) -> Result<EventQueueResponse, StatusCode> {
         // Handle acknowledgment if provided
         if let Some(ack_id) = ack {
             let mut sessions = self.sessions.write().await;
@@ -220,11 +245,18 @@ impl EventQueueManager {
                 if !queue.events.is_empty() {
                     queue.last_activity = Instant::now(); // CRITICAL: Update activity timestamp!
                     let response = queue.create_response();
-                    debug!("Returning {} events for session: {}", response.events.len(), session_id);
+                    debug!(
+                        "Returning {} events for session: {}",
+                        response.events.len(),
+                        session_id
+                    );
                     return Ok(response);
                 }
             } else {
-                warn!("Event queue request for non-existent session: {}", session_id);
+                warn!(
+                    "Event queue request for non-existent session: {}",
+                    session_id
+                );
                 return Err(StatusCode::NOT_FOUND);
             }
         }
@@ -239,7 +271,10 @@ impl EventQueueManager {
                     // Already have a pending long-poll for this session.
                     // Reject the NEW request immediately with 502 to prevent flooding.
                     // The existing pending request will continue to wait for events.
-                    debug!("📡 [EQ] Rejecting duplicate EQG request for session {} (already pending)", session_id);
+                    debug!(
+                        "📡 [EQ] Rejecting duplicate EQG request for session {} (already pending)",
+                        session_id
+                    );
                     return Err(StatusCode::BAD_GATEWAY);
                 }
                 queue.last_activity = Instant::now();
@@ -253,13 +288,20 @@ impl EventQueueManager {
         // Wait for events or timeout (30 seconds - typical for EventQueueGet)
         match timeout(Duration::from_secs(30), receiver).await {
             Ok(Ok(response)) => {
-                info!("📡 [EQ] Long-poll fulfilled with {} events for session: {}", response.events.len(), session_id);
+                info!(
+                    "📡 [EQ] Long-poll fulfilled with {} events for session: {}",
+                    response.events.len(),
+                    session_id
+                );
                 Ok(response)
-            },
+            }
             Ok(Err(_)) => {
-                info!("📡 [EQ] Long-poll receiver dropped (replaced) for session: {}", session_id);
+                info!(
+                    "📡 [EQ] Long-poll receiver dropped (replaced) for session: {}",
+                    session_id
+                );
                 Err(StatusCode::BAD_GATEWAY)
-            },
+            }
             Err(_) => {
                 info!("📡 [EQ] Long-poll 30s timeout for session: {}", session_id);
                 Err(StatusCode::BAD_GATEWAY)
@@ -276,13 +318,21 @@ impl EventQueueManager {
         // The login response already contains seed_capability - no need to send again.
         // Sending it during fresh login may confuse the viewer state machine.
         info!("🎯 [Phase 68.13] Fresh login - NOT sending EstablishAgentCommunication");
-        info!("🎯 [Phase 68.13] Session: {}, Agent: {} (login response has seed_capability)", session_id, agent_id);
+        info!(
+            "🎯 [Phase 68.13] Session: {}, Agent: {} (login response has seed_capability)",
+            session_id, agent_id
+        );
 
         // EventQueue is ready but empty for fresh login - viewer doesn't need events here
         // The viewer already has all necessary info from login response
     }
 
-    pub async fn send_login_events_on_first_request(&self, session_id: &str, agent_id: &str, udp_circuit_ready: bool) {
+    pub async fn send_login_events_on_first_request(
+        &self,
+        session_id: &str,
+        agent_id: &str,
+        udp_circuit_ready: bool,
+    ) {
         // Check if this session needs initial login events
         {
             let mut sessions = self.sessions.write().await;
@@ -307,7 +357,7 @@ impl EventQueueManager {
     async fn cleanup_expired_sessions(sessions: &Arc<RwLock<HashMap<String, SessionEventQueue>>>) {
         let timeout_duration = Duration::from_secs(300); // 5 minutes
         let mut sessions_guard = sessions.write().await;
-        
+
         let expired_sessions: Vec<String> = sessions_guard
             .iter()
             .filter(|(_, queue)| queue.is_expired(timeout_duration))
@@ -334,12 +384,18 @@ pub async fn handle_event_queue_get(
 ) -> Result<axum::response::Response, StatusCode> {
     use serde_json::json;
 
-    debug!("📡 EventQueueGet request for EQG UUID: {} (ack: {:?})", eqg_uuid, query.ack);
+    debug!(
+        "📡 EventQueueGet request for EQG UUID: {} (ack: {:?})",
+        eqg_uuid, query.ack
+    );
 
     // Look up session by EQG UUID
     let session = state.caps_manager.get_session_by_eqg_uuid(&eqg_uuid).await;
     if session.is_none() {
-        warn!("📡 EventQueueGet failed: No session found for EQG UUID: {}", eqg_uuid);
+        warn!(
+            "📡 EventQueueGet failed: No session found for EQG UUID: {}",
+            eqg_uuid
+        );
         return Err(StatusCode::NOT_FOUND);
     }
 
@@ -347,31 +403,49 @@ pub async fn handle_event_queue_get(
     let session_id = session.session_id.clone();
     let agent_id = session.agent_id.clone();
     let udp_circuit_ready = session.udp_circuit_ready;
-    debug!("📡 EventQueueGet mapped EQG UUID {} to session {} (UDP circuit ready: {})", eqg_uuid, session_id, udp_circuit_ready);
+    debug!(
+        "📡 EventQueueGet mapped EQG UUID {} to session {} (UDP circuit ready: {})",
+        eqg_uuid, session_id, udp_circuit_ready
+    );
 
     // Update session activity
-    state.caps_manager.update_session_activity(&session_id).await;
+    state
+        .caps_manager
+        .update_session_activity(&session_id)
+        .await;
 
     // Get events from the event queue manager
     let event_queue = state.caps_manager.get_event_queue();
 
     // CRITICAL: Send login events on first EventQueueGet request ONLY if UDP circuit is ready
     // Viewer must establish UDP connection before receiving EventQueue events
-    event_queue.send_login_events_on_first_request(&session_id, &agent_id, udp_circuit_ready).await;
+    event_queue
+        .send_login_events_on_first_request(&session_id, &agent_id, udp_circuit_ready)
+        .await;
 
     match event_queue.get_events(&session_id, query.ack).await {
         Ok(response) => {
             if !response.events.is_empty() {
-                info!("📡 EventQueueGet response for session: {} with {} events", session_id, response.events.len());
+                info!(
+                    "📡 EventQueueGet response for session: {} with {} events",
+                    session_id,
+                    response.events.len()
+                );
             }
 
             // Phase 70.27: Mark Stage 10 (EVENTQUEUE_ACTIVE) when first EQ response is sent
             // This confirms the viewer has established EventQueue communication
-            state.stage_tracker.mark_passed_by_circuit(
-                session.circuit_code,
-                LoginStage::EventQueueActive,
-                Some(format!("First EQ response with {} events", response.events.len()))
-            ).await;
+            state
+                .stage_tracker
+                .mark_passed_by_circuit(
+                    session.circuit_code,
+                    LoginStage::EventQueueActive,
+                    Some(format!(
+                        "First EQ response with {} events",
+                        response.events.len()
+                    )),
+                )
+                .await;
 
             let response_json = json!({
                 "events": response.events,
@@ -380,17 +454,28 @@ pub async fn handle_event_queue_get(
 
             if !response.events.is_empty() {
                 for (i, event) in response.events.iter().enumerate() {
-                    info!("📡 [DEBUG] Event {}: message='{}', body={}", i, event.message, serde_json::to_string_pretty(&event.body).unwrap_or_default());
+                    info!(
+                        "📡 [DEBUG] Event {}: message='{}', body={}",
+                        i,
+                        event.message,
+                        serde_json::to_string_pretty(&event.body).unwrap_or_default()
+                    );
                 }
             }
 
             crate::caps::handlers::json_response_to_llsd_xml(response_json)
-        },
+        }
         Err(status) => {
             if status == StatusCode::BAD_GATEWAY {
-                debug!("📡 EventQueueGet 502 for session: {} (normal long-poll timeout/replace)", session_id);
+                debug!(
+                    "📡 EventQueueGet 502 for session: {} (normal long-poll timeout/replace)",
+                    session_id
+                );
             } else {
-                warn!("📡 EventQueueGet failed for session: {} with status: {:?}", session_id, status);
+                warn!(
+                    "📡 EventQueueGet failed for session: {} with status: {:?}",
+                    session_id, status
+                );
             }
             Err(status)
         }

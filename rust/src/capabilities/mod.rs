@@ -1,21 +1,21 @@
 //! Capabilities system for Second Life/OpenSim compatibility
 //! Handles capability URLs and services required for viewer functionality
 
+use anyhow::Result;
+use chrono::{DateTime, Utc};
+use serde::{Deserialize, Serialize};
 use std::collections::HashMap;
 use std::sync::Arc;
-use anyhow::Result;
-use serde::{Deserialize, Serialize};
-use tracing::{info, debug, warn};
+use tracing::{debug, info, warn};
 use uuid::Uuid;
-use chrono::{DateTime, Utc};
 
-pub mod seed;
 pub mod handlers;
 pub mod registry;
+pub mod seed;
 
-pub use seed::*;
 pub use handlers::*;
 pub use registry::*;
+pub use seed::*;
 
 /// Capability information
 #[derive(Debug, Clone, Serialize, Deserialize)]
@@ -43,7 +43,7 @@ impl Capability {
             requires_auth: true,
         }
     }
-    
+
     /// Create a capability with expiration
     pub fn with_expiration(name: String, url: String, expires_at: DateTime<Utc>) -> Self {
         Self {
@@ -54,7 +54,7 @@ impl Capability {
             requires_auth: true,
         }
     }
-    
+
     /// Check if capability is expired
     pub fn is_expired(&self) -> bool {
         if let Some(expires_at) = self.expires_at {
@@ -63,13 +63,13 @@ impl Capability {
             false
         }
     }
-    
+
     /// Set capability version
     pub fn with_version(mut self, version: String) -> Self {
         self.version = Some(version);
         self
     }
-    
+
     /// Set authentication requirement
     pub fn with_auth(mut self, requires_auth: bool) -> Self {
         self.requires_auth = requires_auth;
@@ -286,7 +286,7 @@ impl StandardCapability {
             Self::WebFetchInventoryDescendents => "WebFetchInventoryDescendents",
         }
     }
-    
+
     /// Get essential capabilities needed for basic viewer functionality
     pub fn essential_capabilities() -> Vec<StandardCapability> {
         vec![
@@ -301,7 +301,7 @@ impl StandardCapability {
             Self::AgentPreferences,
         ]
     }
-    
+
     /// Get upload capabilities for content creation
     pub fn upload_capabilities() -> Vec<StandardCapability> {
         vec![
@@ -316,12 +316,12 @@ impl StandardCapability {
             Self::UpdateSoundAgentInventory,
         ]
     }
-    
+
     /// Check if this capability is essential for viewer operation
     pub fn is_essential(&self) -> bool {
         Self::essential_capabilities().contains(self)
     }
-    
+
     /// Check if this capability is for uploading content
     pub fn is_upload_capability(&self) -> bool {
         Self::upload_capabilities().contains(self)
@@ -383,7 +383,7 @@ impl AgentCapabilities {
     pub fn new(agent_id: Uuid, session_id: Uuid, base_url: &str) -> Self {
         let seed_cap_id = Uuid::new_v4();
         let seed_url = format!("{}/{}", base_url, seed_cap_id);
-        
+
         Self {
             agent_id,
             session_id,
@@ -393,41 +393,42 @@ impl AgentCapabilities {
             seed_url,
         }
     }
-    
+
     /// Add a capability
     pub fn add_capability(&mut self, capability: Capability) {
-        self.capabilities.insert(capability.name.clone(), capability);
+        self.capabilities
+            .insert(capability.name.clone(), capability);
         self.last_accessed = Utc::now();
     }
-    
+
     /// Get a capability by name
     pub fn get_capability(&self, name: &str) -> Option<&Capability> {
         self.capabilities.get(name)
     }
-    
+
     /// Remove expired capabilities
     pub fn remove_expired(&mut self) -> usize {
         let initial_count = self.capabilities.len();
         self.capabilities.retain(|_, cap| !cap.is_expired());
         initial_count - self.capabilities.len()
     }
-    
+
     /// Get all capability names
     pub fn capability_names(&self) -> Vec<String> {
         self.capabilities.keys().cloned().collect()
     }
-    
+
     /// Get capabilities as JSON for seed capability response
     pub fn to_seed_response(&self) -> serde_json::Value {
         let mut caps = serde_json::Map::new();
-        
+
         for (name, cap) in &self.capabilities {
             caps.insert(name.clone(), serde_json::Value::String(cap.url.clone()));
         }
-        
+
         serde_json::Value::Object(caps)
     }
-    
+
     /// Check if agent has essential capabilities
     pub fn has_essential_capabilities(&self) -> bool {
         StandardCapability::essential_capabilities()
@@ -450,62 +451,75 @@ pub struct CapabilitiesManager {
 impl CapabilitiesManager {
     /// Create new capabilities manager
     pub fn new(config: CapabilitiesConfig) -> Self {
-        info!("Initializing capabilities manager with base URL: {}", config.base_url);
+        info!(
+            "Initializing capabilities manager with base URL: {}",
+            config.base_url
+        );
         Self {
             agent_capabilities: HashMap::new(),
             config,
             url_mappings: HashMap::new(),
         }
     }
-    
+
     /// Create capabilities for an agent
-    pub fn create_agent_capabilities(&mut self, agent_id: Uuid, session_id: Uuid) -> Result<String> {
+    pub fn create_agent_capabilities(
+        &mut self,
+        agent_id: Uuid,
+        session_id: Uuid,
+    ) -> Result<String> {
         debug!("Creating capabilities for agent: {}", agent_id);
-        
+
         let mut agent_caps = AgentCapabilities::new(agent_id, session_id, &self.config.base_url);
-        
+
         // Add essential capabilities
         if self.config.enable_essential {
             self.add_essential_capabilities(&mut agent_caps)?;
         }
-        
+
         // Add upload capabilities
         if self.config.enable_uploads {
             self.add_upload_capabilities(&mut agent_caps)?;
         }
-        
+
         // Add advanced capabilities
         if self.config.enable_advanced {
             self.add_advanced_capabilities(&mut agent_caps)?;
         }
-        
+
         let seed_url = agent_caps.seed_url.clone();
-        
+
         // Register URL mappings
         for (name, capability) in &agent_caps.capabilities {
             let url_path = self.extract_url_path(&capability.url);
             self.url_mappings.insert(url_path, (agent_id, name.clone()));
         }
-        
+
         self.agent_capabilities.insert(agent_id, agent_caps);
-        
-        info!("Created {} capabilities for agent {}", 
-              self.agent_capabilities.get(&agent_id).unwrap().capabilities.len(), 
-              agent_id);
-        
+
+        info!(
+            "Created {} capabilities for agent {}",
+            self.agent_capabilities
+                .get(&agent_id)
+                .unwrap()
+                .capabilities
+                .len(),
+            agent_id
+        );
+
         Ok(seed_url)
     }
-    
+
     /// Get agent capabilities
     pub fn get_agent_capabilities(&self, agent_id: &Uuid) -> Option<&AgentCapabilities> {
         self.agent_capabilities.get(agent_id)
     }
-    
+
     /// Get capability handler by URL path
     pub fn get_capability_by_url(&self, url_path: &str) -> Option<(Uuid, String)> {
         self.url_mappings.get(url_path).cloned()
     }
-    
+
     /// Remove agent capabilities
     pub fn remove_agent_capabilities(&mut self, agent_id: &Uuid) -> bool {
         if let Some(agent_caps) = self.agent_capabilities.remove(agent_id) {
@@ -514,43 +528,44 @@ impl CapabilitiesManager {
                 let url_path = self.extract_url_path(&capability.url);
                 self.url_mappings.remove(&url_path);
             }
-            
+
             debug!("Removed capabilities for agent: {}", agent_id);
             true
         } else {
             false
         }
     }
-    
+
     /// Cleanup expired capabilities
     pub fn cleanup_expired(&mut self) -> usize {
         let mut total_removed = 0;
-        
+
         for agent_caps in self.agent_capabilities.values_mut() {
             total_removed += agent_caps.remove_expired();
         }
-        
+
         if total_removed > 0 {
             debug!("Cleaned up {} expired capabilities", total_removed);
         }
-        
+
         total_removed
     }
-    
+
     /// Get statistics
     pub fn get_stats(&self) -> CapabilitiesStats {
-        let total_capabilities: usize = self.agent_capabilities
+        let total_capabilities: usize = self
+            .agent_capabilities
             .values()
             .map(|caps| caps.capabilities.len())
             .sum();
-            
+
         CapabilitiesStats {
             total_agents: self.agent_capabilities.len(),
             total_capabilities,
             url_mappings: self.url_mappings.len(),
         }
     }
-    
+
     /// Add essential capabilities
     fn add_essential_capabilities(&self, agent_caps: &mut AgentCapabilities) -> Result<()> {
         for std_cap in StandardCapability::essential_capabilities() {
@@ -560,7 +575,7 @@ impl CapabilitiesManager {
         }
         Ok(())
     }
-    
+
     /// Add upload capabilities
     fn add_upload_capabilities(&self, agent_caps: &mut AgentCapabilities) -> Result<()> {
         for std_cap in StandardCapability::upload_capabilities() {
@@ -570,7 +585,7 @@ impl CapabilitiesManager {
         }
         Ok(())
     }
-    
+
     /// Add advanced capabilities
     fn add_advanced_capabilities(&self, agent_caps: &mut AgentCapabilities) -> Result<()> {
         // Add additional capabilities for advanced features
@@ -582,7 +597,7 @@ impl CapabilitiesManager {
             StandardCapability::ViewerMetrics,
             StandardCapability::ViewerStats,
         ];
-        
+
         for std_cap in advanced_caps {
             let cap_url = self.generate_capability_url(agent_caps.agent_id, std_cap.name());
             let capability = Capability::new(std_cap.name().to_string(), cap_url);
@@ -590,13 +605,13 @@ impl CapabilitiesManager {
         }
         Ok(())
     }
-    
+
     /// Generate capability URL
     fn generate_capability_url(&self, agent_id: Uuid, capability_name: &str) -> String {
         let cap_id = Uuid::new_v4();
         format!("{}/{}/{}", self.config.base_url, agent_id, cap_id)
     }
-    
+
     /// Extract URL path from full URL
     fn extract_url_path(&self, url: &str) -> String {
         if let Some(path_start) = url.find("/cap/") {
@@ -628,13 +643,13 @@ mod tests {
             "TestCapability".to_string(),
             "http://example.com/cap/test".to_string(),
         );
-        
+
         assert_eq!(cap.name, "TestCapability");
         assert_eq!(cap.url, "http://example.com/cap/test");
         assert!(!cap.is_expired());
         assert!(cap.requires_auth);
     }
-    
+
     #[test]
     fn test_capability_expiration() {
         let past_time = Utc::now() - chrono::Duration::minutes(5);
@@ -643,17 +658,17 @@ mod tests {
             "http://example.com/cap/expired".to_string(),
             past_time,
         );
-        
+
         assert!(cap.is_expired());
     }
-    
+
     #[test]
     fn test_standard_capability_names() {
         assert_eq!(StandardCapability::Seed.name(), "seed_capability");
         assert_eq!(StandardCapability::EventQueueGet.name(), "EventQueueGet");
         assert_eq!(StandardCapability::GetTexture.name(), "GetTexture");
     }
-    
+
     #[test]
     fn test_essential_capabilities() {
         let essential = StandardCapability::essential_capabilities();
@@ -661,54 +676,59 @@ mod tests {
         assert!(essential.contains(&StandardCapability::EventQueueGet));
         assert!(essential.contains(&StandardCapability::FetchInventory2));
     }
-    
+
     #[test]
     fn test_agent_capabilities() {
         let agent_id = Uuid::new_v4();
         let session_id = Uuid::new_v4();
         let mut agent_caps = AgentCapabilities::new(agent_id, session_id, "http://test.com/cap");
-        
+
         let cap = Capability::new("TestCap".to_string(), "http://test.com/cap/123".to_string());
         agent_caps.add_capability(cap);
-        
+
         assert_eq!(agent_caps.capabilities.len(), 1);
         assert!(agent_caps.get_capability("TestCap").is_some());
         assert!(agent_caps.get_capability("NonExistent").is_none());
     }
-    
+
     #[test]
     fn test_capabilities_manager() {
         let config = CapabilitiesConfig::default();
         let mut manager = CapabilitiesManager::new(config);
-        
+
         let agent_id = Uuid::new_v4();
         let session_id = Uuid::new_v4();
-        
-        let seed_url = manager.create_agent_capabilities(agent_id, session_id).unwrap();
+
+        let seed_url = manager
+            .create_agent_capabilities(agent_id, session_id)
+            .unwrap();
         assert!(seed_url.contains("/cap/"));
-        
+
         let agent_caps = manager.get_agent_capabilities(&agent_id).unwrap();
         assert!(agent_caps.has_essential_capabilities());
-        
+
         let stats = manager.get_stats();
         assert_eq!(stats.total_agents, 1);
         assert!(stats.total_capabilities > 0);
     }
-    
+
     #[test]
     fn test_seed_response() {
         let agent_id = Uuid::new_v4();
         let session_id = Uuid::new_v4();
         let mut agent_caps = AgentCapabilities::new(agent_id, session_id, "http://test.com/cap");
-        
+
         let cap = Capability::new("TestCap".to_string(), "http://test.com/cap/123".to_string());
         agent_caps.add_capability(cap);
-        
+
         let response = agent_caps.to_seed_response();
         assert!(response.is_object());
-        
+
         let obj = response.as_object().unwrap();
         assert!(obj.contains_key("TestCap"));
-        assert_eq!(obj.get("TestCap").unwrap().as_str().unwrap(), "http://test.com/cap/123");
+        assert_eq!(
+            obj.get("TestCap").unwrap().as_str().unwrap(),
+            "http://test.com/cap/123"
+        );
     }
 }

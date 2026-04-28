@@ -3,32 +3,32 @@
 //! Manages configuration for OpenZiti network connectivity, identity,
 //! and security policies.
 
-use std::path::PathBuf;
-use std::collections::HashMap;
+use anyhow::{anyhow, Result};
 use serde::{Deserialize, Serialize};
-use anyhow::{Result, anyhow};
+use std::collections::HashMap;
+use std::path::PathBuf;
 
 /// OpenZiti network configuration
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct ZitiConfig {
     /// Controller endpoint URL
     pub controller_url: String,
-    
+
     /// Identity configuration
     pub identity: ZitiIdentityConfig,
-    
+
     /// Network configuration
     pub network: ZitiNetworkConfig,
-    
+
     /// Security configuration
     pub security: ZitiSecurityConfig,
-    
+
     /// Logging configuration
     pub logging: ZitiLoggingConfig,
-    
+
     /// Service configuration
     pub services: ZitiServicesConfig,
-    
+
     /// Custom configuration options
     pub custom: HashMap<String, String>,
 }
@@ -38,25 +38,25 @@ pub struct ZitiConfig {
 pub struct ZitiIdentityConfig {
     /// Identity certificate file path
     pub cert_file: PathBuf,
-    
+
     /// Identity private key file path
     pub key_file: PathBuf,
-    
+
     /// CA bundle file path
     pub ca_bundle: Option<PathBuf>,
-    
+
     /// Identity name
     pub name: String,
-    
+
     /// Identity type
     pub identity_type: ZitiIdentityType,
-    
+
     /// Auto-enrollment configuration
     pub auto_enroll: Option<ZitiAutoEnrollConfig>,
-    
+
     /// Identity refresh interval in seconds
     pub refresh_interval: u64,
-    
+
     /// Enable identity caching
     pub enable_caching: bool,
 }
@@ -79,13 +79,13 @@ pub enum ZitiIdentityType {
 pub struct ZitiAutoEnrollConfig {
     /// Enrollment token
     pub token: String,
-    
+
     /// Enrollment endpoint
     pub endpoint: String,
-    
+
     /// Certificate validity period in days
     pub cert_validity_days: u32,
-    
+
     /// Enable automatic renewal
     pub auto_renew: bool,
 }
@@ -95,25 +95,25 @@ pub struct ZitiAutoEnrollConfig {
 pub struct ZitiNetworkConfig {
     /// Edge router endpoints
     pub edge_routers: Vec<String>,
-    
+
     /// Connection timeout in seconds
     pub connect_timeout: u64,
-    
+
     /// Keep-alive interval in seconds
     pub keepalive_interval: u64,
-    
+
     /// Maximum retry attempts
     pub max_retries: u32,
-    
+
     /// Retry backoff strategy
     pub retry_backoff: ZitiRetryBackoff,
-    
+
     /// Enable compression
     pub enable_compression: bool,
-    
+
     /// Buffer sizes
     pub buffer_config: ZitiBufferConfig,
-    
+
     /// Tunnel configuration
     pub tunnel: ZitiTunnelConfig,
 }
@@ -124,7 +124,11 @@ pub enum ZitiRetryBackoff {
     /// Fixed delay between retries
     Fixed { delay_ms: u64 },
     /// Exponential backoff
-    Exponential { initial_ms: u64, max_ms: u64, multiplier: f64 },
+    Exponential {
+        initial_ms: u64,
+        max_ms: u64,
+        multiplier: f64,
+    },
     /// Linear backoff
     Linear { initial_ms: u64, increment_ms: u64 },
 }
@@ -134,13 +138,13 @@ pub enum ZitiRetryBackoff {
 pub struct ZitiBufferConfig {
     /// Receive buffer size
     pub receive_buffer_size: usize,
-    
+
     /// Send buffer size
     pub send_buffer_size: usize,
-    
+
     /// Maximum message size
     pub max_message_size: usize,
-    
+
     /// Enable buffer pooling
     pub enable_pooling: bool,
 }
@@ -150,16 +154,16 @@ pub struct ZitiBufferConfig {
 pub struct ZitiTunnelConfig {
     /// Enable tunnel mode
     pub enabled: bool,
-    
+
     /// Tunnel interface name
     pub interface_name: String,
-    
+
     /// MTU size
     pub mtu: u16,
-    
+
     /// DNS configuration
     pub dns: ZitiDnsConfig,
-    
+
     /// IP assignment
     pub ip_assignment: ZitiIpAssignment,
 }
@@ -169,13 +173,13 @@ pub struct ZitiTunnelConfig {
 pub struct ZitiDnsConfig {
     /// Enable DNS interception
     pub enabled: bool,
-    
+
     /// DNS servers
     pub servers: Vec<String>,
-    
+
     /// DNS search domains
     pub search_domains: Vec<String>,
-    
+
     /// DNS timeout in seconds
     pub timeout: u64,
 }
@@ -185,13 +189,13 @@ pub struct ZitiDnsConfig {
 pub struct ZitiIpAssignment {
     /// Assignment strategy
     pub strategy: ZitiIpStrategy,
-    
+
     /// IP range for assignment
     pub ip_range: String,
-    
+
     /// Subnet mask
     pub subnet_mask: String,
-    
+
     /// Gateway IP
     pub gateway: Option<String>,
 }
@@ -212,19 +216,19 @@ pub enum ZitiIpStrategy {
 pub struct ZitiSecurityConfig {
     /// Minimum TLS version
     pub min_tls_version: ZitiTlsVersion,
-    
+
     /// Allowed cipher suites
     pub cipher_suites: Vec<String>,
-    
+
     /// Certificate verification
     pub cert_verification: ZitiCertVerification,
-    
+
     /// Encryption configuration
     pub encryption: ZitiEncryptionConfig,
-    
+
     /// Rate limiting
     pub rate_limiting: ZitiRateLimitConfig,
-    
+
     /// Session configuration
     pub session: ZitiSessionConfig,
 }
@@ -243,13 +247,13 @@ pub enum ZitiTlsVersion {
 pub struct ZitiCertVerification {
     /// Verify certificate chain
     pub verify_chain: bool,
-    
+
     /// Verify hostname
     pub verify_hostname: bool,
-    
+
     /// Allow self-signed certificates
     pub allow_self_signed: bool,
-    
+
     /// Custom CA certificates
     pub custom_cas: Vec<PathBuf>,
 }
@@ -259,13 +263,13 @@ pub struct ZitiCertVerification {
 pub struct ZitiEncryptionConfig {
     /// Default encryption algorithm
     pub default_algorithm: String,
-    
+
     /// Key exchange algorithm
     pub key_exchange: String,
-    
+
     /// Enable perfect forward secrecy
     pub perfect_forward_secrecy: bool,
-    
+
     /// Key rotation interval in hours
     pub key_rotation_hours: u64,
 }
@@ -275,13 +279,13 @@ pub struct ZitiEncryptionConfig {
 pub struct ZitiRateLimitConfig {
     /// Enable rate limiting
     pub enabled: bool,
-    
+
     /// Requests per second limit
     pub requests_per_second: u32,
-    
+
     /// Burst limit
     pub burst_limit: u32,
-    
+
     /// Window size in seconds
     pub window_size: u64,
 }
@@ -291,13 +295,13 @@ pub struct ZitiRateLimitConfig {
 pub struct ZitiSessionConfig {
     /// Session timeout in seconds
     pub timeout: u64,
-    
+
     /// Enable session persistence
     pub persistent: bool,
-    
+
     /// Session storage location
     pub storage_path: Option<PathBuf>,
-    
+
     /// Maximum concurrent sessions
     pub max_concurrent: u32,
 }
@@ -307,16 +311,16 @@ pub struct ZitiSessionConfig {
 pub struct ZitiLoggingConfig {
     /// Log level
     pub level: ZitiLogLevel,
-    
+
     /// Log output destination
     pub output: ZitiLogOutput,
-    
+
     /// Log format
     pub format: ZitiLogFormat,
-    
+
     /// Enable structured logging
     pub structured: bool,
-    
+
     /// Log rotation configuration
     pub rotation: Option<ZitiLogRotation>,
 }
@@ -360,10 +364,10 @@ pub enum ZitiLogFormat {
 pub struct ZitiLogRotation {
     /// Maximum file size in MB
     pub max_size_mb: u64,
-    
+
     /// Maximum number of files to keep
     pub max_files: u32,
-    
+
     /// Rotation interval
     pub interval: ZitiRotationInterval,
 }
@@ -382,13 +386,13 @@ pub enum ZitiRotationInterval {
 pub struct ZitiServicesConfig {
     /// Service discovery configuration
     pub discovery: ZitiServiceDiscovery,
-    
+
     /// Default service timeout
     pub default_timeout: u64,
-    
+
     /// Health check configuration
     pub health_check: ZitiHealthCheckConfig,
-    
+
     /// Load balancing configuration
     pub load_balancing: ZitiLoadBalancingConfig,
 }
@@ -398,10 +402,10 @@ pub struct ZitiServicesConfig {
 pub struct ZitiServiceDiscovery {
     /// Enable automatic discovery
     pub enabled: bool,
-    
+
     /// Discovery interval in seconds
     pub interval: u64,
-    
+
     /// Service cache TTL in seconds
     pub cache_ttl: u64,
 }
@@ -411,13 +415,13 @@ pub struct ZitiServiceDiscovery {
 pub struct ZitiHealthCheckConfig {
     /// Enable health checks
     pub enabled: bool,
-    
+
     /// Health check interval in seconds
     pub interval: u64,
-    
+
     /// Health check timeout in seconds
     pub timeout: u64,
-    
+
     /// Failure threshold
     pub failure_threshold: u32,
 }
@@ -427,10 +431,10 @@ pub struct ZitiHealthCheckConfig {
 pub struct ZitiLoadBalancingConfig {
     /// Load balancing strategy
     pub strategy: ZitiLoadBalancingStrategy,
-    
+
     /// Enable session affinity
     pub session_affinity: bool,
-    
+
     /// Health-based routing
     pub health_based_routing: bool,
 }
@@ -496,9 +500,9 @@ impl Default for ZitiNetworkConfig {
 impl Default for ZitiBufferConfig {
     fn default() -> Self {
         Self {
-            receive_buffer_size: 65536,  // 64KB
-            send_buffer_size: 65536,     // 64KB
-            max_message_size: 1048576,   // 1MB
+            receive_buffer_size: 65536, // 64KB
+            send_buffer_size: 65536,    // 64KB
+            max_message_size: 1048576,  // 1MB
             enable_pooling: true,
         }
     }
@@ -666,21 +670,20 @@ impl Default for ZitiLoadBalancingConfig {
 impl ZitiConfig {
     /// Load configuration from file
     pub fn from_file(path: &std::path::Path) -> Result<Self> {
-        let content = std::fs::read_to_string(path)
-            .map_err(|e| anyhow!(
-                format!("Failed to read config file {}: {}", path.display(), e)
-            ))?;
+        let content = std::fs::read_to_string(path).map_err(|e| {
+            anyhow!(format!(
+                "Failed to read config file {}: {}",
+                path.display(),
+                e
+            ))
+        })?;
 
         if path.extension().and_then(|s| s.to_str()) == Some("json") {
             serde_json::from_str(&content)
-                .map_err(|e| anyhow!(
-                    format!("Failed to parse JSON config: {}", e)
-                ))
+                .map_err(|e| anyhow!(format!("Failed to parse JSON config: {}", e)))
         } else {
             toml::from_str(&content)
-                .map_err(|e| anyhow!(
-                    format!("Failed to parse TOML config: {}", e)
-                ))
+                .map_err(|e| anyhow!(format!("Failed to parse TOML config: {}", e)))
         }
     }
 
@@ -688,20 +691,19 @@ impl ZitiConfig {
     pub fn to_file(&self, path: &std::path::Path) -> Result<()> {
         let content = if path.extension().and_then(|s| s.to_str()) == Some("json") {
             serde_json::to_string_pretty(self)
-                .map_err(|e| anyhow!(
-                    format!("Failed to serialize config to JSON: {}", e)
-                ))?
+                .map_err(|e| anyhow!(format!("Failed to serialize config to JSON: {}", e)))?
         } else {
             toml::to_string_pretty(self)
-                .map_err(|e| anyhow!(
-                    format!("Failed to serialize config to TOML: {}", e)
-                ))?
+                .map_err(|e| anyhow!(format!("Failed to serialize config to TOML: {}", e)))?
         };
 
-        std::fs::write(path, content)
-            .map_err(|e| anyhow!(
-                format!("Failed to write config file {}: {}", path.display(), e)
-            ))?;
+        std::fs::write(path, content).map_err(|e| {
+            anyhow!(format!(
+                "Failed to write config file {}: {}",
+                path.display(),
+                e
+            ))
+        })?;
 
         Ok(())
     }
@@ -710,16 +712,12 @@ impl ZitiConfig {
     pub fn validate(&self) -> Result<()> {
         // Validate controller URL
         if self.controller_url.is_empty() {
-            return Err(anyhow!(
-                "Controller URL cannot be empty".to_string()
-            ));
+            return Err(anyhow!("Controller URL cannot be empty".to_string()));
         }
 
         // Validate identity configuration
         if self.identity.name.is_empty() {
-            return Err(anyhow!(
-                "Identity name cannot be empty".to_string()
-            ));
+            return Err(anyhow!("Identity name cannot be empty".to_string()));
         }
 
         // Validate network configuration
@@ -744,9 +742,7 @@ impl ZitiConfig {
 
         // Validate timeouts
         if self.network.connect_timeout == 0 {
-            return Err(anyhow!(
-                "Connect timeout must be greater than 0".to_string()
-            ));
+            return Err(anyhow!("Connect timeout must be greater than 0".to_string()));
         }
 
         Ok(())
@@ -755,11 +751,19 @@ impl ZitiConfig {
     /// Get default OpenSim services configuration
     pub fn with_opensim_services(mut self) -> Self {
         // Add OpenSim-specific configuration
-        self.custom.insert("opensim_mode".to_string(), "true".to_string());
-        self.custom.insert("virtual_world_services".to_string(), "enabled".to_string());
-        self.custom.insert("asset_service_encryption".to_string(), "required".to_string());
-        self.custom.insert("region_communication_security".to_string(), "zero_trust".to_string());
-        
+        self.custom
+            .insert("opensim_mode".to_string(), "true".to_string());
+        self.custom
+            .insert("virtual_world_services".to_string(), "enabled".to_string());
+        self.custom.insert(
+            "asset_service_encryption".to_string(),
+            "required".to_string(),
+        );
+        self.custom.insert(
+            "region_communication_security".to_string(),
+            "zero_trust".to_string(),
+        );
+
         self
     }
 }

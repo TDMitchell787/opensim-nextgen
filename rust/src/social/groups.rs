@@ -1,5 +1,5 @@
 //! Group System for OpenSim Next Social Features
-//! 
+//!
 //! Provides comprehensive group management including group creation, membership,
 //! roles, permissions, activities, and group-based communication.
 
@@ -61,19 +61,19 @@ pub enum GroupType {
 /// Group visibility settings
 #[derive(Debug, Clone, Serialize, Deserialize, PartialEq)]
 pub enum GroupVisibility {
-    Public,        // Anyone can see and join
-    Discoverable,  // Anyone can see, invite/apply to join
-    Invite,        // Anyone can see, invite only
-    Hidden,        // Only members can see
+    Public,       // Anyone can see and join
+    Discoverable, // Anyone can see, invite/apply to join
+    Invite,       // Anyone can see, invite only
+    Hidden,       // Only members can see
 }
 
 /// Group membership policies
 #[derive(Debug, Clone, Serialize, Deserialize, PartialEq)]
 pub enum GroupMembershipPolicy {
-    Open,          // Anyone can join
-    Application,   // Must apply and be approved
-    Invitation,    // Invitation only
-    Restricted,    // Owner approval required
+    Open,        // Anyone can join
+    Application, // Must apply and be approved
+    Invitation,  // Invitation only
+    Restricted,  // Owner approval required
 }
 
 /// Group settings
@@ -305,7 +305,11 @@ impl GroupSystem {
     }
 
     /// Create a new group
-    pub async fn create_group(&self, owner_id: Uuid, request: CreateGroupRequest) -> SocialResult<Group> {
+    pub async fn create_group(
+        &self,
+        owner_id: Uuid,
+        request: CreateGroupRequest,
+    ) -> SocialResult<Group> {
         info!("Creating new group '{}' by user {}", request.name, owner_id);
 
         // Validate group creation request
@@ -358,23 +362,38 @@ impl GroupSystem {
 
         {
             let mut memberships = self.group_memberships.write().await;
-            memberships.entry(owner_id).or_insert_with(Vec::new).push(owner_membership);
+            memberships
+                .entry(owner_id)
+                .or_insert_with(Vec::new)
+                .push(owner_membership);
         }
 
         // Record activity
-        self.record_group_activity(group.group_id, owner_id, GroupActivityType::MemberJoined, None).await?;
+        self.record_group_activity(
+            group.group_id,
+            owner_id,
+            GroupActivityType::MemberJoined,
+            None,
+        )
+        .await?;
 
         info!("Group created successfully: {}", group.group_id);
         Ok(group)
     }
 
     /// Update group information
-    pub async fn update_group(&self, group_id: Uuid, user_id: Uuid, request: UpdateGroupRequest) -> SocialResult<Group> {
+    pub async fn update_group(
+        &self,
+        group_id: Uuid,
+        user_id: Uuid,
+        request: UpdateGroupRequest,
+    ) -> SocialResult<Group> {
         info!("Updating group {} by user {}", group_id, user_id);
 
         // Get group and verify permissions
         let mut group = self.get_group(group_id).await?;
-        self.verify_group_permission(group_id, user_id, GroupPermissionType::EditGroupInfo).await?;
+        self.verify_group_permission(group_id, user_id, GroupPermissionType::EditGroupInfo)
+            .await?;
 
         // Apply updates
         if let Some(name) = request.name {
@@ -414,7 +433,8 @@ impl GroupSystem {
         }
 
         // Record activity
-        self.record_group_activity(group_id, user_id, GroupActivityType::SettingsChanged, None).await?;
+        self.record_group_activity(group_id, user_id, GroupActivityType::SettingsChanged, None)
+            .await?;
 
         info!("Group updated successfully");
         Ok(group)
@@ -439,7 +459,8 @@ impl GroupSystem {
         // Handle different membership policies
         match group.membership_policy {
             GroupMembershipPolicy::Open => {
-                self.add_group_member(group_id, user_id, GroupRole::Member).await
+                self.add_group_member(group_id, user_id, GroupRole::Member)
+                    .await
             }
             GroupMembershipPolicy::Application => {
                 // Would create membership application
@@ -447,16 +468,12 @@ impl GroupSystem {
                     message: "Group requires application for membership".to_string(),
                 })
             }
-            GroupMembershipPolicy::Invitation => {
-                Err(SocialError::AccessDenied {
-                    reason: "Group is invitation only".to_string(),
-                })
-            }
-            GroupMembershipPolicy::Restricted => {
-                Err(SocialError::AccessDenied {
-                    reason: "Group membership is restricted".to_string(),
-                })
-            }
+            GroupMembershipPolicy::Invitation => Err(SocialError::AccessDenied {
+                reason: "Group is invitation only".to_string(),
+            }),
+            GroupMembershipPolicy::Restricted => Err(SocialError::AccessDenied {
+                reason: "Group membership is restricted".to_string(),
+            }),
         }
     }
 
@@ -483,7 +500,8 @@ impl GroupSystem {
         self.remove_group_member(group_id, user_id).await?;
 
         // Record activity
-        self.record_group_activity(group_id, user_id, GroupActivityType::MemberLeft, None).await?;
+        self.record_group_activity(group_id, user_id, GroupActivityType::MemberLeft, None)
+            .await?;
 
         info!("User left group successfully");
         Ok(())
@@ -497,10 +515,14 @@ impl GroupSystem {
         invitee_id: Uuid,
         message: Option<String>,
     ) -> SocialResult<GroupInvitation> {
-        info!("Sending group invitation from {} to {} for group {}", inviter_id, invitee_id, group_id);
+        info!(
+            "Sending group invitation from {} to {} for group {}",
+            inviter_id, invitee_id, group_id
+        );
 
         // Verify permissions
-        self.verify_group_permission(group_id, inviter_id, GroupPermissionType::InviteMembers).await?;
+        self.verify_group_permission(group_id, inviter_id, GroupPermissionType::InviteMembers)
+            .await?;
 
         // Check if target user is already a member
         if self.is_group_member(group_id, invitee_id).await? {
@@ -527,7 +549,10 @@ impl GroupSystem {
         // Update cache
         {
             let mut invitations = self.group_invitations.write().await;
-            invitations.entry(invitee_id).or_insert_with(Vec::new).push(invitation.clone());
+            invitations
+                .entry(invitee_id)
+                .or_insert_with(Vec::new)
+                .push(invitation.clone());
         }
 
         info!("Group invitation sent successfully");
@@ -535,12 +560,19 @@ impl GroupSystem {
     }
 
     /// Accept group invitation
-    pub async fn accept_group_invitation(&self, invitation_id: Uuid, user_id: Uuid) -> SocialResult<GroupMembership> {
-        info!("User {} accepting group invitation {}", user_id, invitation_id);
+    pub async fn accept_group_invitation(
+        &self,
+        invitation_id: Uuid,
+        user_id: Uuid,
+    ) -> SocialResult<GroupMembership> {
+        info!(
+            "User {} accepting group invitation {}",
+            user_id, invitation_id
+        );
 
         // Get and validate invitation
         let invitation = self.get_group_invitation(invitation_id).await?;
-        
+
         if invitation.invitee_id != user_id {
             return Err(SocialError::AccessDenied {
                 reason: "Only the invitee can accept this invitation".to_string(),
@@ -560,7 +592,9 @@ impl GroupSystem {
         }
 
         // Add user to group
-        let membership = self.add_group_member(invitation.group_id, user_id, GroupRole::Member).await?;
+        let membership = self
+            .add_group_member(invitation.group_id, user_id, GroupRole::Member)
+            .await?;
 
         // Update invitation status
         let mut updated_invitation = invitation;
@@ -582,7 +616,7 @@ impl GroupSystem {
     /// Get group information
     pub async fn get_group(&self, group_id: Uuid) -> SocialResult<Group> {
         let groups = self.active_groups.read().await;
-        
+
         if let Some(group) = groups.get(&group_id) {
             Ok(group.clone())
         } else {
@@ -591,12 +625,16 @@ impl GroupSystem {
     }
 
     /// Get group members
-    pub async fn get_group_members(&self, group_id: Uuid, requester_id: Uuid) -> SocialResult<GroupMemberListResponse> {
+    pub async fn get_group_members(
+        &self,
+        group_id: Uuid,
+        requester_id: Uuid,
+    ) -> SocialResult<GroupMemberListResponse> {
         debug!("Getting members for group {}", group_id);
 
         // Verify group exists and user has permission to view members
         let _group = self.get_group(group_id).await?;
-        
+
         // For now, allow all members to see member list
         // In production, this would check visibility settings
 
@@ -606,9 +644,12 @@ impl GroupSystem {
         let mut role_distribution = HashMap::new();
 
         // Collect all memberships for this group
-        let active_memberships: Vec<_> = memberships.values()
+        let active_memberships: Vec<_> = memberships
+            .values()
             .flat_map(|user_memberships| user_memberships.iter())
-            .filter(|m| m.group_id == group_id && m.membership_status == GroupMembershipStatus::Active)
+            .filter(|m| {
+                m.group_id == group_id && m.membership_status == GroupMembershipStatus::Active
+            })
             .cloned()
             .collect();
         drop(memberships);
@@ -628,7 +669,9 @@ impl GroupSystem {
                 online_count += 1;
             }
 
-            *role_distribution.entry(membership.role.clone()).or_insert(0) += 1;
+            *role_distribution
+                .entry(membership.role.clone())
+                .or_insert(0) += 1;
             members.push(member_info);
         }
 
@@ -639,7 +682,10 @@ impl GroupSystem {
             members,
         };
 
-        debug!("Group member list retrieved: {} members", response.total_count);
+        debug!(
+            "Group member list retrieved: {} members",
+            response.total_count
+        );
         Ok(response)
     }
 
@@ -654,8 +700,10 @@ impl GroupSystem {
         if let Some(query) = &criteria.query {
             let query_lower = query.to_lowercase();
             results.retain(|g| {
-                g.name.to_lowercase().contains(&query_lower) ||
-                g.description.as_ref().map_or(false, |d| d.to_lowercase().contains(&query_lower))
+                g.name.to_lowercase().contains(&query_lower)
+                    || g.description
+                        .as_ref()
+                        .map_or(false, |d| d.to_lowercase().contains(&query_lower))
             });
         }
 
@@ -722,10 +770,12 @@ impl GroupSystem {
     /// Check if user is a member of group
     pub async fn is_group_member(&self, group_id: Uuid, user_id: Uuid) -> SocialResult<bool> {
         let memberships = self.group_memberships.read().await;
-        
+
         if let Some(user_memberships) = memberships.get(&user_id) {
             for membership in user_memberships {
-                if membership.group_id == group_id && membership.membership_status == GroupMembershipStatus::Active {
+                if membership.group_id == group_id
+                    && membership.membership_status == GroupMembershipStatus::Active
+                {
                     return Ok(true);
                 }
             }
@@ -736,7 +786,11 @@ impl GroupSystem {
 
     // Private helper methods
 
-    async fn validate_group_creation(&self, request: &CreateGroupRequest, user_id: Uuid) -> SocialResult<()> {
+    async fn validate_group_creation(
+        &self,
+        request: &CreateGroupRequest,
+        user_id: Uuid,
+    ) -> SocialResult<()> {
         if request.name.trim().is_empty() {
             return Err(SocialError::ValidationError {
                 message: "Group name cannot be empty".to_string(),
@@ -777,7 +831,12 @@ impl GroupSystem {
         Ok(())
     }
 
-    async fn add_group_member(&self, group_id: Uuid, user_id: Uuid, role: GroupRole) -> SocialResult<GroupMembership> {
+    async fn add_group_member(
+        &self,
+        group_id: Uuid,
+        user_id: Uuid,
+        role: GroupRole,
+    ) -> SocialResult<GroupMembership> {
         let membership = GroupMembership {
             membership_id: Uuid::new_v4(),
             group_id,
@@ -797,7 +856,10 @@ impl GroupSystem {
         // Update caches
         {
             let mut memberships = self.group_memberships.write().await;
-            memberships.entry(user_id).or_insert_with(Vec::new).push(membership.clone());
+            memberships
+                .entry(user_id)
+                .or_insert_with(Vec::new)
+                .push(membership.clone());
         }
 
         // Update group member count
@@ -809,7 +871,8 @@ impl GroupSystem {
         }
 
         // Record activity
-        self.record_group_activity(group_id, user_id, GroupActivityType::MemberJoined, None).await?;
+        self.record_group_activity(group_id, user_id, GroupActivityType::MemberJoined, None)
+            .await?;
 
         Ok(membership)
     }
@@ -837,12 +900,19 @@ impl GroupSystem {
         Ok(())
     }
 
-    async fn verify_group_permission(&self, group_id: Uuid, user_id: Uuid, permission: GroupPermissionType) -> SocialResult<()> {
+    async fn verify_group_permission(
+        &self,
+        group_id: Uuid,
+        user_id: Uuid,
+        permission: GroupPermissionType,
+    ) -> SocialResult<()> {
         let memberships = self.group_memberships.read().await;
-        
+
         if let Some(user_memberships) = memberships.get(&user_id) {
             for membership in user_memberships {
-                if membership.group_id == group_id && membership.membership_status == GroupMembershipStatus::Active {
+                if membership.group_id == group_id
+                    && membership.membership_status == GroupMembershipStatus::Active
+                {
                     if self.has_permission(&membership.permissions, permission) {
                         return Ok(());
                     }
@@ -855,7 +925,11 @@ impl GroupSystem {
         })
     }
 
-    fn has_permission(&self, permissions: &GroupPermissions, permission_type: GroupPermissionType) -> bool {
+    fn has_permission(
+        &self,
+        permissions: &GroupPermissions,
+        permission_type: GroupPermissionType,
+    ) -> bool {
         match permission_type {
             GroupPermissionType::InviteMembers => permissions.can_invite_members,
             GroupPermissionType::RemoveMembers => permissions.can_remove_members,
@@ -870,7 +944,7 @@ impl GroupSystem {
 
     async fn get_user_group_count(&self, user_id: Uuid) -> SocialResult<u32> {
         let memberships = self.group_memberships.read().await;
-        
+
         if let Some(user_memberships) = memberships.get(&user_id) {
             let active_count = user_memberships
                 .iter()
@@ -882,7 +956,13 @@ impl GroupSystem {
         }
     }
 
-    async fn record_group_activity(&self, group_id: Uuid, user_id: Uuid, activity_type: GroupActivityType, content: Option<String>) -> SocialResult<()> {
+    async fn record_group_activity(
+        &self,
+        group_id: Uuid,
+        user_id: Uuid,
+        activity_type: GroupActivityType,
+        content: Option<String>,
+    ) -> SocialResult<()> {
         let activity = GroupActivity {
             activity_id: Uuid::new_v4(),
             group_id,
@@ -900,7 +980,10 @@ impl GroupSystem {
         // Update cache
         {
             let mut activities = self.group_activities.write().await;
-            activities.entry(group_id).or_insert_with(Vec::new).push(activity);
+            activities
+                .entry(group_id)
+                .or_insert_with(Vec::new)
+                .push(activity);
         }
 
         Ok(())
@@ -944,16 +1027,19 @@ impl GroupSystem {
 
     async fn get_user_display_name(&self, user_id: Uuid) -> String {
         if let Ok(pool) = self.database.legacy_pool() {
-            let row_result = sqlx::query(
-                "SELECT FirstName, LastName FROM UserAccounts WHERE PrincipalID = $1"
-            )
-            .bind(user_id.to_string())
-            .fetch_optional(pool)
-            .await;
+            let row_result =
+                sqlx::query("SELECT FirstName, LastName FROM UserAccounts WHERE PrincipalID = $1")
+                    .bind(user_id.to_string())
+                    .fetch_optional(pool)
+                    .await;
 
             if let Ok(Some(row)) = row_result {
-                let first_name: String = row.try_get("FirstName").unwrap_or_else(|_| "Unknown".to_string());
-                let last_name: String = row.try_get("LastName").unwrap_or_else(|_| "User".to_string());
+                let first_name: String = row
+                    .try_get("FirstName")
+                    .unwrap_or_else(|_| "Unknown".to_string());
+                let last_name: String = row
+                    .try_get("LastName")
+                    .unwrap_or_else(|_| "User".to_string());
                 return format!("{} {}", first_name, last_name);
             }
         }

@@ -2,9 +2,9 @@
 //!
 //! Shared types for instance management, control, and monitoring.
 
+use chrono::{DateTime, Utc};
 use serde::{Deserialize, Serialize};
 use std::collections::HashMap;
-use chrono::{DateTime, Utc};
 
 /// Instance operational status
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
@@ -161,15 +161,40 @@ pub struct ConsoleEntry {
 #[derive(Debug, Clone, Serialize, Deserialize)]
 #[serde(tag = "action", rename_all = "snake_case")]
 pub enum UserManagementAction {
-    List { limit: Option<u32>, offset: Option<u32> },
-    Get { user_id: String },
-    Create { user: serde_json::Value },
-    Update { user_id: String, updates: serde_json::Value },
-    Delete { user_id: String },
-    ResetPassword { user_id: String, new_password: String },
-    SetLevel { user_id: String, level: i32 },
-    Kick { user_id: String, reason: String },
-    Ban { user_id: String, reason: String, duration_hours: Option<u32> },
+    List {
+        limit: Option<u32>,
+        offset: Option<u32>,
+    },
+    Get {
+        user_id: String,
+    },
+    Create {
+        user: serde_json::Value,
+    },
+    Update {
+        user_id: String,
+        updates: serde_json::Value,
+    },
+    Delete {
+        user_id: String,
+    },
+    ResetPassword {
+        user_id: String,
+        new_password: String,
+    },
+    SetLevel {
+        user_id: String,
+        level: i32,
+    },
+    Kick {
+        user_id: String,
+        reason: String,
+    },
+    Ban {
+        user_id: String,
+        reason: String,
+        duration_hours: Option<u32>,
+    },
 }
 
 /// Region control actions
@@ -177,14 +202,33 @@ pub enum UserManagementAction {
 #[serde(tag = "action", rename_all = "snake_case")]
 pub enum RegionControlAction {
     List,
-    Get { region_id: String },
-    Start { region_id: String },
-    Stop { region_id: String },
-    Restart { region_id: String },
-    Backup { region_id: String },
-    LoadOar { region_id: String, oar_path: String },
-    SaveOar { region_id: String, oar_path: String },
-    TeleportAll { region_id: String, target_region: String },
+    Get {
+        region_id: String,
+    },
+    Start {
+        region_id: String,
+    },
+    Stop {
+        region_id: String,
+    },
+    Restart {
+        region_id: String,
+    },
+    Backup {
+        region_id: String,
+    },
+    LoadOar {
+        region_id: String,
+        oar_path: String,
+    },
+    SaveOar {
+        region_id: String,
+        oar_path: String,
+    },
+    TeleportAll {
+        region_id: String,
+        target_region: String,
+    },
 }
 
 /// Subscription channels for real-time updates

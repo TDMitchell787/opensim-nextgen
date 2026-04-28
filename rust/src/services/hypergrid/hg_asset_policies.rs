@@ -1,11 +1,11 @@
-use std::collections::HashSet;
-use std::sync::Arc;
 use anyhow::Result;
 use async_trait::async_trait;
-use tracing::{info, warn, debug};
+use std::collections::HashSet;
+use std::sync::Arc;
+use tracing::{debug, info, warn};
 
-use crate::services::traits::{AssetServiceTrait, AssetBase, AssetMetadata};
 use super::uui;
+use crate::services::traits::{AssetBase, AssetMetadata, AssetServiceTrait};
 
 #[derive(Debug, Clone)]
 pub struct AssetPolicyConfig {
@@ -45,8 +45,10 @@ impl AssetPolicyConfig {
             }
         }
 
-        info!("[HG-ASSET] Policy: disallow_export={:?}, disallow_import={:?}",
-              config.disallow_export, config.disallow_import);
+        info!(
+            "[HG-ASSET] Policy: disallow_export={:?}, disallow_import={:?}",
+            config.disallow_export, config.disallow_import
+        );
         config
     }
 }
@@ -111,7 +113,10 @@ impl AssetServiceTrait for HGAssetPolicyService {
         let asset = self.inner.get(id).await?;
         if let Some(ref a) = asset {
             if !self.allowed_export(a.asset_type) {
-                warn!("[HG-ASSET] Export blocked for asset {} (type={})", id, a.asset_type);
+                warn!(
+                    "[HG-ASSET] Export blocked for asset {} (type={})",
+                    id, a.asset_type
+                );
                 return Ok(None);
             }
             let mut exported = a.clone();
@@ -125,7 +130,10 @@ impl AssetServiceTrait for HGAssetPolicyService {
         let meta = self.inner.get_metadata(id).await?;
         if let Some(ref m) = meta {
             if !self.allowed_export(m.asset_type) {
-                warn!("[HG-ASSET] Export blocked for asset metadata {} (type={})", id, m.asset_type);
+                warn!(
+                    "[HG-ASSET] Export blocked for asset metadata {} (type={})",
+                    id, m.asset_type
+                );
                 return Ok(None);
             }
             let mut exported = m.clone();
@@ -138,7 +146,10 @@ impl AssetServiceTrait for HGAssetPolicyService {
     async fn get_data(&self, id: &str) -> Result<Option<Vec<u8>>> {
         if let Some(meta) = self.inner.get_metadata(id).await? {
             if !self.allowed_export(meta.asset_type) {
-                warn!("[HG-ASSET] Export blocked for asset data {} (type={})", id, meta.asset_type);
+                warn!(
+                    "[HG-ASSET] Export blocked for asset data {} (type={})",
+                    id, meta.asset_type
+                );
                 return Ok(None);
             }
         }
@@ -147,7 +158,10 @@ impl AssetServiceTrait for HGAssetPolicyService {
 
     async fn store(&self, asset: &AssetBase) -> Result<String> {
         if !self.allowed_import(asset.asset_type) {
-            warn!("[HG-ASSET] Import blocked for asset {} (type={})", asset.id, asset.asset_type);
+            warn!(
+                "[HG-ASSET] Import blocked for asset {} (type={})",
+                asset.id, asset.asset_type
+            );
             return Ok(String::new());
         }
         self.inner.store(asset).await
@@ -202,11 +216,23 @@ mod tests {
     struct DummyAsset;
     #[async_trait]
     impl AssetServiceTrait for DummyAsset {
-        async fn get(&self, _id: &str) -> Result<Option<AssetBase>> { Ok(None) }
-        async fn get_metadata(&self, _id: &str) -> Result<Option<AssetMetadata>> { Ok(None) }
-        async fn get_data(&self, _id: &str) -> Result<Option<Vec<u8>>> { Ok(None) }
-        async fn store(&self, _asset: &AssetBase) -> Result<String> { Ok(String::new()) }
-        async fn delete(&self, _id: &str) -> Result<bool> { Ok(false) }
-        async fn asset_exists(&self, _id: &str) -> Result<bool> { Ok(false) }
+        async fn get(&self, _id: &str) -> Result<Option<AssetBase>> {
+            Ok(None)
+        }
+        async fn get_metadata(&self, _id: &str) -> Result<Option<AssetMetadata>> {
+            Ok(None)
+        }
+        async fn get_data(&self, _id: &str) -> Result<Option<Vec<u8>>> {
+            Ok(None)
+        }
+        async fn store(&self, _asset: &AssetBase) -> Result<String> {
+            Ok(String::new())
+        }
+        async fn delete(&self, _id: &str) -> Result<bool> {
+            Ok(false)
+        }
+        async fn asset_exists(&self, _id: &str) -> Result<bool> {
+            Ok(false)
+        }
     }
 }

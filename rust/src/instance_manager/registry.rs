@@ -60,7 +60,10 @@ impl InstanceRegistry {
             );
         }
 
-        info!("Instance registry initialized with {} instance(s)", instances.len());
+        info!(
+            "Instance registry initialized with {} instance(s)",
+            instances.len()
+        );
 
         Self {
             instances: Arc::new(RwLock::new(instances)),
@@ -145,7 +148,15 @@ impl InstanceRegistry {
             instance.info.status = InstanceStatus::Disconnected;
         }
 
-        info!("Instance {} connection state: {}", id, if connected { "connected" } else { "disconnected" });
+        info!(
+            "Instance {} connection state: {}",
+            id,
+            if connected {
+                "connected"
+            } else {
+                "disconnected"
+            }
+        );
         Ok(())
     }
 
@@ -320,31 +331,29 @@ impl InstanceRegistry {
 
 #[cfg(test)]
 mod tests {
-    use super::*;
     use super::super::config_loader::ControllerConfig;
+    use super::*;
 
     fn create_test_config() -> InstancesConfig {
         InstancesConfig {
             controller: ControllerConfig::default(),
-            instances: vec![
-                InstanceConfig {
-                    id: "test-1".to_string(),
-                    name: "Test Instance 1".to_string(),
-                    description: "Test".to_string(),
-                    host: "localhost".to_string(),
-                    websocket_port: 9001,
-                    admin_port: 9200,
-                    metrics_port: 9100,
-                    http_port: 9000,
-                    udp_port: 9000,
-                    api_key: "test-key".to_string(),
-                    environment: Environment::Development,
-                    auto_connect: true,
-                    tags: vec!["test".to_string()],
-                    authentication: Default::default(),
-                    tls: Default::default(),
-                },
-            ],
+            instances: vec![InstanceConfig {
+                id: "test-1".to_string(),
+                name: "Test Instance 1".to_string(),
+                description: "Test".to_string(),
+                host: "localhost".to_string(),
+                websocket_port: 9001,
+                admin_port: 9200,
+                metrics_port: 9100,
+                http_port: 9000,
+                udp_port: 9000,
+                api_key: "test-key".to_string(),
+                environment: Environment::Development,
+                auto_connect: true,
+                tags: vec!["test".to_string()],
+                authentication: Default::default(),
+                tls: Default::default(),
+            }],
         }
     }
 
@@ -362,7 +371,10 @@ mod tests {
         let config = create_test_config();
         let registry = InstanceRegistry::new(config);
 
-        registry.update_status("test-1", InstanceStatus::Running).await.unwrap();
+        registry
+            .update_status("test-1", InstanceStatus::Running)
+            .await
+            .unwrap();
 
         let instance = registry.get_instance("test-1").await.unwrap();
         assert_eq!(instance.status, InstanceStatus::Running);
@@ -373,7 +385,10 @@ mod tests {
         let config = create_test_config();
         let registry = InstanceRegistry::new(config);
 
-        registry.record_connection_failure("test-1", "Test error").await.unwrap();
+        registry
+            .record_connection_failure("test-1", "Test error")
+            .await
+            .unwrap();
         assert_eq!(registry.get_connection_attempts("test-1").await, Some(1));
 
         registry.update_connected("test-1", true).await.unwrap();

@@ -12,7 +12,9 @@ pub struct VehicleScriptLibrary {
 impl VehicleScriptLibrary {
     pub fn global() -> &'static VehicleScriptLibrary {
         LIBRARY.get_or_init(|| {
-            let mut lib = VehicleScriptLibrary { scripts: HashMap::new() };
+            let mut lib = VehicleScriptLibrary {
+                scripts: HashMap::new(),
+            };
             let base = PathBuf::from("content");
             let dirs = [
                 "gaia_land_vehicles",
@@ -28,7 +30,11 @@ impl VehicleScriptLibrary {
                     lib.load_from_directory(&path);
                 }
             }
-            info!("[VEHICLE_SCRIPTS] Loaded {} scripts from {} directories", lib.scripts.len(), dirs.len());
+            info!(
+                "[VEHICLE_SCRIPTS] Loaded {} scripts from {} directories",
+                lib.scripts.len(),
+                dirs.len()
+            );
             lib
         })
     }
@@ -40,7 +46,11 @@ impl VehicleScriptLibrary {
                 if file_path.extension().map(|e| e == "lsl").unwrap_or(false) {
                     if let Some(name) = file_path.file_name().and_then(|n| n.to_str()) {
                         if let Ok(source) = std::fs::read_to_string(&file_path) {
-                            info!("[VEHICLE_SCRIPTS] Loaded: {} ({} bytes)", name, source.len());
+                            info!(
+                                "[VEHICLE_SCRIPTS] Loaded: {} ({} bytes)",
+                                name,
+                                source.len()
+                            );
                             self.scripts.insert(name.to_string(), source);
                         }
                     }
@@ -53,7 +63,11 @@ impl VehicleScriptLibrary {
         self.scripts.get(name).map(|s| s.as_str())
     }
 
-    pub fn get_script_with_tuning(&self, name: &str, tuning: &HashMap<String, f32>) -> Option<String> {
+    pub fn get_script_with_tuning(
+        &self,
+        name: &str,
+        tuning: &HashMap<String, f32>,
+    ) -> Option<String> {
         let source = self.scripts.get(name)?;
         if tuning.is_empty() {
             return Some(source.clone());
@@ -74,8 +88,19 @@ impl VehicleScriptLibrary {
                         } else {
                             format!("{:.1}", value)
                         };
-                        info!("[VEHICLE_SCRIPTS] Tuning {} in {}: {} → {}", param, name, old_val.trim(), new_val);
-                        result = format!("{}{}{}", &result[..after_eq], new_val, &result[after_eq + semi..]);
+                        info!(
+                            "[VEHICLE_SCRIPTS] Tuning {} in {}: {} → {}",
+                            param,
+                            name,
+                            old_val.trim(),
+                            new_val
+                        );
+                        result = format!(
+                            "{}{}{}",
+                            &result[..after_eq],
+                            new_val,
+                            &result[after_eq + semi..]
+                        );
                     }
                 }
             }
@@ -98,16 +123,22 @@ mod tests {
 
     #[test]
     fn test_library_creation() {
-        let lib = VehicleScriptLibrary { scripts: HashMap::new() };
+        let lib = VehicleScriptLibrary {
+            scripts: HashMap::new(),
+        };
         assert_eq!(lib.script_count(), 0);
         assert!(lib.get_script("nonexistent.lsl").is_none());
     }
 
     #[test]
     fn test_tuning_substitution() {
-        let mut lib = VehicleScriptLibrary { scripts: HashMap::new() };
-        lib.scripts.insert("test.lsl".to_string(),
-            "float MAX_SPEED = 40.0;\ninteger HUD_CH = -14710;\nfloat TURN_RATE = 2.5;".to_string());
+        let mut lib = VehicleScriptLibrary {
+            scripts: HashMap::new(),
+        };
+        lib.scripts.insert(
+            "test.lsl".to_string(),
+            "float MAX_SPEED = 40.0;\ninteger HUD_CH = -14710;\nfloat TURN_RATE = 2.5;".to_string(),
+        );
 
         let mut tuning = HashMap::new();
         tuning.insert("MAX_SPEED".to_string(), 60.0);
@@ -121,10 +152,14 @@ mod tests {
 
     #[test]
     fn test_empty_tuning_returns_original() {
-        let mut lib = VehicleScriptLibrary { scripts: HashMap::new() };
+        let mut lib = VehicleScriptLibrary {
+            scripts: HashMap::new(),
+        };
         let original = "float X = 1.0;".to_string();
         lib.scripts.insert("test.lsl".to_string(), original.clone());
-        let result = lib.get_script_with_tuning("test.lsl", &HashMap::new()).unwrap();
+        let result = lib
+            .get_script_with_tuning("test.lsl", &HashMap::new())
+            .unwrap();
         assert_eq!(result, original);
     }
 

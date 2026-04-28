@@ -1,31 +1,31 @@
 //! Analytics Data Collection System
-//! 
+//!
 //! Comprehensive real-time data collection, processing, and storage
 //! for enterprise-grade analytics and business intelligence.
 
 use super::*;
+use std::collections::{HashMap, VecDeque};
 use tokio::sync::{mpsc, RwLock};
 use tokio::time::{interval, Duration};
-use tracing::{info, warn, error, debug};
-use std::collections::{HashMap, VecDeque};
+use tracing::{debug, error, info, warn};
 
 /// Data collection system
 pub struct DataCollector {
     database: Arc<DatabaseManager>,
     metrics_collector: Arc<MetricsCollector>,
     config: AnalyticsConfig,
-    
+
     // Real-time data processing
     data_buffer: Arc<RwLock<VecDeque<AnalyticsDataPoint>>>,
     event_buffer: Arc<RwLock<VecDeque<RealTimeEvent>>>,
-    
+
     // Data processing channels
     data_sender: mpsc::UnboundedSender<AnalyticsDataPoint>,
     event_sender: mpsc::UnboundedSender<RealTimeEvent>,
-    
+
     // Collection statistics
     collection_stats: Arc<RwLock<DataCollectionStats>>,
-    
+
     // Data aggregators
     user_engagement_aggregator: UserEngagementAggregator,
     system_performance_aggregator: SystemPerformanceAggregator,
@@ -427,38 +427,38 @@ impl DataCollector {
     ) -> AnalyticsResult<Self> {
         let (data_sender, mut data_receiver) = mpsc::unbounded_channel();
         let (event_sender, mut event_receiver) = mpsc::unbounded_channel();
-        
+
         let data_buffer = Arc::new(RwLock::new(VecDeque::new()));
         let event_buffer = Arc::new(RwLock::new(VecDeque::new()));
         let collection_stats = Arc::new(RwLock::new(DataCollectionStats::default()));
-        
+
         // Spawn data processing tasks
         let data_buffer_clone = data_buffer.clone();
         tokio::spawn(async move {
             while let Some(data_point) = data_receiver.recv().await {
                 let mut buffer = data_buffer_clone.write().await;
                 buffer.push_back(data_point);
-                
+
                 // Limit buffer size
                 if buffer.len() > 10000 {
                     buffer.pop_front();
                 }
             }
         });
-        
+
         let event_buffer_clone = event_buffer.clone();
         tokio::spawn(async move {
             while let Some(event) = event_receiver.recv().await {
                 let mut buffer = event_buffer_clone.write().await;
                 buffer.push_back(event);
-                
+
                 // Limit buffer size
                 if buffer.len() > 10000 {
                     buffer.pop_front();
                 }
             }
         });
-        
+
         Ok(Self {
             database,
             metrics_collector,
@@ -474,80 +474,85 @@ impl DataCollector {
             security_analytics_aggregator: SecurityAnalyticsAggregator::new(),
         })
     }
-    
+
     /// Initialize data collection system
     pub async fn initialize(&self) -> AnalyticsResult<()> {
         info!("Initializing analytics data collection system");
-        
+
         // Start collection loops
         self.start_data_collection_loop().await?;
         self.start_aggregation_loop().await?;
         self.start_persistence_loop().await?;
-        
+
         info!("Analytics data collection system initialized");
         Ok(())
     }
-    
+
     /// Collect analytics data point
     pub async fn collect_data_point(&self, data_point: AnalyticsDataPoint) -> AnalyticsResult<()> {
-        self.data_sender.send(data_point)
+        self.data_sender
+            .send(data_point)
             .map_err(|_| AnalyticsError::DataCollectionFailed {
-                reason: "Failed to send data point to processing channel".to_string()
+                reason: "Failed to send data point to processing channel".to_string(),
             })?;
-        
+
         // Update collection stats
         let mut stats = self.collection_stats.write().await;
         stats.total_data_points_collected += 1;
         stats.last_collection_time = Utc::now();
-        
+
         Ok(())
     }
-    
+
     /// Process real-time event
     pub async fn process_real_time_event(&self, event: RealTimeEvent) -> AnalyticsResult<()> {
-        self.event_sender.send(event)
+        self.event_sender
+            .send(event)
             .map_err(|_| AnalyticsError::DataCollectionFailed {
-                reason: "Failed to send event to processing channel".to_string()
+                reason: "Failed to send event to processing channel".to_string(),
             })?;
-        
+
         // Update collection stats
         let mut stats = self.collection_stats.write().await;
         stats.total_events_processed += 1;
-        
+
         Ok(())
     }
-    
+
     /// Get collection statistics
     pub async fn get_collection_stats(&self) -> DataCollectionStats {
         self.collection_stats.read().await.clone()
     }
-    
+
     /// Get user engagement metrics
     pub async fn get_user_engagement_metrics(&self) -> UserEngagementMetrics {
         self.user_engagement_aggregator.get_metrics().await
     }
-    
+
     /// Get system performance data
     pub async fn get_system_performance_data(&self) -> SystemPerformanceData {
-        self.system_performance_aggregator.get_performance_data().await
+        self.system_performance_aggregator
+            .get_performance_data()
+            .await
     }
-    
+
     /// Get business metrics
     pub async fn get_business_metrics(&self) -> (RevenueData, CostData, ROIMetrics) {
         self.business_metrics_aggregator.get_all_metrics().await
     }
-    
+
     /// Get security metrics
     pub async fn get_security_metrics(&self) -> (Vec<SecurityEvent>, ThreatMetrics) {
         self.security_analytics_aggregator.get_security_data().await
     }
-    
+
     // Private helper methods
-    
+
     async fn start_data_collection_loop(&self) -> AnalyticsResult<()> {
-        let interval_duration = Duration::from_secs(self.config.data_collection_interval_seconds as u64);
+        let interval_duration =
+            Duration::from_secs(self.config.data_collection_interval_seconds as u64);
         let mut interval = interval(interval_duration);
-        
+
         tokio::spawn(async move {
             loop {
                 interval.tick().await;
@@ -555,10 +560,10 @@ impl DataCollector {
                 debug!("Collecting analytics data points");
             }
         });
-        
+
         Ok(())
     }
-    
+
     async fn start_aggregation_loop(&self) -> AnalyticsResult<()> {
         tokio::spawn(async move {
             let mut interval = interval(Duration::from_secs(300)); // 5 minutes
@@ -567,10 +572,10 @@ impl DataCollector {
                 debug!("Aggregating analytics data");
             }
         });
-        
+
         Ok(())
     }
-    
+
     async fn start_persistence_loop(&self) -> AnalyticsResult<()> {
         tokio::spawn(async move {
             let mut interval = interval(Duration::from_secs(600)); // 10 minutes
@@ -579,7 +584,7 @@ impl DataCollector {
                 debug!("Persisting analytics data to database");
             }
         });
-        
+
         Ok(())
     }
 }
@@ -593,7 +598,7 @@ impl UserEngagementAggregator {
             engagement_metrics: Arc::new(RwLock::new(UserEngagementMetrics::default())),
         }
     }
-    
+
     async fn get_metrics(&self) -> UserEngagementMetrics {
         self.engagement_metrics.read().await.clone()
     }
@@ -606,7 +611,7 @@ impl SystemPerformanceAggregator {
             resource_utilization: Arc::new(RwLock::new(ResourceUtilization::default())),
         }
     }
-    
+
     async fn get_performance_data(&self) -> SystemPerformanceData {
         self.performance_data.read().await.clone()
     }
@@ -620,7 +625,7 @@ impl BusinessMetricsAggregator {
             roi_metrics: Arc::new(RwLock::new(ROIMetrics::default())),
         }
     }
-    
+
     async fn get_all_metrics(&self) -> (RevenueData, CostData, ROIMetrics) {
         (
             self.revenue_data.read().await.clone(),
@@ -637,7 +642,7 @@ impl SecurityAnalyticsAggregator {
             threat_metrics: Arc::new(RwLock::new(ThreatMetrics::default())),
         }
     }
-    
+
     async fn get_security_data(&self) -> (Vec<SecurityEvent>, ThreatMetrics) {
         (
             self.security_events.read().await.clone(),

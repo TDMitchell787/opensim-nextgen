@@ -1,10 +1,10 @@
-use std::sync::Arc;
-use std::time::{SystemTime, UNIX_EPOCH, Duration};
-use anyhow::{Result, anyhow};
-use tracing::{info, error, warn};
+use anyhow::{anyhow, Result};
 use clap::{Parser, Subcommand};
 use rand;
+use std::sync::Arc;
+use std::time::{Duration, SystemTime, UNIX_EPOCH};
 use tokio::net::UdpSocket;
+use tracing::{error, info, warn};
 
 /// Safely get current timestamp, handling system time before Unix epoch
 fn safe_timestamp() -> u64 {
@@ -17,24 +17,29 @@ fn safe_timestamp() -> u64 {
         .as_secs()
 }
 use axum::{
-    Router, routing::get, response::IntoResponse, Json, 
-    extract::{State}, http::StatusCode,
-    middleware,
+    extract::State, http::StatusCode, middleware, response::IntoResponse, routing::get, Json,
+    Router,
 };
-use std::net::SocketAddr;
-use std::env;
-use headers::{Authorization, HeaderMapExt, authorization::Bearer};
 use axum_server;
+use headers::{authorization::Bearer, Authorization, HeaderMapExt};
+use std::env;
+use std::net::SocketAddr;
 
 fn load_config() {
-    if let Some(instance_dir) = env::var("OPENSIM_INSTANCE_DIR").ok().filter(|s| !s.is_empty()) {
+    if let Some(instance_dir) = env::var("OPENSIM_INSTANCE_DIR")
+        .ok()
+        .filter(|s| !s.is_empty())
+    {
         let instance_env = std::path::Path::new(&instance_dir).join(".env");
         if instance_env.exists() {
             if let Ok(_) = dotenvy::from_path(&instance_env) {
                 println!("Loaded instance config from {}", instance_env.display());
             }
         } else {
-            println!("Warning: OPENSIM_INSTANCE_DIR set but no .env found at {}", instance_env.display());
+            println!(
+                "Warning: OPENSIM_INSTANCE_DIR set but no .env found at {}",
+                instance_env.display()
+            );
         }
         if env::var("OPENSIM_REGIONS_DIR").is_err() {
             let regions = std::path::Path::new(&instance_dir).join("Regions");
@@ -57,7 +62,10 @@ fn load_config() {
 
     let current_dir = env::current_dir().unwrap_or_default();
     println!("Working directory: {}", current_dir.display());
-    println!("Database URL: {}", env::var("DATABASE_URL").unwrap_or_default());
+    println!(
+        "Database URL: {}",
+        env::var("DATABASE_URL").unwrap_or_default()
+    );
     if let Ok(instance) = env::var("OPENSIM_INSTANCE_DIR") {
         println!("Instance directory: {}", instance);
     }
@@ -66,44 +74,49 @@ fn load_config() {
 mod xmlrpc_login_response;
 
 use opensim_next::{
-    asset::{AssetManager, AssetManagerConfig, cache::AssetCache, cdn::CdnManager, storage::{StorageBackend, FileSystemStorage}, load_default_assets},
-    caps::{CapsManager, CapsHandlerState},
-    network::{
-        NetworkManager,
-        session::SessionManager,
-        web_client::WebClientServer,
-        loopback::{LoopbackConnector, LoopbackConfig},
-        hypergrid::{HypergridManager, HypergridConfig},
-        admin_api::{create_admin_api_router, AdminApiState, create_security_api_router, SecurityApiState},
-        ai_api::{initialize_ai_api, create_ai_api_router},
-        console_api::{create_console_api_router, ConsoleApiState},
-        skill_api::create_skill_api_router,
-        handlers::login::LoginServer,
+    archives::api::{create_archive_api_router, ArchiveApiState},
+    asset::jpeg2000::{check_opj_compress_available, J2KEncoder},
+    asset::{
+        cache::AssetCache,
+        cdn::CdnManager,
+        load_default_assets,
+        storage::{FileSystemStorage, StorageBackend},
+        AssetManager, AssetManagerConfig,
     },
-    login_service::LoginService,
-    session::SessionManager as LoginSessionManager,
-    state::StateManager,
-    ffi::physics::PhysicsBridge,
-    region::{RegionManager, simulation::SimulationEngine, RegionConfig, RegionId, config_parser},
-    monitoring::MonitoringSystem,
+    caps::{CapsHandlerState, CapsManager},
     database::{
         multi_backend::{DatabaseConnection, MultiDatabaseConfig},
-        DatabaseManager,
-        DatabaseAdmin,
-        DatabaseInitializer,
+        DatabaseAdmin, DatabaseInitializer, DatabaseManager,
     },
-    services::AvatarService,
-    setup::{SetupWizard, SetupPreset},
+    ffi::physics::PhysicsBridge,
+    login_service::LoginService,
     login_session::{CircuitCodeRegistry, LoginSession},
     login_stage_tracker::LoginStageTracker,
-    opensim_compatibility::library_assets::{LibraryAssetManager, set_global_library_manager},
-    opensim_compatibility::avatar_data::{AvatarDataManager, set_global_avatar_data_manager},
+    monitoring::MonitoringSystem,
+    network::{
+        admin_api::{
+            create_admin_api_router, create_security_api_router, AdminApiState, SecurityApiState,
+        },
+        ai_api::{create_ai_api_router, initialize_ai_api},
+        console_api::{create_console_api_router, ConsoleApiState},
+        handlers::login::LoginServer,
+        hypergrid::{HypergridConfig, HypergridManager},
+        loopback::{LoopbackConfig, LoopbackConnector},
+        session::SessionManager,
+        skill_api::create_skill_api_router,
+        web_client::WebClientServer,
+        NetworkManager,
+    },
     opensim_compatibility::animations::init_global_animations,
-    archives::api::{create_archive_api_router, ArchiveApiState},
+    opensim_compatibility::avatar_data::{set_global_avatar_data_manager, AvatarDataManager},
+    opensim_compatibility::library_assets::{set_global_library_manager, LibraryAssetManager},
     region::terrain_storage::TerrainStorage,
-    asset::jpeg2000::{J2KEncoder, check_opj_compress_available},
+    region::{config_parser, simulation::SimulationEngine, RegionConfig, RegionId, RegionManager},
+    services::AvatarService,
+    session::SessionManager as LoginSessionManager,
+    setup::{SetupPreset, SetupWizard},
+    state::StateManager,
 };
-
 
 #[derive(Parser)]
 #[command(name = "opensim-next")]
@@ -179,14 +192,14 @@ struct MonitoringHttpConfig {
 impl MonitoringHttpConfig {
     fn from_env() -> Self {
         Self {
-            api_key: env::var("OPENSIM_API_KEY").unwrap_or_else(|_| "default-key-change-me".to_string()),
+            api_key: env::var("OPENSIM_API_KEY")
+                .unwrap_or_else(|_| "default-key-change-me".to_string()),
             metrics_port: env::var("OPENSIM_METRICS_PORT")
                 .unwrap_or_else(|_| "9100".to_string())
                 .parse()
                 .unwrap_or(9100),
-            instance_id: env::var("OPENSIM_INSTANCE_ID").unwrap_or_else(|_| {
-                format!("instance-{}", safe_timestamp())
-            }),
+            instance_id: env::var("OPENSIM_INSTANCE_ID")
+                .unwrap_or_else(|_| format!("instance-{}", safe_timestamp())),
         }
     }
 }
@@ -216,14 +229,25 @@ async fn metrics_handler(State(state): State<AppState>) -> impl IntoResponse {
                  opensim_instance_id{{instance=\"{}\"}} 1\n\n{}",
                 state.config.instance_id, metrics
             );
-            ([
-                ("Content-Type", "text/plain; version=0.0.4"),
-                ("Access-Control-Allow-Origin", "*"),
-                ("Access-Control-Allow-Methods", "GET, OPTIONS"),
-                ("Access-Control-Allow-Headers", "Authorization, Content-Type")
-            ], instance_metrics).into_response()
+            (
+                [
+                    ("Content-Type", "text/plain; version=0.0.4"),
+                    ("Access-Control-Allow-Origin", "*"),
+                    ("Access-Control-Allow-Methods", "GET, OPTIONS"),
+                    (
+                        "Access-Control-Allow-Headers",
+                        "Authorization, Content-Type",
+                    ),
+                ],
+                instance_metrics,
+            )
+                .into_response()
         }
-        Err(_) => (StatusCode::INTERNAL_SERVER_ERROR, "Failed to collect metrics").into_response(),
+        Err(_) => (
+            StatusCode::INTERNAL_SERVER_ERROR,
+            "Failed to collect metrics",
+        )
+            .into_response(),
     }
 }
 
@@ -240,12 +264,20 @@ async fn health_handler(State(state): State<AppState>) -> impl IntoResponse {
                 [
                     ("Access-Control-Allow-Origin", "*"),
                     ("Access-Control-Allow-Methods", "GET, OPTIONS"),
-                    ("Access-Control-Allow-Headers", "Authorization, Content-Type")
+                    (
+                        "Access-Control-Allow-Headers",
+                        "Authorization, Content-Type",
+                    ),
                 ],
-                Json(response)
-            ).into_response()
+                Json(response),
+            )
+                .into_response()
         }
-        Err(_) => (StatusCode::INTERNAL_SERVER_ERROR, "Failed to get health status").into_response(),
+        Err(_) => (
+            StatusCode::INTERNAL_SERVER_ERROR,
+            "Failed to get health status",
+        )
+            .into_response(),
     }
 }
 
@@ -272,25 +304,31 @@ async fn instance_info_handler(State(state): State<AppState>) -> impl IntoRespon
         [
             ("Access-Control-Allow-Origin", "*"),
             ("Access-Control-Allow-Methods", "GET, OPTIONS"),
-            ("Access-Control-Allow-Headers", "Authorization, Content-Type")
+            (
+                "Access-Control-Allow-Headers",
+                "Authorization, Content-Type",
+            ),
         ],
-        Json(response)
+        Json(response),
     )
 }
 
-
-async fn run_setup_wizard(preset: Option<String>, non_interactive: bool, reconfigure: bool) -> Result<()> {
+async fn run_setup_wizard(
+    preset: Option<String>,
+    non_interactive: bool,
+    reconfigure: bool,
+) -> Result<()> {
     info!("Starting OpenSim Next Setup Wizard");
-    
+
     if reconfigure {
         info!("Reconfiguring existing OpenSim Next installation");
         if std::path::Path::new("./config/OpenSim.ini").exists() {
             info!("Existing configuration found, will be overwritten");
         }
     }
-    
+
     let mut wizard = SetupWizard::new();
-    
+
     // Apply preset if specified
     if let Some(preset_name) = preset {
         let preset = match preset_name.as_str() {
@@ -307,30 +345,28 @@ async fn run_setup_wizard(preset: Option<String>, non_interactive: bool, reconfi
         wizard = SetupWizard::with_preset(preset);
         info!("Using preset: {}", preset_name);
     }
-    
+
     // Set non-interactive mode if requested
     if non_interactive {
         wizard = wizard.non_interactive();
         info!("Running in non-interactive mode");
     }
-    
+
     // Run the setup wizard
     match wizard.run().await {
-        Ok(setup_result) => {
-            match setup_result {
-                opensim_next::setup::SetupResult::Success(_config) => {
-                    info!("✅ Setup completed successfully!");
-                    info!("Configuration files generated in ./config/");
-                    info!("You can now start the server with: cargo run start");
-                },
-                opensim_next::setup::SetupResult::Cancelled => {
-                    info!("Setup cancelled by user");
-                    std::process::exit(0);
-                },
-                opensim_next::setup::SetupResult::Error(error) => {
-                    error!("❌ Setup failed: {}", error);
-                    std::process::exit(1);
-                },
+        Ok(setup_result) => match setup_result {
+            opensim_next::setup::SetupResult::Success(_config) => {
+                info!("✅ Setup completed successfully!");
+                info!("Configuration files generated in ./config/");
+                info!("You can now start the server with: cargo run start");
+            }
+            opensim_next::setup::SetupResult::Cancelled => {
+                info!("Setup cancelled by user");
+                std::process::exit(0);
+            }
+            opensim_next::setup::SetupResult::Error(error) => {
+                error!("❌ Setup failed: {}", error);
+                std::process::exit(1);
             }
         },
         Err(e) => {
@@ -338,52 +374,86 @@ async fn run_setup_wizard(preset: Option<String>, non_interactive: bool, reconfi
             std::process::exit(1);
         }
     }
-    
+
     Ok(())
 }
 
 /// Robust database connection with PostgreSQL → MariaDB fallback
-async fn try_database_connection_with_fallback(primary_config: &MultiDatabaseConfig) -> Result<DatabaseConnection> {
+async fn try_database_connection_with_fallback(
+    primary_config: &MultiDatabaseConfig,
+) -> Result<DatabaseConnection> {
     // Try primary database (PostgreSQL)
-    info!("Attempting connection to primary database: {:?}", primary_config.database_type);
+    info!(
+        "Attempting connection to primary database: {:?}",
+        primary_config.database_type
+    );
     match DatabaseConnection::new(primary_config).await {
         Ok(conn) => {
             // Test the connection to ensure it's working
             match conn.test_connection().await {
                 Ok(_) => {
-                    info!("✅ Primary database connection successful: {:?}", primary_config.database_type);
+                    info!(
+                        "✅ Primary database connection successful: {:?}",
+                        primary_config.database_type
+                    );
                     return Ok(conn);
-                },
+                }
                 Err(e) => {
-                    warn!("Primary database connection test failed: {}. Attempting fallback...", e);
+                    warn!(
+                        "Primary database connection test failed: {}. Attempting fallback...",
+                        e
+                    );
                 }
             }
-        },
+        }
         Err(e) => {
-            warn!("Primary database connection failed: {}. Attempting fallback...", e);
+            warn!(
+                "Primary database connection failed: {}. Attempting fallback...",
+                e
+            );
         }
     }
-    
+
     // Fallback to MariaDB
-    let fallback_config = MultiDatabaseConfig::mysql("localhost", 3306, "opensim_mariadb", "opensim", "password123");
-    info!("Attempting fallback database connection: {:?}", fallback_config.database_type);
-    
+    let fallback_config = MultiDatabaseConfig::mysql(
+        "localhost",
+        3306,
+        "opensim_mariadb",
+        "opensim",
+        "password123",
+    );
+    info!(
+        "Attempting fallback database connection: {:?}",
+        fallback_config.database_type
+    );
+
     match DatabaseConnection::new(&fallback_config).await {
-        Ok(conn) => {
-            match conn.test_connection().await {
-                Ok(_) => {
-                    warn!("✅ Fallback database connection successful: {:?}", fallback_config.database_type);
-                    Ok(conn)
-                },
-                Err(e) => {
-                    error!("❌ Fallback database connection test failed: {}. No database available!", e);
-                    Err(anyhow!("Both primary and fallback database connections failed"))
-                }
+        Ok(conn) => match conn.test_connection().await {
+            Ok(_) => {
+                warn!(
+                    "✅ Fallback database connection successful: {:?}",
+                    fallback_config.database_type
+                );
+                Ok(conn)
+            }
+            Err(e) => {
+                error!(
+                    "❌ Fallback database connection test failed: {}. No database available!",
+                    e
+                );
+                Err(anyhow!(
+                    "Both primary and fallback database connections failed"
+                ))
             }
         },
         Err(e) => {
-            error!("❌ Fallback database connection failed: {}. No database available!", e);
-            Err(anyhow!("Both primary and fallback database connections failed"))
+            error!(
+                "❌ Fallback database connection failed: {}. No database available!",
+                e
+            );
+            Err(anyhow!(
+                "Both primary and fallback database connections failed"
+            ))
         }
     }
 }
@@ -393,7 +463,7 @@ async fn generate_map_tile(
     tile_uuid: uuid::Uuid,
     db_conn: &Arc<DatabaseConnection>,
 ) -> Result<usize> {
-    use image::{RgbaImage, Rgba};
+    use image::{Rgba, RgbaImage};
 
     let mut img = RgbaImage::new(256, 256);
 
@@ -416,7 +486,9 @@ async fn generate_map_tile(
     }
 
     let dynamic_img = image::DynamicImage::ImageRgba8(img);
-    let j2c_data = J2KEncoder::new().with_quality(75).encode(&dynamic_img)
+    let j2c_data = J2KEncoder::new()
+        .with_quality(75)
+        .encode(&dynamic_img)
         .map_err(|e| anyhow!("J2K encode failed: {}", e))?;
     let j2c_len = j2c_data.len();
 
@@ -486,10 +558,12 @@ async fn handle_map_tile_request(
         return (StatusCode::NOT_FOUND, Vec::new()).into_response();
     }
 
-    let service_mode = env::var("OPENSIM_SERVICE_MODE").unwrap_or_else(|_| "standalone".to_string());
-    let region = state.region_registry.iter().find(|r| {
-        r.grid_x == grid_x && r.grid_y == grid_y && r.service_mode == service_mode
-    });
+    let service_mode =
+        env::var("OPENSIM_SERVICE_MODE").unwrap_or_else(|_| "standalone".to_string());
+    let region = state
+        .region_registry
+        .iter()
+        .find(|r| r.grid_x == grid_x && r.grid_y == grid_y && r.service_mode == service_mode);
 
     let map_image_id = match region {
         Some(r) if !r.map_image_id.is_nil() => r.map_image_id,
@@ -529,7 +603,10 @@ async fn handle_map_tile_request(
 
     let dynamic = image::DynamicImage::ImageRgba8(rgba);
     let mut jpeg_buf = std::io::Cursor::new(Vec::new());
-    if dynamic.write_to(&mut jpeg_buf, image::ImageFormat::Jpeg).is_err() {
+    if dynamic
+        .write_to(&mut jpeg_buf, image::ImageFormat::Jpeg)
+        .is_err()
+    {
         return (StatusCode::INTERNAL_SERVER_ERROR, Vec::new()).into_response();
     }
 
@@ -540,12 +617,17 @@ async fn handle_map_tile_request(
             (axum::http::header::CACHE_CONTROL, "public, max-age=86400"),
         ],
         jpeg_buf.into_inner(),
-    ).into_response()
+    )
+        .into_response()
 }
 
 #[derive(Clone)]
 struct MapItemsState {
-    avatar_states: Arc<parking_lot::RwLock<std::collections::HashMap<uuid::Uuid, opensim_next::udp::AvatarMovementState>>>,
+    avatar_states: Arc<
+        parking_lot::RwLock<
+            std::collections::HashMap<uuid::Uuid, opensim_next::udp::AvatarMovementState>,
+        >,
+    >,
     parcels: Arc<parking_lot::RwLock<Vec<opensim_next::modules::land::Parcel>>>,
     region_registry: Arc<Vec<opensim_next::udp::RegionInfo>>,
 }
@@ -556,19 +638,34 @@ async fn handle_map_items_request(
 ) -> impl IntoResponse {
     let region_handle: u64 = match handle_str.parse() {
         Ok(h) => h,
-        Err(_) => return (StatusCode::BAD_REQUEST, [(axum::http::header::CONTENT_TYPE, "text/plain")], String::new()).into_response(),
+        Err(_) => {
+            return (
+                StatusCode::BAD_REQUEST,
+                [(axum::http::header::CONTENT_TYPE, "text/plain")],
+                String::new(),
+            )
+                .into_response()
+        }
     };
 
     let region_global_x = ((region_handle >> 32) & 0xFFFFFFFF) as u32;
     let region_global_y = (region_handle & 0xFFFFFFFF) as u32;
 
-    let service_mode = env::var("OPENSIM_SERVICE_MODE").unwrap_or_else(|_| "standalone".to_string());
+    let service_mode =
+        env::var("OPENSIM_SERVICE_MODE").unwrap_or_else(|_| "standalone".to_string());
     let is_our_region = state.region_registry.iter().any(|r| {
-        r.service_mode == service_mode && r.grid_x == region_global_x / 256 && r.grid_y == region_global_y / 256
+        r.service_mode == service_mode
+            && r.grid_x == region_global_x / 256
+            && r.grid_y == region_global_y / 256
     });
 
     if !is_our_region {
-        return (StatusCode::NOT_FOUND, [(axum::http::header::CONTENT_TYPE, "text/plain")], String::new()).into_response();
+        return (
+            StatusCode::NOT_FOUND,
+            [(axum::http::header::CONTENT_TYPE, "text/plain")],
+            String::new(),
+        )
+            .into_response();
     }
 
     let mut xml = String::from("<?xml version=\"1.0\" encoding=\"utf-8\"?>\n<llsd>\n<map>\n");
@@ -593,7 +690,11 @@ async fn handle_map_items_request(
             if parcel.sale_price > 0 && (parcel.flags & 0x4000) != 0 {
                 let px = region_global_x + parcel.landing_point[0] as u32;
                 let py = region_global_y + parcel.landing_point[1] as u32;
-                let escaped_name = parcel.name.replace('&', "&amp;").replace('<', "&lt;").replace('>', "&gt;");
+                let escaped_name = parcel
+                    .name
+                    .replace('&', "&amp;")
+                    .replace('<', "&lt;")
+                    .replace('>', "&gt;");
                 xml.push_str(&format!(
                     "<map><key>X</key><integer>{}</integer><key>Y</key><integer>{}</integer><key>ID</key><uuid>{}</uuid><key>Name</key><string>{}</string><key>Extra</key><integer>{}</integer><key>Extra2</key><integer>{}</integer></map>\n",
                     px, py, parcel.uuid, escaped_name, parcel.area, parcel.sale_price
@@ -606,7 +707,12 @@ async fn handle_map_items_request(
     xml.push_str("<key>1</key>\n<array>\n</array>\n");
     xml.push_str("</map>\n</llsd>");
 
-    (StatusCode::OK, [(axum::http::header::CONTENT_TYPE, "application/xml+llsd")], xml).into_response()
+    (
+        StatusCode::OK,
+        [(axum::http::header::CONTENT_TYPE, "application/xml+llsd")],
+        xml,
+    )
+        .into_response()
 }
 
 async fn run_preflight(instance: &str) -> Result<()> {
@@ -645,9 +751,16 @@ async fn run_preflight(instance: &str) -> Result<()> {
     let regions_dir = instance_path.join("Regions");
     if regions_dir.exists() {
         let count = std::fs::read_dir(&regions_dir)
-            .map(|rd| rd.filter_map(|e| e.ok()).filter(|e| {
-                e.path().extension().map(|ext| ext.eq_ignore_ascii_case("ini")).unwrap_or(false)
-            }).count())
+            .map(|rd| {
+                rd.filter_map(|e| e.ok())
+                    .filter(|e| {
+                        e.path()
+                            .extension()
+                            .map(|ext| ext.eq_ignore_ascii_case("ini"))
+                            .unwrap_or(false)
+                    })
+                    .count()
+            })
             .unwrap_or(0);
         println!("[PASS] Regions directory found ({} .ini files)", count);
         pass += 1;
@@ -661,23 +774,21 @@ async fn run_preflight(instance: &str) -> Result<()> {
     if !db_url.is_empty() {
         println!("[INFO] DATABASE_URL: {}", db_url);
         match opensim_next::database::multi_backend::MultiDatabaseConfig::from_env() {
-            Ok(config) => {
-                match try_database_connection_with_fallback(&config).await {
-                    Ok(conn) => {
-                        if conn.test_connection().await.is_ok() {
-                            println!("[PASS] Database connection successful");
-                            pass += 1;
-                        } else {
-                            println!("[FAIL] Database connection test failed");
-                            fail += 1;
-                        }
-                    }
-                    Err(e) => {
-                        println!("[FAIL] Database connection failed: {}", e);
+            Ok(config) => match try_database_connection_with_fallback(&config).await {
+                Ok(conn) => {
+                    if conn.test_connection().await.is_ok() {
+                        println!("[PASS] Database connection successful");
+                        pass += 1;
+                    } else {
+                        println!("[FAIL] Database connection test failed");
                         fail += 1;
                     }
                 }
-            }
+                Err(e) => {
+                    println!("[FAIL] Database connection failed: {}", e);
+                    fail += 1;
+                }
+            },
             Err(e) => {
                 println!("[FAIL] Database config error: {}", e);
                 fail += 1;
@@ -690,9 +801,27 @@ async fn run_preflight(instance: &str) -> Result<()> {
 
     // 5. Port availability
     let ports_to_check: Vec<(u16, &str)> = vec![
-        (env::var("OPENSIM_LOGIN_PORT").unwrap_or_else(|_| "9000".to_string()).parse().unwrap_or(9000), "Login/HTTP"),
-        (env::var("OPENSIM_ROBUST_PORT").unwrap_or_else(|_| "8003".to_string()).parse().unwrap_or(8003), "Robust"),
-        (env::var("OPENSIM_METRICS_PORT").unwrap_or_else(|_| "9100".to_string()).parse().unwrap_or(9100), "Metrics"),
+        (
+            env::var("OPENSIM_LOGIN_PORT")
+                .unwrap_or_else(|_| "9000".to_string())
+                .parse()
+                .unwrap_or(9000),
+            "Login/HTTP",
+        ),
+        (
+            env::var("OPENSIM_ROBUST_PORT")
+                .unwrap_or_else(|_| "8003".to_string())
+                .parse()
+                .unwrap_or(8003),
+            "Robust",
+        ),
+        (
+            env::var("OPENSIM_METRICS_PORT")
+                .unwrap_or_else(|_| "9100".to_string())
+                .parse()
+                .unwrap_or(9100),
+            "Metrics",
+        ),
     ];
 
     for (port, name) in &ports_to_check {
@@ -735,8 +864,8 @@ async fn run_preflight(instance: &str) -> Result<()> {
 async fn start_server_with_mode(mode: &str) -> Result<()> {
     if mode == "grid" {
         info!("Starting OpenSim Next Server in GRID mode (region server)...");
-        let robust_url = env::var("OPENSIM_ROBUST_URL")
-            .unwrap_or_else(|_| "http://localhost:8003".to_string());
+        let robust_url =
+            env::var("OPENSIM_ROBUST_URL").unwrap_or_else(|_| "http://localhost:8003".to_string());
         info!("  Robust URL: {}", robust_url);
         info!("  Remote services will be used via Robust HTTP connections");
         env::set_var("OPENSIM_ROBUST_URL", &robust_url);
@@ -753,9 +882,16 @@ async fn start_robust_mode() -> Result<()> {
     let db_config = match opensim_next::database::multi_backend::MultiDatabaseConfig::from_env() {
         Ok(config) => config,
         Err(e) => {
-            warn!("Failed to load database configuration: {}. Using defaults.", e);
+            warn!(
+                "Failed to load database configuration: {}. Using defaults.",
+                e
+            );
             opensim_next::database::multi_backend::MultiDatabaseConfig::mysql(
-                "localhost", 3306, "opensim_mariadb", "opensim", "password123",
+                "localhost",
+                3306,
+                "opensim_mariadb",
+                "opensim",
+                "password123",
             )
         }
     };
@@ -776,14 +912,16 @@ async fn start_robust_mode() -> Result<()> {
         ..Default::default()
     };
 
-    let container = opensim_next::services::factory::ServiceContainer::new(
-        service_config, Some(conn.clone()),
-    )?;
+    let container =
+        opensim_next::services::factory::ServiceContainer::new(service_config, Some(conn.clone()))?;
     info!("Robust mode: ServiceContainer created with local services");
 
     let avatar_service: Arc<dyn opensim_next::services::traits::AvatarServiceTrait> = {
-        let db_manager = opensim_next::database::DatabaseManager::with_connection(conn.clone()).await?;
-        Arc::new(opensim_next::services::AvatarService::new(Arc::new(db_manager)))
+        let db_manager =
+            opensim_next::database::DatabaseManager::with_connection(conn.clone()).await?;
+        Arc::new(opensim_next::services::AvatarService::new(Arc::new(
+            db_manager,
+        )))
     };
 
     let hg_config = opensim_next::services::config_parser::build_hypergrid_config();
@@ -791,8 +929,8 @@ async fn start_robust_mode() -> Result<()> {
         Option<Arc<dyn opensim_next::services::traits::GatekeeperServiceTrait>>,
         Option<Arc<dyn opensim_next::services::traits::UserAgentServiceTrait>>,
     ) = if hg_config.enabled {
-        let local_uas: Arc<dyn opensim_next::services::traits::UserAgentServiceTrait> = Arc::new(
-            opensim_next::services::local::LocalUserAgentService::new(
+        let local_uas: Arc<dyn opensim_next::services::traits::UserAgentServiceTrait> =
+            Arc::new(opensim_next::services::local::LocalUserAgentService::new(
                 container.grid_service.clone(),
                 container.user_account_service.clone(),
                 container.presence_service.clone(),
@@ -801,8 +939,7 @@ async fn start_robust_mode() -> Result<()> {
                 hg_config.external_uri.clone(),
                 hg_config.external_robust_uri.clone(),
                 hg_config.grid_name.clone(),
-            )
-        );
+            ));
         let local_gk: Arc<dyn opensim_next::services::traits::GatekeeperServiceTrait> = Arc::new(
             opensim_next::services::local::LocalGatekeeperService::new(
                 container.grid_service.clone(),
@@ -810,20 +947,28 @@ async fn start_robust_mode() -> Result<()> {
                 conn.clone(),
                 hg_config.gatekeeper_uri.clone(),
             )
-            .with_config(hg_config.allow_teleports_to_any_region, hg_config.foreign_agents_allowed)
+            .with_config(
+                hg_config.allow_teleports_to_any_region,
+                hg_config.foreign_agents_allowed,
+            )
             .with_user_account_service(container.user_account_service.clone())
-            .with_local_uas(local_uas.clone())
+            .with_local_uas(local_uas.clone()),
         );
-        info!("Robust mode: Hypergrid services enabled (gk={}, uas={})", hg_config.gatekeeper_uri, hg_config.home_uri);
+        info!(
+            "Robust mode: Hypergrid services enabled (gk={}, uas={})",
+            hg_config.gatekeeper_uri, hg_config.home_uri
+        );
         (Some(local_gk), Some(local_uas))
     } else {
         info!("Robust mode: Hypergrid services disabled");
         (None, None)
     };
 
-    let hg_inventory_service: Option<std::sync::Arc<dyn opensim_next::services::traits::InventoryServiceTrait>> = if gatekeeper_service.is_some() {
+    let hg_inventory_service: Option<
+        std::sync::Arc<dyn opensim_next::services::traits::InventoryServiceTrait>,
+    > = if gatekeeper_service.is_some() {
         let suitcase_svc = opensim_next::services::hypergrid::HGSuitcaseInventoryService::new(
-            container.inventory_service.clone()
+            container.inventory_service.clone(),
         );
         info!("[HG] Suitcase inventory service enabled for foreign grid requests");
         Some(std::sync::Arc::new(suitcase_svc))
@@ -832,38 +977,61 @@ async fn start_robust_mode() -> Result<()> {
     };
 
     let griduser_service: Arc<dyn opensim_next::services::traits::GridUserServiceTrait> = Arc::new(
-        opensim_next::services::local::LocalGridUserService::new(conn.clone())
+        opensim_next::services::local::LocalGridUserService::new(conn.clone()),
     );
-    let agentprefs_service: Arc<dyn opensim_next::services::traits::AgentPrefsServiceTrait> = Arc::new(
-        opensim_next::services::local::LocalAgentPrefsService::new(conn.clone())
-    );
-    let hg_friends_service: Option<Arc<dyn opensim_next::services::traits::HGFriendsServiceTrait>> = if let Some(pg) = conn.postgres_pool() {
-        Some(Arc::new(opensim_next::services::hypergrid::hg_friends::HGFriendsService::new(Arc::new(pg.clone()))))
-    } else {
-        None
-    };
+    let agentprefs_service: Arc<dyn opensim_next::services::traits::AgentPrefsServiceTrait> =
+        Arc::new(opensim_next::services::local::LocalAgentPrefsService::new(
+            conn.clone(),
+        ));
+    let hg_friends_service: Option<Arc<dyn opensim_next::services::traits::HGFriendsServiceTrait>> =
+        if let Some(pg) = conn.postgres_pool() {
+            Some(Arc::new(
+                opensim_next::services::hypergrid::hg_friends::HGFriendsService::new(Arc::new(
+                    pg.clone(),
+                )),
+            ))
+        } else {
+            None
+        };
 
     let instance_dir = env::var("OPENSIM_INSTANCE_DIR").unwrap_or_else(|_| ".".to_string());
     let bakes_dir = format!("{}/bakes", instance_dir);
 
     let mutelist_service: Option<Arc<dyn opensim_next::services::traits::MuteListServiceTrait>> =
-        Some(Arc::new(opensim_next::services::local::LocalMuteListService::new(conn.clone())));
+        Some(Arc::new(
+            opensim_next::services::local::LocalMuteListService::new(conn.clone()),
+        ));
     let estate_service: Option<Arc<dyn opensim_next::services::traits::EstateServiceTrait>> =
-        Some(Arc::new(opensim_next::services::local::LocalEstateService::new(conn.clone())));
+        Some(Arc::new(
+            opensim_next::services::local::LocalEstateService::new(conn.clone()),
+        ));
     let map_tiles_dir = format!("{}/maptiles", instance_dir);
     let map_service: Option<Arc<dyn opensim_next::services::traits::MapImageServiceTrait>> =
-        Some(Arc::new(opensim_next::services::local::LocalMapImageService::new(map_tiles_dir)));
+        Some(Arc::new(
+            opensim_next::services::local::LocalMapImageService::new(map_tiles_dir),
+        ));
 
-    let authorization_service: Option<Arc<dyn opensim_next::services::traits::AuthorizationServiceTrait>> =
-        Some(Arc::new(opensim_next::services::local::LocalAuthorizationService::new()));
+    let authorization_service: Option<
+        Arc<dyn opensim_next::services::traits::AuthorizationServiceTrait>,
+    > = Some(Arc::new(
+        opensim_next::services::local::LocalAuthorizationService::new(),
+    ));
     let friends_service: Option<Arc<dyn opensim_next::services::traits::FriendsServiceTrait>> =
-        Some(Arc::new(opensim_next::services::local::LocalFriendsService::new(conn.clone())));
+        Some(Arc::new(
+            opensim_next::services::local::LocalFriendsService::new(conn.clone()),
+        ));
     let land_service: Option<Arc<dyn opensim_next::services::traits::LandServiceTrait>> =
-        Some(Arc::new(opensim_next::services::local::LocalLandService::new(conn.clone())));
+        Some(Arc::new(
+            opensim_next::services::local::LocalLandService::new(conn.clone()),
+        ));
     let offlineim_service: Option<Arc<dyn opensim_next::services::traits::OfflineIMServiceTrait>> =
-        Some(Arc::new(opensim_next::services::local::LocalOfflineIMService::new(conn.clone())));
+        Some(Arc::new(
+            opensim_next::services::local::LocalOfflineIMService::new(conn.clone()),
+        ));
     let profiles_service: Option<Arc<dyn opensim_next::services::traits::ProfilesServiceTrait>> =
-        Some(Arc::new(opensim_next::services::local::LocalProfilesService::new(conn.clone())));
+        Some(Arc::new(
+            opensim_next::services::local::LocalProfilesService::new(conn.clone()),
+        ));
 
     let robust_state = opensim_next::services::robust::RobustState {
         grid_service: container.grid_service.clone(),
@@ -903,29 +1071,73 @@ async fn start_robust_mode() -> Result<()> {
 
     info!("Robust services:");
     info!("  Grid:        POST http://0.0.0.0:{}/grid", robust_port);
-    info!("  UserAccount: POST http://0.0.0.0:{}/accounts", robust_port);
+    info!(
+        "  UserAccount: POST http://0.0.0.0:{}/accounts",
+        robust_port
+    );
     info!("  Auth:        POST http://0.0.0.0:{}/auth", robust_port);
     info!("  Asset:       POST http://0.0.0.0:{}/assets", robust_port);
-    info!("  Inventory:   POST http://0.0.0.0:{}/inventory", robust_port);
-    info!("  HG Inventory:POST http://0.0.0.0:{}/hg/xinventory (suitcase-restricted)", robust_port);
-    info!("  Presence:    POST http://0.0.0.0:{}/presence", robust_port);
+    info!(
+        "  Inventory:   POST http://0.0.0.0:{}/inventory",
+        robust_port
+    );
+    info!(
+        "  HG Inventory:POST http://0.0.0.0:{}/hg/xinventory (suitcase-restricted)",
+        robust_port
+    );
+    info!(
+        "  Presence:    POST http://0.0.0.0:{}/presence",
+        robust_port
+    );
     info!("  Avatar:      POST http://0.0.0.0:{}/avatar", robust_port);
-    info!("  GridUser:    POST http://0.0.0.0:{}/griduser", robust_port);
-    info!("  AgentPrefs:  POST http://0.0.0.0:{}/agentprefs", robust_port);
-    info!("  Bakes:       GET/POST http://0.0.0.0:{}/bakes/:id", robust_port);
-    info!("  MuteList:    POST http://0.0.0.0:{}/mutelist", robust_port);
-    info!("  Estates:     GET/POST http://0.0.0.0:{}/estates", robust_port);
+    info!(
+        "  GridUser:    POST http://0.0.0.0:{}/griduser",
+        robust_port
+    );
+    info!(
+        "  AgentPrefs:  POST http://0.0.0.0:{}/agentprefs",
+        robust_port
+    );
+    info!(
+        "  Bakes:       GET/POST http://0.0.0.0:{}/bakes/:id",
+        robust_port
+    );
+    info!(
+        "  MuteList:    POST http://0.0.0.0:{}/mutelist",
+        robust_port
+    );
+    info!(
+        "  Estates:     GET/POST http://0.0.0.0:{}/estates",
+        robust_port
+    );
     info!("  Map:         GET/POST http://0.0.0.0:{}/map", robust_port);
-    info!("  Authorization: POST http://0.0.0.0:{}/authorization", robust_port);
+    info!(
+        "  Authorization: POST http://0.0.0.0:{}/authorization",
+        robust_port
+    );
     info!("  Friends:     POST http://0.0.0.0:{}/friends", robust_port);
     info!("  Land:        POST http://0.0.0.0:{}/land", robust_port);
-    info!("  OfflineIM:   POST http://0.0.0.0:{}/offlineim", robust_port);
-    info!("  Neighbours:  POST http://0.0.0.0:{}/region/:id", robust_port);
-    info!("  Profiles:    POST http://0.0.0.0:{}/user_profile_rpc (JsonRpc)", robust_port);
-    info!("  Freeswitch:  POST http://0.0.0.0:{}/fsapi/* (stub)", robust_port);
+    info!(
+        "  OfflineIM:   POST http://0.0.0.0:{}/offlineim",
+        robust_port
+    );
+    info!(
+        "  Neighbours:  POST http://0.0.0.0:{}/region/:id",
+        robust_port
+    );
+    info!(
+        "  Profiles:    POST http://0.0.0.0:{}/user_profile_rpc (JsonRpc)",
+        robust_port
+    );
+    info!(
+        "  Freeswitch:  POST http://0.0.0.0:{}/fsapi/* (stub)",
+        robust_port
+    );
 
     let robust_handle = tokio::spawn(async move {
-        if let Err(e) = opensim_next::services::robust::start_robust_server(robust_port, robust_state).await {
+        if let Err(e) =
+            opensim_next::services::robust::start_robust_server(robust_port, robust_state).await
+        {
             error!("Robust server error: {}", e);
         }
     });
@@ -936,21 +1148,37 @@ async fn start_robust_mode() -> Result<()> {
     let robust_instance_dir = opensim_next::instance_manager::discovery::resolve_instance_dir();
     let robust_discovery_info = opensim_next::instance_manager::RunningInstanceInfo::new(
         env::var("OPENSIM_INSTANCE_ID").unwrap_or_else(|_| {
-            robust_instance_dir.file_name().unwrap_or_default().to_string_lossy().to_lowercase().replace(' ', "-")
+            robust_instance_dir
+                .file_name()
+                .unwrap_or_default()
+                .to_string_lossy()
+                .to_lowercase()
+                .replace(' ', "-")
         }),
         "robust".to_string(),
         0,
         0,
         robust_port,
     );
-    if let Err(e) = opensim_next::instance_manager::write_discovery_file(&robust_instance_dir, "robust", &robust_discovery_info) {
+    if let Err(e) = opensim_next::instance_manager::write_discovery_file(
+        &robust_instance_dir,
+        "robust",
+        &robust_discovery_info,
+    ) {
         warn!("Failed to write robust discovery file: {}", e);
     }
 
     if let Ok(controller_url) = env::var("OPENSIM_CONTROLLER_URL") {
         let instance_id = env::var("OPENSIM_INSTANCE_ID").unwrap_or_else(|_| {
             env::var("OPENSIM_INSTANCE_DIR")
-                .map(|d| std::path::Path::new(&d).file_name().unwrap_or_default().to_string_lossy().to_lowercase().replace(' ', "-"))
+                .map(|d| {
+                    std::path::Path::new(&d)
+                        .file_name()
+                        .unwrap_or_default()
+                        .to_string_lossy()
+                        .to_lowercase()
+                        .replace(' ', "-")
+                })
                 .unwrap_or_else(|_| "robust".to_string())
         });
         let announce_robust_port = robust_port;
@@ -968,17 +1196,27 @@ async fn start_robust_mode() -> Result<()> {
             });
 
             for attempt in 0..3u32 {
-                match client.post(format!("{}/api/instance/announce", controller_url))
+                match client
+                    .post(format!("{}/api/instance/announce", controller_url))
                     .json(&announcement)
                     .timeout(std::time::Duration::from_secs(5))
-                    .send().await
+                    .send()
+                    .await
                 {
                     Ok(resp) if resp.status().is_success() => {
                         info!("Announced to controller at {}", controller_url);
                         break;
                     }
-                    Ok(resp) => warn!("Controller announce failed (attempt {}): HTTP {}", attempt + 1, resp.status()),
-                    Err(e) => warn!("Controller announce failed (attempt {}): {}", attempt + 1, e),
+                    Ok(resp) => warn!(
+                        "Controller announce failed (attempt {}): HTTP {}",
+                        attempt + 1,
+                        resp.status()
+                    ),
+                    Err(e) => warn!(
+                        "Controller announce failed (attempt {}): {}",
+                        attempt + 1,
+                        e
+                    ),
                 }
                 tokio::time::sleep(std::time::Duration::from_secs(2u64.pow(attempt))).await;
             }
@@ -994,10 +1232,12 @@ async fn start_robust_mode() -> Result<()> {
                     "cpu_usage": 0.0f64,
                     "memory_usage_mb": 0u64,
                 });
-                let _ = client.post(format!("{}/api/instance/heartbeat", controller_url))
+                let _ = client
+                    .post(format!("{}/api/instance/heartbeat", controller_url))
                     .json(&heartbeat)
                     .timeout(std::time::Duration::from_secs(5))
-                    .send().await;
+                    .send()
+                    .await;
             }
         });
     }
@@ -1018,7 +1258,8 @@ async fn start_controller_mode() -> Result<()> {
         .unwrap_or_else(|e| {
             warn!("Failed to load instances.toml: {}. Using defaults.", e);
             opensim_next::instance_manager::config_loader::InstancesConfig {
-                controller: opensim_next::instance_manager::config_loader::ControllerConfig::default(),
+                controller:
+                    opensim_next::instance_manager::config_loader::ControllerConfig::default(),
                 instances: Vec::new(),
             }
         });
@@ -1031,15 +1272,25 @@ async fn start_controller_mode() -> Result<()> {
         std::path::PathBuf::from(&config.controller.binary_path)
     };
 
-    let registry = Arc::new(opensim_next::instance_manager::InstanceRegistry::new(config));
+    let registry = Arc::new(opensim_next::instance_manager::InstanceRegistry::new(
+        config,
+    ));
     let process_manager = Arc::new(opensim_next::instance_manager::ProcessManager::new(
-        binary_path, instances_base_dir.clone(),
+        binary_path,
+        instances_base_dir.clone(),
     ));
 
     let discovered = process_manager.scan_directories();
-    info!("Discovered {} instance directories in {}", discovered.len(), instances_base_dir.display());
+    info!(
+        "Discovered {} instance directories in {}",
+        discovered.len(),
+        instances_base_dir.display()
+    );
     for d in &discovered {
-        info!("  - {} ({}) [mode={}, port={}]", d.name, d.id, d.service_mode, d.login_port);
+        info!(
+            "  - {} ({}) [mode={}, port={}]",
+            d.name, d.id, d.service_mode, d.login_port
+        );
         if !registry.has_instance(&d.id).await {
             let inst_config = opensim_next::instance_manager::InstanceConfig {
                 id: d.id.clone(),
@@ -1061,17 +1312,25 @@ async fn start_controller_mode() -> Result<()> {
             if let Err(e) = registry.add_instance(inst_config).await {
                 warn!("Failed to register discovered instance {}: {}", d.id, e);
             }
-            if let Err(e) = registry.update_status(&d.id, opensim_next::instance_manager::InstanceStatus::Discovered).await {
+            if let Err(e) = registry
+                .update_status(
+                    &d.id,
+                    opensim_next::instance_manager::InstanceStatus::Discovered,
+                )
+                .await
+            {
                 warn!("Failed to set Discovered status: {}", e);
             }
         }
     }
 
-    let controller_state = Arc::new(opensim_next::instance_manager::announcement::ControllerState {
-        registry: registry.clone(),
-        process_manager: process_manager.clone(),
-        controller_port,
-    });
+    let controller_state = Arc::new(
+        opensim_next::instance_manager::announcement::ControllerState {
+            registry: registry.clone(),
+            process_manager: process_manager.clone(),
+            controller_port,
+        },
+    );
 
     let pm_for_routes = process_manager.clone();
     let reg_for_routes = registry.clone();
@@ -1189,47 +1448,108 @@ async fn start_controller_mode() -> Result<()> {
 
     let addr = SocketAddr::from(([0, 0, 0, 0], controller_port));
     info!("=== Controller Mode Endpoints ===");
-    info!("  Health:        GET  http://0.0.0.0:{}/health", controller_port);
-    info!("  Instances:     GET  http://0.0.0.0:{}/api/instances", controller_port);
-    info!("  Directories:   GET  http://0.0.0.0:{}/api/instance-dirs", controller_port);
-    info!("  Running:       GET  http://0.0.0.0:{}/api/running", controller_port);
-    info!("  Start:         POST http://0.0.0.0:{}/api/instance/:id/start", controller_port);
-    info!("  Stop:          POST http://0.0.0.0:{}/api/instance/:id/stop", controller_port);
-    info!("  Restart:       POST http://0.0.0.0:{}/api/instance/:id/restart", controller_port);
-    info!("  Console:       GET  http://0.0.0.0:{}/api/instance/:id/console", controller_port);
-    info!("  Announce:      POST http://0.0.0.0:{}/api/instance/announce", controller_port);
-    info!("  Heartbeat:     POST http://0.0.0.0:{}/api/instance/heartbeat", controller_port);
+    info!(
+        "  Health:        GET  http://0.0.0.0:{}/health",
+        controller_port
+    );
+    info!(
+        "  Instances:     GET  http://0.0.0.0:{}/api/instances",
+        controller_port
+    );
+    info!(
+        "  Directories:   GET  http://0.0.0.0:{}/api/instance-dirs",
+        controller_port
+    );
+    info!(
+        "  Running:       GET  http://0.0.0.0:{}/api/running",
+        controller_port
+    );
+    info!(
+        "  Start:         POST http://0.0.0.0:{}/api/instance/:id/start",
+        controller_port
+    );
+    info!(
+        "  Stop:          POST http://0.0.0.0:{}/api/instance/:id/stop",
+        controller_port
+    );
+    info!(
+        "  Restart:       POST http://0.0.0.0:{}/api/instance/:id/restart",
+        controller_port
+    );
+    info!(
+        "  Console:       GET  http://0.0.0.0:{}/api/instance/:id/console",
+        controller_port
+    );
+    info!(
+        "  Announce:      POST http://0.0.0.0:{}/api/instance/announce",
+        controller_port
+    );
+    info!(
+        "  Heartbeat:     POST http://0.0.0.0:{}/api/instance/heartbeat",
+        controller_port
+    );
     info!("  WebSocket:     ws://0.0.0.0:{}/ws", controller_port);
-    info!("  Set Level:     POST http://0.0.0.0:{}/api/admin/set-level", controller_port);
-    info!("  List Users:    GET  http://0.0.0.0:{}/api/admin/users", controller_port);
+    info!(
+        "  Set Level:     POST http://0.0.0.0:{}/api/admin/set-level",
+        controller_port
+    );
+    info!(
+        "  List Users:    GET  http://0.0.0.0:{}/api/admin/users",
+        controller_port
+    );
 
     let mut process_rx = process_manager.subscribe();
     let reg_for_events = registry.clone();
     tokio::spawn(async move {
         while let Ok(event) = process_rx.recv().await {
             match &event {
-                opensim_next::instance_manager::process_manager::ProcessEvent::Spawned { id, pid } => {
+                opensim_next::instance_manager::process_manager::ProcessEvent::Spawned {
+                    id,
+                    pid,
+                } => {
                     info!("Process event: {} spawned (PID {})", id, pid);
                 }
-                opensim_next::instance_manager::process_manager::ProcessEvent::Exited { id, pid, exit_code } => {
-                    info!("Process event: {} exited (PID {}, code={:?})", id, pid, exit_code);
-                    let _ = reg_for_events.update_status(id, opensim_next::instance_manager::InstanceStatus::Stopped).await;
+                opensim_next::instance_manager::process_manager::ProcessEvent::Exited {
+                    id,
+                    pid,
+                    exit_code,
+                } => {
+                    info!(
+                        "Process event: {} exited (PID {}, code={:?})",
+                        id, pid, exit_code
+                    );
+                    let _ = reg_for_events
+                        .update_status(id, opensim_next::instance_manager::InstanceStatus::Stopped)
+                        .await;
                     let _ = reg_for_events.update_connected(id, false).await;
                 }
-                opensim_next::instance_manager::process_manager::ProcessEvent::StdoutLine { id, line } => {
+                opensim_next::instance_manager::process_manager::ProcessEvent::StdoutLine {
+                    id,
+                    line,
+                } => {
                     tracing::trace!("[{}] {}", id, line);
                 }
-                opensim_next::instance_manager::process_manager::ProcessEvent::StderrLine { id, line } => {
+                opensim_next::instance_manager::process_manager::ProcessEvent::StderrLine {
+                    id,
+                    line,
+                } => {
                     tracing::trace!("[{}/err] {}", id, line);
                 }
             }
         }
     });
 
-    info!("OpenSim Next CONTROLLER server starting on port {}", controller_port);
+    info!(
+        "OpenSim Next CONTROLLER server starting on port {}",
+        controller_port
+    );
 
     let listener = tokio::net::TcpListener::bind(addr).await?;
-    axum::serve(listener, app.into_make_service_with_connect_info::<SocketAddr>()).await?;
+    axum::serve(
+        listener,
+        app.into_make_service_with_connect_info::<SocketAddr>(),
+    )
+    .await?;
 
     info!("OpenSim Next CONTROLLER server shutdown complete");
     Ok(())
@@ -1239,33 +1559,48 @@ async fn start_controller_mode() -> Result<()> {
 /// Default ON unless OPENSIM_DISABLE_CONTROLLER=true. Auto-selects port from 9300-9320 range.
 /// The controller router binds to its own port alongside the instance's normal services.
 async fn spawn_embedded_controller(controller_port: u16) {
-    info!("Starting EMBEDDED controller on port {} (same process)...", controller_port);
+    info!(
+        "Starting EMBEDDED controller on port {} (same process)...",
+        controller_port
+    );
 
     let config = opensim_next::instance_manager::config_loader::load_default_instances_config()
         .unwrap_or_else(|e| {
             warn!("Failed to load instances.toml: {}. Using defaults.", e);
             opensim_next::instance_manager::config_loader::InstancesConfig {
-                controller: opensim_next::instance_manager::config_loader::ControllerConfig::default(),
+                controller:
+                    opensim_next::instance_manager::config_loader::ControllerConfig::default(),
                 instances: Vec::new(),
             }
         });
 
-    let instances_base_dir = opensim_next::instance_manager::discovery::resolve_instances_base_dir();
+    let instances_base_dir =
+        opensim_next::instance_manager::discovery::resolve_instances_base_dir();
     let binary_path = if config.controller.binary_path.is_empty() {
         std::env::current_exe().unwrap_or_else(|_| std::path::PathBuf::from("opensim-next"))
     } else {
         std::path::PathBuf::from(&config.controller.binary_path)
     };
 
-    let registry = Arc::new(opensim_next::instance_manager::InstanceRegistry::new(config));
+    let registry = Arc::new(opensim_next::instance_manager::InstanceRegistry::new(
+        config,
+    ));
     let process_manager = Arc::new(opensim_next::instance_manager::ProcessManager::new(
-        binary_path, instances_base_dir.clone(),
+        binary_path,
+        instances_base_dir.clone(),
     ));
 
     let discovered = process_manager.scan_directories();
-    info!("Embedded controller: instances_base_dir={}, discovered {} directories", instances_base_dir.display(), discovered.len());
+    info!(
+        "Embedded controller: instances_base_dir={}, discovered {} directories",
+        instances_base_dir.display(),
+        discovered.len()
+    );
     for d in &discovered {
-        info!("  - {} ({}) [mode={}, port={}]", d.name, d.id, d.service_mode, d.login_port);
+        info!(
+            "  - {} ({}) [mode={}, port={}]",
+            d.name, d.id, d.service_mode, d.login_port
+        );
         if !registry.has_instance(&d.id).await {
             let inst_config = opensim_next::instance_manager::InstanceConfig {
                 id: d.id.clone(),
@@ -1285,18 +1620,33 @@ async fn spawn_embedded_controller(controller_port: u16) {
                 tls: Default::default(),
             };
             let _ = registry.add_instance(inst_config).await;
-            let _ = registry.update_status(&d.id, opensim_next::instance_manager::InstanceStatus::Discovered).await;
+            let _ = registry
+                .update_status(
+                    &d.id,
+                    opensim_next::instance_manager::InstanceStatus::Discovered,
+                )
+                .await;
         }
     }
 
     // Register THIS instance as Running (it's already started — we're inside it)
     let self_id = env::var("OPENSIM_INSTANCE_ID").unwrap_or_else(|_| {
         env::var("OPENSIM_INSTANCE_DIR")
-            .map(|d| std::path::Path::new(&d).file_name().unwrap_or_default().to_string_lossy().to_lowercase().replace(' ', "-"))
+            .map(|d| {
+                std::path::Path::new(&d)
+                    .file_name()
+                    .unwrap_or_default()
+                    .to_string_lossy()
+                    .to_lowercase()
+                    .replace(' ', "-")
+            })
             .unwrap_or_else(|_| "self".to_string())
     });
     let self_mode = env::var("OPENSIM_SERVICE_MODE").unwrap_or_else(|_| "standalone".to_string());
-    let self_port = env::var("OPENSIM_LOGIN_PORT").ok().and_then(|p| p.parse::<u16>().ok()).unwrap_or(9000);
+    let self_port = env::var("OPENSIM_LOGIN_PORT")
+        .ok()
+        .and_then(|p| p.parse::<u16>().ok())
+        .unwrap_or(9000);
     if !registry.has_instance(&self_id).await {
         let self_config = opensim_next::instance_manager::InstanceConfig {
             id: self_id.clone(),
@@ -1317,14 +1667,21 @@ async fn spawn_embedded_controller(controller_port: u16) {
         };
         let _ = registry.add_instance(self_config).await;
     }
-    let _ = registry.update_status(&self_id, opensim_next::instance_manager::InstanceStatus::Running).await;
+    let _ = registry
+        .update_status(
+            &self_id,
+            opensim_next::instance_manager::InstanceStatus::Running,
+        )
+        .await;
     let _ = registry.update_connected(&self_id, true).await;
 
-    let controller_state = Arc::new(opensim_next::instance_manager::announcement::ControllerState {
-        registry: registry.clone(),
-        process_manager: process_manager.clone(),
-        controller_port,
-    });
+    let controller_state = Arc::new(
+        opensim_next::instance_manager::announcement::ControllerState {
+            registry: registry.clone(),
+            process_manager: process_manager.clone(),
+            controller_port,
+        },
+    );
 
     let pm_for_routes = process_manager.clone();
     let reg_for_routes = registry.clone();
@@ -1440,13 +1797,34 @@ async fn spawn_embedded_controller(controller_port: u16) {
         }))
         .with_state(controller_state);
 
-    info!("=== Embedded Controller Endpoints (port {}) ===", controller_port);
-    info!("  Health:     GET  http://0.0.0.0:{}/health", controller_port);
-    info!("  Instances:  GET  http://0.0.0.0:{}/api/instances", controller_port);
-    info!("  Running:    GET  http://0.0.0.0:{}/api/running", controller_port);
-    info!("  Start:      POST http://0.0.0.0:{}/api/instance/:id/start", controller_port);
-    info!("  Stop:       POST http://0.0.0.0:{}/api/instance/:id/stop", controller_port);
-    info!("  Console:    GET  http://0.0.0.0:{}/api/instance/:id/console", controller_port);
+    info!(
+        "=== Embedded Controller Endpoints (port {}) ===",
+        controller_port
+    );
+    info!(
+        "  Health:     GET  http://0.0.0.0:{}/health",
+        controller_port
+    );
+    info!(
+        "  Instances:  GET  http://0.0.0.0:{}/api/instances",
+        controller_port
+    );
+    info!(
+        "  Running:    GET  http://0.0.0.0:{}/api/running",
+        controller_port
+    );
+    info!(
+        "  Start:      POST http://0.0.0.0:{}/api/instance/:id/start",
+        controller_port
+    );
+    info!(
+        "  Stop:       POST http://0.0.0.0:{}/api/instance/:id/stop",
+        controller_port
+    );
+    info!(
+        "  Console:    GET  http://0.0.0.0:{}/api/instance/:id/console",
+        controller_port
+    );
     info!("  WebSocket:  ws://0.0.0.0:{}/ws", controller_port);
 
     let mut process_rx = process_manager.subscribe();
@@ -1454,12 +1832,24 @@ async fn spawn_embedded_controller(controller_port: u16) {
     tokio::spawn(async move {
         while let Ok(event) = process_rx.recv().await {
             match &event {
-                opensim_next::instance_manager::process_manager::ProcessEvent::Spawned { id, pid } => {
+                opensim_next::instance_manager::process_manager::ProcessEvent::Spawned {
+                    id,
+                    pid,
+                } => {
                     info!("Process event: {} spawned (PID {})", id, pid);
                 }
-                opensim_next::instance_manager::process_manager::ProcessEvent::Exited { id, pid, exit_code } => {
-                    info!("Process event: {} exited (PID {}, code={:?})", id, pid, exit_code);
-                    let _ = reg_for_events.update_status(id, opensim_next::instance_manager::InstanceStatus::Stopped).await;
+                opensim_next::instance_manager::process_manager::ProcessEvent::Exited {
+                    id,
+                    pid,
+                    exit_code,
+                } => {
+                    info!(
+                        "Process event: {} exited (PID {}, code={:?})",
+                        id, pid, exit_code
+                    );
+                    let _ = reg_for_events
+                        .update_status(id, opensim_next::instance_manager::InstanceStatus::Stopped)
+                        .await;
                     let _ = reg_for_events.update_connected(id, false).await;
                 }
                 _ => {}
@@ -1472,12 +1862,20 @@ async fn spawn_embedded_controller(controller_port: u16) {
         match tokio::net::TcpListener::bind(addr).await {
             Ok(listener) => {
                 info!("Embedded controller listening on port {}", controller_port);
-                if let Err(e) = axum::serve(listener, app.into_make_service_with_connect_info::<SocketAddr>()).await {
+                if let Err(e) = axum::serve(
+                    listener,
+                    app.into_make_service_with_connect_info::<SocketAddr>(),
+                )
+                .await
+                {
                     warn!("Embedded controller error: {}", e);
                 }
             }
             Err(e) => {
-                warn!("Failed to bind embedded controller on port {}: {}", controller_port, e);
+                warn!(
+                    "Failed to bind embedded controller on port {}: {}",
+                    controller_port, e
+                );
             }
         }
     });
@@ -1497,7 +1895,9 @@ async fn controller_ws_handler(
         "instances": instances,
     });
     if let Ok(text) = serde_json::to_string(&list_msg) {
-        let _ = socket.send(axum::extract::ws::Message::Text(text.into())).await;
+        let _ = socket
+            .send(axum::extract::ws::Message::Text(text.into()))
+            .await;
     }
 
     while let Some(msg) = socket.next().await {
@@ -1509,13 +1909,17 @@ async fn controller_ws_handler(
                         "Heartbeat" => {
                             let pong = serde_json::json!({ "type": "Pong" });
                             if let Ok(text) = serde_json::to_string(&pong) {
-                                let _ = socket.send(axum::extract::ws::Message::Text(text.into())).await;
+                                let _ = socket
+                                    .send(axum::extract::ws::Message::Text(text.into()))
+                                    .await;
                             }
                         }
                         "Subscribe" => {
                             let ack = serde_json::json!({ "type": "SubscriptionConfirmed", "channels": ["all"] });
                             if let Ok(text) = serde_json::to_string(&ack) {
-                                let _ = socket.send(axum::extract::ws::Message::Text(text.into())).await;
+                                let _ = socket
+                                    .send(axum::extract::ws::Message::Text(text.into()))
+                                    .await;
                             }
                         }
                         _ => {
@@ -1545,7 +1949,10 @@ async fn start_server() -> Result<()> {
         .unwrap_or_else(|_| "9000".to_string())
         .parse()
         .unwrap_or(9000);
-    info!("Unified port initialization - binding HTTP/UDP server on port {}...", login_port);
+    info!(
+        "Unified port initialization - binding HTTP/UDP server on port {}...",
+        login_port
+    );
     let early_login_listener: Option<tokio::net::TcpListener> = None;
 
     let readiness_tracker = opensim_next::readiness::new_shared_tracker();
@@ -1553,119 +1960,153 @@ async fn start_server() -> Result<()> {
     // Initialize robust PostgreSQL → MariaDB fallback system (NO SQLite)
     let db_config = match MultiDatabaseConfig::from_env() {
         Ok(config) => {
-            info!("Database configuration loaded: {:?} backend", config.database_type);
+            info!(
+                "Database configuration loaded: {:?} backend",
+                config.database_type
+            );
             config
-        },
+        }
         Err(e) => {
-            warn!("Failed to load database configuration: {}. Using MariaDB fallback.", e);
-            MultiDatabaseConfig::mysql("localhost", 3306, "opensim_mariadb", "opensim", "password123")
+            warn!(
+                "Failed to load database configuration: {}. Using MariaDB fallback.",
+                e
+            );
+            MultiDatabaseConfig::mysql(
+                "localhost",
+                3306,
+                "opensim_mariadb",
+                "opensim",
+                "password123",
+            )
         }
     };
-    
+
     // Robust PostgreSQL → MariaDB fallback connection system
-    let (database_connection, database_manager, user_account_database) = 
+    let (database_connection, database_manager, user_account_database) =
         match try_database_connection_with_fallback(&db_config).await {
-        Ok(conn) => {
-            let conn = Arc::new(conn);
-            
-            // Test connection and run migrations
-            if let Err(e) = conn.test_connection().await {
-                warn!("Database connection test failed: {}", e);
-            } else {
-                info!("Database connection test successful");
-                readiness_tracker.set_database_connected();
+            Ok(conn) => {
+                let conn = Arc::new(conn);
 
-                // Run database migrations (skip in grid mode — Robust handles migrations)
-                let skip_migrations = env::var("OPENSIM_SERVICE_MODE").unwrap_or_default() == "grid";
-                let migration_ok = if skip_migrations {
-                    info!("Grid mode: skipping migrations (Robust server handles them)");
-                    true
+                // Test connection and run migrations
+                if let Err(e) = conn.test_connection().await {
+                    warn!("Database connection test failed: {}", e);
                 } else {
-                    match conn.migrate().await {
-                        Ok(_) => { info!("Database migrations completed successfully"); true },
-                        Err(e) => { warn!("Database migration failed: {}", e); false },
-                    }
-                };
-                if migration_ok {
-                    readiness_tracker.set_migrations_complete();
+                    info!("Database connection test successful");
+                    readiness_tracker.set_database_connected();
 
-                    // Seed default Ruth avatar assets
-                    if let Err(e) = conn.seed_default_assets().await {
-                        warn!("Failed to seed default assets: {}", e);
-                    }
-
-                    // PHASE 72: Load default assets from OpenSim XML asset sets
-                    // This is CRITICAL - without these assets, the viewer cannot render properly
-                    if let Some(pool) = conn.postgres_pool() {
-                        let assets_path = std::path::PathBuf::from("../bin/assets");
-                        if assets_path.exists() {
-                            info!("🎨 Loading OpenSim default assets from XML asset sets...");
-                            match load_default_assets(pool, &assets_path).await {
-                                Ok(()) => info!("✅ Default assets loaded successfully"),
-                                Err(e) => warn!("⚠️ Failed to load default assets: {}", e),
+                    // Run database migrations (skip in grid mode — Robust handles migrations)
+                    let skip_migrations =
+                        env::var("OPENSIM_SERVICE_MODE").unwrap_or_default() == "grid";
+                    let migration_ok = if skip_migrations {
+                        info!("Grid mode: skipping migrations (Robust server handles them)");
+                        true
+                    } else {
+                        match conn.migrate().await {
+                            Ok(_) => {
+                                info!("Database migrations completed successfully");
+                                true
                             }
-                        } else {
-                            warn!("⚠️ Assets directory not found at {:?}", assets_path);
+                            Err(e) => {
+                                warn!("Database migration failed: {}", e);
+                                false
+                            }
+                        }
+                    };
+                    if migration_ok {
+                        readiness_tracker.set_migrations_complete();
+
+                        // Seed default Ruth avatar assets
+                        if let Err(e) = conn.seed_default_assets().await {
+                            warn!("Failed to seed default assets: {}", e);
+                        }
+
+                        // PHASE 72: Load default assets from OpenSim XML asset sets
+                        // This is CRITICAL - without these assets, the viewer cannot render properly
+                        if let Some(pool) = conn.postgres_pool() {
+                            let assets_path = std::path::PathBuf::from("../bin/assets");
+                            if assets_path.exists() {
+                                info!("🎨 Loading OpenSim default assets from XML asset sets...");
+                                match load_default_assets(pool, &assets_path).await {
+                                    Ok(()) => info!("✅ Default assets loaded successfully"),
+                                    Err(e) => warn!("⚠️ Failed to load default assets: {}", e),
+                                }
+                            } else {
+                                warn!("⚠️ Assets directory not found at {:?}", assets_path);
+                            }
                         }
                     }
                 }
-            }
-            
-            // ELEGANT SOLUTION: Use DATABASE_URL directly for PostgreSQL compatibility
-            let postgres_url = std::env::var("DATABASE_URL")
-                .unwrap_or_else(|_| db_config.connection_string.clone());
-            
-            // Use our successful database connection directly instead of creating a new one
-            info!("Creating database manager with existing {} connection", conn.database_type());
-            
-            match DatabaseManager::with_connection(conn.clone()).await {
-                Ok(db_manager) => {
-                    let db_manager = Arc::new(db_manager);
-                    
-                    // Database initialization handled by migrations - PostgreSQL/MariaDB ready to use
-                    info!("✅ Database manager initialized with {} backend", conn.database_type());
-                    
-                    let user_db = db_manager.user_accounts();
-                    info!("Database system initialized with {:?} backend", db_config.database_type);
-                    (Some(conn), Some(db_manager), Some(user_db))
-                },
-                Err(e) => {
-                    error!("Database manager initialization failed: {}. Continuing with limited functionality.", e);
-                    error!("Database URL being used: {}", postgres_url);
-                    error!("Database config type: {:?}", db_config.database_type);
-                    (Some(conn), None, None)
+
+                // ELEGANT SOLUTION: Use DATABASE_URL directly for PostgreSQL compatibility
+                let postgres_url = std::env::var("DATABASE_URL")
+                    .unwrap_or_else(|_| db_config.connection_string.clone());
+
+                // Use our successful database connection directly instead of creating a new one
+                info!(
+                    "Creating database manager with existing {} connection",
+                    conn.database_type()
+                );
+
+                match DatabaseManager::with_connection(conn.clone()).await {
+                    Ok(db_manager) => {
+                        let db_manager = Arc::new(db_manager);
+
+                        // Database initialization handled by migrations - PostgreSQL/MariaDB ready to use
+                        info!(
+                            "✅ Database manager initialized with {} backend",
+                            conn.database_type()
+                        );
+
+                        let user_db = db_manager.user_accounts();
+                        info!(
+                            "Database system initialized with {:?} backend",
+                            db_config.database_type
+                        );
+                        (Some(conn), Some(db_manager), Some(user_db))
+                    }
+                    Err(e) => {
+                        error!("Database manager initialization failed: {}. Continuing with limited functionality.", e);
+                        error!("Database URL being used: {}", postgres_url);
+                        error!("Database config type: {:?}", db_config.database_type);
+                        (Some(conn), None, None)
+                    }
                 }
             }
-        },
-        Err(e) => {
-            error!("Database connection failed: {}. Continuing without database for testing.", e);
-            error!("Database config: {:?}", db_config);
-            (None, None, None)
-        }
-    };
+            Err(e) => {
+                error!(
+                    "Database connection failed: {}. Continuing without database for testing.",
+                    e
+                );
+                error!("Database config: {:?}", db_config);
+                (None, None, None)
+            }
+        };
 
     // Initialize asset system components
     let cache_config = opensim_next::asset::cache::CacheConfig::default();
     let asset_cache = Arc::new(AssetCache::new(cache_config).await?);
-    
+
     let cdn_config = opensim_next::asset::cdn::CdnConfig::default();
     let cdn_manager = Arc::new(CdnManager::new(cdn_config).await?);
-    
+
     // Create assets directory if it doesn't exist
     std::fs::create_dir_all("./assets").unwrap_or_default();
     let storage: Arc<dyn StorageBackend> = Arc::new(FileSystemStorage::new("./assets".into())?);
-    
+
     let asset_config = AssetManagerConfig::default();
-    
+
     // For now, skip AssetManager if database is not available
     let asset_manager = if let Some(db_manager) = &database_manager {
-        Some(Arc::new(AssetManager::new(
-            db_manager.clone(),
-            asset_cache,
-            cdn_manager,
-            storage,
-            asset_config,
-        ).await?))
+        Some(Arc::new(
+            AssetManager::new(
+                db_manager.clone(),
+                asset_cache,
+                cdn_manager,
+                storage,
+                asset_config,
+            )
+            .await?,
+        ))
     } else {
         warn!("Asset manager not initialized due to missing database");
         None
@@ -1682,10 +2123,15 @@ async fn start_server() -> Result<()> {
         std::path::PathBuf::from("bin")
     } else {
         // Use environment variable or default
-        std::path::PathBuf::from(env::var("OPENSIM_BIN_DIR").unwrap_or_else(|_| "../bin".to_string()))
+        std::path::PathBuf::from(
+            env::var("OPENSIM_BIN_DIR").unwrap_or_else(|_| "../bin".to_string()),
+        )
     };
 
-    info!("Initializing library asset manager from {}", bin_directory.display());
+    info!(
+        "Initializing library asset manager from {}",
+        bin_directory.display()
+    );
     let library_asset_manager = match LibraryAssetManager::new(&bin_directory) {
         Ok(mut manager) => {
             // Initialize asynchronously to load all assets
@@ -1696,13 +2142,13 @@ async fn start_server() -> Result<()> {
                     // Set global reference for use by login/inventory services
                     set_global_library_manager(manager_arc.clone());
                     Some(manager_arc)
-                },
+                }
                 Err(e) => {
                     warn!("⚠️  Library asset manager initialization failed: {}. Continuing without library assets.", e);
                     None
                 }
             }
-        },
+        }
         Err(e) => {
             warn!("⚠️  Failed to create library asset manager: {}. Continuing without library assets.", e);
             None
@@ -1710,33 +2156,43 @@ async fn start_server() -> Result<()> {
     };
 
     // Initialize avatar data manager (openmetaverse_data files)
-    info!("Initializing avatar data manager from {}", bin_directory.display());
+    info!(
+        "Initializing avatar data manager from {}",
+        bin_directory.display()
+    );
     let _avatar_data_manager = match AvatarDataManager::new(&bin_directory) {
-        Ok(mut manager) => {
-            match manager.initialize().await {
-                Ok(_) => {
-                    info!("✅ Avatar data manager initialized successfully");
-                    let manager_arc = Arc::new(tokio::sync::RwLock::new(manager));
-                    set_global_avatar_data_manager(manager_arc.clone());
-                    Some(manager_arc)
-                },
-                Err(e) => {
-                    warn!("⚠️  Avatar data manager initialization failed: {}. Continuing without avatar data.", e);
-                    None
-                }
+        Ok(mut manager) => match manager.initialize().await {
+            Ok(_) => {
+                info!("✅ Avatar data manager initialized successfully");
+                let manager_arc = Arc::new(tokio::sync::RwLock::new(manager));
+                set_global_avatar_data_manager(manager_arc.clone());
+                Some(manager_arc)
+            }
+            Err(e) => {
+                warn!("⚠️  Avatar data manager initialization failed: {}. Continuing without avatar data.", e);
+                None
             }
         },
         Err(e) => {
-            warn!("⚠️  Failed to create avatar data manager: {}. Continuing without avatar data.", e);
+            warn!(
+                "⚠️  Failed to create avatar data manager: {}. Continuing without avatar data.",
+                e
+            );
             None
         }
     };
 
     // Initialize animation manager (avataranimations.xml)
-    info!("Initializing animation manager from {}", bin_directory.display());
+    info!(
+        "Initializing animation manager from {}",
+        bin_directory.display()
+    );
     match init_global_animations(&bin_directory) {
         Ok(_) => info!("✅ Animation manager initialized successfully"),
-        Err(e) => warn!("⚠️  Animation manager initialization failed: {}. Continuing without animations.", e),
+        Err(e) => warn!(
+            "⚠️  Animation manager initialization failed: {}. Continuing without animations.",
+            e
+        ),
     }
 
     // Initialize core systems
@@ -1745,7 +2201,8 @@ async fn start_server() -> Result<()> {
     // Phase 140: Create shared Physics instance — per-simulator from OpenSim.ini [Startup] physics
     let physics_engine_name = {
         let mut name = None;
-        let instance_dir = std::env::var("OPENSIM_INSTANCE_DIR").unwrap_or_else(|_| ".".to_string());
+        let instance_dir =
+            std::env::var("OPENSIM_INSTANCE_DIR").unwrap_or_else(|_| ".".to_string());
         let ini_path = std::path::Path::new(&instance_dir).join("bin/OpenSim.ini");
         if let Ok(content) = std::fs::read_to_string(&ini_path) {
             let mut in_startup = false;
@@ -1757,7 +2214,7 @@ async fn start_server() -> Result<()> {
                     if let Some(eq) = trimmed.find('=') {
                         let key = trimmed[..eq].trim();
                         if key.eq_ignore_ascii_case("physics") {
-                            let val = trimmed[eq+1..].trim().trim_matches('"');
+                            let val = trimmed[eq + 1..].trim().trim_matches('"');
                             name = Some(val.to_string());
                             break;
                         }
@@ -1768,25 +2225,34 @@ async fn start_server() -> Result<()> {
                 info!("[PHYSICS] Read physics='{}' from {}", n, ini_path.display());
             }
         }
-        name
-            .or_else(|| std::env::var("OPENSIM_PHYSICS").ok())
+        name.or_else(|| std::env::var("OPENSIM_PHYSICS").ok())
             .unwrap_or_else(|| "BulletSim".to_string())
     };
     let physics_engine_type = opensim_next::ffi::PhysicsEngineType::from_str(&physics_engine_name);
-    info!("Initializing physics engine: {:?} (from config: '{}')", physics_engine_type, physics_engine_name);
-    let shared_physics: Option<Arc<std::sync::Mutex<opensim_next::ffi::Physics>>> = match opensim_next::ffi::Physics::with_engine(physics_engine_type) {
-        Ok(physics) => {
-            info!("✅ Physics engine enabled ({:?}) - shared instance for avatar movement", physics_engine_type);
-            Some(Arc::new(std::sync::Mutex::new(physics)))
-        }
-        Err(e) => {
-            warn!("⚠️  Physics engine failed to initialize: {}. Avatar movement will use arithmetic fallback.", e);
-            None
-        }
-    };
+    info!(
+        "Initializing physics engine: {:?} (from config: '{}')",
+        physics_engine_type, physics_engine_name
+    );
+    let shared_physics: Option<Arc<std::sync::Mutex<opensim_next::ffi::Physics>>> =
+        match opensim_next::ffi::Physics::with_engine(physics_engine_type) {
+            Ok(physics) => {
+                info!(
+                    "✅ Physics engine enabled ({:?}) - shared instance for avatar movement",
+                    physics_engine_type
+                );
+                Some(Arc::new(std::sync::Mutex::new(physics)))
+            }
+            Err(e) => {
+                warn!("⚠️  Physics engine failed to initialize: {}. Avatar movement will use arithmetic fallback.", e);
+                None
+            }
+        };
     // RegionManager uses PhysicsBridge stubs - keep it disabled to avoid double-init
     let physics_bridge = Arc::new(PhysicsBridge::new_disabled());
-    let region_manager = Arc::new(RegionManager::new(physics_bridge.clone(), state_manager.clone()));
+    let region_manager = Arc::new(RegionManager::new(
+        physics_bridge.clone(),
+        state_manager.clone(),
+    ));
 
     // Phase 94.1: Initialize scripting system with real managers
     let _scripting_manager = if let Some(ref asset_mgr) = asset_manager {
@@ -1823,15 +2289,22 @@ async fn start_server() -> Result<()> {
     };
 
     // Phase 103.1: Parse Regions.ini for dynamic region configuration
-    let regions_dir_str = env::var("OPENSIM_REGIONS_DIR").unwrap_or_else(|_| "bin/Regions".to_string());
+    let regions_dir_str =
+        env::var("OPENSIM_REGIONS_DIR").unwrap_or_else(|_| "bin/Regions".to_string());
     let regions_dir = std::path::Path::new(&regions_dir_str);
     let region_configs = match config_parser::parse_regions_ini(regions_dir) {
         Ok(configs) => {
-            info!("[REGION] Loaded {} region(s) from Regions.ini", configs.len());
+            info!(
+                "[REGION] Loaded {} region(s) from Regions.ini",
+                configs.len()
+            );
             configs
         }
         Err(e) => {
-            warn!("[REGION] Failed to parse Regions.ini: {} - using defaults", e);
+            warn!(
+                "[REGION] Failed to parse Regions.ini: {} - using defaults",
+                e
+            );
             vec![config_parser::RegionIniConfig {
                 name: "Default Region".to_string(),
                 uuid: uuid::Uuid::parse_str("11111111-1111-1111-1111-111111111111").unwrap(),
@@ -1853,9 +2326,15 @@ async fn start_server() -> Result<()> {
         }
     };
     let active_region = region_configs[0].clone();
-    info!("[REGION] Active region: '{}' UUID={} grid=({},{}) port={} handle={}",
-          active_region.name, active_region.uuid, active_region.grid_x, active_region.grid_y,
-          active_region.internal_port, active_region.region_handle());
+    info!(
+        "[REGION] Active region: '{}' UUID={} grid=({},{}) port={} handle={}",
+        active_region.name,
+        active_region.uuid,
+        active_region.grid_x,
+        active_region.grid_y,
+        active_region.internal_port,
+        active_region.region_handle()
+    );
 
     // Create both session managers: one for XMLRPC login sessions, one for network management
     let login_session_manager = Arc::new(LoginSessionManager::new_with_region_size(
@@ -1864,26 +2343,31 @@ async fn start_server() -> Result<()> {
         active_region.size_x,
         active_region.size_y,
     ));
-    let network_session_manager = Arc::new(SessionManager::new(std::time::Duration::from_secs(60 * 10)));
+    let network_session_manager =
+        Arc::new(SessionManager::new(std::time::Duration::from_secs(60 * 10)));
 
     // Initialize loopback connectors for proper local networking (excluding web service to avoid port conflict)
     info!("Initializing loopback connectors...");
     let mut loopback_config = LoopbackConfig::default();
     loopback_config.enabled = false; // Disable to avoid port conflicts with WebClientServer
     let _loopback_connector = Arc::new(LoopbackConnector::new(loopback_config));
-    
+
     // Note: Loopback connectors disabled to prevent port conflicts with dedicated WebClientServer
-    
+
     // Initialize Hypergrid manager for inter-grid communication
     info!("Initializing Hypergrid...");
     let hg_config = opensim_next::services::config_parser::build_hypergrid_config();
-    let mut grid_service_for_registration: Option<Arc<dyn opensim_next::services::traits::GridServiceTrait>> = None;
+    let mut grid_service_for_registration: Option<
+        Arc<dyn opensim_next::services::traits::GridServiceTrait>,
+    > = None;
     let hypergrid_manager: Option<Arc<HypergridManager>> = if hg_config.enabled {
         if let Some(ref db_conn) = database_connection {
             let svc_mode = env::var("OPENSIM_SERVICE_MODE").unwrap_or_default();
             let robust_url = env::var("OPENSIM_ROBUST_URL").ok();
             let svc_config = if svc_mode == "grid" {
-                let url = robust_url.clone().unwrap_or_else(|| "http://localhost:8003".to_string());
+                let url = robust_url
+                    .clone()
+                    .unwrap_or_else(|| "http://localhost:8003".to_string());
                 opensim_next::services::traits::ServiceConfig {
                     mode: opensim_next::services::traits::ServiceMode::Grid,
                     grid_server_uri: Some(url.clone()),
@@ -1900,7 +2384,10 @@ async fn start_server() -> Result<()> {
                     ..Default::default()
                 }
             };
-            match opensim_next::services::factory::ServiceContainer::new(svc_config, Some(db_conn.clone())) {
+            match opensim_next::services::factory::ServiceContainer::new(
+                svc_config,
+                Some(db_conn.clone()),
+            ) {
                 Ok(svc) => {
                     let local_uas: Arc<dyn opensim_next::services::traits::UserAgentServiceTrait> =
                         Arc::new(opensim_next::services::local::LocalUserAgentService::new(
@@ -1919,18 +2406,26 @@ async fn start_server() -> Result<()> {
                         hg_config.external_uri.clone()
                     };
                     let local_gk: Arc<dyn opensim_next::services::traits::GatekeeperServiceTrait> =
-                        Arc::new(opensim_next::services::local::LocalGatekeeperService::new(
-                            svc.grid_service.clone(),
-                            svc.presence_service.clone(),
-                            db_conn.clone(),
-                            gk_external,
-                        )
-                        .with_config(hg_config.allow_teleports_to_any_region, hg_config.foreign_agents_allowed)
-                        .with_user_account_service(svc.user_account_service.clone())
-                        .with_local_uas(local_uas.clone()));
+                        Arc::new(
+                            opensim_next::services::local::LocalGatekeeperService::new(
+                                svc.grid_service.clone(),
+                                svc.presence_service.clone(),
+                                db_conn.clone(),
+                                gk_external,
+                            )
+                            .with_config(
+                                hg_config.allow_teleports_to_any_region,
+                                hg_config.foreign_agents_allowed,
+                            )
+                            .with_user_account_service(svc.user_account_service.clone())
+                            .with_local_uas(local_uas.clone()),
+                        );
                     grid_service_for_registration = Some(svc.grid_service.clone());
                     let mgr = HypergridManager::new(local_gk, local_uas, hg_config.clone());
-                    info!("Hypergrid manager created (home={}, gk={})", hg_config.home_uri, hg_config.gatekeeper_uri);
+                    info!(
+                        "Hypergrid manager created (home={}, gk={})",
+                        hg_config.home_uri, hg_config.gatekeeper_uri
+                    );
                     Some(Arc::new(mgr))
                 }
                 Err(e) => {
@@ -1946,7 +2441,7 @@ async fn start_server() -> Result<()> {
         info!("Hypergrid disabled");
         None
     };
-    
+
     // Monitoring system config (for logic)
     let mut monitoring_system_config = opensim_next::monitoring::MonitoringConfig::default();
     monitoring_system_config.enable_metrics = true;
@@ -1960,27 +2455,31 @@ async fn start_server() -> Result<()> {
     info!("Monitoring system started");
 
     // Force NetworkManager initialization for Phase 28.1 testing
-    let _network_manager = if let (Some(asset_mgr), Some(user_db)) = (&asset_manager, &user_account_database) {
-        let network_manager = Arc::new(NetworkManager::new(
-            monitoring.clone(),
-            network_session_manager.clone(),
-            region_manager.clone(),
-            state_manager.clone(),
-            asset_mgr.clone(),
-            user_db.clone(),
-        ).await?);
-        info!("Network manager initialized with full dependencies");
-        Some(network_manager)
-    } else {
-        warn!("Network manager dependencies missing - login server will be handled separately");
-        None
-    };
-    
+    let _network_manager =
+        if let (Some(asset_mgr), Some(user_db)) = (&asset_manager, &user_account_database) {
+            let network_manager = Arc::new(
+                NetworkManager::new(
+                    monitoring.clone(),
+                    network_session_manager.clone(),
+                    region_manager.clone(),
+                    state_manager.clone(),
+                    asset_mgr.clone(),
+                    user_db.clone(),
+                )
+                .await?,
+            );
+            info!("Network manager initialized with full dependencies");
+            Some(network_manager)
+        } else {
+            warn!("Network manager dependencies missing - login server will be handled separately");
+            None
+        };
+
     // Create CAPS manager - UNIFIED PORT: Use port 9000 for all services
     let system_ip = opensim_next::config::login::resolve_system_ip();
     let caps_manager = Arc::new(
         CapsManager::new(format!("http://{}:{}", system_ip, login_port))
-            .with_default_region_uuid(active_region.uuid.to_string())
+            .with_default_region_uuid(active_region.uuid.to_string()),
     );
 
     // Get database pool for CAPS handlers (texture serving)
@@ -1998,11 +2497,18 @@ async fn start_server() -> Result<()> {
     let login_stage_tracker = Arc::new(LoginStageTracker::new());
     info!("[LOGIN_STAGE] Created login stage tracker for diagnostic visibility");
 
-    let mut caps_state = CapsHandlerState::new(caps_manager.clone(), caps_db_pool, login_stage_tracker.clone());
+    let mut caps_state = CapsHandlerState::new(
+        caps_manager.clone(),
+        caps_db_pool,
+        login_stage_tracker.clone(),
+    );
 
     // UNIFIED PORT: CAPS will be served through the unified HTTP server on port 9000
     // Separate CAPS server disabled in favor of unified architecture
-    info!("CAPS services will be handled through unified HTTP server on port {}", login_port);
+    info!(
+        "CAPS services will be handled through unified HTTP server on port {}",
+        login_port
+    );
 
     // Create circuit code registry with LoginSessionManager access
     let circuit_codes = CircuitCodeRegistry::with_session_manager(login_session_manager.clone());
@@ -2016,7 +2522,8 @@ async fn start_server() -> Result<()> {
         warn!("[MAP] opj_compress not found - map tiles will be blank. Install OpenJPEG for map tile support.");
     }
 
-    let mut region_infos: Vec<opensim_next::udp::RegionInfo> = Vec::with_capacity(region_configs.len());
+    let mut region_infos: Vec<opensim_next::udp::RegionInfo> =
+        Vec::with_capacity(region_configs.len());
     for rc in &region_configs {
         let mut map_image_id = uuid::Uuid::nil();
 
@@ -2029,12 +2536,20 @@ async fn start_server() -> Result<()> {
                         match generate_map_tile(&heightmap, tile_uuid, db_conn).await {
                             Ok(size) => {
                                 map_image_id = tile_uuid;
-                                info!("[MAP] Generated map tile for '{}' ({}, {} bytes)", rc.name, tile_uuid, size);
+                                info!(
+                                    "[MAP] Generated map tile for '{}' ({}, {} bytes)",
+                                    rc.name, tile_uuid, size
+                                );
                             }
-                            Err(e) => warn!("[MAP] Failed to generate map tile for '{}': {}", rc.name, e),
+                            Err(e) => {
+                                warn!("[MAP] Failed to generate map tile for '{}': {}", rc.name, e)
+                            }
                         }
                     }
-                    Ok(None) => info!("[MAP] No terrain data for '{}' - map tile will be blank", rc.name),
+                    Ok(None) => info!(
+                        "[MAP] No terrain data for '{}' - map tile will be blank",
+                        rc.name
+                    ),
                     Err(e) => warn!("[MAP] Failed to load terrain for '{}': {}", rc.name, e),
                 }
             }
@@ -2049,15 +2564,22 @@ async fn start_server() -> Result<()> {
             size_y: rc.size_y,
             map_image_id,
             internal_port: rc.internal_port,
-            service_mode: env::var("OPENSIM_SERVICE_MODE").unwrap_or_else(|_| "standalone".to_string()),
+            service_mode: env::var("OPENSIM_SERVICE_MODE")
+                .unwrap_or_else(|_| "standalone".to_string()),
         });
     }
 
     let region_registry: Arc<Vec<opensim_next::udp::RegionInfo>> = Arc::new(region_infos);
-    info!("[REGION] Region registry: {} region(s) for map lookup", region_registry.len());
+    info!(
+        "[REGION] Region registry: {} region(s) for map lookup",
+        region_registry.len()
+    );
 
     if let Some(ref grid_svc) = grid_service_for_registration {
-        info!("[GRID] Registering {} region(s) with Robust grid service...", region_configs.len());
+        info!(
+            "[GRID] Registering {} region(s) with Robust grid service...",
+            region_configs.len()
+        );
         for rc in &region_configs {
             let grid_region = opensim_next::services::traits::RegionInfo {
                 region_id: rc.uuid,
@@ -2075,7 +2597,10 @@ async fn start_server() -> Result<()> {
                 estate_id: 1,
             };
             match grid_svc.register_region(&grid_region).await {
-                Ok(true) => info!("[GRID] Registered '{}' ({}) at ({},{})", rc.name, rc.uuid, rc.grid_x, rc.grid_y),
+                Ok(true) => info!(
+                    "[GRID] Registered '{}' ({}) at ({},{})",
+                    rc.name, rc.uuid, rc.grid_x, rc.grid_y
+                ),
                 Ok(false) => warn!("[GRID] Failed to register '{}': returned false", rc.name),
                 Err(e) => warn!("[GRID] Failed to register '{}': {}", rc.name, e),
             }
@@ -2161,7 +2686,10 @@ async fn start_server() -> Result<()> {
 
         Arc::new(parking_lot::RwLock::new(registry))
     };
-    info!("[MODULES] Module registry created with {} modules", module_registry.read().module_count());
+    info!(
+        "[MODULES] Module registry created with {} modules",
+        module_registry.read().module_count()
+    );
 
     let voice_module: Option<Arc<dyn opensim_next::modules::voice::VoiceHandler>> = {
         use opensim_next::modules::RegionModule;
@@ -2174,17 +2702,55 @@ async fn start_server() -> Result<()> {
 
         if vivox_enabled {
             let mut vivox_config = opensim_next::modules::ModuleConfig::new("VivoxVoice");
-            vivox_config.params.insert("enabled".to_string(), "true".to_string());
-            if let Ok(v) = std::env::var("OPENSIM_VIVOX_SERVER") { vivox_config.params.insert("vivox_server".to_string(), v); }
-            if let Ok(v) = std::env::var("OPENSIM_VIVOX_SIP_URI") { vivox_config.params.insert("vivox_sip_uri".to_string(), v); }
-            if let Ok(v) = std::env::var("OPENSIM_VIVOX_ADMIN_USER") { vivox_config.params.insert("vivox_admin_user".to_string(), v); }
-            if let Ok(v) = std::env::var("OPENSIM_VIVOX_ADMIN_PASSWORD") { vivox_config.params.insert("vivox_admin_password".to_string(), v); }
-            if let Ok(v) = std::env::var("OPENSIM_VIVOX_CHANNEL_TYPE") { vivox_config.params.insert("vivox_channel_type".to_string(), v); }
-            if let Ok(v) = std::env::var("OPENSIM_VIVOX_CHANNEL_MODE") { vivox_config.params.insert("vivox_channel_mode".to_string(), v); }
-            if let Ok(v) = std::env::var("OPENSIM_VIVOX_CHANNEL_DISTANCE_MODEL") { vivox_config.params.insert("vivox_channel_distance_model".to_string(), v); }
-            if let Ok(v) = std::env::var("OPENSIM_VIVOX_CHANNEL_ROLL_OFF") { vivox_config.params.insert("vivox_channel_roll_off".to_string(), v); }
-            if let Ok(v) = std::env::var("OPENSIM_VIVOX_CHANNEL_MAX_RANGE") { vivox_config.params.insert("vivox_channel_max_range".to_string(), v); }
-            if let Ok(v) = std::env::var("OPENSIM_VIVOX_CHANNEL_CLAMPING_DISTANCE") { vivox_config.params.insert("vivox_channel_clamping_distance".to_string(), v); }
+            vivox_config
+                .params
+                .insert("enabled".to_string(), "true".to_string());
+            if let Ok(v) = std::env::var("OPENSIM_VIVOX_SERVER") {
+                vivox_config.params.insert("vivox_server".to_string(), v);
+            }
+            if let Ok(v) = std::env::var("OPENSIM_VIVOX_SIP_URI") {
+                vivox_config.params.insert("vivox_sip_uri".to_string(), v);
+            }
+            if let Ok(v) = std::env::var("OPENSIM_VIVOX_ADMIN_USER") {
+                vivox_config
+                    .params
+                    .insert("vivox_admin_user".to_string(), v);
+            }
+            if let Ok(v) = std::env::var("OPENSIM_VIVOX_ADMIN_PASSWORD") {
+                vivox_config
+                    .params
+                    .insert("vivox_admin_password".to_string(), v);
+            }
+            if let Ok(v) = std::env::var("OPENSIM_VIVOX_CHANNEL_TYPE") {
+                vivox_config
+                    .params
+                    .insert("vivox_channel_type".to_string(), v);
+            }
+            if let Ok(v) = std::env::var("OPENSIM_VIVOX_CHANNEL_MODE") {
+                vivox_config
+                    .params
+                    .insert("vivox_channel_mode".to_string(), v);
+            }
+            if let Ok(v) = std::env::var("OPENSIM_VIVOX_CHANNEL_DISTANCE_MODEL") {
+                vivox_config
+                    .params
+                    .insert("vivox_channel_distance_model".to_string(), v);
+            }
+            if let Ok(v) = std::env::var("OPENSIM_VIVOX_CHANNEL_ROLL_OFF") {
+                vivox_config
+                    .params
+                    .insert("vivox_channel_roll_off".to_string(), v);
+            }
+            if let Ok(v) = std::env::var("OPENSIM_VIVOX_CHANNEL_MAX_RANGE") {
+                vivox_config
+                    .params
+                    .insert("vivox_channel_max_range".to_string(), v);
+            }
+            if let Ok(v) = std::env::var("OPENSIM_VIVOX_CHANNEL_CLAMPING_DISTANCE") {
+                vivox_config
+                    .params
+                    .insert("vivox_channel_clamping_distance".to_string(), v);
+            }
 
             let mut module = opensim_next::modules::voice::VivoxVoiceModule::new();
             if let Err(e) = module.initialize(&vivox_config).await {
@@ -2198,12 +2764,24 @@ async fn start_server() -> Result<()> {
             }
         } else if freeswitch_enabled {
             let mut fs_config = opensim_next::modules::ModuleConfig::new("FreeSwitchVoice");
-            fs_config.params.insert("Enabled".to_string(), "true".to_string());
-            if let Ok(v) = std::env::var("OPENSIM_FREESWITCH_SERVER") { fs_config.params.insert("ServerAddress".to_string(), v); }
-            if let Ok(v) = std::env::var("OPENSIM_FREESWITCH_REALM") { fs_config.params.insert("Realm".to_string(), v); }
-            if let Ok(v) = std::env::var("OPENSIM_FREESWITCH_SIP_PROXY") { fs_config.params.insert("SIPProxy".to_string(), v); }
-            if let Ok(v) = std::env::var("OPENSIM_FREESWITCH_ECHO_SERVER") { fs_config.params.insert("EchoServer".to_string(), v); }
-            if let Ok(v) = std::env::var("OPENSIM_FREESWITCH_ECHO_PORT") { fs_config.params.insert("EchoPort".to_string(), v); }
+            fs_config
+                .params
+                .insert("Enabled".to_string(), "true".to_string());
+            if let Ok(v) = std::env::var("OPENSIM_FREESWITCH_SERVER") {
+                fs_config.params.insert("ServerAddress".to_string(), v);
+            }
+            if let Ok(v) = std::env::var("OPENSIM_FREESWITCH_REALM") {
+                fs_config.params.insert("Realm".to_string(), v);
+            }
+            if let Ok(v) = std::env::var("OPENSIM_FREESWITCH_SIP_PROXY") {
+                fs_config.params.insert("SIPProxy".to_string(), v);
+            }
+            if let Ok(v) = std::env::var("OPENSIM_FREESWITCH_ECHO_SERVER") {
+                fs_config.params.insert("EchoServer".to_string(), v);
+            }
+            if let Ok(v) = std::env::var("OPENSIM_FREESWITCH_ECHO_PORT") {
+                fs_config.params.insert("EchoPort".to_string(), v);
+            }
 
             let mut module = opensim_next::modules::voice::FreeSwitchVoiceModule::new();
             if let Err(e) = module.initialize(&fs_config).await {
@@ -2234,13 +2812,21 @@ async fn start_server() -> Result<()> {
     // Phase 103.2: Multi-region startup - one UdpServer per configured region
     info!("[REGION] Starting {} region(s)...", region_configs.len());
     let mut udp_scene_objects_opt = None;
-    let mut map_items_avatar_states: Option<Arc<parking_lot::RwLock<std::collections::HashMap<uuid::Uuid, opensim_next::udp::AvatarMovementState>>>> = None;
-    let mut map_items_parcels: Option<Arc<parking_lot::RwLock<Vec<opensim_next::modules::land::Parcel>>>> = None;
+    let mut map_items_avatar_states: Option<
+        Arc<
+            parking_lot::RwLock<
+                std::collections::HashMap<uuid::Uuid, opensim_next::udp::AvatarMovementState>,
+            >,
+        >,
+    > = None;
+    let mut map_items_parcels: Option<
+        Arc<parking_lot::RwLock<Vec<opensim_next::modules::land::Parcel>>>,
+    > = None;
     let mut regions_started = 0u32;
 
     let udp_security_manager = Arc::new(
         opensim_next::network::security::SecurityManager::new()
-            .expect("Failed to create SecurityManager")
+            .expect("Failed to create SecurityManager"),
     );
     info!("[SECURITY] SecurityManager initialized for UDP firewall");
 
@@ -2253,8 +2839,9 @@ async fn start_server() -> Result<()> {
         info!("[ZITI] OpenZiti integration disabled (set OPENSIM_ZITI_ENABLED=true to enable)");
     }
 
-    let shared_galadriel_brain: Arc<tokio::sync::Mutex<Option<opensim_next::ai::galadriel::GaladrielBrain>>> =
-        Arc::new(tokio::sync::Mutex::new(None));
+    let shared_galadriel_brain: Arc<
+        tokio::sync::Mutex<Option<opensim_next::ai::galadriel::GaladrielBrain>>,
+    > = Arc::new(tokio::sync::Mutex::new(None));
     let shared_build_sessions = if let Some(ref db_conn) = database_connection {
         if let Some(pool) = db_conn.postgres_pool() {
             opensim_next::ai::build_session::BuildSessionStore::new(Some(pool.clone()))
@@ -2273,7 +2860,10 @@ async fn start_server() -> Result<()> {
     } else {
         opensim_next::ai::npc_memory::NPCMemoryStore::new(None)
     };
-    info!("[GALADRIEL] Shared AI brain + stores created for {} region(s)", region_configs.len());
+    info!(
+        "[GALADRIEL] Shared AI brain + stores created for {} region(s)",
+        region_configs.len()
+    );
 
     let shared_handshake_sent: Arc<tokio::sync::Mutex<std::collections::HashSet<u32>>> =
         Arc::new(tokio::sync::Mutex::new(std::collections::HashSet::new()));
@@ -2293,7 +2883,9 @@ async fn start_server() -> Result<()> {
             memory_cache_size: 2000,
             memory_ttl_seconds: 300,
             redis_ttl_seconds: 3600,
-            redis_url: env::var("REDIS_URL").ok().or_else(|| env::var("VALKEY_URL").ok()),
+            redis_url: env::var("REDIS_URL")
+                .ok()
+                .or_else(|| env::var("VALKEY_URL").ok()),
             enable_compression: true,
             compression_threshold: 4096,
         };
@@ -2303,7 +2895,10 @@ async fn start_server() -> Result<()> {
                 Some(Arc::new(cache))
             }
             Err(e) => {
-                warn!("[ASSET-CACHE] Failed to initialize: {} — continuing without cache", e);
+                warn!(
+                    "[ASSET-CACHE] Failed to initialize: {} — continuing without cache",
+                    e
+                );
                 None
             }
         };
@@ -2312,7 +2907,10 @@ async fn start_server() -> Result<()> {
             Ok(storage) => {
                 let storage = Arc::new(storage);
                 storage.start_background_writer();
-                info!("[FSASSETS] Filesystem asset storage enabled: {}", fsassets_base);
+                info!(
+                    "[FSASSETS] Filesystem asset storage enabled: {}",
+                    fsassets_base
+                );
                 let mut fetcher = opensim_next::asset::AssetFetcher::new(Some(storage), true);
                 if let Some(cache) = asset_cache {
                     fetcher = fetcher.with_cache(cache);
@@ -2334,9 +2932,16 @@ async fn start_server() -> Result<()> {
 
     for (i, region_config) in region_configs.iter().enumerate() {
         let bind_addr = format!("0.0.0.0:{}", region_config.internal_port);
-        info!("[REGION {}/{}] Starting '{}' on {} (grid {},{} handle={})",
-              i + 1, region_configs.len(), region_config.name, bind_addr,
-              region_config.grid_x, region_config.grid_y, region_config.region_handle());
+        info!(
+            "[REGION {}/{}] Starting '{}' on {} (grid {},{} handle={})",
+            i + 1,
+            region_configs.len(),
+            region_config.name,
+            bind_addr,
+            region_config.grid_x,
+            region_config.grid_y,
+            region_config.region_handle()
+        );
 
         let udp_server_result = opensim_next::udp::UdpServer::new(
             &bind_addr,
@@ -2350,7 +2955,8 @@ async fn start_server() -> Result<()> {
             region_config.size_y,
             region_config.water_height,
             region_config.name.clone(),
-        ).await;
+        )
+        .await;
 
         match udp_server_result {
             Ok(mut udp_server) => {
@@ -2381,22 +2987,43 @@ async fn start_server() -> Result<()> {
                     udp_server = udp_server.with_database(db_conn.clone());
 
                     if let Err(e) = udp_server.initialize_terrain().await {
-                        warn!("[REGION] '{}': Failed to init terrain: {}", region_config.name, e);
+                        warn!(
+                            "[REGION] '{}': Failed to init terrain: {}",
+                            region_config.name, e
+                        );
                     }
-                    if i == 0 { readiness_tracker.set_terrain_loaded(); }
+                    if i == 0 {
+                        readiness_tracker.set_terrain_loaded();
+                    }
                     if let Err(e) = udp_server.load_scene_objects_from_db().await {
-                        warn!("[REGION] '{}': Failed to load objects: {}", region_config.name, e);
+                        warn!(
+                            "[REGION] '{}': Failed to load objects: {}",
+                            region_config.name, e
+                        );
                     }
-                    if i == 0 { readiness_tracker.set_scene_loaded(); }
+                    if i == 0 {
+                        readiness_tracker.set_scene_loaded();
+                    }
                     if let Err(e) = udp_server.load_scripts_from_db().await {
-                        warn!("[REGION] '{}': Failed to load scripts: {}", region_config.name, e);
+                        warn!(
+                            "[REGION] '{}': Failed to load scripts: {}",
+                            region_config.name, e
+                        );
                     }
-                    if i == 0 { readiness_tracker.set_scripts_initialized(); }
+                    if i == 0 {
+                        readiness_tracker.set_scripts_initialized();
+                    }
                     if let Err(e) = udp_server.load_parcels().await {
-                        warn!("[REGION] '{}': Failed to load parcels: {}", region_config.name, e);
+                        warn!(
+                            "[REGION] '{}': Failed to load parcels: {}",
+                            region_config.name, e
+                        );
                     }
                     if let Err(e) = udp_server.load_estate_info().await {
-                        warn!("[REGION] '{}': Failed to load estate info: {}", region_config.name, e);
+                        warn!(
+                            "[REGION] '{}': Failed to load estate info: {}",
+                            region_config.name, e
+                        );
                     }
                 } else if i == 0 {
                     readiness_tracker.set_terrain_loaded();
@@ -2426,13 +3053,22 @@ async fn start_server() -> Result<()> {
                     let scene = udp_server.build_scene_context();
                     let mut reg = module_registry.write();
                     if let Err(e) = reg.add_region_all(&scene).await {
-                        warn!("[MODULES] add_region failed for '{}': {}", region_config.name, e);
+                        warn!(
+                            "[MODULES] add_region failed for '{}': {}",
+                            region_config.name, e
+                        );
                     }
                     if let Err(e) = reg.post_initialize_all(&scene).await {
-                        warn!("[MODULES] post_initialize failed for '{}': {}", region_config.name, e);
+                        warn!(
+                            "[MODULES] post_initialize failed for '{}': {}",
+                            region_config.name, e
+                        );
                     }
                     if let Err(e) = reg.region_loaded_all(&scene).await {
-                        warn!("[MODULES] region_loaded failed for '{}': {}", region_config.name, e);
+                        warn!(
+                            "[MODULES] region_loaded failed for '{}': {}",
+                            region_config.name, e
+                        );
                     }
                 }
 
@@ -2446,19 +3082,32 @@ async fn start_server() -> Result<()> {
                     }
                 });
                 regions_started += 1;
-                info!("[REGION] '{}' started on port {}", region_config.name, region_port);
+                info!(
+                    "[REGION] '{}' started on port {}",
+                    region_config.name, region_port
+                );
             }
             Err(e) => {
-                error!("[REGION] Failed to start '{}' on port {}: {}",
-                       region_config.name, region_config.internal_port, e);
+                error!(
+                    "[REGION] Failed to start '{}' on port {}: {}",
+                    region_config.name, region_config.internal_port, e
+                );
                 if i == 0 {
-                    return Err(anyhow!("Home region '{}' failed to start: {}", region_config.name, e));
+                    return Err(anyhow!(
+                        "Home region '{}' failed to start: {}",
+                        region_config.name,
+                        e
+                    ));
                 }
             }
         }
         tokio::time::sleep(tokio::time::Duration::from_millis(50)).await;
     }
-    info!("[REGION] {} of {} region(s) started successfully", regions_started, region_configs.len());
+    info!(
+        "[REGION] {} of {} region(s) started successfully",
+        regions_started,
+        region_configs.len()
+    );
 
     // REMOVED: 600+ lines of manual UDP packet handling code replaced with UdpServer
     // The UdpServer now handles:
@@ -2469,7 +3118,6 @@ async fn start_server() -> Result<()> {
     // - AgentUpdate
     // - Packet acknowledgments
     // - Reliability management
-        
 
     // Spawn HTTP server for metrics and health with authentication
     let app_state = AppState {
@@ -2479,13 +3127,13 @@ async fn start_server() -> Result<()> {
         circuit_codes: circuit_codes.clone(),
     };
     let metrics_port = http_config.metrics_port;
-    
+
     // Spawn Admin API server for Robust-style database commands
     let admin_port = env::var("OPENSIM_ADMIN_PORT")
         .unwrap_or_else(|_| "9200".to_string())
         .parse()
         .unwrap_or(9200);
-    
+
     if let Some(database_manager) = database_manager.as_ref() {
         let admin_api_state = AdminApiState {
             admin: database_manager.admin(),
@@ -2529,9 +3177,16 @@ async fn start_server() -> Result<()> {
             let skill_router = create_skill_api_router();
             let combined_router = if let Some(archive_state) = archive_api_clone {
                 let archive_router = create_archive_api_router().with_state(archive_state);
-                admin_router.merge(archive_router).merge(console_router).merge(security_router).merge(skill_router)
+                admin_router
+                    .merge(archive_router)
+                    .merge(console_router)
+                    .merge(security_router)
+                    .merge(skill_router)
             } else {
-                admin_router.merge(console_router).merge(security_router).merge(skill_router)
+                admin_router
+                    .merge(console_router)
+                    .merge(security_router)
+                    .merge(skill_router)
             };
 
             let addr = SocketAddr::from(([0, 0, 0, 0], admin_port));
@@ -2647,7 +3302,10 @@ async fn start_server() -> Result<()> {
             info!("  GET /skills/{{domain}} - List domain skills");
             info!("  GET /skills/{{domain}}/{{skill_id}} - Skill detail");
 
-            match axum_server::bind(addr).serve(combined_router.into_make_service()).await {
+            match axum_server::bind(addr)
+                .serve(combined_router.into_make_service())
+                .await
+            {
                 Ok(_) => info!("Admin API server shut down gracefully"),
                 Err(e) => error!("Admin API server failed: {}", e),
             }
@@ -2667,9 +3325,12 @@ async fn start_server() -> Result<()> {
                 [
                     ("Access-Control-Allow-Origin", "*"),
                     ("Access-Control-Allow-Methods", "GET, POST, OPTIONS"),
-                    ("Access-Control-Allow-Headers", "Authorization, Content-Type"),
-                    ("Access-Control-Max-Age", "86400")
-                ]
+                    (
+                        "Access-Control-Allow-Headers",
+                        "Authorization, Content-Type",
+                    ),
+                    ("Access-Control-Max-Age", "86400"),
+                ],
             )
         }
 
@@ -2681,9 +3342,12 @@ async fn start_server() -> Result<()> {
                     ("Content-Type", "application/json"),
                     ("Access-Control-Allow-Origin", "*"),
                     ("Access-Control-Allow-Methods", "GET, OPTIONS"),
-                    ("Access-Control-Allow-Headers", "Authorization, Content-Type")
+                    (
+                        "Access-Control-Allow-Headers",
+                        "Authorization, Content-Type",
+                    ),
                 ],
-                r#"{"status":"ok","message":"OpenSim Next server is running"}"#
+                r#"{"status":"ok","message":"OpenSim Next server is running"}"#,
             )
         }
 
@@ -2692,7 +3356,10 @@ async fn start_server() -> Result<()> {
             .route("/health", get(health_handler).options(cors_handler))
             .route("/info", get(instance_info_handler).options(cors_handler))
             .route("/ping", get(simple_health)) // No auth required
-            .layer(middleware::from_fn_with_state(app_state.clone(), auth_middleware))
+            .layer(middleware::from_fn_with_state(
+                app_state.clone(),
+                auth_middleware,
+            ))
             .with_state(app_state.clone())
             // Add fallback route without auth for OPTIONS
             .fallback(cors_handler);
@@ -2702,7 +3369,7 @@ async fn start_server() -> Result<()> {
         info!("  GET /metrics - Prometheus metrics (requires API key)");
         info!("  GET /health  - Health status (requires API key)");
         info!("  GET /info    - Instance information (requires API key)");
-        
+
         match axum_server::bind(addr).serve(app.into_make_service()).await {
             Ok(_) => info!("Monitoring HTTP server shut down gracefully"),
             Err(e) => error!("Monitoring HTTP server failed: {}", e),
@@ -2725,7 +3392,9 @@ async fn start_server() -> Result<()> {
         physics: opensim_next::ffi::physics::PhysicsConfig::default(),
         max_entities: 1000,
     };
-    let _region = region_manager.create_region(region_id, region_config).await?;
+    let _region = region_manager
+        .create_region(region_id, region_config)
+        .await?;
     info!("Created default region: {}", region_id);
 
     // Start simulation engine - TEMPORARILY DISABLED FOR WEB INTERFACE TESTING
@@ -2762,12 +3431,13 @@ async fn start_server() -> Result<()> {
 
     // Start Firestorm-compatible login service for Second Life viewer compatibility
     // This is the primary login endpoint that handles Second Life viewer connections
-    if user_account_database.is_some() { // Enable login server when database is available
+    if user_account_database.is_some() {
+        // Enable login server when database is available
         use opensim_next::config::login::LoginConfigManager;
-        
+
         // Create login configuration manager (reads OPENSIM_LOGIN_PORT env var)
-        let config_manager = LoginConfigManager::load_from_env()
-            .unwrap_or_else(|_| LoginConfigManager::new());
+        let config_manager =
+            LoginConfigManager::load_from_env().unwrap_or_else(|_| LoginConfigManager::new());
 
         // CRITICAL FIX: Reuse the SAME login_session_manager that UdpServer uses (created on line 453)
         // DO NOT create a new instance here - that creates a separate HashMap storage!
@@ -2775,7 +3445,7 @@ async fn start_server() -> Result<()> {
         // Create AvatarService for avatar appearance management
         // Matches: OpenSim LLLoginService.cs:117, 229-230
         let avatar_service = Arc::new(AvatarService::new(
-            database_manager.as_ref().unwrap().clone()
+            database_manager.as_ref().unwrap().clone(),
         ));
         info!("[AVATAR SERVICE]: Avatar service initialized for login");
 
@@ -2786,11 +3456,11 @@ async fn start_server() -> Result<()> {
             user_account_database.as_ref().unwrap().clone(),
             avatar_service,
         );
-        
+
         // CRITICAL FIX: Connect CircuitCodeRegistry to LoginService for XMLRPC->UDP coordination
         login_service.set_circuit_registry(Arc::new(circuit_codes.clone()));
         info!("🔗 Connected CircuitCodeRegistry to LoginService for XMLRPC->UDP coordination");
-        
+
         // Connect the CapsManager to LoginService for session coordination
         login_service.set_caps_manager(caps_manager.clone());
         info!("Connected CapsManager to LoginService for session coordination");
@@ -2808,7 +3478,10 @@ async fn start_server() -> Result<()> {
         if let Some(ref hg) = hypergrid_manager {
             let mut urls = std::collections::HashMap::new();
             urls.insert("SRV_HomeURI".to_string(), hg.config().home_uri.clone());
-            urls.insert("SRV_GatekeeperURI".to_string(), hg.config().gatekeeper_uri.clone());
+            urls.insert(
+                "SRV_GatekeeperURI".to_string(),
+                hg.config().gatekeeper_uri.clone(),
+            );
             let base = &hg.config().home_uri;
             urls.insert("SRV_InventoryServerURI".to_string(), format!("{}/hg", base));
             urls.insert("SRV_AssetServerURI".to_string(), base.clone());
@@ -2818,7 +3491,10 @@ async fn start_server() -> Result<()> {
             login_service.set_hg_service_urls(urls);
             login_service.set_uas_service(hg.uas().clone());
             login_service.set_gatekeeper_service(hg.gatekeeper().clone());
-            info!("[HG] Service URLs + UAS + Gatekeeper wired into LoginService (home={})", base);
+            info!(
+                "[HG] Service URLs + UAS + Gatekeeper wired into LoginService (home={})",
+                base
+            );
         }
 
         login_service.set_security_manager(udp_security_manager.clone());
@@ -2826,50 +3502,112 @@ async fn start_server() -> Result<()> {
 
         // UDP server for circuit handling is already started above in main spawn task
         // Skipping duplicate UDP server startup to prevent port conflict
-        info!("UDP server already running on port {} - skipping duplicate startup", login_port);
+        info!(
+            "UDP server already running on port {} - skipping duplicate startup",
+            login_port
+        );
 
         match tokio::net::TcpListener::bind(format!("0.0.0.0:{}", login_port)).await {
             Ok(test_listener) => {
                 // Port is available, close test listener and start real server
                 drop(test_listener);
-                
+
                 // Create HTTP server for XMLRPC login requests and capabilities
                 let login_service_arc = Arc::new(login_service);
-                
+
                 // Import the caps router
                 use opensim_next::caps::router::create_caps_router;
-                
+
                 // Create login routes with legacy viewer compatibility
                 // Cool Viewer, Singularity, and other legacy viewers use various paths
                 let login_router = axum::Router::new()
-                    .route("/", axum::routing::post(opensim_next::login_service::handle_login_post)) // XMLRPC login at root
-                    .route("/login", axum::routing::post(opensim_next::login_service::handle_login_post))
-                    .route("/login", axum::routing::get(opensim_next::login_service::handle_login_page))
+                    .route(
+                        "/",
+                        axum::routing::post(opensim_next::login_service::handle_login_post),
+                    ) // XMLRPC login at root
+                    .route(
+                        "/login",
+                        axum::routing::post(opensim_next::login_service::handle_login_post),
+                    )
+                    .route(
+                        "/login",
+                        axum::routing::get(opensim_next::login_service::handle_login_page),
+                    )
                     // Legacy viewer path aliases (Cool Viewer, Singularity, etc.)
-                    .route("/xmlrpc.php", axum::routing::post(opensim_next::login_service::handle_login_post))
-                    .route("/login.cgi", axum::routing::post(opensim_next::login_service::handle_login_post))
-                    .route("/cgi-bin/login.cgi", axum::routing::post(opensim_next::login_service::handle_login_post))
-                    .route("/xmlrpc", axum::routing::post(opensim_next::login_service::handle_login_post))
-                    .route("/get_grid_info", axum::routing::get(opensim_next::login_service::handle_grid_info))
-                    .route("/json_grid_info", axum::routing::get(opensim_next::login_service::handle_grid_info_json))
-                    .route("/welcome", axum::routing::get(opensim_next::login_service::handle_splash_page))
-                    .route("/splash.png", axum::routing::get(opensim_next::login_service::handle_splash_image))
+                    .route(
+                        "/xmlrpc.php",
+                        axum::routing::post(opensim_next::login_service::handle_login_post),
+                    )
+                    .route(
+                        "/login.cgi",
+                        axum::routing::post(opensim_next::login_service::handle_login_post),
+                    )
+                    .route(
+                        "/cgi-bin/login.cgi",
+                        axum::routing::post(opensim_next::login_service::handle_login_post),
+                    )
+                    .route(
+                        "/xmlrpc",
+                        axum::routing::post(opensim_next::login_service::handle_login_post),
+                    )
+                    .route(
+                        "/get_grid_info",
+                        axum::routing::get(opensim_next::login_service::handle_grid_info),
+                    )
+                    .route(
+                        "/json_grid_info",
+                        axum::routing::get(opensim_next::login_service::handle_grid_info_json),
+                    )
+                    .route(
+                        "/welcome",
+                        axum::routing::get(opensim_next::login_service::handle_splash_page),
+                    )
+                    .route(
+                        "/splash.png",
+                        axum::routing::get(opensim_next::login_service::handle_splash_image),
+                    )
                     .with_state(login_service_arc);
 
                 let currency_state = opensim_next::login_service::CurrencyState {
                     database_manager: database_manager.clone(),
                 };
                 let currency_router = axum::Router::new()
-                    .route("/currency.php", axum::routing::post(opensim_next::login_service::handle_currency_php))
-                    .route("/landtool.php", axum::routing::post(opensim_next::login_service::handle_landtool_php))
+                    .route(
+                        "/currency.php",
+                        axum::routing::post(opensim_next::login_service::handle_currency_php),
+                    )
+                    .route(
+                        "/landtool.php",
+                        axum::routing::post(opensim_next::login_service::handle_landtool_php),
+                    )
                     .with_state(currency_state);
 
                 let helo_router = axum::Router::new()
-                    .route("/helo", axum::routing::get(opensim_next::services::robust::helo_handler::handle_helo_get))
-                    .route("/helo", axum::routing::head(opensim_next::services::robust::helo_handler::handle_helo_head))
-                    .route("/helo/", axum::routing::get(opensim_next::services::robust::helo_handler::handle_helo_get))
-                    .route("/helo/", axum::routing::head(opensim_next::services::robust::helo_handler::handle_helo_head));
-                
+                    .route(
+                        "/helo",
+                        axum::routing::get(
+                            opensim_next::services::robust::helo_handler::handle_helo_get,
+                        ),
+                    )
+                    .route(
+                        "/helo",
+                        axum::routing::head(
+                            opensim_next::services::robust::helo_handler::handle_helo_head,
+                        ),
+                    )
+                    .route(
+                        "/helo/",
+                        axum::routing::get(
+                            opensim_next::services::robust::helo_handler::handle_helo_get,
+                        ),
+                    )
+                    .route(
+                        "/helo/",
+                        axum::routing::head(
+                            opensim_next::services::robust::helo_handler::handle_helo_head,
+                        ),
+                    );
+
                 let mut app = login_router
                     .merge(create_caps_router().with_state(caps_state))
                     .merge(helo_router)
@@ -2887,14 +3625,19 @@ async fn start_server() -> Result<()> {
                     info!("[MAP] World map tile endpoint enabled at /t/map-<zoom>-<x>-<y>-objects.jpg");
                 }
 
-                if let (Some(av_states), Some(parcels_ref)) = (map_items_avatar_states.clone(), map_items_parcels.clone()) {
+                if let (Some(av_states), Some(parcels_ref)) =
+                    (map_items_avatar_states.clone(), map_items_parcels.clone())
+                {
                     let map_items_state = MapItemsState {
                         avatar_states: av_states,
                         parcels: parcels_ref,
                         region_registry: region_registry.clone(),
                     };
                     let map_items_router = axum::Router::new()
-                        .route("/MAP/MapItems/:regionhandle", axum::routing::get(handle_map_items_request))
+                        .route(
+                            "/MAP/MapItems/:regionhandle",
+                            axum::routing::get(handle_map_items_request),
+                        )
                         .with_state(map_items_state);
                     app = app.merge(map_items_router);
                     info!("[MAP] MapItems endpoint enabled at /MAP/MapItems/{{regionhandle}}");
@@ -2914,37 +3657,48 @@ async fn start_server() -> Result<()> {
                         session_manager: Some(login_session_manager.clone()),
                         caps_manager: Some(caps_manager.clone()),
                     };
-                    let gk_router = opensim_next::services::robust::create_gatekeeper_router(gk_state);
+                    let gk_router =
+                        opensim_next::services::robust::create_gatekeeper_router(gk_state);
                     app = app.merge(gk_router);
                     info!("[HG] Gatekeeper endpoints enabled on port {}: POST /gatekeeper, POST /foreignagent/{{agent_id}}", login_port);
                 }
 
                 {
                     let tracker = readiness_tracker.clone();
-                    let ready_router = axum::Router::new()
-                        .route("/ready", axum::routing::get(move || {
+                    let ready_router = axum::Router::new().route(
+                        "/ready",
+                        axum::routing::get(move || {
                             let tracker = tracker.clone();
                             async move {
                                 if tracker.is_login_ready() {
-                                    (axum::http::StatusCode::OK, axum::Json(serde_json::json!({
-                                        "ready": true,
-                                        "service": "region",
-                                        "uptime_secs": tracker.uptime_secs()
-                                    })))
+                                    (
+                                        axum::http::StatusCode::OK,
+                                        axum::Json(serde_json::json!({
+                                            "ready": true,
+                                            "service": "region",
+                                            "uptime_secs": tracker.uptime_secs()
+                                        })),
+                                    )
                                 } else {
-                                    let pending: Vec<&str> = tracker.status_breakdown().iter()
+                                    let pending: Vec<&str> = tracker
+                                        .status_breakdown()
+                                        .iter()
                                         .filter(|(_, ready)| !ready)
                                         .map(|(name, _)| *name)
                                         .collect();
-                                    (axum::http::StatusCode::SERVICE_UNAVAILABLE, axum::Json(serde_json::json!({
-                                        "ready": false,
-                                        "service": "region",
-                                        "pending": pending,
-                                        "uptime_secs": tracker.uptime_secs()
-                                    })))
+                                    (
+                                        axum::http::StatusCode::SERVICE_UNAVAILABLE,
+                                        axum::Json(serde_json::json!({
+                                            "ready": false,
+                                            "service": "region",
+                                            "pending": pending,
+                                            "uptime_secs": tracker.uptime_secs()
+                                        })),
+                                    )
                                 }
                             }
-                        }));
+                        }),
+                    );
                     app = app.merge(ready_router);
                 }
 
@@ -2952,14 +3706,18 @@ async fn start_server() -> Result<()> {
                     let method = req.method().clone();
                     let uri = req.uri().clone();
                     let headers = req.headers().clone();
-                    let content_len = headers.get("content-length")
+                    let content_len = headers
+                        .get("content-length")
                         .and_then(|v| v.to_str().ok())
                         .unwrap_or("unknown");
-                    let content_type = headers.get("content-type")
+                    let content_type = headers
+                        .get("content-type")
                         .and_then(|v| v.to_str().ok())
                         .unwrap_or("unknown");
-                    warn!("[FALLBACK] Unmatched request: {} {} (content-type={}, content-length={})",
-                        method, uri, content_type, content_len);
+                    warn!(
+                        "[FALLBACK] Unmatched request: {} {} (content-type={}, content-length={})",
+                        method, uri, content_type, content_len
+                    );
                     (axum::http::StatusCode::NOT_FOUND, "Not found")
                 });
 
@@ -2974,7 +3732,7 @@ async fn start_server() -> Result<()> {
 
                 tokio::time::sleep(tokio::time::Duration::from_millis(100)).await;
                 info!("Login server started on 0.0.0.0:{}", login_port);
-            },
+            }
             Err(e) => {
                 error!("Cannot bind to port {} for login server: {}", login_port, e);
                 error!("Make sure no other service is using port {}", login_port);
@@ -2992,8 +3750,14 @@ async fn start_server() -> Result<()> {
     info!("🌟 Revolutionary Multi-Database Virtual World Server Ready!");
     info!("");
     info!("📡 Available services:");
-    info!("  🌐 Frontend Dashboard: http://0.0.0.0:{}", web_client_port);
-    info!("  🔗 API Endpoints: http://0.0.0.0:{} (requires API key)", http_config.metrics_port);
+    info!(
+        "  🌐 Frontend Dashboard: http://0.0.0.0:{}",
+        web_client_port
+    );
+    info!(
+        "  🔗 API Endpoints: http://0.0.0.0:{} (requires API key)",
+        http_config.metrics_port
+    );
     info!("  🔧 Admin API (Robust Commands): http://0.0.0.0:9200 (requires API key)");
     info!("  📡 WebSocket Server: ws://0.0.0.0:9001");
     info!("  Second Life Viewers: opensim://0.0.0.0:{}", login_port);
@@ -3003,50 +3767,82 @@ async fn start_server() -> Result<()> {
     info!("");
     info!("🔧 Server Configuration:");
     info!("  Instance ID: {}", http_config.instance_id);
-    info!("  API Key: {} (change via OPENSIM_API_KEY)", 
-          if http_config.api_key == "default-key-change-me" { 
-              "default-key-change-me (⚠️  CHANGE FOR PRODUCTION)" 
-          } else { 
-              "configured" 
-          });
-    info!("  Database: {}", std::env::var("DATABASE_URL").unwrap_or_else(|_| "SQLite (default)".to_string()));
+    info!(
+        "  API Key: {} (change via OPENSIM_API_KEY)",
+        if http_config.api_key == "default-key-change-me" {
+            "default-key-change-me (⚠️  CHANGE FOR PRODUCTION)"
+        } else {
+            "configured"
+        }
+    );
+    info!(
+        "  Database: {}",
+        std::env::var("DATABASE_URL").unwrap_or_else(|_| "SQLite (default)".to_string())
+    );
     info!("");
     info!("🚀 Access your revolutionary virtual world:");
     info!("  👉 Open browser: http://localhost:{}", web_client_port);
     info!("  Connect viewer: opensim://localhost:{}", login_port);
-    info!("  👉 Test API: curl -H 'X-API-Key: {}' http://localhost:{}/health", 
-          http_config.api_key, http_config.metrics_port);
+    info!(
+        "  👉 Test API: curl -H 'X-API-Key: {}' http://localhost:{}/health",
+        http_config.api_key, http_config.metrics_port
+    );
 
     let instance_dir = opensim_next::instance_manager::discovery::resolve_instance_dir();
     let instances_base = opensim_next::instance_manager::discovery::resolve_instances_base_dir();
-    let svc_mode_for_discovery = env::var("OPENSIM_SERVICE_MODE").unwrap_or_else(|_| "standalone".to_string());
+    let svc_mode_for_discovery =
+        env::var("OPENSIM_SERVICE_MODE").unwrap_or_else(|_| "standalone".to_string());
 
     if env::var("OPENSIM_DISABLE_CONTROLLER").unwrap_or_default() != "true" {
         let controller_port = env::var("OPENSIM_CONTROLLER_PORT")
-            .ok().and_then(|p| p.parse::<u16>().ok())
-            .unwrap_or_else(|| opensim_next::instance_manager::find_available_controller_port(&instances_base, 9300, 9320));
+            .ok()
+            .and_then(|p| p.parse::<u16>().ok())
+            .unwrap_or_else(|| {
+                opensim_next::instance_manager::find_available_controller_port(
+                    &instances_base,
+                    9300,
+                    9320,
+                )
+            });
         spawn_embedded_controller(controller_port).await;
 
         let discovery_info = opensim_next::instance_manager::RunningInstanceInfo::new(
             env::var("OPENSIM_INSTANCE_ID").unwrap_or_else(|_| {
-                instance_dir.file_name().unwrap_or_default().to_string_lossy().to_lowercase().replace(' ', "-")
+                instance_dir
+                    .file_name()
+                    .unwrap_or_default()
+                    .to_string_lossy()
+                    .to_lowercase()
+                    .replace(' ', "-")
             }),
             svc_mode_for_discovery.clone(),
             controller_port,
             login_port,
             0,
         );
-        if let Err(e) = opensim_next::instance_manager::write_discovery_file(&instance_dir, &svc_mode_for_discovery, &discovery_info) {
+        if let Err(e) = opensim_next::instance_manager::write_discovery_file(
+            &instance_dir,
+            &svc_mode_for_discovery,
+            &discovery_info,
+        ) {
             warn!("Failed to write discovery file: {}", e);
         }
     } else if let Ok(controller_url) = env::var("OPENSIM_CONTROLLER_URL") {
         // External controller: announce to it
         let instance_id = env::var("OPENSIM_INSTANCE_ID").unwrap_or_else(|_| {
             env::var("OPENSIM_INSTANCE_DIR")
-                .map(|d| std::path::Path::new(&d).file_name().unwrap_or_default().to_string_lossy().to_lowercase().replace(' ', "-"))
+                .map(|d| {
+                    std::path::Path::new(&d)
+                        .file_name()
+                        .unwrap_or_default()
+                        .to_string_lossy()
+                        .to_lowercase()
+                        .replace(' ', "-")
+                })
                 .unwrap_or_else(|_| "standalone".to_string())
         });
-        let svc_mode = env::var("OPENSIM_SERVICE_MODE").unwrap_or_else(|_| "standalone".to_string());
+        let svc_mode =
+            env::var("OPENSIM_SERVICE_MODE").unwrap_or_else(|_| "standalone".to_string());
         let announce_login_port = login_port;
 
         tokio::spawn(async move {
@@ -3066,20 +3862,30 @@ async fn start_server() -> Result<()> {
             });
 
             for attempt in 0..3u32 {
-                match client.post(format!("{}/api/instance/announce", controller_url))
+                match client
+                    .post(format!("{}/api/instance/announce", controller_url))
                     .json(&announcement)
                     .timeout(std::time::Duration::from_secs(5))
-                    .send().await
+                    .send()
+                    .await
                 {
                     Ok(resp) if resp.status().is_success() => {
                         info!("Announced to controller at {}", controller_url);
                         break;
                     }
                     Ok(resp) => {
-                        warn!("Controller announce failed (attempt {}): HTTP {}", attempt + 1, resp.status());
+                        warn!(
+                            "Controller announce failed (attempt {}): HTTP {}",
+                            attempt + 1,
+                            resp.status()
+                        );
                     }
                     Err(e) => {
-                        warn!("Controller announce failed (attempt {}): {}", attempt + 1, e);
+                        warn!(
+                            "Controller announce failed (attempt {}): {}",
+                            attempt + 1,
+                            e
+                        );
                     }
                 }
                 tokio::time::sleep(std::time::Duration::from_secs(2u64.pow(attempt))).await;
@@ -3096,10 +3902,12 @@ async fn start_server() -> Result<()> {
                     "cpu_usage": 0.0f64,
                     "memory_usage_mb": 0u64,
                 });
-                let _ = client.post(format!("{}/api/instance/heartbeat", controller_url))
+                let _ = client
+                    .post(format!("{}/api/instance/heartbeat", controller_url))
                     .json(&heartbeat)
                     .timeout(std::time::Duration::from_secs(5))
-                    .send().await;
+                    .send()
+                    .await;
             }
         });
     }
@@ -3123,10 +3931,10 @@ async fn start_server() -> Result<()> {
 }
 
 async fn run_fsassets_migration(fsassets_root: &str, batch_size: i64, verify: bool) -> Result<()> {
-    use std::path::PathBuf;
-    use opensim_next::asset::fsassets::{FSAssetsStorage, FSAssetsConfig};
+    use opensim_next::asset::fsassets::{FSAssetsConfig, FSAssetsStorage};
     use opensim_next::asset::fsassets_migrate::FSAssetsMigrator;
     use opensim_next::database::multi_backend::DatabaseConnection;
+    use std::path::PathBuf;
 
     let db_url = env::var("DATABASE_URL")
         .unwrap_or_else(|_| "postgresql://opensim@localhost/gaiagrid".to_string());
@@ -3152,7 +3960,7 @@ async fn run_fsassets_migration(fsassets_root: &str, batch_size: i64, verify: bo
             create_time INTEGER NOT NULL DEFAULT 0,
             access_time INTEGER NOT NULL DEFAULT 0,
             asset_flags INTEGER NOT NULL DEFAULT 0
-        )"
+        )",
     )
     .execute(&pool)
     .await?;
@@ -3175,7 +3983,10 @@ async fn run_fsassets_migration(fsassets_root: &str, batch_size: i64, verify: bo
     println!("FSAssets entries: {}", fs_count);
 
     if fs_count >= asset_count && fs_count > 0 {
-        println!("Migration appears complete ({} >= {}). Nothing to do.", fs_count, asset_count);
+        println!(
+            "Migration appears complete ({} >= {}). Nothing to do.",
+            fs_count, asset_count
+        );
         if !verify {
             return Ok(());
         }
@@ -3197,7 +4008,10 @@ async fn run_fsassets_migration(fsassets_root: &str, batch_size: i64, verify: bo
 
     if fs_count < asset_count {
         println!();
-        println!("Starting migration of {} assets (batch_size={})...", asset_count, batch_size);
+        println!(
+            "Starting migration of {} assets (batch_size={})...",
+            asset_count, batch_size
+        );
         println!("This will take several minutes for large databases.");
         println!();
 
@@ -3210,12 +4024,17 @@ async fn run_fsassets_migration(fsassets_root: &str, batch_size: i64, verify: bo
         println!("Skipped (exists): {}", stats.skipped_existing);
         println!("Skipped (null):   {}", stats.skipped_null_data);
         println!("Errors:           {}", stats.errors);
-        println!("Data processed:   {:.2} GB", stats.bytes_processed as f64 / (1024.0 * 1024.0 * 1024.0));
+        println!(
+            "Data processed:   {:.2} GB",
+            stats.bytes_processed as f64 / (1024.0 * 1024.0 * 1024.0)
+        );
         println!("Elapsed:          {:.1}s", stats.elapsed_secs);
         if stats.elapsed_secs > 0.0 {
-            println!("Throughput:       {:.0} assets/sec, {:.1} MB/sec",
+            println!(
+                "Throughput:       {:.0} assets/sec, {:.1} MB/sec",
                 stats.total_assets as f64 / stats.elapsed_secs,
-                stats.bytes_processed as f64 / (1024.0 * 1024.0) / stats.elapsed_secs);
+                stats.bytes_processed as f64 / (1024.0 * 1024.0) / stats.elapsed_secs
+            );
         }
     }
 
@@ -3226,7 +4045,14 @@ async fn run_fsassets_migration(fsassets_root: &str, batch_size: i64, verify: bo
         tokio::time::sleep(tokio::time::Duration::from_secs(2)).await;
         let spool_dir = PathBuf::from(fsassets_root).join("tmp");
         let count = std::fs::read_dir(&spool_dir)
-            .map(|d| d.filter(|e| e.as_ref().map(|e| e.path().extension().map(|x| x == "asset").unwrap_or(false)).unwrap_or(false)).count())
+            .map(|d| {
+                d.filter(|e| {
+                    e.as_ref()
+                        .map(|e| e.path().extension().map(|x| x == "asset").unwrap_or(false))
+                        .unwrap_or(false)
+                })
+                .count()
+            })
             .unwrap_or(0);
         if count == 0 {
             println!("Spool drained.");
@@ -3258,7 +4084,10 @@ async fn run_fsassets_migration(fsassets_root: &str, batch_size: i64, verify: bo
             .await?;
         if total > 0 {
             let dedup_pct = (1.0 - unique as f64 / total as f64) * 100.0;
-            println!("Deduplication: {} unique hashes / {} total = {:.1}% savings", unique, total, dedup_pct);
+            println!(
+                "Deduplication: {} unique hashes / {} total = {:.1}% savings",
+                unique, total, dedup_pct
+            );
         }
     }
 
@@ -3269,25 +4098,27 @@ async fn run_fsassets_migration(fsassets_root: &str, batch_size: i64, verify: bo
 async fn main() -> Result<()> {
     // Load configuration first
     load_config();
-    
+
     // Initialize logging
     tracing_subscriber::fmt::init();
-    
+
     // Parse command line arguments
     let cli = Cli::parse();
-    
+
     let mode_env = env::var("OPENSIM_SERVICE_MODE").unwrap_or_default();
 
     match cli.command {
-        Some(Commands::Setup { preset, non_interactive, reconfigure }) => {
-            run_setup_wizard(preset, non_interactive, reconfigure).await
-        },
-        Some(Commands::Preflight { instance }) => {
-            run_preflight(&instance).await
-        },
-        Some(Commands::MigrateFsassets { fsassets_root, batch_size, verify }) => {
-            run_fsassets_migration(&fsassets_root, batch_size, verify).await
-        },
+        Some(Commands::Setup {
+            preset,
+            non_interactive,
+            reconfigure,
+        }) => run_setup_wizard(preset, non_interactive, reconfigure).await,
+        Some(Commands::Preflight { instance }) => run_preflight(&instance).await,
+        Some(Commands::MigrateFsassets {
+            fsassets_root,
+            batch_size,
+            verify,
+        }) => run_fsassets_migration(&fsassets_root, batch_size, verify).await,
         Some(Commands::Start { mode }) => {
             let effective_mode = if !mode_env.is_empty() { mode_env } else { mode };
             match effective_mode.as_str() {
@@ -3296,7 +4127,7 @@ async fn main() -> Result<()> {
                 "controller" => start_controller_mode().await,
                 _ => start_server_with_mode("standalone").await,
             }
-        },
+        }
         None => {
             if !mode_env.is_empty() {
                 match mode_env.as_str() {

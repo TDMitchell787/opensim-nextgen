@@ -1,16 +1,16 @@
 //! Inter-region communication system for distributed OpenSim regions
 
-use std::{collections::HashMap, sync::Arc, time::Duration};
 use anyhow::{anyhow, Result};
 use serde::{Deserialize, Serialize};
-use tokio::sync::{RwLock, mpsc};
-use tracing::{info, warn, error};
+use std::{collections::HashMap, sync::Arc, time::Duration};
+use tokio::sync::{mpsc, RwLock};
+use tracing::{error, info, warn};
 use uuid::Uuid;
 
 use crate::{
+    network::llsd::LLSDValue,
     region::{RegionId, RegionManager},
     state::StateManager,
-    network::llsd::LLSDValue,
 };
 
 /// Types of inter-region messages
@@ -106,12 +106,9 @@ pub struct InterRegionManager {
 
 impl InterRegionManager {
     /// Create a new inter-region manager
-    pub fn new(
-        region_manager: Arc<RegionManager>,
-        state_manager: Arc<StateManager>,
-    ) -> Self {
+    pub fn new(region_manager: Arc<RegionManager>, state_manager: Arc<StateManager>) -> Self {
         let (message_tx, message_rx) = mpsc::unbounded_channel();
-        
+
         Self {
             connected_regions: RwLock::new(HashMap::new()),
             outgoing_queue: RwLock::new(Vec::new()),
@@ -128,7 +125,11 @@ impl InterRegionManager {
         info!("Starting inter-region communication system");
 
         // Take the receiver out of the option
-        let mut message_rx = self.message_rx.write().await.take()
+        let mut message_rx = self
+            .message_rx
+            .write()
+            .await
+            .take()
             .ok_or_else(|| anyhow!("Inter-region manager already started"))?;
 
         // Start message processing loop
@@ -164,7 +165,10 @@ impl InterRegionManager {
         region_name: String,
         endpoint: String,
     ) -> Result<()> {
-        info!("Registering region {} ({}) at {}", region_id, region_name, endpoint);
+        info!(
+            "Registering region {} ({}) at {}",
+            region_id, region_name, endpoint
+        );
 
         let connection = RegionConnection {
             region_id,
@@ -175,7 +179,10 @@ impl InterRegionManager {
             connection_established: self.current_timestamp(),
         };
 
-        self.connected_regions.write().await.insert(region_id, connection);
+        self.connected_regions
+            .write()
+            .await
+            .insert(region_id, connection);
 
         // Send welcome message to new region
         let welcome_message = self.create_message(
@@ -183,8 +190,14 @@ impl InterRegionManager {
             Some(region_id),
             LLSDValue::Map({
                 let mut map = HashMap::new();
-                map.insert("action".to_string(), LLSDValue::String("welcome".to_string()));
-                map.insert("message".to_string(), LLSDValue::String("Welcome to the grid".to_string()));
+                map.insert(
+                    "action".to_string(),
+                    LLSDValue::String("welcome".to_string()),
+                );
+                map.insert(
+                    "message".to_string(),
+                    LLSDValue::String("Welcome to the grid".to_string()),
+                );
                 map
             }),
             MessagePriority::Normal,
@@ -200,7 +213,10 @@ impl InterRegionManager {
     /// Unregister a region connection
     pub async fn unregister_region(&self, region_id: RegionId) -> Result<()> {
         if let Some(connection) = self.connected_regions.write().await.remove(&region_id) {
-            info!("Unregistered region {} ({})", region_id, connection.region_name);
+            info!(
+                "Unregistered region {} ({})",
+                region_id, connection.region_name
+            );
 
             // Send goodbye message to other regions
             let goodbye_message = self.create_message(
@@ -208,9 +224,18 @@ impl InterRegionManager {
                 None, // Broadcast
                 LLSDValue::Map({
                     let mut map = HashMap::new();
-                    map.insert("action".to_string(), LLSDValue::String("region_offline".to_string()));
-                    map.insert("region_id".to_string(), LLSDValue::Integer(region_id.0 as i32));
-                    map.insert("region_name".to_string(), LLSDValue::String(connection.region_name));
+                    map.insert(
+                        "action".to_string(),
+                        LLSDValue::String("region_offline".to_string()),
+                    );
+                    map.insert(
+                        "region_id".to_string(),
+                        LLSDValue::Integer(region_id.0 as i32),
+                    );
+                    map.insert(
+                        "region_name".to_string(),
+                        LLSDValue::String(connection.region_name),
+                    );
                     map
                 }),
                 MessagePriority::Normal,
@@ -242,9 +267,12 @@ impl InterRegionManager {
         timeout: Duration,
     ) -> Result<InterRegionResponse> {
         message.requires_response = true;
-        
+
         let (response_tx, response_rx) = tokio::sync::oneshot::channel();
-        self.pending_responses.write().await.insert(message.message_id.clone(), response_tx);
+        self.pending_responses
+            .write()
+            .await
+            .insert(message.message_id.clone(), response_tx);
 
         self.send_message(message).await?;
 
@@ -282,13 +310,22 @@ impl InterRegionManager {
 
         let crossing_data = LLSDValue::Map({
             let mut map = HashMap::new();
-            map.insert("agent_id".to_string(), LLSDValue::String(agent_id.to_string()));
-            map.insert("source_region".to_string(), LLSDValue::Integer(source_region.0 as i32));
-            map.insert("position".to_string(), LLSDValue::Array(vec![
-                LLSDValue::Real(position.0 as f64),
-                LLSDValue::Real(position.1 as f64),
-                LLSDValue::Real(position.2 as f64),
-            ]));
+            map.insert(
+                "agent_id".to_string(),
+                LLSDValue::String(agent_id.to_string()),
+            );
+            map.insert(
+                "source_region".to_string(),
+                LLSDValue::Integer(source_region.0 as i32),
+            );
+            map.insert(
+                "position".to_string(),
+                LLSDValue::Array(vec![
+                    LLSDValue::Real(position.0 as f64),
+                    LLSDValue::Real(position.1 as f64),
+                    LLSDValue::Real(position.2 as f64),
+                ]),
+            );
             map
         });
 
@@ -300,14 +337,20 @@ impl InterRegionManager {
             true,
         );
 
-        let response = self.send_message_with_response(message, Duration::from_secs(10)).await?;
+        let response = self
+            .send_message_with_response(message, Duration::from_secs(10))
+            .await?;
 
         if response.success {
             info!("Avatar crossing confirmed by target region");
             Ok(())
         } else {
-            Err(anyhow!("Avatar crossing rejected: {}", 
-                response.error_message.unwrap_or_else(|| "Unknown error".to_string())))
+            Err(anyhow!(
+                "Avatar crossing rejected: {}",
+                response
+                    .error_message
+                    .unwrap_or_else(|| "Unknown error".to_string())
+            ))
         }
     }
 
@@ -318,7 +361,10 @@ impl InterRegionManager {
 
     /// Process incoming messages
     async fn process_message(&self, message: InterRegionMessage) -> Result<()> {
-        info!("Processing inter-region message: {:?}", message.message_type);
+        info!(
+            "Processing inter-region message: {:?}",
+            message.message_type
+        );
 
         match message.message_type {
             InterRegionMessageType::AvatarCrossing => {
@@ -356,7 +402,7 @@ impl InterRegionManager {
 
         // Validate the crossing request
         // In a real implementation, this would check permissions, region capacity, etc.
-        
+
         let response = InterRegionResponse {
             response_id: Uuid::new_v4().to_string(),
             original_message_id: message.message_id,
@@ -364,7 +410,10 @@ impl InterRegionManager {
             payload: Some(LLSDValue::Map({
                 let mut map = HashMap::new();
                 map.insert("accepted".to_string(), LLSDValue::Boolean(true));
-                map.insert("agent_id".to_string(), LLSDValue::String(agent_id.to_string()));
+                map.insert(
+                    "agent_id".to_string(),
+                    LLSDValue::String(agent_id.to_string()),
+                );
                 map
             })),
             error_message: None,
@@ -401,8 +450,13 @@ impl InterRegionManager {
     async fn send_response(&self, response: InterRegionResponse) -> Result<()> {
         // In a real implementation, this would send the response over the network
         // For now, we'll just handle it locally if there's a pending response
-        
-        if let Some(sender) = self.pending_responses.write().await.remove(&response.original_message_id) {
+
+        if let Some(sender) = self
+            .pending_responses
+            .write()
+            .await
+            .remove(&response.original_message_id)
+        {
             let _ = sender.send(response);
         }
 
@@ -433,16 +487,16 @@ impl InterRegionManager {
     /// Process the outgoing message queue
     async fn process_message_queue(&self) {
         let mut interval = tokio::time::interval(Duration::from_millis(100));
-        
+
         loop {
             interval.tick().await;
-            
+
             let messages = {
                 let mut queue = self.outgoing_queue.write().await;
                 if queue.is_empty() {
                     continue;
                 }
-                
+
                 // Sort by priority and take up to 10 messages
                 queue.sort_by(|a, b| b.priority.cmp(&a.priority));
                 let count = queue.len().min(10);
@@ -464,8 +518,11 @@ impl InterRegionManager {
             let regions = self.connected_regions.read().await;
             if let Some(connection) = regions.get(&target_region) {
                 // In a real implementation, this would send over the network
-                info!("Delivering message to region {} at {}", target_region, connection.endpoint);
-                
+                info!(
+                    "Delivering message to region {} at {}",
+                    target_region, connection.endpoint
+                );
+
                 // Simulate message delivery by sending to our own processor
                 if let Err(e) = self.message_tx.send(message) {
                     error!("Failed to send message to processor: {}", e);
@@ -477,12 +534,15 @@ impl InterRegionManager {
             // Broadcast to all regions
             let regions = self.connected_regions.read().await;
             for (region_id, connection) in regions.iter() {
-                info!("Broadcasting message to region {} at {}", region_id, connection.endpoint);
-                
+                info!(
+                    "Broadcasting message to region {} at {}",
+                    region_id, connection.endpoint
+                );
+
                 // Create a copy for each region
                 let mut message_copy = message.clone();
                 message_copy.target_region = Some(*region_id);
-                
+
                 // Simulate broadcast by sending to our own processor
                 if let Err(e) = self.message_tx.send(message_copy) {
                     error!("Failed to send broadcast message to processor: {}", e);
@@ -496,22 +556,24 @@ impl InterRegionManager {
     /// Monitor region heartbeats
     async fn heartbeat_monitor(&self) {
         let mut interval = tokio::time::interval(Duration::from_secs(30));
-        
+
         loop {
             interval.tick().await;
-            
+
             let current_time = self.current_timestamp();
             let mut regions = self.connected_regions.write().await;
-            
+
             for (region_id, connection) in regions.iter_mut() {
                 let time_since_heartbeat = current_time.saturating_sub(connection.last_heartbeat);
-                
-                if time_since_heartbeat > 120 { // 2 minutes
+
+                if time_since_heartbeat > 120 {
+                    // 2 minutes
                     if connection.status != RegionStatus::Offline {
                         warn!("Region {} appears to be offline", region_id);
                         connection.status = RegionStatus::Offline;
                     }
-                } else if time_since_heartbeat > 60 { // 1 minute
+                } else if time_since_heartbeat > 60 {
+                    // 1 minute
                     if connection.status == RegionStatus::Online {
                         warn!("Region {} connection degraded", region_id);
                         connection.status = RegionStatus::Degraded;
@@ -535,7 +597,7 @@ impl Clone for InterRegionManager {
     fn clone(&self) -> Self {
         // Create a new channel for the clone
         let (message_tx, _) = mpsc::unbounded_channel();
-        
+
         Self {
             connected_regions: RwLock::new(HashMap::new()),
             outgoing_queue: RwLock::new(Vec::new()),
@@ -553,7 +615,7 @@ mod tests {
     use super::*;
     use crate::{
         ffi::physics::PhysicsBridge,
-        region::{RegionConfig, terrain::TerrainConfig},
+        region::{terrain::TerrainConfig, RegionConfig},
     };
 
     #[tokio::test]
@@ -561,20 +623,22 @@ mod tests {
         let physics_bridge = Arc::new(PhysicsBridge::new()?);
         let state_manager = Arc::new(StateManager::new()?);
         let region_manager = Arc::new(RegionManager::new(physics_bridge, state_manager.clone()));
-        
+
         let inter_region_manager = InterRegionManager::new(region_manager, state_manager);
-        
+
         // Test region registration
-        inter_region_manager.register_region(
-            RegionId(1),
-            "Test Region".to_string(),
-            "http://localhost:8080".to_string(),
-        ).await?;
-        
+        inter_region_manager
+            .register_region(
+                RegionId(1),
+                "Test Region".to_string(),
+                "http://localhost:8080".to_string(),
+            )
+            .await?;
+
         let regions = inter_region_manager.get_region_status().await;
         assert_eq!(regions.len(), 1);
         assert!(regions.contains_key(&RegionId(1)));
-        
+
         Ok(())
     }
 
@@ -583,9 +647,9 @@ mod tests {
         let physics_bridge = Arc::new(PhysicsBridge::new()?);
         let state_manager = Arc::new(StateManager::new()?);
         let region_manager = Arc::new(RegionManager::new(physics_bridge, state_manager.clone()));
-        
+
         let inter_region_manager = InterRegionManager::new(region_manager, state_manager);
-        
+
         let message = inter_region_manager.create_message(
             InterRegionMessageType::StatusUpdate,
             Some(RegionId(2)),
@@ -593,13 +657,13 @@ mod tests {
             MessagePriority::Normal,
             false,
         );
-        
+
         assert_eq!(message.target_region, Some(RegionId(2)));
         assert_eq!(message.message_type, InterRegionMessageType::StatusUpdate);
         assert_eq!(message.priority, MessagePriority::Normal);
-        
+
         inter_region_manager.send_message(message).await?;
-        
+
         Ok(())
     }
 }

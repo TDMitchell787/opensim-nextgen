@@ -1,5 +1,5 @@
 //! Avatar Persistence Layer for OpenSim Next
-//! 
+//!
 //! Handles database storage and retrieval of avatar data.
 
 use super::*;
@@ -16,7 +16,9 @@ fn parse_uuid_from_db(value: &str) -> Result<Uuid, uuid::Error> {
 }
 
 /// Helper function to parse DateTime from database string
-fn parse_datetime_from_db(value: &str) -> Result<chrono::DateTime<chrono::Utc>, chrono::ParseError> {
+fn parse_datetime_from_db(
+    value: &str,
+) -> Result<chrono::DateTime<chrono::Utc>, chrono::ParseError> {
     chrono::DateTime::parse_from_rfc3339(value).map(|dt| dt.with_timezone(&chrono::Utc))
 }
 
@@ -65,7 +67,7 @@ impl AvatarPersistence {
                 social_profile = EXCLUDED.social_profile,
                 persistence_data = EXCLUDED.persistence_data,
                 updated_at = EXCLUDED.updated_at
-            "#
+            "#,
         )
         .bind(avatar.id.to_string())
         .bind(avatar.user_id.to_string())
@@ -95,10 +97,14 @@ impl AvatarPersistence {
         .await?;
 
         if let Some(row) = row {
-            let appearance: AvatarAppearance = serde_json::from_str(row.try_get::<String, _>("appearance")?.as_str())?;
-            let behavior: AvatarBehavior = serde_json::from_str(row.try_get::<String, _>("behavior")?.as_str())?;
-            let social_profile: AvatarSocialProfile = serde_json::from_str(row.try_get::<String, _>("social_profile")?.as_str())?;
-            let persistence_data: AvatarPersistenceData = serde_json::from_str(row.try_get::<String, _>("persistence_data")?.as_str())?;
+            let appearance: AvatarAppearance =
+                serde_json::from_str(row.try_get::<String, _>("appearance")?.as_str())?;
+            let behavior: AvatarBehavior =
+                serde_json::from_str(row.try_get::<String, _>("behavior")?.as_str())?;
+            let social_profile: AvatarSocialProfile =
+                serde_json::from_str(row.try_get::<String, _>("social_profile")?.as_str())?;
+            let persistence_data: AvatarPersistenceData =
+                serde_json::from_str(row.try_get::<String, _>("persistence_data")?.as_str())?;
 
             // ELEGANT ARCHIVE SOLUTION: Parse UUID and DateTime from strings
             let id_str: String = row.try_get("id")?;
@@ -107,15 +113,29 @@ impl AvatarPersistence {
             let updated_at_str: String = row.try_get("updated_at")?;
 
             let avatar = EnhancedAvatar {
-                id: parse_uuid_from_db(&id_str).map_err(|e| AvatarError::SystemError { message: format!("Invalid UUID: {}", e) })?,
-                user_id: parse_uuid_from_db(&user_id_str).map_err(|e| AvatarError::SystemError { message: format!("Invalid UUID: {}", e) })?,
+                id: parse_uuid_from_db(&id_str).map_err(|e| AvatarError::SystemError {
+                    message: format!("Invalid UUID: {}", e),
+                })?,
+                user_id: parse_uuid_from_db(&user_id_str).map_err(|e| {
+                    AvatarError::SystemError {
+                        message: format!("Invalid UUID: {}", e),
+                    }
+                })?,
                 name: row.try_get::<String, _>("name")?,
                 appearance,
                 behavior,
                 social_profile,
                 persistence_data,
-                created_at: parse_datetime_from_db(&created_at_str).map_err(|e| AvatarError::SystemError { message: format!("Invalid DateTime: {}", e) })?,
-                updated_at: parse_datetime_from_db(&updated_at_str).map_err(|e| AvatarError::SystemError { message: format!("Invalid DateTime: {}", e) })?,
+                created_at: parse_datetime_from_db(&created_at_str).map_err(|e| {
+                    AvatarError::SystemError {
+                        message: format!("Invalid DateTime: {}", e),
+                    }
+                })?,
+                updated_at: parse_datetime_from_db(&updated_at_str).map_err(|e| {
+                    AvatarError::SystemError {
+                        message: format!("Invalid DateTime: {}", e),
+                    }
+                })?,
             };
 
             debug!("Avatar loaded successfully: {}", avatar_id);
@@ -137,10 +157,14 @@ impl AvatarPersistence {
         .await?;
 
         if let Some(row) = row {
-            let appearance: AvatarAppearance = serde_json::from_str(row.try_get::<String, _>("appearance")?.as_str())?;
-            let behavior: AvatarBehavior = serde_json::from_str(row.try_get::<String, _>("behavior")?.as_str())?;
-            let social_profile: AvatarSocialProfile = serde_json::from_str(row.try_get::<String, _>("social_profile")?.as_str())?;
-            let persistence_data: AvatarPersistenceData = serde_json::from_str(row.try_get::<String, _>("persistence_data")?.as_str())?;
+            let appearance: AvatarAppearance =
+                serde_json::from_str(row.try_get::<String, _>("appearance")?.as_str())?;
+            let behavior: AvatarBehavior =
+                serde_json::from_str(row.try_get::<String, _>("behavior")?.as_str())?;
+            let social_profile: AvatarSocialProfile =
+                serde_json::from_str(row.try_get::<String, _>("social_profile")?.as_str())?;
+            let persistence_data: AvatarPersistenceData =
+                serde_json::from_str(row.try_get::<String, _>("persistence_data")?.as_str())?;
 
             // ELEGANT ARCHIVE SOLUTION: Parse UUID and DateTime from strings
             let id_str: String = row.try_get("id")?;
@@ -149,15 +173,29 @@ impl AvatarPersistence {
             let updated_at_str: String = row.try_get("updated_at")?;
 
             let avatar = EnhancedAvatar {
-                id: parse_uuid_from_db(&id_str).map_err(|e| AvatarError::SystemError { message: format!("Invalid UUID: {}", e) })?,
-                user_id: parse_uuid_from_db(&user_id_str).map_err(|e| AvatarError::SystemError { message: format!("Invalid UUID: {}", e) })?,
+                id: parse_uuid_from_db(&id_str).map_err(|e| AvatarError::SystemError {
+                    message: format!("Invalid UUID: {}", e),
+                })?,
+                user_id: parse_uuid_from_db(&user_id_str).map_err(|e| {
+                    AvatarError::SystemError {
+                        message: format!("Invalid UUID: {}", e),
+                    }
+                })?,
                 name: row.try_get::<String, _>("name")?,
                 appearance,
                 behavior,
                 social_profile,
                 persistence_data,
-                created_at: parse_datetime_from_db(&created_at_str).map_err(|e| AvatarError::SystemError { message: format!("Invalid DateTime: {}", e) })?,
-                updated_at: parse_datetime_from_db(&updated_at_str).map_err(|e| AvatarError::SystemError { message: format!("Invalid DateTime: {}", e) })?,
+                created_at: parse_datetime_from_db(&created_at_str).map_err(|e| {
+                    AvatarError::SystemError {
+                        message: format!("Invalid DateTime: {}", e),
+                    }
+                })?,
+                updated_at: parse_datetime_from_db(&updated_at_str).map_err(|e| {
+                    AvatarError::SystemError {
+                        message: format!("Invalid DateTime: {}", e),
+                    }
+                })?,
             };
 
             debug!("Avatar loaded by user ID successfully: {}", user_id);
@@ -186,7 +224,7 @@ impl AvatarPersistence {
                 persistence_data = $6,
                 updated_at = $7
             WHERE id = $1
-            "#
+            "#,
         )
         .bind(avatar.id.to_string())
         .bind(&avatar.name)
@@ -210,12 +248,10 @@ impl AvatarPersistence {
     pub async fn delete_avatar(&self, avatar_id: Uuid) -> AvatarResult<()> {
         info!("Deleting avatar from database: {}", avatar_id);
 
-        let result = sqlx::query(
-            "DELETE FROM enhanced_avatars WHERE id = $1"
-        )
-        .bind(avatar_id.to_string())
-        .execute(self.database.legacy_pool()?)
-        .await?;
+        let result = sqlx::query("DELETE FROM enhanced_avatars WHERE id = $1")
+            .bind(avatar_id.to_string())
+            .execute(self.database.legacy_pool()?)
+            .await?;
 
         if result.rows_affected() == 0 {
             return Err(AvatarError::NotFound { id: avatar_id });
@@ -226,14 +262,17 @@ impl AvatarPersistence {
     }
 
     /// Search avatars by criteria
-    pub async fn search_avatars(&self, criteria: AvatarSearchCriteria) -> AvatarResult<Vec<EnhancedAvatar>> {
+    pub async fn search_avatars(
+        &self,
+        criteria: AvatarSearchCriteria,
+    ) -> AvatarResult<Vec<EnhancedAvatar>> {
         debug!("Searching avatars with criteria: {:?}", criteria);
 
         // ELEGANT ARCHIVE SOLUTION: Simplified query to avoid complex dynamic parameter binding
         // TODO: Implement advanced search criteria in future phases
         let limit = criteria.limit.unwrap_or(100);
         let offset = criteria.offset.unwrap_or(0);
-        
+
         let rows = if let Some(name_pattern) = &criteria.name_pattern {
             // Search by name pattern
             sqlx::query("SELECT * FROM enhanced_avatars WHERE name ILIKE $1 ORDER BY updated_at DESC LIMIT $2 OFFSET $3")
@@ -252,28 +291,26 @@ impl AvatarPersistence {
                 .await?
         } else {
             // Default search - all avatars
-            sqlx::query("SELECT * FROM enhanced_avatars ORDER BY updated_at DESC LIMIT $1 OFFSET $2")
-                .bind(limit)
-                .bind(offset)
-                .fetch_all(self.database.legacy_pool()?)
-                .await?
+            sqlx::query(
+                "SELECT * FROM enhanced_avatars ORDER BY updated_at DESC LIMIT $1 OFFSET $2",
+            )
+            .bind(limit)
+            .bind(offset)
+            .fetch_all(self.database.legacy_pool()?)
+            .await?
         };
 
         let mut avatars = Vec::new();
 
         for row in rows {
-            let appearance: AvatarAppearance = serde_json::from_str(
-                row.try_get::<String, _>("appearance")?.as_str()
-            )?;
-            let behavior: AvatarBehavior = serde_json::from_str(
-                row.try_get::<String, _>("behavior")?.as_str()
-            )?;
-            let social_profile: AvatarSocialProfile = serde_json::from_str(
-                row.try_get::<String, _>("social_profile")?.as_str()
-            )?;
-            let persistence_data: AvatarPersistenceData = serde_json::from_str(
-                row.try_get::<String, _>("persistence_data")?.as_str()
-            )?;
+            let appearance: AvatarAppearance =
+                serde_json::from_str(row.try_get::<String, _>("appearance")?.as_str())?;
+            let behavior: AvatarBehavior =
+                serde_json::from_str(row.try_get::<String, _>("behavior")?.as_str())?;
+            let social_profile: AvatarSocialProfile =
+                serde_json::from_str(row.try_get::<String, _>("social_profile")?.as_str())?;
+            let persistence_data: AvatarPersistenceData =
+                serde_json::from_str(row.try_get::<String, _>("persistence_data")?.as_str())?;
 
             // ELEGANT ARCHIVE SOLUTION: Parse UUID and DateTime from strings
             let id_str: String = row.try_get("id")?;
@@ -282,15 +319,29 @@ impl AvatarPersistence {
             let updated_at_str: String = row.try_get("updated_at")?;
 
             let avatar = EnhancedAvatar {
-                id: parse_uuid_from_db(&id_str).map_err(|e| AvatarError::SystemError { message: format!("Invalid UUID: {}", e) })?,
-                user_id: parse_uuid_from_db(&user_id_str).map_err(|e| AvatarError::SystemError { message: format!("Invalid UUID: {}", e) })?,
+                id: parse_uuid_from_db(&id_str).map_err(|e| AvatarError::SystemError {
+                    message: format!("Invalid UUID: {}", e),
+                })?,
+                user_id: parse_uuid_from_db(&user_id_str).map_err(|e| {
+                    AvatarError::SystemError {
+                        message: format!("Invalid UUID: {}", e),
+                    }
+                })?,
                 name: row.try_get("name")?,
                 appearance,
                 behavior,
                 social_profile,
                 persistence_data,
-                created_at: parse_datetime_from_db(&created_at_str).map_err(|e| AvatarError::SystemError { message: format!("Invalid DateTime: {}", e) })?,
-                updated_at: parse_datetime_from_db(&updated_at_str).map_err(|e| AvatarError::SystemError { message: format!("Invalid DateTime: {}", e) })?,
+                created_at: parse_datetime_from_db(&created_at_str).map_err(|e| {
+                    AvatarError::SystemError {
+                        message: format!("Invalid DateTime: {}", e),
+                    }
+                })?,
+                updated_at: parse_datetime_from_db(&updated_at_str).map_err(|e| {
+                    AvatarError::SystemError {
+                        message: format!("Invalid DateTime: {}", e),
+                    }
+                })?,
             };
 
             avatars.push(avatar);
@@ -344,21 +395,21 @@ impl AvatarPersistence {
                 created_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
                 updated_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
             )
-            "#
+            "#,
         )
         .execute(self.database.legacy_pool()?)
         .await?;
 
         // Create index on user_id
         sqlx::query(
-            "CREATE INDEX IF NOT EXISTS idx_enhanced_avatars_user_id ON enhanced_avatars (user_id)"
+            "CREATE INDEX IF NOT EXISTS idx_enhanced_avatars_user_id ON enhanced_avatars (user_id)",
         )
         .execute(self.database.legacy_pool()?)
         .await?;
 
         // Create index on name for searching
         sqlx::query(
-            "CREATE INDEX IF NOT EXISTS idx_enhanced_avatars_name ON enhanced_avatars (name)"
+            "CREATE INDEX IF NOT EXISTS idx_enhanced_avatars_name ON enhanced_avatars (name)",
         )
         .execute(self.database.legacy_pool()?)
         .await?;
@@ -376,7 +427,7 @@ impl AvatarPersistence {
                 total_time_seconds BIGINT NOT NULL DEFAULT 0,
                 UNIQUE(avatar_id, region_id)
             )
-            "#
+            "#,
         )
         .execute(self.database.legacy_pool()?)
         .await?;
@@ -413,7 +464,7 @@ impl AvatarPersistence {
                 last_visit = NOW(),
                 visit_count = avatar_region_visits.visit_count + 1,
                 total_time_seconds = avatar_region_visits.total_time_seconds + $3
-            "#
+            "#,
         )
         .bind(avatar_id.to_string())
         .bind(region_id.to_string())
@@ -439,26 +490,33 @@ impl AvatarPersistence {
             JOIN enhanced_avatars ea ON arv.avatar_id = ea.id
             WHERE arv.region_id = $1
             ORDER BY arv.total_time_seconds DESC
-            "#
+            "#,
         )
         .bind(region_id.to_string())
         .fetch_all(self.database.legacy_pool()?)
         .await?;
 
-        let stats = rows.into_iter().map(|row| {
-            let avatar_id_str: String = row.try_get("avatar_id").unwrap();
-            let first_visit_str: String = row.try_get("first_visit").unwrap();
-            let last_visit_str: String = row.try_get("last_visit").unwrap();
-            
-            RegionVisitStats {
-                avatar_id: Uuid::parse_str(&avatar_id_str).unwrap_or_default(),
-                avatar_name: row.try_get("avatar_name").unwrap(),
-                first_visit: chrono::DateTime::parse_from_rfc3339(&first_visit_str).unwrap().with_timezone(&chrono::Utc),
-                last_visit: chrono::DateTime::parse_from_rfc3339(&last_visit_str).unwrap().with_timezone(&chrono::Utc),
-                visit_count: row.try_get("visit_count").unwrap(),
-                total_time_seconds: row.try_get("total_time_seconds").unwrap(),
-            }
-        }).collect();
+        let stats = rows
+            .into_iter()
+            .map(|row| {
+                let avatar_id_str: String = row.try_get("avatar_id").unwrap();
+                let first_visit_str: String = row.try_get("first_visit").unwrap();
+                let last_visit_str: String = row.try_get("last_visit").unwrap();
+
+                RegionVisitStats {
+                    avatar_id: Uuid::parse_str(&avatar_id_str).unwrap_or_default(),
+                    avatar_name: row.try_get("avatar_name").unwrap(),
+                    first_visit: chrono::DateTime::parse_from_rfc3339(&first_visit_str)
+                        .unwrap()
+                        .with_timezone(&chrono::Utc),
+                    last_visit: chrono::DateTime::parse_from_rfc3339(&last_visit_str)
+                        .unwrap()
+                        .with_timezone(&chrono::Utc),
+                    visit_count: row.try_get("visit_count").unwrap(),
+                    total_time_seconds: row.try_get("total_time_seconds").unwrap(),
+                }
+            })
+            .collect();
 
         Ok(stats)
     }
@@ -472,28 +530,34 @@ impl AvatarPersistence {
     /// Store avatar visit (simplified version for compatibility)
     pub async fn store_avatar_visit(&self, avatar_id: Uuid, region_id: String) -> AvatarResult<()> {
         // Convert string region_id to UUID for database storage
-        let region_uuid = Uuid::parse_str(&region_id)
-            .unwrap_or_else(|_| Uuid::new_v4()); // Fallback to new UUID if parsing fails
-        
-        self.record_region_visit(avatar_id, region_uuid, 0).await
-            .map_err(|e| AvatarError::SystemError { message: e.to_string() })?;
-        
+        let region_uuid = Uuid::parse_str(&region_id).unwrap_or_else(|_| Uuid::new_v4()); // Fallback to new UUID if parsing fails
+
+        self.record_region_visit(avatar_id, region_uuid, 0)
+            .await
+            .map_err(|e| AvatarError::SystemError {
+                message: e.to_string(),
+            })?;
+
         Ok(())
     }
 
     /// Get avatar visits (simplified version for compatibility)
     pub async fn get_avatar_visits(&self, avatar_id: Uuid) -> AvatarResult<Vec<String>> {
-        let rows = sqlx::query(
-            "SELECT DISTINCT region_id FROM avatar_region_visits WHERE avatar_id = $1"
-        )
-        .bind(avatar_id.to_string())
-        .fetch_all(self.database.legacy_pool()?)
-        .await
-        .map_err(|e| AvatarError::SystemError { message: e.to_string() })?;
+        let rows =
+            sqlx::query("SELECT DISTINCT region_id FROM avatar_region_visits WHERE avatar_id = $1")
+                .bind(avatar_id.to_string())
+                .fetch_all(self.database.legacy_pool()?)
+                .await
+                .map_err(|e| AvatarError::SystemError {
+                    message: e.to_string(),
+                })?;
 
-        let region_ids = rows.into_iter()
-            .map(|row| row.try_get::<String, _>("region_id")
-                .unwrap_or_else(|_| "unknown".to_string()))
+        let region_ids = rows
+            .into_iter()
+            .map(|row| {
+                row.try_get::<String, _>("region_id")
+                    .unwrap_or_else(|_| "unknown".to_string())
+            })
             .collect();
 
         Ok(region_ids)

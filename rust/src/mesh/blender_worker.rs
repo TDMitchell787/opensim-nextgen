@@ -43,26 +43,44 @@ impl GarmentType {
         };
         match self {
             GarmentType::Shirt => GarmentSpec {
-                garment_type: *self, z_min: 0.47, z_max: 0.88,
-                include_arms: true, offset, subdivision_level: 1,
+                garment_type: *self,
+                z_min: 0.47,
+                z_max: 0.88,
+                include_arms: true,
+                offset,
+                subdivision_level: 1,
             },
             GarmentType::Dress => GarmentSpec {
                 garment_type: *self,
                 z_min: hem_length.unwrap_or(0.3).clamp(0.1, 0.47),
-                z_max: 0.88, include_arms: true, offset, subdivision_level: 1,
+                z_max: 0.88,
+                include_arms: true,
+                offset,
+                subdivision_level: 1,
             },
             GarmentType::Pants => GarmentSpec {
-                garment_type: *self, z_min: 0.03, z_max: 0.47,
-                include_arms: false, offset, subdivision_level: 1,
+                garment_type: *self,
+                z_min: 0.03,
+                z_max: 0.47,
+                include_arms: false,
+                offset,
+                subdivision_level: 1,
             },
             GarmentType::Jacket => GarmentSpec {
-                garment_type: *self, z_min: 0.40, z_max: 0.88,
-                include_arms: true, offset, subdivision_level: 1,
+                garment_type: *self,
+                z_min: 0.40,
+                z_max: 0.88,
+                include_arms: true,
+                offset,
+                subdivision_level: 1,
             },
             GarmentType::Skirt => GarmentSpec {
                 garment_type: *self,
                 z_min: hem_length.unwrap_or(0.3).clamp(0.1, 0.47),
-                z_max: 0.47, include_arms: false, offset, subdivision_level: 1,
+                z_max: 0.47,
+                include_arms: false,
+                offset,
+                subdivision_level: 1,
             },
         }
     }
@@ -81,13 +99,15 @@ impl GarmentType {
 
 impl BlenderWorker {
     pub fn new() -> Result<Self> {
-        let temp_dir = std::env::temp_dir().join(format!("opensim_blender_{}", uuid::Uuid::new_v4()));
+        let temp_dir =
+            std::env::temp_dir().join(format!("opensim_blender_{}", uuid::Uuid::new_v4()));
         std::fs::create_dir_all(&temp_dir)?;
         Ok(Self { temp_dir })
     }
 
     pub async fn generate(&self, python_code: &str) -> Result<PathBuf> {
-        self.generate_with_format(python_code, ExportFormat::Obj).await
+        self.generate_with_format(python_code, ExportFormat::Obj)
+            .await
     }
 
     pub async fn run_script(&self, python_code: &str) -> Result<String> {
@@ -110,7 +130,10 @@ impl BlenderWorker {
         let stderr = String::from_utf8_lossy(&output.stderr).to_string();
 
         for line in stdout.lines().chain(stderr.lines()) {
-            if line.contains("SNAPSHOT_STATUE") || line.contains("Error") || line.contains("Traceback") {
+            if line.contains("SNAPSHOT_STATUE")
+                || line.contains("Error")
+                || line.contains("Traceback")
+            {
                 info!("[BLENDER] {}", line);
             }
         }
@@ -122,7 +145,11 @@ impl BlenderWorker {
         Ok(stdout)
     }
 
-    pub async fn generate_with_format(&self, python_code: &str, format: ExportFormat) -> Result<PathBuf> {
+    pub async fn generate_with_format(
+        &self,
+        python_code: &str,
+        format: ExportFormat,
+    ) -> Result<PathBuf> {
         let blender = PathBuf::from(BLENDER_PATH);
         if !blender.exists() {
             bail!("Blender not found at {}", BLENDER_PATH);
@@ -147,7 +174,9 @@ impl BlenderWorker {
         let script_path = self.temp_dir.join("generate.py");
 
         let preamble = match format {
-            ExportFormat::Obj => "import bpy\nbpy.ops.wm.read_factory_settings(use_empty=True)\n".to_string(),
+            ExportFormat::Obj => {
+                "import bpy\nbpy.ops.wm.read_factory_settings(use_empty=True)\n".to_string()
+            }
             ExportFormat::Dae => "import bpy\n".to_string(),
         };
 
@@ -171,34 +200,73 @@ impl BlenderWorker {
             let stdout = String::from_utf8_lossy(&output.stdout);
             let stderr = String::from_utf8_lossy(&output.stderr);
             let combined = format!("{}\n{}", stdout, stderr);
-            let relevant: Vec<&str> = combined.lines()
-                .filter(|l| l.contains("Error") || l.contains("Traceback") || l.contains("BLEND") || l.contains("ARMATURE") || l.contains("BODY") || l.contains("PRE-EXPORT") || l.contains("SELECTION") || l.contains("SHIRT") || l.contains("AttributeError") || l.contains("Exception") || l.contains("RuntimeError"))
+            let relevant: Vec<&str> = combined
+                .lines()
+                .filter(|l| {
+                    l.contains("Error")
+                        || l.contains("Traceback")
+                        || l.contains("BLEND")
+                        || l.contains("ARMATURE")
+                        || l.contains("BODY")
+                        || l.contains("PRE-EXPORT")
+                        || l.contains("SELECTION")
+                        || l.contains("SHIRT")
+                        || l.contains("AttributeError")
+                        || l.contains("Exception")
+                        || l.contains("RuntimeError")
+                })
                 .collect();
             let detail = if relevant.is_empty() {
                 let last_lines: Vec<&str> = combined.lines().rev().take(20).collect();
-                last_lines.into_iter().rev().collect::<Vec<&str>>().join("\n")
+                last_lines
+                    .into_iter()
+                    .rev()
+                    .collect::<Vec<&str>>()
+                    .join("\n")
             } else {
                 relevant.join("\n")
             };
-            bail!("Blender did not produce output file: {} — {}", output_path.display(), detail);
+            bail!(
+                "Blender did not produce output file: {} — {}",
+                output_path.display(),
+                detail
+            );
         }
 
         let blender_stdout = String::from_utf8_lossy(&output.stdout);
         for line in blender_stdout.lines() {
-            if line.contains("STATUE") || line.contains("MAPPED") || line.contains("BVH") || line.contains("PRE-EXPORT") || line.contains("DECIMATE") {
+            if line.contains("STATUE")
+                || line.contains("MAPPED")
+                || line.contains("BVH")
+                || line.contains("PRE-EXPORT")
+                || line.contains("DECIMATE")
+            {
                 info!("[BLENDER] {}", line.trim());
             }
         }
 
-        info!("[BLENDER] Generated mesh ({}): {}",
-            if format == ExportFormat::Dae { "DAE" } else { "OBJ" },
-            output_path.display());
+        info!(
+            "[BLENDER] Generated mesh ({}): {}",
+            if format == ExportFormat::Dae {
+                "DAE"
+            } else {
+                "OBJ"
+            },
+            output_path.display()
+        );
 
         let stage_dir = std::path::PathBuf::from("mesh");
         if !stage_dir.exists() {
             let _ = std::fs::create_dir_all(&stage_dir);
         }
-        let stage_name = format!("latest_output.{}", if format == ExportFormat::Dae { "dae" } else { "obj" });
+        let stage_name = format!(
+            "latest_output.{}",
+            if format == ExportFormat::Dae {
+                "dae"
+            } else {
+                "obj"
+            }
+        );
         let stage_path = stage_dir.join(&stage_name);
         match std::fs::copy(&output_path, &stage_path) {
             Ok(_) => info!("[BLENDER] Staged copy: {}", stage_path.display()),
@@ -241,10 +309,18 @@ impl BlenderWorker {
 
         if let Some(pose_name) = params.get("POSE") {
             let bvh_path = resolve_pose_bvh(pose_name);
-            info!("[BLENDER] Resolved pose '{}' -> BVH path: '{}' (exists={})", pose_name, bvh_path, std::path::Path::new(&bvh_path).exists());
+            info!(
+                "[BLENDER] Resolved pose '{}' -> BVH path: '{}' (exists={})",
+                pose_name,
+                bvh_path,
+                std::path::Path::new(&bvh_path).exists()
+            );
             result = result.replace("{{BVH_PATH}}", &bvh_path);
         } else {
-            info!("[BLENDER] No POSE param found in: {:?}", params.keys().collect::<Vec<_>>());
+            info!(
+                "[BLENDER] No POSE param found in: {:?}",
+                params.keys().collect::<Vec<_>>()
+            );
         }
 
         for (key, value) in params {
@@ -316,7 +392,11 @@ if garment:
                 continue;
             }
 
-            info!("[BLENDER] Generated LOD{}: {}", lod_level, output_path.display());
+            info!(
+                "[BLENDER] Generated LOD{}: {}",
+                lod_level,
+                output_path.display()
+            );
             lod_paths.push(output_path);
         }
 
@@ -335,8 +415,10 @@ impl Drop for BlenderWorker {
 }
 
 pub fn is_clothing_template(name: &str) -> bool {
-    matches!(name, "shirt" | "pants" | "dress" | "jacket" | "skirt"
-        | "shirt_legacy" | "pants_legacy")
+    matches!(
+        name,
+        "shirt" | "pants" | "dress" | "jacket" | "skirt" | "shirt_legacy" | "pants_legacy"
+    )
 }
 
 pub fn body_blend_path(body_type: &str) -> String {
@@ -346,8 +428,14 @@ pub fn body_blend_path(body_type: &str) -> String {
 
     let candidates: Vec<String> = if body_type == "roth2" {
         vec![
-            format!("{}/content/Roth2-master/Mesh/Roth2V2DevWithArmature.blend", parent),
-            format!("{}/content/Roth2-master/Mesh/Roth2V2DevWithArmature.blend", base),
+            format!(
+                "{}/content/Roth2-master/Mesh/Roth2V2DevWithArmature.blend",
+                parent
+            ),
+            format!(
+                "{}/content/Roth2-master/Mesh/Roth2V2DevWithArmature.blend",
+                base
+            ),
             "content/Roth2-master/Mesh/Roth2V2DevWithArmature.blend".to_string(),
         ]
     } else {
@@ -368,8 +456,11 @@ pub fn body_blend_path(body_type: &str) -> String {
     for c in &candidates {
         let p = std::path::Path::new(c);
         if p.exists() {
-            return p.canonicalize().unwrap_or_else(|_| p.to_path_buf())
-                .to_string_lossy().to_string();
+            return p
+                .canonicalize()
+                .unwrap_or_else(|_| p.to_path_buf())
+                .to_string_lossy()
+                .to_string();
         }
     }
     candidates[0].clone()
@@ -402,8 +493,11 @@ fn resolve_pose_bvh(pose_name: &str) -> String {
     for c in &candidates {
         let p = std::path::Path::new(c);
         if p.exists() {
-            return p.canonicalize().unwrap_or_else(|_| p.to_path_buf())
-                .to_string_lossy().to_string();
+            return p
+                .canonicalize()
+                .unwrap_or_else(|_| p.to_path_buf())
+                .to_string_lossy()
+                .to_string();
         }
     }
     candidates[0].clone()
@@ -425,7 +519,13 @@ pub fn list_available_poses() -> Vec<String> {
                 return entries
                     .filter_map(|e| e.ok())
                     .filter(|e| e.path().extension().map_or(false, |ext| ext == "bvh"))
-                    .map(|e| e.path().file_stem().unwrap_or_default().to_string_lossy().to_string())
+                    .map(|e| {
+                        e.path()
+                            .file_stem()
+                            .unwrap_or_default()
+                            .to_string_lossy()
+                            .to_string()
+                    })
                     .collect();
             }
         }
@@ -2718,8 +2818,12 @@ pub fn ruth2_base_dir() -> Option<String> {
     for c in &candidates {
         let p = std::path::Path::new(c);
         if p.is_dir() {
-            return Some(p.canonicalize().unwrap_or_else(|_| p.to_path_buf())
-                .to_string_lossy().to_string());
+            return Some(
+                p.canonicalize()
+                    .unwrap_or_else(|_| p.to_path_buf())
+                    .to_string_lossy()
+                    .to_string(),
+            );
         }
     }
     None
@@ -2752,7 +2856,11 @@ pub fn ruth2_dae_path(part: &str) -> Option<String> {
         _ => return None,
     };
     let path = format!("{}/DAE/{}", base, filename);
-    if std::path::Path::new(&path).exists() { Some(path) } else { None }
+    if std::path::Path::new(&path).exists() {
+        Some(path)
+    } else {
+        None
+    }
 }
 
 pub fn ruth2_uv_path(region: &str) -> Option<String> {
@@ -2775,7 +2883,11 @@ pub fn ruth2_uv_path(region: &str) -> Option<String> {
         _ => return None,
     };
     let path = format!("{}/UV/{}", base, filename);
-    if std::path::Path::new(&path).exists() { Some(path) } else { None }
+    if std::path::Path::new(&path).exists() {
+        Some(path)
+    } else {
+        None
+    }
 }
 
 pub fn ruth2_texture_path(region: &str) -> Option<String> {
@@ -2787,35 +2899,78 @@ pub fn ruth2_texture_path(region: &str) -> Option<String> {
         _ => return None,
     };
     let path = format!("{}/textures/{}", base, filename);
-    if std::path::Path::new(&path).exists() { Some(path) } else { None }
+    if std::path::Path::new(&path).exists() {
+        Some(path)
+    } else {
+        None
+    }
 }
 
 pub fn ruth2_all_dae_parts() -> Vec<&'static str> {
     vec![
-        "full", "body", "headless", "head", "head_vneck",
-        "business", "business_headless", "hands",
-        "feet_flat", "feet_medium", "feet_high",
-        "eyeballs", "eyelashes",
-        "fingernails_short", "fingernails_med", "fingernails_long",
-        "fingernails_oval", "fingernails_pointed",
-        "feet_flat_toenails", "feet_med_toenails", "feet_high_toenails",
+        "full",
+        "body",
+        "headless",
+        "head",
+        "head_vneck",
+        "business",
+        "business_headless",
+        "hands",
+        "feet_flat",
+        "feet_medium",
+        "feet_high",
+        "eyeballs",
+        "eyelashes",
+        "fingernails_short",
+        "fingernails_med",
+        "fingernails_long",
+        "fingernails_oval",
+        "fingernails_pointed",
+        "feet_flat_toenails",
+        "feet_med_toenails",
+        "feet_high_toenails",
     ]
 }
 
 pub fn ruth2_all_uv_regions() -> Vec<&'static str> {
     vec![
-        "upper", "lower", "head", "eyeball", "eyelashes",
-        "feet_flat", "feet_medium", "feet_high",
-        "fingernails_short", "fingernails_med", "fingernails_long",
-        "fingernails_oval", "fingernails_pointed", "toenails",
+        "upper",
+        "lower",
+        "head",
+        "eyeball",
+        "eyelashes",
+        "feet_flat",
+        "feet_medium",
+        "feet_high",
+        "fingernails_short",
+        "fingernails_med",
+        "fingernails_long",
+        "fingernails_oval",
+        "fingernails_pointed",
+        "toenails",
     ]
 }
 
 pub fn available_templates() -> Vec<&'static str> {
     vec![
-        "table", "chair", "shelf", "arch", "staircase", "stone", "stone_ring",
-        "boulder", "column", "path", "shirt", "pants", "dress", "jacket", "skirt",
-        "shirt_legacy", "pants_legacy", "snapshot_statue",
+        "table",
+        "chair",
+        "shelf",
+        "arch",
+        "staircase",
+        "stone",
+        "stone_ring",
+        "boulder",
+        "column",
+        "path",
+        "shirt",
+        "pants",
+        "dress",
+        "jacket",
+        "skirt",
+        "shirt_legacy",
+        "pants_legacy",
+        "snapshot_statue",
     ]
 }
 
@@ -2857,8 +3012,12 @@ mod tests {
             let result = BlenderWorker::get_template(name, &params);
             assert!(result.is_ok(), "Template '{}' should resolve", name);
             let script = result.unwrap();
-            assert!(!script.contains("{{"), "Template '{}' has unresolved placeholder: {}",
-                name, script.lines().find(|l| l.contains("{{")).unwrap_or(""));
+            assert!(
+                !script.contains("{{"),
+                "Template '{}' has unresolved placeholder: {}",
+                name,
+                script.lines().find(|l| l.contains("{{")).unwrap_or("")
+            );
         }
     }
 
@@ -2866,14 +3025,18 @@ mod tests {
     fn test_shirt_template() {
         let params = HashMap::new();
         let script = BlenderWorker::get_template("shirt", &params).expect("shirt template failed");
-        assert!(script.contains("Shirt"), "Body-clone shirt should create 'Shirt' object");
+        assert!(
+            script.contains("Shirt"),
+            "Body-clone shirt should create 'Shirt' object"
+        );
         assert!(script.contains("body_path"), "Body-clone uses body_path");
     }
 
     #[test]
     fn test_shirt_legacy_template() {
         let params = HashMap::new();
-        let script = BlenderWorker::get_template("shirt_legacy", &params).expect("legacy shirt template failed");
+        let script = BlenderWorker::get_template("shirt_legacy", &params)
+            .expect("legacy shirt template failed");
         assert!(script.contains("SLEEVE = 1.0"));
         assert!(script.contains("shirt_mesh"));
     }
@@ -2882,14 +3045,18 @@ mod tests {
     fn test_pants_template() {
         let params = HashMap::new();
         let script = BlenderWorker::get_template("pants", &params).expect("pants template failed");
-        assert!(script.contains("Pants"), "Body-clone pants should create 'Pants' object");
+        assert!(
+            script.contains("Pants"),
+            "Body-clone pants should create 'Pants' object"
+        );
         assert!(script.contains("body_path"), "Body-clone uses body_path");
     }
 
     #[test]
     fn test_pants_legacy_template() {
         let params = HashMap::new();
-        let script = BlenderWorker::get_template("pants_legacy", &params).expect("legacy pants template failed");
+        let script = BlenderWorker::get_template("pants_legacy", &params)
+            .expect("legacy pants template failed");
         assert!(script.contains("LEG_LEN = 1.0"));
         assert!(script.contains("pants_mesh"));
     }
@@ -2898,23 +3065,39 @@ mod tests {
     fn test_dress_template() {
         let params = HashMap::new();
         let script = BlenderWorker::get_template("dress", &params).expect("dress template failed");
-        assert!(script.contains("Dress"), "Dress template should create 'Dress' object");
-        assert!(script.contains("FLARE_AMT"), "Dress should support FLARE parameter");
+        assert!(
+            script.contains("Dress"),
+            "Dress template should create 'Dress' object"
+        );
+        assert!(
+            script.contains("FLARE_AMT"),
+            "Dress should support FLARE parameter"
+        );
     }
 
     #[test]
     fn test_jacket_template() {
         let params = HashMap::new();
-        let script = BlenderWorker::get_template("jacket", &params).expect("jacket template failed");
-        assert!(script.contains("Jacket"), "Jacket template should create 'Jacket' object");
+        let script =
+            BlenderWorker::get_template("jacket", &params).expect("jacket template failed");
+        assert!(
+            script.contains("Jacket"),
+            "Jacket template should create 'Jacket' object"
+        );
     }
 
     #[test]
     fn test_skirt_template() {
         let params = HashMap::new();
         let script = BlenderWorker::get_template("skirt", &params).expect("skirt template failed");
-        assert!(script.contains("Skirt"), "Skirt template should create 'Skirt' object");
-        assert!(script.contains("FLARE_AMT"), "Skirt should support FLARE parameter");
+        assert!(
+            script.contains("Skirt"),
+            "Skirt template should create 'Skirt' object"
+        );
+        assert!(
+            script.contains("FLARE_AMT"),
+            "Skirt should support FLARE parameter"
+        );
     }
 
     #[test]
@@ -2973,40 +3156,61 @@ mod tests {
         let dir = ruth2_base_dir();
         assert!(dir.is_some(), "Ruth2_v4 base directory should resolve");
         let dir_path = dir.unwrap();
-        assert!(std::path::Path::new(&dir_path).is_dir(),
-            "Ruth2_v4 dir should exist: {}", dir_path);
+        assert!(
+            std::path::Path::new(&dir_path).is_dir(),
+            "Ruth2_v4 dir should exist: {}",
+            dir_path
+        );
     }
 
     #[test]
     fn test_ruth2_dae_path_all_parts() {
-        if ruth2_base_dir().is_none() { return; }
+        if ruth2_base_dir().is_none() {
+            return;
+        }
         for part in ruth2_all_dae_parts() {
             let path = ruth2_dae_path(part);
             assert!(path.is_some(), "DAE part '{}' should resolve", part);
-            assert!(std::path::Path::new(path.as_ref().unwrap()).exists(),
-                "DAE file for '{}' should exist: {:?}", part, path);
+            assert!(
+                std::path::Path::new(path.as_ref().unwrap()).exists(),
+                "DAE file for '{}' should exist: {:?}",
+                part,
+                path
+            );
         }
     }
 
     #[test]
     fn test_ruth2_uv_path_all_regions() {
-        if ruth2_base_dir().is_none() { return; }
+        if ruth2_base_dir().is_none() {
+            return;
+        }
         for region in ruth2_all_uv_regions() {
             let path = ruth2_uv_path(region);
             assert!(path.is_some(), "UV region '{}' should resolve", region);
-            assert!(std::path::Path::new(path.as_ref().unwrap()).exists(),
-                "UV file for '{}' should exist: {:?}", region, path);
+            assert!(
+                std::path::Path::new(path.as_ref().unwrap()).exists(),
+                "UV file for '{}' should exist: {:?}",
+                region,
+                path
+            );
         }
     }
 
     #[test]
     fn test_ruth2_texture_path_all() {
-        if ruth2_base_dir().is_none() { return; }
+        if ruth2_base_dir().is_none() {
+            return;
+        }
         for region in &["upper", "lower", "head"] {
             let path = ruth2_texture_path(region);
             assert!(path.is_some(), "SL texture '{}' should resolve", region);
-            assert!(std::path::Path::new(path.as_ref().unwrap()).exists(),
-                "SL texture for '{}' should exist: {:?}", region, path);
+            assert!(
+                std::path::Path::new(path.as_ref().unwrap()).exists(),
+                "SL texture for '{}' should exist: {:?}",
+                region,
+                path
+            );
         }
     }
 
@@ -3028,15 +3232,23 @@ mod tests {
     #[test]
     fn test_all_garment_specs_valid() {
         let fits = ["tight", "normal", "loose"];
-        let types = [GarmentType::Shirt, GarmentType::Dress, GarmentType::Pants,
-                     GarmentType::Jacket, GarmentType::Skirt];
+        let types = [
+            GarmentType::Shirt,
+            GarmentType::Dress,
+            GarmentType::Pants,
+            GarmentType::Jacket,
+            GarmentType::Skirt,
+        ];
         for gt in &types {
             for fit in &fits {
                 let spec = gt.spec(fit, None);
-                assert!(spec.z_min < spec.z_max,
-                    "{:?} {} has z_min >= z_max", gt, fit);
-                assert!(spec.offset > 0.0,
-                    "{:?} {} has zero offset", gt, fit);
+                assert!(
+                    spec.z_min < spec.z_max,
+                    "{:?} {} has z_min >= z_max",
+                    gt,
+                    fit
+                );
+                assert!(spec.offset > 0.0, "{:?} {} has zero offset", gt, fit);
             }
         }
     }

@@ -1,35 +1,34 @@
+pub mod collaborative_filtering;
 pub mod embeddings;
 pub mod llm_client;
 pub mod onnx_predictor;
-pub mod vector_store;
 pub mod quality_service;
-pub mod collaborative_filtering;
+pub mod vector_store;
 
-use crate::database::DatabaseManager;
 use super::AIError;
+use crate::database::DatabaseManager;
+use serde::{Deserialize, Serialize};
 use std::sync::Arc;
 use tokio::sync::RwLock;
-use serde::{Deserialize, Serialize};
 
-pub use embeddings::{EmbeddingService, ContentEmbedding, EmbeddingModel};
-pub use llm_client::{LocalLLMClient, LLMConfig, LLMResponse};
-pub use onnx_predictor::{ONNXPredictor, PredictorConfig, PredictionResult};
-pub use vector_store::{
-    VectorStore, VectorStoreConfig, VectorEntry, SearchResult as VectorSearchResult,
-    ContentType, EmbeddingPipeline, AssetEmbeddingRequest, RegionEmbeddingRequest,
-    LandmarkEmbeddingRequest, UserProfileEmbeddingRequest, EmbeddingBatchResult,
-    VectorStoreStats,
-};
-pub use quality_service::{
-    QualityService, QualityServiceConfig, QualityAssessment, QualityGrade,
-    UploadQualityRequest, RegionQualityRequest, RegionQualityReport,
-    AnomalyAlert, AnomalyStatus, RiskLevel, QualitySuggestion,
-};
 pub use collaborative_filtering::{
-    CollaborativeRecommender, RecommenderConfig,
-    ContentRecommendation as CFContentRecommendation,
-    SocialRecommendation, UserActivity, ActivityType, UserProfile as CFUserProfile,
-    EngagementMetrics, ContentItemType, RecommendationReason, RecommenderStats,
+    ActivityType, CollaborativeRecommender, ContentItemType,
+    ContentRecommendation as CFContentRecommendation, EngagementMetrics, RecommendationReason,
+    RecommenderConfig, RecommenderStats, SocialRecommendation, UserActivity,
+    UserProfile as CFUserProfile,
+};
+pub use embeddings::{ContentEmbedding, EmbeddingModel, EmbeddingService};
+pub use llm_client::{LLMConfig, LLMResponse, LocalLLMClient};
+pub use onnx_predictor::{ONNXPredictor, PredictionResult, PredictorConfig};
+pub use quality_service::{
+    AnomalyAlert, AnomalyStatus, QualityAssessment, QualityGrade, QualityService,
+    QualityServiceConfig, QualitySuggestion, RegionQualityReport, RegionQualityRequest, RiskLevel,
+    UploadQualityRequest,
+};
+pub use vector_store::{
+    AssetEmbeddingRequest, ContentType, EmbeddingBatchResult, EmbeddingPipeline,
+    LandmarkEmbeddingRequest, RegionEmbeddingRequest, SearchResult as VectorSearchResult,
+    UserProfileEmbeddingRequest, VectorEntry, VectorStore, VectorStoreConfig, VectorStoreStats,
 };
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
@@ -122,7 +121,9 @@ impl MLIntegrationManager {
             EmbeddingModel::from_name(&self.config.embedding_model),
             self.config.cache_embeddings,
             self.config.max_embedding_cache_size,
-        ).await {
+        )
+        .await
+        {
             self.embedding_service = Some(embedding);
             self.status.write().await.embedding_service_available = true;
         }
@@ -167,7 +168,9 @@ impl MLIntegrationManager {
             Ok(embedding)
         } else {
             self.record_error().await;
-            Err(AIError::EngineNotAvailable("Embedding service not available".to_string()))
+            Err(AIError::EngineNotAvailable(
+                "Embedding service not available".to_string(),
+            ))
         }
     }
 
@@ -178,7 +181,9 @@ impl MLIntegrationManager {
             Ok(response.text)
         } else {
             self.record_error().await;
-            Err(AIError::EngineNotAvailable("LLM service not available".to_string()))
+            Err(AIError::EngineNotAvailable(
+                "LLM service not available".to_string(),
+            ))
         }
     }
 
@@ -189,7 +194,9 @@ impl MLIntegrationManager {
             Ok(result)
         } else {
             self.record_error().await;
-            Err(AIError::EngineNotAvailable("ONNX predictor not available".to_string()))
+            Err(AIError::EngineNotAvailable(
+                "ONNX predictor not available".to_string(),
+            ))
         }
     }
 
@@ -237,7 +244,8 @@ impl MLIntegrationManager {
             );
 
             let response = client.generate(&prompt).await?;
-            let suggestions: Vec<String> = response.text
+            let suggestions: Vec<String> = response
+                .text
                 .lines()
                 .filter(|line| !line.trim().is_empty())
                 .map(|line| line.trim().to_string())
@@ -247,7 +255,9 @@ impl MLIntegrationManager {
             Ok(suggestions)
         } else {
             self.record_error().await;
-            Err(AIError::EngineNotAvailable("LLM service not available".to_string()))
+            Err(AIError::EngineNotAvailable(
+                "LLM service not available".to_string(),
+            ))
         }
     }
 
@@ -275,7 +285,9 @@ impl MLIntegrationManager {
             Ok(scored)
         } else {
             self.record_error().await;
-            Err(AIError::EngineNotAvailable("Embedding service not available".to_string()))
+            Err(AIError::EngineNotAvailable(
+                "Embedding service not available".to_string(),
+            ))
         }
     }
 
@@ -310,7 +322,9 @@ impl MLIntegrationManager {
         status.onnx_service_available = self.onnx_predictor.is_some();
         status.last_health_check = chrono::Utc::now();
 
-        status.embedding_service_available || status.llm_service_available || status.onnx_service_available
+        status.embedding_service_available
+            || status.llm_service_available
+            || status.onnx_service_available
     }
 
     async fn record_success(&self) {

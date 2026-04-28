@@ -28,8 +28,10 @@ impl CircuitCodeRegistry {
             session_manager: None,
         }
     }
-    
-    pub fn with_session_manager(session_manager: Arc<crate::session::manager::SessionManager>) -> Self {
+
+    pub fn with_session_manager(
+        session_manager: Arc<crate::session::manager::SessionManager>,
+    ) -> Self {
         Self {
             codes: Arc::new(RwLock::new(HashMap::new())),
             session_manager: Some(session_manager),
@@ -37,7 +39,10 @@ impl CircuitCodeRegistry {
     }
 
     pub async fn register_login(&self, session: LoginSession) {
-        self.codes.write().await.insert(session.circuit_code, session);
+        self.codes
+            .write()
+            .await
+            .insert(session.circuit_code, session);
     }
 
     pub async fn validate_circuit_code(&self, circuit_code: u32) -> Option<LoginSession> {
@@ -56,23 +61,27 @@ impl CircuitCodeRegistry {
     pub async fn get_most_recent_session(&self) -> Option<LoginSession> {
         let codes = self.codes.read().await;
         let now = std::time::Instant::now();
-        
+
         // First, try to find XMLRPC sessions in our registry
-        if let Some(xmlrpc_session) = codes.values()
+        if let Some(xmlrpc_session) = codes
+            .values()
             .filter(|session| {
                 now.duration_since(session.created_at).as_secs() < 60 && session.is_xmlrpc_session
             })
             .max_by_key(|session| session.created_at)
-            .cloned() {
+            .cloned()
+        {
             return Some(xmlrpc_session);
         }
-        
+
         // If we have access to SessionManager, check for recent sessions there
         if let Some(ref session_manager) = self.session_manager {
             // Get all sessions from SessionManager and find the most recent one
             let sessions = session_manager.get_all_sessions();
-            if let Some(recent_session) = sessions.into_iter()
-                .max_by_key(|session| session.created_at) {
+            if let Some(recent_session) = sessions
+                .into_iter()
+                .max_by_key(|session| session.created_at)
+            {
                 // Convert SessionManager::LoginSession to CircuitCodeRegistry::LoginSession
                 return Some(LoginSession {
                     circuit_code: recent_session.circuit_code,
@@ -85,9 +94,10 @@ impl CircuitCodeRegistry {
                 });
             }
         }
-        
+
         // Fall back to any recent session in our registry (temporary UDP sessions)
-        codes.values()
+        codes
+            .values()
             .filter(|session| now.duration_since(session.created_at).as_secs() < 60)
             .max_by_key(|session| session.created_at)
             .cloned()

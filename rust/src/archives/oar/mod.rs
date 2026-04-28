@@ -6,5 +6,5 @@ pub mod reader;
 pub mod writer;
 pub mod xml_schemas;
 
-pub use reader::{OarReader, OarLoadResult, OarLoadOptions};
-pub use writer::{OarWriter, OarSaveResult, OarSaveOptions};
+pub use reader::{OarLoadOptions, OarLoadResult, OarReader};
+pub use writer::{OarSaveOptions, OarSaveResult, OarWriter};

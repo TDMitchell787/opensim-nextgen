@@ -1,6 +1,6 @@
+use anyhow::{anyhow, Result};
+use bytes::{Buf, Bytes};
 use uuid::Uuid;
-use bytes::{Bytes, Buf};
-use anyhow::{Result, anyhow};
 
 #[derive(Debug, Clone)]
 pub struct CoarseLocationUpdate {

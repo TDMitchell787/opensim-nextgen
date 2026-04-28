@@ -8,8 +8,8 @@ use std::{
 use uuid::Uuid;
 
 use crate::ai::{
-    content_creation::{ContentPattern, ContentCategory, RecognitionData},
-    oar_analyzer::{OARData, AnalyzedObject},
+    content_creation::{ContentCategory, ContentPattern, RecognitionData},
+    oar_analyzer::{AnalyzedObject, OARData},
     pattern_repository::{self as repo, PatternRepository},
 };
 
@@ -223,8 +223,11 @@ impl EADSLearningSystem {
 
     /// Core EADS learning process - analyze and learn from OAR data
     pub async fn learn_from_oar(&mut self, oar_data: &OARData) -> Result<LearningResult> {
-        tracing::info!("Starting EADS learning process for OAR: {}", oar_data.metadata.region_name);
-        
+        tracing::info!(
+            "Starting EADS learning process for OAR: {}",
+            oar_data.metadata.region_name
+        );
+
         let start_time = Instant::now();
         let mut learning_result = LearningResult::new();
 
@@ -254,14 +257,25 @@ impl EADSLearningSystem {
         }
 
         learning_result.processing_time = start_time.elapsed();
-        tracing::info!("EADS learning completed in {:?}", learning_result.processing_time);
+        tracing::info!(
+            "EADS learning completed in {:?}",
+            learning_result.processing_time
+        );
 
         Ok(learning_result)
     }
 
     /// Generate content using learned patterns and EADS methodology
-    pub async fn generate_content(&mut self, prompt: &str, complexity: ContentComplexity) -> Result<GeneratedContent> {
-        tracing::info!("Generating content with EADS: '{}' (complexity: {:?})", prompt, complexity);
+    pub async fn generate_content(
+        &mut self,
+        prompt: &str,
+        complexity: ContentComplexity,
+    ) -> Result<GeneratedContent> {
+        tracing::info!(
+            "Generating content with EADS: '{}' (complexity: {:?})",
+            prompt,
+            complexity
+        );
 
         // Parse prompt for pattern requirements
         let requirements = self.parse_prompt_requirements(prompt).await?;
@@ -270,7 +284,9 @@ impl EADSLearningSystem {
         let selected_patterns = self.select_patterns(&requirements, complexity).await?;
 
         // Apply elegance principles to generation
-        let elegant_design = self.apply_elegance_principles(&selected_patterns, &requirements).await?;
+        let elegant_design = self
+            .apply_elegance_principles(&selected_patterns, &requirements)
+            .await?;
 
         // Generate content with disaster prevention
         let content = self.generate_with_safety(&elegant_design).await?;
@@ -279,7 +295,8 @@ impl EADSLearningSystem {
         let validated_content = self.validate_and_improve(content).await?;
 
         // Archive successful generation for future learning
-        self.archive_successful_generation(&validated_content, prompt).await?;
+        self.archive_successful_generation(&validated_content, prompt)
+            .await?;
 
         Ok(validated_content)
     }
@@ -340,7 +357,10 @@ impl EADSLearningSystem {
 
     /// Learn from user feedback using EADS principles
     pub async fn learn_from_feedback(&mut self, feedback: &UserFeedback) -> Result<()> {
-        tracing::info!("Processing user feedback for content: {}", feedback.content_id);
+        tracing::info!(
+            "Processing user feedback for content: {}",
+            feedback.content_id
+        );
 
         // Process feedback through EADS lens
         let processed_feedback = self.process_feedback_elegantly(feedback).await?;
@@ -349,7 +369,9 @@ impl EADSLearningSystem {
         self.update_pattern_scores(&processed_feedback).await?;
 
         // Identify potential improvements
-        let improvements = self.identify_feedback_improvements(&processed_feedback).await?;
+        let improvements = self
+            .identify_feedback_improvements(&processed_feedback)
+            .await?;
 
         // Apply improvements if they meet EADS criteria
         for improvement in improvements {
@@ -370,7 +392,9 @@ impl EADSLearningSystem {
         let mut result = AnalysisResult::new();
 
         // Analyze architectural elegance
-        result.architectural_elegance = self.analyze_architectural_elegance(&oar_data.objects).await?;
+        result.architectural_elegance = self
+            .analyze_architectural_elegance(&oar_data.objects)
+            .await?;
 
         // Analyze spatial elegance
         result.spatial_elegance = self.analyze_spatial_elegance(&oar_data.objects).await?;
@@ -394,30 +418,42 @@ impl EADSLearningSystem {
         for pattern in &analysis.discovered_patterns {
             if pattern.elegance_score >= self.config.pattern_threshold {
                 let learned_pattern = self.convert_to_learned_pattern(pattern).await?;
-                self.patterns.content_patterns.insert(learned_pattern.id.clone(), learned_pattern.clone());
+                self.patterns
+                    .content_patterns
+                    .insert(learned_pattern.id.clone(), learned_pattern.clone());
                 result.new_patterns.push(learned_pattern);
             }
         }
 
         // Archive high-quality examples
-        self.core.archive_manager.archive_examples(&result.new_patterns).await?;
+        self.core
+            .archive_manager
+            .archive_examples(&result.new_patterns)
+            .await?;
 
         Ok(result)
     }
 
-    async fn apply_disaster_prevention(&mut self, archive_result: &ArchiveResult) -> Result<SafetyResult> {
+    async fn apply_disaster_prevention(
+        &mut self,
+        archive_result: &ArchiveResult,
+    ) -> Result<SafetyResult> {
         let mut result = SafetyResult::new();
 
         // Check for anti-patterns
         for pattern in &archive_result.new_patterns {
             let anti_pattern_score = self.check_anti_patterns(pattern).await?;
             if anti_pattern_score > 0.7 {
-                result.safety_warnings.push(format!("Anti-pattern detected in: {}", pattern.name));
+                result
+                    .safety_warnings
+                    .push(format!("Anti-pattern detected in: {}", pattern.name));
             }
         }
 
         // Validate pattern stability
-        result.stability_score = self.validate_pattern_stability(&archive_result.new_patterns).await?;
+        result.stability_score = self
+            .validate_pattern_stability(&archive_result.new_patterns)
+            .await?;
 
         // Calculate overall safety rating
         result.safety_rating = self.calculate_safety_rating(&result).await?;
@@ -425,13 +461,20 @@ impl EADSLearningSystem {
         Ok(result)
     }
 
-    async fn integrate_solutions(&mut self, safety_result: &SafetyResult) -> Result<IntegrationResult> {
+    async fn integrate_solutions(
+        &mut self,
+        safety_result: &SafetyResult,
+    ) -> Result<IntegrationResult> {
         let mut result = IntegrationResult::new();
 
         // Collect patterns to integrate first
-        let patterns_to_integrate: Vec<(String, LearnedPattern)> = safety_result.safe_patterns.iter()
+        let patterns_to_integrate: Vec<(String, LearnedPattern)> = safety_result
+            .safe_patterns
+            .iter()
             .filter_map(|pattern_id| {
-                self.patterns.content_patterns.get(pattern_id)
+                self.patterns
+                    .content_patterns
+                    .get(pattern_id)
                     .map(|p| (pattern_id.clone(), p.clone()))
             })
             .collect();
@@ -470,12 +513,19 @@ impl EADSLearningSystem {
         Ok(requirements)
     }
 
-    async fn select_patterns(&self, requirements: &PromptRequirements, complexity: ContentComplexity) -> Result<Vec<LearnedPattern>> {
+    async fn select_patterns(
+        &self,
+        requirements: &PromptRequirements,
+        complexity: ContentComplexity,
+    ) -> Result<Vec<LearnedPattern>> {
         let mut selected = Vec::new();
 
         // Filter patterns by requirements and complexity
         for pattern in self.patterns.content_patterns.values() {
-            if self.pattern_matches_requirements(pattern, requirements, &complexity).await? {
+            if self
+                .pattern_matches_requirements(pattern, requirements, &complexity)
+                .await?
+            {
                 selected.push(pattern.clone());
             }
         }
@@ -484,26 +534,38 @@ impl EADSLearningSystem {
         selected.sort_by(|a, b| {
             let score_a = a.elegance_score * a.success_rate;
             let score_b = b.elegance_score * b.success_rate;
-            score_b.partial_cmp(&score_a).unwrap_or(std::cmp::Ordering::Equal)
+            score_b
+                .partial_cmp(&score_a)
+                .unwrap_or(std::cmp::Ordering::Equal)
         });
 
         Ok(selected)
     }
 
-    async fn apply_elegance_principles(&self, patterns: &[LearnedPattern], requirements: &PromptRequirements) -> Result<ElegantDesign> {
+    async fn apply_elegance_principles(
+        &self,
+        patterns: &[LearnedPattern],
+        requirements: &PromptRequirements,
+    ) -> Result<ElegantDesign> {
         let mut design = ElegantDesign::new();
 
         // Apply proportion principles
         design.proportions = self.calculate_elegant_proportions(patterns).await?;
 
         // Apply material harmony principles
-        design.materials = self.select_harmonious_materials(patterns, requirements).await?;
+        design.materials = self
+            .select_harmonious_materials(patterns, requirements)
+            .await?;
 
         // Apply spatial organization principles
-        design.spatial_layout = self.organize_spatial_elegantly(patterns, requirements).await?;
+        design.spatial_layout = self
+            .organize_spatial_elegantly(patterns, requirements)
+            .await?;
 
         // Apply functional elegance principles
-        design.functionality = self.design_elegant_functionality(patterns, requirements).await?;
+        design.functionality = self
+            .design_elegant_functionality(patterns, requirements)
+            .await?;
 
         Ok(design)
     }
@@ -519,12 +581,18 @@ impl EADSLearningSystem {
         content.scripts = self.generate_safe_scripts(&design.functionality).await?;
 
         // Final safety validation
-        self.core.disaster_prevention.validate_content(&content).await?;
+        self.core
+            .disaster_prevention
+            .validate_content(&content)
+            .await?;
 
         Ok(content)
     }
 
-    async fn validate_and_improve(&mut self, mut content: GeneratedContent) -> Result<GeneratedContent> {
+    async fn validate_and_improve(
+        &mut self,
+        mut content: GeneratedContent,
+    ) -> Result<GeneratedContent> {
         // Quality validation
         let quality = self.assess_quality(&content).await?;
 
@@ -542,14 +610,18 @@ impl EADSLearningSystem {
     async fn update_learning_metrics(&mut self, result: &LearningResult) -> Result<()> {
         self.metrics.learning_sessions += 1;
         self.metrics.total_patterns_learned += result.patterns_discovered as u32;
-        
+
         // Update accuracy based on result quality
-        let new_accuracy = (self.metrics.pattern_accuracy * (self.metrics.learning_sessions - 1) as f64 + result.analysis_quality) / self.metrics.learning_sessions as f64;
+        let new_accuracy = (self.metrics.pattern_accuracy
+            * (self.metrics.learning_sessions - 1) as f64
+            + result.analysis_quality)
+            / self.metrics.learning_sessions as f64;
         self.metrics.pattern_accuracy = new_accuracy;
 
         // Update improvement rate
         if self.metrics.learning_sessions > 1 {
-            self.metrics.improvement_rate = (result.analysis_quality - self.metrics.pattern_accuracy).abs();
+            self.metrics.improvement_rate =
+                (result.analysis_quality - self.metrics.pattern_accuracy).abs();
         }
 
         Ok(())
@@ -574,11 +646,19 @@ impl EADSLearningSystem {
         let variety_factor = (primitive_types.len() as f64 * 0.03).min(0.15);
         elegance_score += variety_factor;
 
-        let scale_consistency: f64 = objects.iter().map(|o| {
-            let (sx, sy, sz) = o.scale;
-            let ratio = sx.max(sy).max(sz) / sx.min(sy).min(sz);
-            if ratio < 3.0 { 1.0 } else { 0.5 }
-        }).sum::<f64>() / objects.len() as f64;
+        let scale_consistency: f64 = objects
+            .iter()
+            .map(|o| {
+                let (sx, sy, sz) = o.scale;
+                let ratio = sx.max(sy).max(sz) / sx.min(sy).min(sz);
+                if ratio < 3.0 {
+                    1.0
+                } else {
+                    0.5
+                }
+            })
+            .sum::<f64>()
+            / objects.len() as f64;
         elegance_score += scale_consistency * 0.1;
 
         let organization_factor = if objects.len() > 5 { 0.1 } else { 0.05 };
@@ -601,23 +681,44 @@ impl EADSLearningSystem {
             positions.iter().map(|p| p.2).sum::<f32>() / positions.len() as f32,
         );
 
-        let avg_distance: f32 = positions.iter()
-            .map(|p| ((p.0 - center.0).powi(2) + (p.1 - center.1).powi(2) + (p.2 - center.2).powi(2)).sqrt())
-            .sum::<f32>() / positions.len() as f32;
+        let avg_distance: f32 = positions
+            .iter()
+            .map(|p| {
+                ((p.0 - center.0).powi(2) + (p.1 - center.1).powi(2) + (p.2 - center.2).powi(2))
+                    .sqrt()
+            })
+            .sum::<f32>()
+            / positions.len() as f32;
 
         let distribution_factor: f64 = if avg_distance < 100.0 { 0.2 } else { 0.1 };
         elegance_score += distribution_factor;
 
-        let height_variation: f32 = positions.iter().map(|p| p.2).collect::<Vec<f32>>().iter().cloned()
+        let height_variation: f32 = positions
+            .iter()
+            .map(|p| p.2)
+            .collect::<Vec<f32>>()
+            .iter()
+            .cloned()
             .fold(f32::INFINITY, |a: f32, b: f32| a.min(b));
-        let height_max: f32 = positions.iter().map(|p| p.2).fold(f32::NEG_INFINITY, |a: f32, b: f32| a.max(b));
+        let height_max: f32 = positions
+            .iter()
+            .map(|p| p.2)
+            .fold(f32::NEG_INFINITY, |a: f32, b: f32| a.max(b));
         let height_range = height_max - height_variation;
 
-        let layering_factor: f64 = if height_range > 1.0 && height_range < 50.0 { 0.15 } else { 0.05 };
+        let layering_factor: f64 = if height_range > 1.0 && height_range < 50.0 {
+            0.15
+        } else {
+            0.05
+        };
         elegance_score += layering_factor;
 
         let density = objects.len() as f64 / (avg_distance.max(1.0) as f64);
-        let density_factor: f64 = if density > 0.01 && density < 1.0 { 0.15 } else { 0.05 };
+        let density_factor: f64 = if density > 0.01 && density < 1.0 {
+            0.15
+        } else {
+            0.05
+        };
         elegance_score += density_factor;
 
         Ok(elegance_score.min(1.0))
@@ -630,18 +731,28 @@ impl EADSLearningSystem {
 
         let mut elegance_score = 0.5;
 
-        let textured_count = objects.iter().filter(|o| o.material_data.texture_id.is_some()).count();
+        let textured_count = objects
+            .iter()
+            .filter(|o| o.material_data.texture_id.is_some())
+            .count();
         let texture_ratio = textured_count as f64 / objects.len() as f64;
         elegance_score += texture_ratio * 0.2;
 
-        let color_variety: std::collections::HashSet<_> = objects.iter()
-            .map(|o| (
-                (o.material_data.color.0 * 10.0) as i32,
-                (o.material_data.color.1 * 10.0) as i32,
-                (o.material_data.color.2 * 10.0) as i32,
-            ))
+        let color_variety: std::collections::HashSet<_> = objects
+            .iter()
+            .map(|o| {
+                (
+                    (o.material_data.color.0 * 10.0) as i32,
+                    (o.material_data.color.1 * 10.0) as i32,
+                    (o.material_data.color.2 * 10.0) as i32,
+                )
+            })
             .collect();
-        let color_factor = if color_variety.len() > 1 && color_variety.len() < 10 { 0.15 } else { 0.05 };
+        let color_factor = if color_variety.len() > 1 && color_variety.len() < 10 {
+            0.15
+        } else {
+            0.05
+        };
         elegance_score += color_factor;
 
         let has_glow = objects.iter().any(|o| o.material_data.glow > 0.0);
@@ -658,23 +769,47 @@ impl EADSLearningSystem {
         Ok(elegance_score.min(1.0))
     }
 
-    async fn analyze_scripting_elegance(&self, scripts: &[crate::ai::oar_analyzer::ScriptData]) -> Result<f64> {
+    async fn analyze_scripting_elegance(
+        &self,
+        scripts: &[crate::ai::oar_analyzer::ScriptData],
+    ) -> Result<f64> {
         if scripts.is_empty() {
             return Ok(0.5);
         }
 
         let mut elegance_score: f64 = 0.5;
 
-        let avg_complexity: f64 = scripts.iter().map(|s| s.complexity_score).sum::<f64>() / scripts.len() as f64;
-        let complexity_factor: f64 = if avg_complexity > 1.0 && avg_complexity < 5.0 { 0.15 } else { 0.05 };
+        let avg_complexity: f64 =
+            scripts.iter().map(|s| s.complexity_score).sum::<f64>() / scripts.len() as f64;
+        let complexity_factor: f64 = if avg_complexity > 1.0 && avg_complexity < 5.0 {
+            0.15
+        } else {
+            0.05
+        };
         elegance_score += complexity_factor;
 
-        let avg_functions: f64 = scripts.iter().map(|s| s.functions_used.len() as f64).sum::<f64>() / scripts.len() as f64;
-        let function_factor: f64 = if avg_functions > 2.0 && avg_functions < 20.0 { 0.15 } else { 0.05 };
+        let avg_functions: f64 = scripts
+            .iter()
+            .map(|s| s.functions_used.len() as f64)
+            .sum::<f64>()
+            / scripts.len() as f64;
+        let function_factor: f64 = if avg_functions > 2.0 && avg_functions < 20.0 {
+            0.15
+        } else {
+            0.05
+        };
         elegance_score += function_factor;
 
-        let avg_events: f64 = scripts.iter().map(|s| s.events_handled.len() as f64).sum::<f64>() / scripts.len() as f64;
-        let event_factor: f64 = if avg_events >= 1.0 && avg_events < 10.0 { 0.1 } else { 0.05 };
+        let avg_events: f64 = scripts
+            .iter()
+            .map(|s| s.events_handled.len() as f64)
+            .sum::<f64>()
+            / scripts.len() as f64;
+        let event_factor: f64 = if avg_events >= 1.0 && avg_events < 10.0 {
+            0.1
+        } else {
+            0.05
+        };
         elegance_score += event_factor;
 
         let has_compiled = scripts.iter().any(|s| s.compiled);
@@ -705,7 +840,11 @@ impl EADSLearningSystem {
         Ok(())
     }
 
-    async fn archive_successful_generation(&mut self, _content: &GeneratedContent, _prompt: &str) -> Result<()> {
+    async fn archive_successful_generation(
+        &mut self,
+        _content: &GeneratedContent,
+        _prompt: &str,
+    ) -> Result<()> {
         self.metrics.generation_success_rate = (self.metrics.generation_success_rate + 1.0) / 2.0;
         Ok(())
     }
@@ -761,7 +900,10 @@ impl EADSLearningSystem {
         Ok(quality)
     }
 
-    async fn process_feedback_elegantly(&self, feedback: &UserFeedback) -> Result<ProcessedFeedback> {
+    async fn process_feedback_elegantly(
+        &self,
+        feedback: &UserFeedback,
+    ) -> Result<ProcessedFeedback> {
         Ok(ProcessedFeedback {
             content_id: feedback.content_id.clone(),
             quality_adjustment: feedback.rating - 0.5,
@@ -770,11 +912,15 @@ impl EADSLearningSystem {
     }
 
     async fn update_pattern_scores(&mut self, feedback: &ProcessedFeedback) -> Result<()> {
-        self.metrics.user_satisfaction = (self.metrics.user_satisfaction + feedback.quality_adjustment).clamp(0.0, 1.0);
+        self.metrics.user_satisfaction =
+            (self.metrics.user_satisfaction + feedback.quality_adjustment).clamp(0.0, 1.0);
         Ok(())
     }
 
-    async fn identify_feedback_improvements(&self, _feedback: &ProcessedFeedback) -> Result<Vec<Improvement>> {
+    async fn identify_feedback_improvements(
+        &self,
+        _feedback: &ProcessedFeedback,
+    ) -> Result<Vec<Improvement>> {
         Ok(vec![])
     }
 
@@ -791,7 +937,10 @@ impl EADSLearningSystem {
         Ok(self.metrics.user_satisfaction)
     }
 
-    async fn convert_to_learned_pattern(&self, pattern: &DiscoveredPattern) -> Result<LearnedPattern> {
+    async fn convert_to_learned_pattern(
+        &self,
+        pattern: &DiscoveredPattern,
+    ) -> Result<LearnedPattern> {
         Ok(LearnedPattern {
             id: Uuid::new_v4().to_string(),
             name: "Discovered Pattern".to_string(),
@@ -840,27 +989,50 @@ impl EADSLearningSystem {
         vec![]
     }
 
-    async fn pattern_matches_requirements(&self, _pattern: &LearnedPattern, _requirements: &PromptRequirements, _complexity: &ContentComplexity) -> Result<bool> {
+    async fn pattern_matches_requirements(
+        &self,
+        _pattern: &LearnedPattern,
+        _requirements: &PromptRequirements,
+        _complexity: &ContentComplexity,
+    ) -> Result<bool> {
         Ok(true)
     }
 
-    async fn calculate_elegant_proportions(&self, _patterns: &[LearnedPattern]) -> Result<ProportionRules> {
+    async fn calculate_elegant_proportions(
+        &self,
+        _patterns: &[LearnedPattern],
+    ) -> Result<ProportionRules> {
         Ok(ProportionRules)
     }
 
-    async fn select_harmonious_materials(&self, _patterns: &[LearnedPattern], _requirements: &PromptRequirements) -> Result<Vec<String>> {
+    async fn select_harmonious_materials(
+        &self,
+        _patterns: &[LearnedPattern],
+        _requirements: &PromptRequirements,
+    ) -> Result<Vec<String>> {
         Ok(vec!["default_material".to_string()])
     }
 
-    async fn organize_spatial_elegantly(&self, _patterns: &[LearnedPattern], _requirements: &PromptRequirements) -> Result<SpatialLayout> {
+    async fn organize_spatial_elegantly(
+        &self,
+        _patterns: &[LearnedPattern],
+        _requirements: &PromptRequirements,
+    ) -> Result<SpatialLayout> {
         Ok(SpatialLayout)
     }
 
-    async fn design_elegant_functionality(&self, _patterns: &[LearnedPattern], _requirements: &PromptRequirements) -> Result<Vec<String>> {
+    async fn design_elegant_functionality(
+        &self,
+        _patterns: &[LearnedPattern],
+        _requirements: &PromptRequirements,
+    ) -> Result<Vec<String>> {
         Ok(vec![])
     }
 
-    async fn generate_safe_geometry(&self, _proportions: &ProportionRules) -> Result<Vec<GeometricElement>> {
+    async fn generate_safe_geometry(
+        &self,
+        _proportions: &ProportionRules,
+    ) -> Result<Vec<GeometricElement>> {
         Ok(vec![])
     }
 
@@ -876,7 +1048,11 @@ impl EADSLearningSystem {
         Ok(vec![])
     }
 
-    async fn apply_quality_improvements(&self, content: GeneratedContent, _quality: &QualityAssessment) -> Result<GeneratedContent> {
+    async fn apply_quality_improvements(
+        &self,
+        content: GeneratedContent,
+        _quality: &QualityAssessment,
+    ) -> Result<GeneratedContent> {
         Ok(content)
     }
 
@@ -886,7 +1062,10 @@ impl EADSLearningSystem {
 
     /// Persist all learned patterns to the PatternRepository for cross-restart persistence
     /// This is the core P1 Learning Persistence integration
-    pub async fn persist_to_repository(&self, repository: &PatternRepository) -> Result<PersistenceResult> {
+    pub async fn persist_to_repository(
+        &self,
+        repository: &PatternRepository,
+    ) -> Result<PersistenceResult> {
         tracing::info!("Persisting EADS patterns to repository");
         let mut result = PersistenceResult::new();
 
@@ -904,7 +1083,10 @@ impl EADSLearningSystem {
         // Persist architectural patterns
         for (key, pattern) in &self.patterns.architectural_patterns {
             let repo_pattern = self.convert_to_repo_architectural_pattern(pattern);
-            if let Err(e) = repository.save_architectural_pattern(key, &repo_pattern).await {
+            if let Err(e) = repository
+                .save_architectural_pattern(key, &repo_pattern)
+                .await
+            {
                 tracing::warn!("Failed to persist architectural pattern {}: {}", key, e);
                 result.failed_count += 1;
             } else {
@@ -973,7 +1155,10 @@ impl EADSLearningSystem {
     }
 
     /// Load patterns from the PatternRepository to restore learned patterns after restart
-    pub async fn load_from_repository(&mut self, repository: &PatternRepository) -> Result<LoadResult> {
+    pub async fn load_from_repository(
+        &mut self,
+        repository: &PatternRepository,
+    ) -> Result<LoadResult> {
         tracing::info!("Loading EADS patterns from repository");
         let mut result = LoadResult::new();
 
@@ -981,7 +1166,9 @@ impl EADSLearningSystem {
         let content_patterns = repository.get_content_patterns().await;
         for (_id, repo_pattern) in content_patterns {
             let pattern = self.convert_from_repo_pattern(&repo_pattern);
-            self.patterns.content_patterns.insert(pattern.id.clone(), pattern);
+            self.patterns
+                .content_patterns
+                .insert(pattern.id.clone(), pattern);
             result.content_patterns_loaded += 1;
         }
 
@@ -1035,10 +1222,7 @@ impl EADSLearningSystem {
         // Update metrics
         self.metrics.total_patterns_learned = result.total_loaded;
 
-        tracing::info!(
-            "Loading complete: {} patterns loaded",
-            result.total_loaded
-        );
+        tracing::info!("Loading complete: {} patterns loaded", result.total_loaded);
 
         Ok(result)
     }
@@ -1055,20 +1239,25 @@ impl EADSLearningSystem {
             elegance_score: pattern.elegance_score,
             characteristics: pattern.characteristics.clone(),
             examples: pattern.examples.clone(),
-            improvement_history: pattern.improvement_history.iter().map(|_| {
-                repo::ImprovementRecord {
+            improvement_history: pattern
+                .improvement_history
+                .iter()
+                .map(|_| repo::ImprovementRecord {
                     timestamp: Utc::now(),
                     improvement_type: "migrated".to_string(),
                     before_score: 0.0,
                     after_score: pattern.elegance_score,
                     description: "Migrated from EADS".to_string(),
-                }
-            }).collect(),
+                })
+                .collect(),
             learned_from: pattern.learned_from.clone(),
         }
     }
 
-    fn convert_to_repo_architectural_pattern(&self, pattern: &ArchitecturalPattern) -> repo::ArchitecturalPattern {
+    fn convert_to_repo_architectural_pattern(
+        &self,
+        pattern: &ArchitecturalPattern,
+    ) -> repo::ArchitecturalPattern {
         repo::ArchitecturalPattern {
             style: pattern.style.clone(),
             period: pattern.period.clone(),
@@ -1100,7 +1289,10 @@ impl EADSLearningSystem {
         }
     }
 
-    fn convert_to_repo_scripting_pattern(&self, pattern: &ScriptingPattern) -> repo::ScriptingPattern {
+    fn convert_to_repo_scripting_pattern(
+        &self,
+        pattern: &ScriptingPattern,
+    ) -> repo::ScriptingPattern {
         repo::ScriptingPattern {
             function_type: pattern.function_type.clone(),
             common_implementations: pattern.common_implementations.clone(),
@@ -1156,7 +1348,10 @@ impl EADSLearningSystem {
         }
     }
 
-    fn convert_from_repo_architectural_pattern(&self, pattern: &repo::ArchitecturalPattern) -> ArchitecturalPattern {
+    fn convert_from_repo_architectural_pattern(
+        &self,
+        pattern: &repo::ArchitecturalPattern,
+    ) -> ArchitecturalPattern {
         ArchitecturalPattern {
             style: pattern.style.clone(),
             period: pattern.period.clone(),
@@ -1168,7 +1363,10 @@ impl EADSLearningSystem {
         }
     }
 
-    fn convert_from_repo_material_pattern(&self, pattern: &repo::MaterialPattern) -> MaterialPattern {
+    fn convert_from_repo_material_pattern(
+        &self,
+        pattern: &repo::MaterialPattern,
+    ) -> MaterialPattern {
         MaterialPattern {
             material_type: pattern.material_type.clone(),
             usage_contexts: pattern.usage_contexts.clone(),
@@ -1188,7 +1386,10 @@ impl EADSLearningSystem {
         }
     }
 
-    fn convert_from_repo_scripting_pattern(&self, pattern: &repo::ScriptingPattern) -> ScriptingPattern {
+    fn convert_from_repo_scripting_pattern(
+        &self,
+        pattern: &repo::ScriptingPattern,
+    ) -> ScriptingPattern {
         ScriptingPattern {
             function_type: pattern.function_type.clone(),
             common_implementations: pattern.common_implementations.clone(),
@@ -1359,15 +1560,34 @@ pub struct DensityRules;
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct ImprovementRecord;
 #[derive(Debug, Clone, Serialize, Deserialize)]
-pub struct AnalysisResult { pub architectural_elegance: f64, pub spatial_elegance: f64, pub material_elegance: f64, pub scripting_elegance: f64, pub quality_score: f64, pub discovered_patterns: Vec<DiscoveredPattern> }
+pub struct AnalysisResult {
+    pub architectural_elegance: f64,
+    pub spatial_elegance: f64,
+    pub material_elegance: f64,
+    pub scripting_elegance: f64,
+    pub quality_score: f64,
+    pub discovered_patterns: Vec<DiscoveredPattern>,
+}
 #[derive(Debug, Clone, Serialize, Deserialize)]
-pub struct DiscoveredPattern { pub elegance_score: f64 }
+pub struct DiscoveredPattern {
+    pub elegance_score: f64,
+}
 #[derive(Debug, Clone, Serialize, Deserialize)]
-pub struct ArchiveResult { pub new_patterns: Vec<LearnedPattern> }
+pub struct ArchiveResult {
+    pub new_patterns: Vec<LearnedPattern>,
+}
 #[derive(Debug, Clone, Serialize, Deserialize)]
-pub struct SafetyResult { pub safety_warnings: Vec<String>, pub stability_score: f64, pub safety_rating: f64, pub safe_patterns: Vec<String> }
+pub struct SafetyResult {
+    pub safety_warnings: Vec<String>,
+    pub stability_score: f64,
+    pub safety_rating: f64,
+    pub safe_patterns: Vec<String>,
+}
 #[derive(Debug, Clone, Serialize, Deserialize)]
-pub struct IntegrationResult { pub integrated_patterns: Vec<String>, pub success_rate: f64 }
+pub struct IntegrationResult {
+    pub integrated_patterns: Vec<String>,
+    pub success_rate: f64,
+}
 
 impl AnalysisResult {
     pub fn new() -> Self {
@@ -1384,7 +1604,9 @@ impl AnalysisResult {
 
 impl ArchiveResult {
     pub fn new() -> Self {
-        Self { new_patterns: Vec::new() }
+        Self {
+            new_patterns: Vec::new(),
+        }
     }
 }
 
@@ -1408,9 +1630,19 @@ impl IntegrationResult {
     }
 }
 #[derive(Debug, Clone, Serialize, Deserialize)]
-pub struct PromptRequirements { pub style: String, pub complexity: String, pub functionality: Vec<String>, pub aesthetics: Vec<String> }
+pub struct PromptRequirements {
+    pub style: String,
+    pub complexity: String,
+    pub functionality: Vec<String>,
+    pub aesthetics: Vec<String>,
+}
 #[derive(Debug, Clone, Serialize, Deserialize)]
-pub struct ElegantDesign { pub proportions: ProportionRules, pub materials: Vec<String>, pub spatial_layout: SpatialLayout, pub functionality: Vec<String> }
+pub struct ElegantDesign {
+    pub proportions: ProportionRules,
+    pub materials: Vec<String>,
+    pub spatial_layout: SpatialLayout,
+    pub functionality: Vec<String>,
+}
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct GeometricElement;
 #[derive(Debug, Clone, Serialize, Deserialize)]
@@ -1422,11 +1654,24 @@ pub struct ScriptElement;
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct ContentMetadata;
 #[derive(Debug, Clone, Serialize, Deserialize)]
-pub struct ImprovementReport { pub current_performance: f64, pub opportunities: Vec<String>, pub improvements_applied: Vec<String>, pub validation_results: f64 }
+pub struct ImprovementReport {
+    pub current_performance: f64,
+    pub opportunities: Vec<String>,
+    pub improvements_applied: Vec<String>,
+    pub validation_results: f64,
+}
 #[derive(Debug, Clone, Serialize, Deserialize)]
-pub struct ProcessedFeedback { pub content_id: String, pub quality_adjustment: f64, pub improvement_suggestions: Vec<String> }
+pub struct ProcessedFeedback {
+    pub content_id: String,
+    pub quality_adjustment: f64,
+    pub improvement_suggestions: Vec<String>,
+}
 #[derive(Debug, Clone, Serialize, Deserialize)]
-pub struct Improvement { pub improvement_type: String, pub target: String, pub expected_impact: f64 }
+pub struct Improvement {
+    pub improvement_type: String,
+    pub target: String,
+    pub expected_impact: f64,
+}
 
 impl EleganceScorer {
     pub async fn score_content(&self, _content: &GeneratedContent) -> Result<f64> {

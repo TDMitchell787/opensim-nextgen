@@ -1,8 +1,8 @@
+use anyhow::{anyhow, Result};
 use std::collections::HashMap;
 use std::path::Path;
-use uuid::Uuid;
-use anyhow::{Result, anyhow};
 use tracing::{info, warn};
+use uuid::Uuid;
 
 #[derive(Debug, Clone)]
 pub struct RegionIniConfig {
@@ -56,14 +56,18 @@ pub fn parse_regions_ini(config_dir: &Path) -> Result<Vec<RegionIniConfig>> {
     let mut regions = Vec::new();
 
     if !config_dir.exists() {
-        return Err(anyhow!("Regions config directory does not exist: {:?}", config_dir));
+        return Err(anyhow!(
+            "Regions config directory does not exist: {:?}",
+            config_dir
+        ));
     }
 
     let entries = std::fs::read_dir(config_dir)?;
     let mut ini_files: Vec<_> = entries
         .filter_map(|e| e.ok())
         .filter(|e| {
-            e.path().extension()
+            e.path()
+                .extension()
                 .map(|ext| ext.eq_ignore_ascii_case("ini"))
                 .unwrap_or(false)
         })
@@ -88,8 +92,12 @@ pub fn parse_regions_ini(config_dir: &Path) -> Result<Vec<RegionIniConfig>> {
     for region in &regions {
         info!(
             "  Region '{}' UUID={} grid=({},{}) port={} handle={}",
-            region.name, region.uuid, region.grid_x, region.grid_y,
-            region.internal_port, region.region_handle()
+            region.name,
+            region.uuid,
+            region.grid_x,
+            region.grid_y,
+            region.internal_port,
+            region.region_handle()
         );
     }
 
@@ -149,73 +157,103 @@ fn build_region(
     let uuid_str = match props.get("RegionUUID") {
         Some(s) => s,
         None => {
-            warn!("Section [{}] in {:?} missing RegionUUID, skipping", section_name, path);
+            warn!(
+                "Section [{}] in {:?} missing RegionUUID, skipping",
+                section_name, path
+            );
             return Ok(None);
         }
     };
 
-    let uuid = Uuid::parse_str(uuid_str)
-        .map_err(|e| anyhow!("Invalid UUID '{}' in section [{}]: {}", uuid_str, section_name, e))?;
+    let uuid = Uuid::parse_str(uuid_str).map_err(|e| {
+        anyhow!(
+            "Invalid UUID '{}' in section [{}]: {}",
+            uuid_str,
+            section_name,
+            e
+        )
+    })?;
 
     let (grid_x, grid_y) = parse_location(
-        props.get("Location").map(|s| s.as_str()).unwrap_or("1000,1000"),
+        props
+            .get("Location")
+            .map(|s| s.as_str())
+            .unwrap_or("1000,1000"),
         section_name,
     )?;
 
-    let internal_port: u16 = props.get("InternalPort")
+    let internal_port: u16 = props
+        .get("InternalPort")
         .map(|s| s.parse().unwrap_or(9000))
         .unwrap_or(9000);
 
-    let name = props.get("RegionName")
+    let name = props
+        .get("RegionName")
         .cloned()
         .unwrap_or_else(|| section_name.to_string());
 
-    let internal_address = props.get("InternalAddress")
+    let internal_address = props
+        .get("InternalAddress")
         .cloned()
         .unwrap_or_else(|| "0.0.0.0".to_string());
 
-    let external_host = props.get("ExternalHostName")
+    let external_host = props
+        .get("ExternalHostName")
         .cloned()
         .unwrap_or_else(|| "SYSTEMIP".to_string());
 
-    let max_prims: u32 = props.get("MaxPrims")
+    let max_prims: u32 = props
+        .get("MaxPrims")
         .map(|s| s.parse().unwrap_or(45000))
         .unwrap_or(45000);
 
-    let max_agents: u32 = props.get("MaxAgents")
+    let max_agents: u32 = props
+        .get("MaxAgents")
         .map(|s| s.parse().unwrap_or(100))
         .unwrap_or(100);
 
-    let scope_id = props.get("ScopeID")
+    let scope_id = props
+        .get("ScopeID")
         .and_then(|s| Uuid::parse_str(s).ok())
         .unwrap_or(Uuid::nil());
 
-    let region_type = props.get("RegionType")
+    let region_type = props
+        .get("RegionType")
         .cloned()
         .unwrap_or_else(|| "Mainland".to_string());
 
-    let physics = props.get("Physics")
+    let physics = props
+        .get("Physics")
         .cloned()
         .unwrap_or_else(|| "BulletSim".to_string());
 
-    let meshing = props.get("Meshing")
+    let meshing = props
+        .get("Meshing")
         .cloned()
         .unwrap_or_else(|| "Meshmerizer".to_string());
 
-    let size_x: u32 = props.get("SizeX")
+    let size_x: u32 = props
+        .get("SizeX")
         .map(|s| s.parse().unwrap_or(256))
         .unwrap_or(256);
 
-    let size_y: u32 = props.get("SizeY")
+    let size_y: u32 = props
+        .get("SizeY")
         .map(|s| s.parse().unwrap_or(256))
         .unwrap_or(256);
 
-    let water_height: f32 = props.get("WaterHeight")
+    let water_height: f32 = props
+        .get("WaterHeight")
         .map(|s| s.parse().unwrap_or(20.0))
         .unwrap_or(20.0);
 
     if size_x % 256 != 0 || size_y % 256 != 0 {
-        return Err(anyhow!("Region '{}' SizeX/SizeY must be multiples of 256 (got {}x{})", section_name, size_x, size_y));
+        return Err(anyhow!(
+            "Region '{}' SizeX/SizeY must be multiples of 256 (got {}x{})",
+            section_name,
+            size_x,
+            size_y
+        ));
     }
 
     Ok(Some(RegionIniConfig {
@@ -241,11 +279,19 @@ fn build_region(
 fn parse_location(location: &str, section: &str) -> Result<(u32, u32)> {
     let parts: Vec<&str> = location.split(',').collect();
     if parts.len() != 2 {
-        return Err(anyhow!("Invalid Location '{}' in section [{}]", location, section));
+        return Err(anyhow!(
+            "Invalid Location '{}' in section [{}]",
+            location,
+            section
+        ));
     }
-    let x: u32 = parts[0].trim().parse()
+    let x: u32 = parts[0]
+        .trim()
+        .parse()
         .map_err(|_| anyhow!("Invalid X coordinate in Location for section [{}]", section))?;
-    let y: u32 = parts[1].trim().parse()
+    let y: u32 = parts[1]
+        .trim()
+        .parse()
         .map_err(|_| anyhow!("Invalid Y coordinate in Location for section [{}]", section))?;
     Ok((x, y))
 }
@@ -258,7 +304,9 @@ fn validate_regions(regions: &[RegionIniConfig]) -> Result<()> {
         if let Some(existing) = ports.get(&region.internal_port) {
             return Err(anyhow!(
                 "Duplicate port {} used by regions '{}' and '{}'",
-                region.internal_port, existing, region.name
+                region.internal_port,
+                existing,
+                region.name
             ));
         }
         ports.insert(region.internal_port, &region.name);
@@ -267,7 +315,10 @@ fn validate_regions(regions: &[RegionIniConfig]) -> Result<()> {
         if let Some(existing) = positions.get(&pos) {
             return Err(anyhow!(
                 "Duplicate grid position ({},{}) used by regions '{}' and '{}'",
-                pos.0, pos.1, existing, region.name
+                pos.0,
+                pos.1,
+                existing,
+                region.name
             ));
         }
         positions.insert(pos, &region.name);
@@ -355,12 +406,15 @@ InternalPort = 9001
             RegionIniConfig {
                 name: "R1".to_string(),
                 uuid: Uuid::new_v4(),
-                grid_x: 1000, grid_y: 1000,
-                size_x: 256, size_y: 256,
+                grid_x: 1000,
+                grid_y: 1000,
+                size_x: 256,
+                size_y: 256,
                 internal_port: 9000,
                 internal_address: "0.0.0.0".to_string(),
                 external_host: "SYSTEMIP".to_string(),
-                max_prims: 45000, max_agents: 100,
+                max_prims: 45000,
+                max_agents: 100,
                 scope_id: Uuid::nil(),
                 region_type: "Mainland".to_string(),
                 physics: "BulletSim".to_string(),
@@ -370,12 +424,15 @@ InternalPort = 9001
             RegionIniConfig {
                 name: "R2".to_string(),
                 uuid: Uuid::new_v4(),
-                grid_x: 1001, grid_y: 1000,
-                size_x: 256, size_y: 256,
+                grid_x: 1001,
+                grid_y: 1000,
+                size_x: 256,
+                size_y: 256,
                 internal_port: 9000,
                 internal_address: "0.0.0.0".to_string(),
                 external_host: "SYSTEMIP".to_string(),
-                max_prims: 45000, max_agents: 100,
+                max_prims: 45000,
+                max_agents: 100,
                 scope_id: Uuid::nil(),
                 region_type: "Mainland".to_string(),
                 physics: "BulletSim".to_string(),
@@ -391,12 +448,15 @@ InternalPort = 9001
         let config = RegionIniConfig {
             name: "Test".to_string(),
             uuid: Uuid::new_v4(),
-            grid_x: 2000, grid_y: 2000,
-            size_x: 256, size_y: 256,
+            grid_x: 2000,
+            grid_y: 2000,
+            size_x: 256,
+            size_y: 256,
             internal_port: 9000,
             internal_address: "0.0.0.0".to_string(),
             external_host: "SYSTEMIP".to_string(),
-            max_prims: 45000, max_agents: 100,
+            max_prims: 45000,
+            max_agents: 100,
             scope_id: Uuid::nil(),
             region_type: "Mainland".to_string(),
             physics: "BulletSim".to_string(),

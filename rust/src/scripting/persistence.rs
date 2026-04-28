@@ -1,9 +1,9 @@
+use sha2::{Digest, Sha256};
 use std::collections::HashMap;
-use sha2::{Sha256, Digest};
 use uuid::Uuid;
 
+use super::lsl_types::{LSLRotation, LSLVector};
 use super::LSLValue;
-use super::lsl_types::{LSLVector, LSLRotation};
 
 pub const DEFAULT_HEAP_LIMIT: usize = 65536;
 pub const MAX_HEAP_LIMIT: usize = 1048576;
@@ -99,10 +99,14 @@ impl ScriptStateData {
 
         let mut global_vars = HashMap::new();
         for _ in 0..var_count {
-            if pos + 4 > data.len() { break; }
+            if pos + 4 > data.len() {
+                break;
+            }
             let name_len = u32::from_le_bytes(data[pos..pos + 4].try_into().ok()?) as usize;
             pos += 4;
-            if pos + name_len > data.len() { break; }
+            if pos + name_len > data.len() {
+                break;
+            }
             let name = String::from_utf8(data[pos..pos + name_len].to_vec()).ok()?;
             pos += name_len;
             let (value, new_pos) = deserialize_lsl_value(data, pos)?;
@@ -177,45 +181,72 @@ fn deserialize_lsl_value(data: &[u8], pos: usize) -> Option<(LSLValue, usize)> {
 
     match tag {
         0 => {
-            if p + 4 > data.len() { return None; }
+            if p + 4 > data.len() {
+                return None;
+            }
             let n = i32::from_le_bytes(data[p..p + 4].try_into().ok()?);
             Some((LSLValue::Integer(n), p + 4))
         }
         1 => {
-            if p + 8 > data.len() { return None; }
+            if p + 8 > data.len() {
+                return None;
+            }
             let f = f64::from_le_bytes(data[p..p + 8].try_into().ok()?);
             Some((LSLValue::Float(f as f32), p + 8))
         }
         2 => {
-            if p + 4 > data.len() { return None; }
+            if p + 4 > data.len() {
+                return None;
+            }
             let len = u32::from_le_bytes(data[p..p + 4].try_into().ok()?) as usize;
             p += 4;
-            if p + len > data.len() { return None; }
+            if p + len > data.len() {
+                return None;
+            }
             let s = String::from_utf8(data[p..p + len].to_vec()).ok()?;
             Some((LSLValue::String(s), p + len))
         }
         3 => {
-            if p + 16 > data.len() { return None; }
+            if p + 16 > data.len() {
+                return None;
+            }
             let k = Uuid::from_slice(&data[p..p + 16]).ok()?;
             Some((LSLValue::Key(k), p + 16))
         }
         4 => {
-            if p + 24 > data.len() { return None; }
+            if p + 24 > data.len() {
+                return None;
+            }
             let x = f64::from_le_bytes(data[p..p + 8].try_into().ok()?);
             let y = f64::from_le_bytes(data[p + 8..p + 16].try_into().ok()?);
             let z = f64::from_le_bytes(data[p + 16..p + 24].try_into().ok()?);
-            Some((LSLValue::Vector(LSLVector::new(x as f32, y as f32, z as f32)), p + 24))
+            Some((
+                LSLValue::Vector(LSLVector::new(x as f32, y as f32, z as f32)),
+                p + 24,
+            ))
         }
         5 => {
-            if p + 32 > data.len() { return None; }
+            if p + 32 > data.len() {
+                return None;
+            }
             let x = f64::from_le_bytes(data[p..p + 8].try_into().ok()?);
             let y = f64::from_le_bytes(data[p + 8..p + 16].try_into().ok()?);
             let z = f64::from_le_bytes(data[p + 16..p + 24].try_into().ok()?);
             let s = f64::from_le_bytes(data[p + 24..p + 32].try_into().ok()?);
-            Some((LSLValue::Rotation(LSLRotation { x: x as f32, y: y as f32, z: z as f32, s: s as f32 }), p + 32))
+            Some((
+                LSLValue::Rotation(LSLRotation {
+                    x: x as f32,
+                    y: y as f32,
+                    z: z as f32,
+                    s: s as f32,
+                }),
+                p + 32,
+            ))
         }
         6 => {
-            if p + 4 > data.len() { return None; }
+            if p + 4 > data.len() {
+                return None;
+            }
             let count = u32::from_le_bytes(data[p..p + 4].try_into().ok()?) as usize;
             p += 4;
             let mut items = Vec::with_capacity(count);
@@ -245,15 +276,14 @@ pub fn compute_heap_size(value: &LSLValue) -> usize {
         LSLValue::Key(_) => 16,
         LSLValue::Vector(_) => 12,
         LSLValue::Rotation(_) => 16,
-        LSLValue::List(items) => {
-            24 + items.iter().map(compute_heap_size).sum::<usize>()
-        }
+        LSLValue::List(items) => 24 + items.iter().map(compute_heap_size).sum::<usize>(),
         _ => 0,
     }
 }
 
 pub fn total_heap_usage(globals: &HashMap<String, LSLValue>) -> usize {
-    globals.iter()
+    globals
+        .iter()
         .map(|(k, v)| k.len() + compute_heap_size(v))
         .sum()
 }
@@ -286,11 +316,14 @@ impl CompiledScriptCache {
 
     pub fn put(&mut self, source_hash: String, backend: String, compiled_data: Vec<u8>) {
         let key = format!("{}:{}", source_hash, backend);
-        self.entries.insert(key, CacheEntry {
-            source_hash,
-            backend,
-            compiled_data,
-        });
+        self.entries.insert(
+            key,
+            CacheEntry {
+                source_hash,
+                backend,
+                compiled_data,
+            },
+        );
     }
 
     pub fn remove(&mut self, source_hash: &str, backend: &str) {
@@ -333,13 +366,15 @@ impl ScriptStatePersistence {
     }
 
     pub fn get_all_for_region(&self, region_id: Uuid) -> Vec<&ScriptStateData> {
-        self.states.values()
+        self.states
+            .values()
             .filter(|s| s.region_id == region_id)
             .collect()
     }
 
     pub fn get_all_for_object(&self, object_id: Uuid) -> Vec<&ScriptStateData> {
-        self.states.values()
+        self.states
+            .values()
             .filter(|s| s.object_id == object_id)
             .collect()
     }
@@ -353,7 +388,8 @@ impl ScriptStatePersistence {
     }
 
     pub fn serialize_all(&self) -> Vec<(Uuid, Vec<u8>)> {
-        self.states.iter()
+        self.states
+            .iter()
             .map(|(id, state)| (*id, state.serialize()))
             .collect()
     }
@@ -385,9 +421,16 @@ mod tests {
         state.current_state = "walking".to_string();
         state.running = true;
         state.permissions_granted = 0x1234;
-        state.global_vars.insert("counter".to_string(), LSLValue::Integer(42));
-        state.global_vars.insert("name".to_string(), LSLValue::String("test".to_string()));
-        state.global_vars.insert("pos".to_string(), LSLValue::Vector(LSLVector::new(1.0, 2.0, 3.0)));
+        state
+            .global_vars
+            .insert("counter".to_string(), LSLValue::Integer(42));
+        state
+            .global_vars
+            .insert("name".to_string(), LSLValue::String("test".to_string()));
+        state.global_vars.insert(
+            "pos".to_string(),
+            LSLValue::Vector(LSLVector::new(1.0, 2.0, 3.0)),
+        );
 
         let data = state.serialize();
         let restored = ScriptStateData::deserialize(&data).expect("deserialize failed");
@@ -407,13 +450,19 @@ mod tests {
     #[test]
     fn test_serialize_list_value() {
         let mut state = ScriptStateData::new(
-            Uuid::new_v4(), Uuid::new_v4(), Uuid::new_v4(), Uuid::new_v4(),
+            Uuid::new_v4(),
+            Uuid::new_v4(),
+            Uuid::new_v4(),
+            Uuid::new_v4(),
         );
-        state.global_vars.insert("items".to_string(), LSLValue::List(vec![
-            LSLValue::Integer(1),
-            LSLValue::String("two".to_string()),
-            LSLValue::Float(3.0),
-        ]));
+        state.global_vars.insert(
+            "items".to_string(),
+            LSLValue::List(vec![
+                LSLValue::Integer(1),
+                LSLValue::String("two".to_string()),
+                LSLValue::Float(3.0),
+            ]),
+        );
 
         let data = state.serialize();
         let restored = ScriptStateData::deserialize(&data).unwrap();
@@ -437,10 +486,24 @@ mod tests {
     fn test_heap_size() {
         assert_eq!(compute_heap_size(&LSLValue::Integer(0)), 4);
         assert_eq!(compute_heap_size(&LSLValue::Float(0.0)), 8);
-        assert_eq!(compute_heap_size(&LSLValue::String("hello".to_string())), 29);
+        assert_eq!(
+            compute_heap_size(&LSLValue::String("hello".to_string())),
+            29
+        );
         assert_eq!(compute_heap_size(&LSLValue::Key(Uuid::nil())), 16);
-        assert_eq!(compute_heap_size(&LSLValue::Vector(LSLVector::new(0.0, 0.0, 0.0))), 12);
-        assert_eq!(compute_heap_size(&LSLValue::Rotation(LSLRotation { x: 0.0, y: 0.0, z: 0.0, s: 1.0 })), 16);
+        assert_eq!(
+            compute_heap_size(&LSLValue::Vector(LSLVector::new(0.0, 0.0, 0.0))),
+            12
+        );
+        assert_eq!(
+            compute_heap_size(&LSLValue::Rotation(LSLRotation {
+                x: 0.0,
+                y: 0.0,
+                z: 0.0,
+                s: 1.0
+            })),
+            16
+        );
     }
 
     #[test]
@@ -475,9 +538,16 @@ mod tests {
         let mut persistence = ScriptStatePersistence::new(300);
         let region_id = Uuid::new_v4();
 
-        let state1 = ScriptStateData::new(Uuid::new_v4(), Uuid::new_v4(), Uuid::new_v4(), region_id);
-        let state2 = ScriptStateData::new(Uuid::new_v4(), Uuid::new_v4(), Uuid::new_v4(), region_id);
-        let other_region = ScriptStateData::new(Uuid::new_v4(), Uuid::new_v4(), Uuid::new_v4(), Uuid::new_v4());
+        let state1 =
+            ScriptStateData::new(Uuid::new_v4(), Uuid::new_v4(), Uuid::new_v4(), region_id);
+        let state2 =
+            ScriptStateData::new(Uuid::new_v4(), Uuid::new_v4(), Uuid::new_v4(), region_id);
+        let other_region = ScriptStateData::new(
+            Uuid::new_v4(),
+            Uuid::new_v4(),
+            Uuid::new_v4(),
+            Uuid::new_v4(),
+        );
 
         let s1_id = state1.script_id;
         persistence.save_state(state1);
@@ -495,8 +565,15 @@ mod tests {
     fn test_bulk_serialize_deserialize() {
         let mut persistence = ScriptStatePersistence::new(300);
 
-        let mut state = ScriptStateData::new(Uuid::new_v4(), Uuid::new_v4(), Uuid::new_v4(), Uuid::new_v4());
-        state.global_vars.insert("val".to_string(), LSLValue::Integer(99));
+        let mut state = ScriptStateData::new(
+            Uuid::new_v4(),
+            Uuid::new_v4(),
+            Uuid::new_v4(),
+            Uuid::new_v4(),
+        );
+        state
+            .global_vars
+            .insert("val".to_string(), LSLValue::Integer(99));
         persistence.save_state(state);
 
         let serialized = persistence.serialize_all();

@@ -1,12 +1,12 @@
 //! Setup question definitions and data structures
-//! 
+//!
 //! Defines all the interactive questions asked during setup,
 //! based on the OpenSim master configuration flow.
 
+use serde::{Deserialize, Serialize};
 use std::collections::HashMap;
 use std::net::{IpAddr, Ipv4Addr};
 use uuid::Uuid;
-use serde::{Deserialize, Serialize};
 
 /// Types of questions that can be asked
 #[derive(Debug, Clone, PartialEq)]
@@ -92,27 +92,27 @@ pub struct SetupConfig {
     pub admin_last_name: String,
     pub admin_email: String,
     pub admin_password: String,
-    
+
     // Database configuration
     pub database_provider: String,
     pub database_connection: String,
-    
+
     // Network configuration
     pub http_port: u16,
     pub region_port_start: u16,
     pub external_hostname: String,
-    
+
     // Region configuration
     pub region_count: u32,
-    
+
     // Features
     pub enable_hypergrid: bool,
     pub enable_ossl: bool,
     pub ossl_threat_level: String,
-    
+
     // Setup metadata
     pub preset: crate::setup::SetupPreset,
-    
+
     // Legacy fields (for backward compatibility)
     pub setup_mode: String,
     pub region_name: String,
@@ -161,7 +161,7 @@ impl Default for SetupConfig {
             enable_ossl: true,
             ossl_threat_level: "Moderate".to_string(),
             preset: crate::setup::SetupPreset::Standalone,
-            
+
             // Legacy fields
             setup_mode: "standalone".to_string(),
             region_name: "My Region".to_string(),
@@ -201,53 +201,45 @@ pub fn get_setup_questions() -> Vec<SetupQuestion> {
             .with_description("Choose the type of OpenSim setup")
             .with_type(QuestionType::Choice(vec![
                 "standalone".to_string(),
-                "grid-region".to_string(), 
-                "grid-robust".to_string()
+                "grid-region".to_string(),
+                "grid-robust".to_string(),
             ]))
             .with_default("standalone")
             .required(),
-
         // Preset selection
         SetupQuestion::new("preset", "Configuration preset")
             .with_description("Choose a preset configuration")
             .with_type(QuestionType::Choice(vec![
                 "development".to_string(),
                 "production".to_string(),
-                "custom".to_string()
+                "custom".to_string(),
             ]))
             .with_default("development"),
-
         // Region configuration
         SetupQuestion::new("region_name", "Region name")
             .with_description("Enter a name for your region")
             .with_type(QuestionType::StringNotEmpty)
             .with_default("My Region")
             .required(),
-
         SetupQuestion::new("region_location", "Region location")
             .with_description("Region coordinates in the grid (X,Y format)")
             .with_default("1000,1000")
             .with_validator(validate_region_location),
-
         SetupQuestion::new("internal_address", "Internal IP address")
             .with_description("IP address for the region server to listen on")
             .with_type(QuestionType::IpAddress)
             .with_default("0.0.0.0"),
-
         SetupQuestion::new("internal_port", "Internal port")
             .with_description("Port for the region server to listen on")
             .with_type(QuestionType::Port)
             .with_default("9000"),
-
         SetupQuestion::new("external_hostname", "External hostname")
             .with_description("Hostname or IP that clients will connect to")
             .with_default("SYSTEMIP"),
-
         SetupQuestion::new("resolve_address", "Resolve hostname to IP")
             .with_description("Resolve hostname to IP on start (useful for Docker)")
             .with_type(QuestionType::Boolean)
             .with_default("false"),
-
         // Database configuration
         SetupQuestion::new("database_type", "Database type")
             .with_description("Choose the database backend to use")
@@ -255,49 +247,43 @@ pub fn get_setup_questions() -> Vec<SetupQuestion> {
                 "sqlite".to_string(),
                 "postgresql".to_string(),
                 "mysql".to_string(),
-                "mariadb".to_string()
+                "mariadb".to_string(),
             ]))
             .with_default("sqlite"),
-
         SetupQuestion::new("database_url", "Database connection")
             .with_description("Database connection string or file path")
             .with_type(QuestionType::DatabaseUrl)
             .with_default("./opensim.db"),
-
         // Grid configuration (only for grid mode)
         SetupQuestion::new("grid_uri", "Grid URI")
             .with_description("URI of the grid services (Robust server)")
             .depends_on("setup_mode", "grid-region")
             .with_default("http://localhost:8003"),
-
         // Advanced configuration
         SetupQuestion::new("physics_engine", "Physics engine")
             .with_description("Physics simulation engine to use")
             .with_type(QuestionType::Choice(vec![
                 "ubODE".to_string(),
                 "Bullet".to_string(),
-                "basicphysics".to_string()
+                "basicphysics".to_string(),
             ]))
             .with_default("ubODE"),
-
         SetupQuestion::new("script_engine", "Script engine")
             .with_description("Scripting engine for LSL scripts")
             .with_type(QuestionType::Choice(vec![
                 "XEngine".to_string(),
-                "YEngine".to_string()
+                "YEngine".to_string(),
             ]))
             .with_default("XEngine"),
-
         SetupQuestion::new("log_level", "Log level")
             .with_description("Logging verbosity level")
             .with_type(QuestionType::Choice(vec![
                 "ERROR".to_string(),
                 "WARN".to_string(),
                 "INFO".to_string(),
-                "DEBUG".to_string()
+                "DEBUG".to_string(),
             ]))
             .with_default("INFO"),
-
         SetupQuestion::new("enable_monitoring", "Enable monitoring")
             .with_description("Enable Prometheus metrics and health monitoring")
             .with_type(QuestionType::Boolean)
@@ -311,13 +297,13 @@ fn validate_region_location(input: &str) -> Result<(), String> {
     if parts.len() != 2 {
         return Err("Region location must be in X,Y format (e.g., 1000,1000)".to_string());
     }
-    
+
     for part in parts {
         if part.trim().parse::<u32>().is_err() {
             return Err("Region coordinates must be positive integers".to_string());
         }
     }
-    
+
     Ok(())
 }
 
@@ -347,7 +333,7 @@ mod tests {
             .with_description("A test")
             .with_default("default")
             .required();
-        
+
         assert_eq!(question.key, "test");
         assert_eq!(question.prompt, "Test question");
         assert_eq!(question.default_value, "default");

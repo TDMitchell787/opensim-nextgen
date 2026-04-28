@@ -1,19 +1,23 @@
 use axum::extract::State;
+use axum::http::{header, StatusCode};
 use axum::response::IntoResponse;
-use axum::http::{StatusCode, header};
-use tracing::{info, warn, debug};
-use uuid::Uuid;
 use std::collections::HashMap;
+use tracing::{debug, info, warn};
+use uuid::Uuid;
 
-use super::RobustState;
 use super::xml_response::*;
+use super::RobustState;
 
 pub async fn handle_griduser(
     State(state): State<RobustState>,
     body: String,
 ) -> axum::response::Response {
     let params = parse_form_body(&body);
-    let method = params.get("METHOD").or_else(|| params.get("method")).cloned().unwrap_or_default();
+    let method = params
+        .get("METHOD")
+        .or_else(|| params.get("method"))
+        .cloned()
+        .unwrap_or_default();
 
     debug!("[GRIDUSER] Request: METHOD={}", method);
 
@@ -27,7 +31,11 @@ pub async fn handle_griduser(
 
     match method.to_lowercase().as_str() {
         "loggedin" => {
-            let user_id = params.get("UserID").or_else(|| params.get("USERID")).cloned().unwrap_or_default();
+            let user_id = params
+                .get("UserID")
+                .or_else(|| params.get("USERID"))
+                .cloned()
+                .unwrap_or_default();
             info!("[GRIDUSER] loggedin: {}", user_id);
 
             match svc.logged_in(&user_id).await {
@@ -40,16 +48,40 @@ pub async fn handle_griduser(
             }
         }
         "loggedout" => {
-            let user_id = params.get("UserID").or_else(|| params.get("USERID")).cloned().unwrap_or_default();
-            let region_id = params.get("RegionID").or_else(|| params.get("REGIONID"))
+            let user_id = params
+                .get("UserID")
+                .or_else(|| params.get("USERID"))
+                .cloned()
+                .unwrap_or_default();
+            let region_id = params
+                .get("RegionID")
+                .or_else(|| params.get("REGIONID"))
                 .and_then(|s| Uuid::parse_str(s).ok())
                 .unwrap_or_default();
-            let position = params.get("Position").or_else(|| params.get("POSITION")).cloned().unwrap_or_else(|| "<0,0,0>".to_string());
-            let look_at = params.get("LookAt").or_else(|| params.get("LOOKAT")).cloned().unwrap_or_else(|| "<0,0,0>".to_string());
-            let _session_id = params.get("SessionID").or_else(|| params.get("SESSIONID")).cloned().unwrap_or_default();
-            info!("[GRIDUSER] loggedout: {} region={} session={}", user_id, region_id, _session_id);
+            let position = params
+                .get("Position")
+                .or_else(|| params.get("POSITION"))
+                .cloned()
+                .unwrap_or_else(|| "<0,0,0>".to_string());
+            let look_at = params
+                .get("LookAt")
+                .or_else(|| params.get("LOOKAT"))
+                .cloned()
+                .unwrap_or_else(|| "<0,0,0>".to_string());
+            let _session_id = params
+                .get("SessionID")
+                .or_else(|| params.get("SESSIONID"))
+                .cloned()
+                .unwrap_or_default();
+            info!(
+                "[GRIDUSER] loggedout: {} region={} session={}",
+                user_id, region_id, _session_id
+            );
 
-            match svc.logged_out(&user_id, region_id, &position, &look_at).await {
+            match svc
+                .logged_out(&user_id, region_id, &position, &look_at)
+                .await
+            {
                 Ok(true) => success_result_response(),
                 Ok(false) => failure_xml("LoggedOut failed"),
                 Err(e) => {
@@ -59,12 +91,26 @@ pub async fn handle_griduser(
             }
         }
         "sethome" => {
-            let user_id = params.get("UserID").or_else(|| params.get("USERID")).cloned().unwrap_or_default();
-            let region_id = params.get("RegionID").or_else(|| params.get("REGIONID"))
+            let user_id = params
+                .get("UserID")
+                .or_else(|| params.get("USERID"))
+                .cloned()
+                .unwrap_or_default();
+            let region_id = params
+                .get("RegionID")
+                .or_else(|| params.get("REGIONID"))
                 .and_then(|s| Uuid::parse_str(s).ok())
                 .unwrap_or_default();
-            let position = params.get("Position").or_else(|| params.get("POSITION")).cloned().unwrap_or_else(|| "<0,0,0>".to_string());
-            let look_at = params.get("LookAt").or_else(|| params.get("LOOKAT")).cloned().unwrap_or_else(|| "<0,0,0>".to_string());
+            let position = params
+                .get("Position")
+                .or_else(|| params.get("POSITION"))
+                .cloned()
+                .unwrap_or_else(|| "<0,0,0>".to_string());
+            let look_at = params
+                .get("LookAt")
+                .or_else(|| params.get("LOOKAT"))
+                .cloned()
+                .unwrap_or_else(|| "<0,0,0>".to_string());
             info!("[GRIDUSER] sethome: {} region={}", user_id, region_id);
 
             match svc.set_home(&user_id, region_id, &position, &look_at).await {
@@ -77,16 +123,40 @@ pub async fn handle_griduser(
             }
         }
         "setposition" => {
-            let user_id = params.get("UserID").or_else(|| params.get("USERID")).cloned().unwrap_or_default();
-            let region_id = params.get("RegionID").or_else(|| params.get("REGIONID"))
+            let user_id = params
+                .get("UserID")
+                .or_else(|| params.get("USERID"))
+                .cloned()
+                .unwrap_or_default();
+            let region_id = params
+                .get("RegionID")
+                .or_else(|| params.get("REGIONID"))
                 .and_then(|s| Uuid::parse_str(s).ok())
                 .unwrap_or_default();
-            let position = params.get("Position").or_else(|| params.get("POSITION")).cloned().unwrap_or_else(|| "<0,0,0>".to_string());
-            let look_at = params.get("LookAt").or_else(|| params.get("LOOKAT")).cloned().unwrap_or_else(|| "<0,0,0>".to_string());
-            let _session_id = params.get("SessionID").or_else(|| params.get("SESSIONID")).cloned().unwrap_or_default();
-            info!("[GRIDUSER] setposition: {} region={} session={}", user_id, region_id, _session_id);
+            let position = params
+                .get("Position")
+                .or_else(|| params.get("POSITION"))
+                .cloned()
+                .unwrap_or_else(|| "<0,0,0>".to_string());
+            let look_at = params
+                .get("LookAt")
+                .or_else(|| params.get("LOOKAT"))
+                .cloned()
+                .unwrap_or_else(|| "<0,0,0>".to_string());
+            let _session_id = params
+                .get("SessionID")
+                .or_else(|| params.get("SESSIONID"))
+                .cloned()
+                .unwrap_or_default();
+            info!(
+                "[GRIDUSER] setposition: {} region={} session={}",
+                user_id, region_id, _session_id
+            );
 
-            match svc.set_last_position(&user_id, region_id, &position, &look_at).await {
+            match svc
+                .set_last_position(&user_id, region_id, &position, &look_at)
+                .await
+            {
                 Ok(true) => success_result_response(),
                 Ok(false) => failure_xml("SetPosition failed"),
                 Err(e) => {
@@ -96,7 +166,11 @@ pub async fn handle_griduser(
             }
         }
         "getgriduserinfo" => {
-            let user_id = params.get("UserID").or_else(|| params.get("USERID")).cloned().unwrap_or_default();
+            let user_id = params
+                .get("UserID")
+                .or_else(|| params.get("USERID"))
+                .cloned()
+                .unwrap_or_default();
             debug!("[GRIDUSER] getgriduserinfo: {}", user_id);
 
             match svc.get_grid_user_info(&user_id).await {
@@ -109,8 +183,13 @@ pub async fn handle_griduser(
             }
         }
         "getgriduserinfos" => {
-            let ids_str = params.get("AgentIDs").or_else(|| params.get("AGENTIDS")).cloned().unwrap_or_default();
-            let user_ids: Vec<String> = ids_str.split(',')
+            let ids_str = params
+                .get("AgentIDs")
+                .or_else(|| params.get("AGENTIDS"))
+                .cloned()
+                .unwrap_or_default();
+            let user_ids: Vec<String> = ids_str
+                .split(',')
                 .map(|s| s.trim().to_string())
                 .filter(|s| !s.is_empty())
                 .collect();
@@ -118,9 +197,8 @@ pub async fn handle_griduser(
 
             match svc.get_grid_user_infos(&user_ids).await {
                 Ok(infos) => {
-                    let items: Vec<HashMap<String, String>> = infos.iter()
-                        .map(|i| i.to_key_value_pairs())
-                        .collect();
+                    let items: Vec<HashMap<String, String>> =
+                        infos.iter().map(|i| i.to_key_value_pairs()).collect();
                     let xml = list_result("griduser", items);
                     (StatusCode::OK, [(header::CONTENT_TYPE, "text/xml")], xml).into_response()
                 }

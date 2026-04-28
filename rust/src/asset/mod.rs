@@ -1,44 +1,46 @@
 //! Asset management system for OpenSim Next
-//! 
+//!
 //! This module provides comprehensive asset management with deduplication,
 //! compression, CDN integration, and multi-storage backend support.
 
+use anyhow::{anyhow, Result};
+use bytes::Bytes;
+use serde::{Deserialize, Serialize};
+use sha2::Digest;
 use std::{
     collections::HashMap,
     sync::Arc,
     time::{Duration, SystemTime},
 };
-use anyhow::{anyhow, Result};
-use bytes::Bytes;
-use uuid::Uuid;
-use sha2::Digest;
-use serde::{Serialize, Deserialize};
-use tokio::sync::{RwLock, Mutex};
+use tokio::sync::{Mutex, RwLock};
 use tracing::{info, warn};
+use uuid::Uuid;
 
 use crate::database::DatabaseManager;
 
+pub mod asset_loader;
 pub mod cache;
 pub mod cdn;
-pub mod storage;
-pub mod streaming;
-pub mod persistence;
 pub mod deduplication;
 pub mod fsassets;
 pub mod fsassets_fetch;
 pub mod fsassets_migrate;
 pub mod jpeg2000;
-pub mod asset_loader;
+pub mod persistence;
+pub mod storage;
+pub mod streaming;
 
 // Re-export commonly used types
+pub use asset_loader::{load_default_assets, AssetLoader};
 pub use cache::{AssetCache, CacheConfig};
-pub use cdn::{CdnConfig, CdnProvider, CdnManager};
-pub use storage::{StorageBackend, StorageBackendType};
-pub use persistence::FileSystemBackend;
-pub use jpeg2000::{J2KCodec, DecodedImage, TextureFormat, is_valid_j2k, is_valid_jp2, detect_texture_format};
-pub use asset_loader::{AssetLoader, load_default_assets};
-pub use fsassets::{FSAssetsStorage, FSAssetsConfig};
+pub use cdn::{CdnConfig, CdnManager, CdnProvider};
+pub use fsassets::{FSAssetsConfig, FSAssetsStorage};
 pub use fsassets_fetch::AssetFetcher;
+pub use jpeg2000::{
+    detect_texture_format, is_valid_j2k, is_valid_jp2, DecodedImage, J2KCodec, TextureFormat,
+};
+pub use persistence::FileSystemBackend;
+pub use storage::{StorageBackend, StorageBackendType};
 
 /// Asset data representation for storage operations
 pub type AssetData = Vec<u8>;
@@ -123,7 +125,7 @@ impl AssetType {
     pub fn content_type(self) -> &'static str {
         match self {
             Self::Texture | Self::TextureTGA | Self::ImageTGA | Self::ImageJPEG => "image/jpeg",
-            Self::Sound | Self::SoundWAV => "audio/wav", 
+            Self::Sound | Self::SoundWAV => "audio/wav",
             Self::LSLText | Self::Script => "text/plain",
             Self::Notecard => "text/plain",
             Self::Mesh => "application/vnd.ll.mesh",
@@ -238,8 +240,15 @@ pub struct AssetUploadSession {
 }
 
 impl AssetUploadSession {
-    pub fn new(asset_id: Uuid, total_chunks: u32, chunk_size: usize, expected_size: usize,
-               asset_type: AssetType, metadata: AssetMetadata, ttl: Duration) -> Self {
+    pub fn new(
+        asset_id: Uuid,
+        total_chunks: u32,
+        chunk_size: usize,
+        expected_size: usize,
+        asset_type: AssetType,
+        metadata: AssetMetadata,
+        ttl: Duration,
+    ) -> Self {
         let now = SystemTime::now();
         Self {
             id: Uuid::new_v4(),
@@ -354,14 +363,18 @@ impl AssetManager {
         if let Some(asset) = self.load_from_database(asset_id).await? {
             // Update access time
             let _ = self.update_access_time(asset_id).await;
-            
+
             // Cache the result
             if let Some(data) = &asset.data {
-                if let Err(e) = self.cache.put(&cache_key, (**data).clone(), asset.asset_type).await {
+                if let Err(e) = self
+                    .cache
+                    .put(&cache_key, (**data).clone(), asset.asset_type)
+                    .await
+                {
                     warn!("Failed to cache asset {}: {}", asset_id, e);
                 }
             }
-            
+
             return Ok(Some(asset));
         }
 
@@ -381,8 +394,14 @@ impl AssetManager {
     }
 
     /// Store an asset with comprehensive persistence, deduplication, and CDN integration
-    pub async fn store_asset(&self, _asset_id: Uuid, _asset_type: AssetType, _data: Bytes, 
-                            _metadata: AssetMetadata, _uploader_id: Option<Uuid>) -> Result<Uuid> {
+    pub async fn store_asset(
+        &self,
+        _asset_id: Uuid,
+        _asset_type: AssetType,
+        _data: Bytes,
+        _metadata: AssetMetadata,
+        _uploader_id: Option<Uuid>,
+    ) -> Result<Uuid> {
         // TODO: Implement proper database-agnostic asset storage
         info!("Asset storage temporarily disabled until database queries are fixed");
         Ok(Uuid::new_v4())
@@ -407,10 +426,15 @@ impl AssetManager {
     }
 
     /// Start a chunked upload session for large assets
-    pub async fn start_upload_session(&self, asset_id: Uuid, total_chunks: u32, 
-                                     chunk_size: usize, expected_size: usize,
-                                     asset_type: AssetType, metadata: AssetMetadata) -> Result<Uuid> {
-        
+    pub async fn start_upload_session(
+        &self,
+        asset_id: Uuid,
+        total_chunks: u32,
+        chunk_size: usize,
+        expected_size: usize,
+        asset_type: AssetType,
+        metadata: AssetMetadata,
+    ) -> Result<Uuid> {
         // Validate session limits
         {
             let sessions = self.upload_sessions.lock().await;
@@ -436,14 +460,21 @@ impl AssetManager {
             sessions.insert(session_id, session);
         }
 
-        info!("Started upload session {} for asset {} ({} chunks, {} bytes)", 
-              session_id, asset_id, total_chunks, expected_size);
+        info!(
+            "Started upload session {} for asset {} ({} chunks, {} bytes)",
+            session_id, asset_id, total_chunks, expected_size
+        );
 
         Ok(session_id)
     }
 
     /// Upload a chunk to an existing session
-    pub async fn upload_chunk(&self, _session_id: Uuid, _chunk_index: u32, _data: Bytes) -> Result<bool> {
+    pub async fn upload_chunk(
+        &self,
+        _session_id: Uuid,
+        _chunk_index: u32,
+        _data: Bytes,
+    ) -> Result<bool> {
         // TODO: Implement chunk upload
         info!("Chunk upload temporarily disabled until database queries are fixed");
         Ok(false)
@@ -484,14 +515,23 @@ impl AssetManager {
     }
 
     /// Store asset chunk for chunked uploads
-    pub async fn store_asset_chunk(&self, _asset_id: &str, _chunk_index: u32, _data: Bytes) -> Result<()> {
+    pub async fn store_asset_chunk(
+        &self,
+        _asset_id: &str,
+        _chunk_index: u32,
+        _data: Bytes,
+    ) -> Result<()> {
         // TODO: Implement chunked asset storage
         info!("Asset chunk storage temporarily disabled until database queries are fixed");
         Ok(())
     }
 
     /// Assemble asset chunks into complete asset
-    pub async fn assemble_asset_chunks(&self, _asset_id: &str, _total_chunks: u32) -> Result<Bytes> {
+    pub async fn assemble_asset_chunks(
+        &self,
+        _asset_id: &str,
+        _total_chunks: u32,
+    ) -> Result<Bytes> {
         // TODO: Implement asset chunk assembly
         info!("Asset chunk assembly temporarily disabled until database queries are fixed");
         Ok(Bytes::new())

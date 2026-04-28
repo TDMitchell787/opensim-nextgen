@@ -33,9 +33,12 @@ pub fn build_ruth_avatar_texture_entry() -> Vec<u8> {
     te.extend_from_slice(&0i16.to_le_bytes());
     te.push(0);
 
-    te.push(0); te.push(0);
-    te.push(0); te.push(0);
-    te.push(0); te.push(0);
+    te.push(0);
+    te.push(0);
+    te.push(0);
+    te.push(0);
+    te.push(0);
+    te.push(0);
     te.extend_from_slice(&[0u8; 16]);
 
     te
@@ -81,7 +84,8 @@ pub fn build_textured_prim_texture_entry(texture_uuid: Uuid) -> Vec<u8> {
 
 fn build_prim_texture_entry(texture: Option<Uuid>, color: Option<[f32; 4]>) -> Vec<u8> {
     let mut te = Vec::with_capacity(64);
-    let tex = texture.unwrap_or_else(|| Uuid::parse_str("89556747-24cb-43ed-920b-47caed15465f").unwrap());
+    let tex =
+        texture.unwrap_or_else(|| Uuid::parse_str("89556747-24cb-43ed-920b-47caed15465f").unwrap());
     te.extend_from_slice(tex.as_bytes());
     te.push(0);
     let c = color.unwrap_or([1.0, 1.0, 1.0, 1.0]);
@@ -102,9 +106,12 @@ fn build_prim_texture_entry(texture: Option<Uuid>, color: Option<[f32; 4]>) -> V
     te.push(0);
     te.extend_from_slice(&0i16.to_le_bytes());
     te.push(0);
-    te.push(0); te.push(0);
-    te.push(0); te.push(0);
-    te.push(0); te.push(0);
+    te.push(0);
+    te.push(0);
+    te.push(0);
+    te.push(0);
+    te.push(0);
+    te.push(0);
     te.extend_from_slice(&[0u8; 16]);
     te.push(0);
     te
@@ -321,7 +328,12 @@ impl TextureEntryData {
 
         fn read_f32(data: &[u8], pos: &mut usize) -> f32 {
             if *pos + 4 <= data.len() {
-                let val = f32::from_le_bytes([data[*pos], data[*pos+1], data[*pos+2], data[*pos+3]]);
+                let val = f32::from_le_bytes([
+                    data[*pos],
+                    data[*pos + 1],
+                    data[*pos + 2],
+                    data[*pos + 3],
+                ]);
                 *pos += 4;
                 val
             } else {
@@ -332,7 +344,7 @@ impl TextureEntryData {
 
         fn read_i16_as_f32(data: &[u8], pos: &mut usize) -> f32 {
             if *pos + 2 <= data.len() {
-                let val = i16::from_le_bytes([data[*pos], data[*pos+1]]);
+                let val = i16::from_le_bytes([data[*pos], data[*pos + 1]]);
                 *pos += 2;
                 val as f32 / 32768.0 * std::f32::consts::PI
             } else {
@@ -345,24 +357,37 @@ impl TextureEntryData {
             let mut facebits: u32 = 0;
             let mut bit_pos = 0u32;
             loop {
-                if *pos >= data.len() { break; }
+                if *pos >= data.len() {
+                    break;
+                }
                 let b = data[*pos];
                 *pos += 1;
                 facebits |= ((b & 0x7F) as u32) << bit_pos;
-                if b & 0x80 == 0 { break; }
+                if b & 0x80 == 0 {
+                    break;
+                }
                 bit_pos += 7;
             }
             facebits
         }
 
-        fn skip_section_u8(data: &[u8], pos: &mut usize, te: &mut TextureEntryData, setter: fn(&mut TextureEntryFace, u8)) {
-            if *pos >= data.len() { return; }
+        fn skip_section_u8(
+            data: &[u8],
+            pos: &mut usize,
+            te: &mut TextureEntryData,
+            setter: fn(&mut TextureEntryFace, u8),
+        ) {
+            if *pos >= data.len() {
+                return;
+            }
             let default_val = data[*pos];
             *pos += 1;
             setter(&mut te.default_face, default_val);
             while *pos < data.len() && data[*pos] != 0 {
                 let bits = read_bitfield(data, pos);
-                if *pos >= data.len() { break; }
+                if *pos >= data.len() {
+                    break;
+                }
                 let val = data[*pos];
                 *pos += 1;
                 for i in 0..MAX_FACES {
@@ -374,7 +399,9 @@ impl TextureEntryData {
                     }
                 }
             }
-            if *pos < data.len() { *pos += 1; }
+            if *pos < data.len() {
+                *pos += 1;
+            }
         }
 
         te.default_face.texture_id = read_uuid(data, &mut pos);
@@ -390,7 +417,9 @@ impl TextureEntryData {
                 }
             }
         }
-        if pos < data.len() { pos += 1; }
+        if pos < data.len() {
+            pos += 1;
+        }
 
         te.default_face.color = read_color4(data, &mut pos);
         while pos < data.len() && data[pos] != 0 {
@@ -405,7 +434,9 @@ impl TextureEntryData {
                 }
             }
         }
-        if pos < data.len() { pos += 1; }
+        if pos < data.len() {
+            pos += 1;
+        }
 
         te.default_face.repeat_u = read_f32(data, &mut pos);
         while pos < data.len() && data[pos] != 0 {
@@ -420,7 +451,9 @@ impl TextureEntryData {
                 }
             }
         }
-        if pos < data.len() { pos += 1; }
+        if pos < data.len() {
+            pos += 1;
+        }
 
         te.default_face.repeat_v = read_f32(data, &mut pos);
         while pos < data.len() && data[pos] != 0 {
@@ -435,7 +468,9 @@ impl TextureEntryData {
                 }
             }
         }
-        if pos < data.len() { pos += 1; }
+        if pos < data.len() {
+            pos += 1;
+        }
 
         te.default_face.offset_u = read_i16_as_f32(data, &mut pos);
         while pos < data.len() && data[pos] != 0 {
@@ -450,7 +485,9 @@ impl TextureEntryData {
                 }
             }
         }
-        if pos < data.len() { pos += 1; }
+        if pos < data.len() {
+            pos += 1;
+        }
 
         te.default_face.offset_v = read_i16_as_f32(data, &mut pos);
         while pos < data.len() && data[pos] != 0 {
@@ -465,7 +502,9 @@ impl TextureEntryData {
                 }
             }
         }
-        if pos < data.len() { pos += 1; }
+        if pos < data.len() {
+            pos += 1;
+        }
 
         te.default_face.rotation = read_i16_as_f32(data, &mut pos);
         while pos < data.len() && data[pos] != 0 {
@@ -480,7 +519,9 @@ impl TextureEntryData {
                 }
             }
         }
-        if pos < data.len() { pos += 1; }
+        if pos < data.len() {
+            pos += 1;
+        }
 
         skip_section_u8(data, &mut pos, &mut te, |f, v| f.material = v);
         skip_section_u8(data, &mut pos, &mut te, |f, v| f.media = v);
@@ -672,7 +713,15 @@ pub fn modify_te_rotation(existing_te: &[u8], face: i32, rotation: f32) -> Vec<u
     ted.to_bytes()
 }
 
-pub fn build_texture_anim(mode: i32, face: i32, size_x: i32, size_y: i32, start: f32, length: f32, rate: f32) -> Vec<u8> {
+pub fn build_texture_anim(
+    mode: i32,
+    face: i32,
+    size_x: i32,
+    size_y: i32,
+    start: f32,
+    length: f32,
+    rate: f32,
+) -> Vec<u8> {
     let mut anim = Vec::with_capacity(16);
     anim.extend_from_slice(&(mode as u32).to_le_bytes());
     anim.extend_from_slice(&(face as i8).to_le_bytes());
@@ -703,13 +752,19 @@ pub const PERM_MASK_MOVE: u32 = 1 << 19;
 pub fn compute_owner_update_flags(base_flags: u32, owner_mask: u32) -> u32 {
     let mut flags = base_flags;
     flags |= FLAGS_OBJECT_YOU_OWNER | FLAGS_OBJECT_ANY_OWNER;
-    if owner_mask & PERM_MASK_COPY != 0 { flags |= FLAGS_OBJECT_COPY; }
-    if owner_mask & PERM_MASK_MOVE != 0 { flags |= FLAGS_OBJECT_MOVE; }
+    if owner_mask & PERM_MASK_COPY != 0 {
+        flags |= FLAGS_OBJECT_COPY;
+    }
+    if owner_mask & PERM_MASK_MOVE != 0 {
+        flags |= FLAGS_OBJECT_MOVE;
+    }
     if owner_mask & PERM_MASK_MODIFY != 0 {
         flags |= FLAGS_OBJECT_MODIFY;
         flags |= FLAGS_OBJECT_OWNER_MODIFY;
     }
-    if owner_mask & PERM_MASK_TRANSFER != 0 { flags |= FLAGS_OBJECT_TRANSFER; }
+    if owner_mask & PERM_MASK_TRANSFER != 0 {
+        flags |= FLAGS_OBJECT_TRANSFER;
+    }
     flags
 }
 
@@ -717,21 +772,36 @@ pub fn compute_nonowner_update_flags(base_flags: u32, everyone_mask: u32) -> u32
     let mut flags = base_flags;
     flags |= FLAGS_OBJECT_ANY_OWNER;
     flags &= !FLAGS_OBJECT_YOU_OWNER;
-    if everyone_mask & PERM_MASK_COPY != 0 { flags |= FLAGS_OBJECT_COPY; }
-    if everyone_mask & PERM_MASK_MOVE != 0 { flags |= FLAGS_OBJECT_MOVE; }
-    if everyone_mask & PERM_MASK_MODIFY != 0 { flags |= FLAGS_OBJECT_MODIFY; }
-    if everyone_mask & PERM_MASK_TRANSFER != 0 { flags |= FLAGS_OBJECT_TRANSFER; }
+    if everyone_mask & PERM_MASK_COPY != 0 {
+        flags |= FLAGS_OBJECT_COPY;
+    }
+    if everyone_mask & PERM_MASK_MOVE != 0 {
+        flags |= FLAGS_OBJECT_MOVE;
+    }
+    if everyone_mask & PERM_MASK_MODIFY != 0 {
+        flags |= FLAGS_OBJECT_MODIFY;
+    }
+    if everyone_mask & PERM_MASK_TRANSFER != 0 {
+        flags |= FLAGS_OBJECT_TRANSFER;
+    }
     flags
 }
 
-pub fn apply_viewer_flags(prim_data: &mut AvatarObjectData, obj_owner_id: uuid::Uuid, viewer_agent_id: uuid::Uuid, everyone_mask: u32) {
+pub fn apply_viewer_flags(
+    prim_data: &mut AvatarObjectData,
+    obj_owner_id: uuid::Uuid,
+    viewer_agent_id: uuid::Uuid,
+    everyone_mask: u32,
+) {
     if viewer_agent_id != obj_owner_id {
-        let base_flags = prim_data.update_flags & !(
-            FLAGS_OBJECT_YOU_OWNER | FLAGS_OBJECT_ANY_OWNER |
-            FLAGS_OBJECT_COPY | FLAGS_OBJECT_MOVE |
-            FLAGS_OBJECT_MODIFY | FLAGS_OBJECT_OWNER_MODIFY |
-            FLAGS_OBJECT_TRANSFER
-        );
+        let base_flags = prim_data.update_flags
+            & !(FLAGS_OBJECT_YOU_OWNER
+                | FLAGS_OBJECT_ANY_OWNER
+                | FLAGS_OBJECT_COPY
+                | FLAGS_OBJECT_MOVE
+                | FLAGS_OBJECT_MODIFY
+                | FLAGS_OBJECT_OWNER_MODIFY
+                | FLAGS_OBJECT_TRANSFER);
         prim_data.update_flags = compute_nonowner_update_flags(base_flags, everyone_mask);
     }
 }
@@ -799,18 +869,23 @@ pub struct AvatarObjectData {
 }
 
 impl AvatarObjectData {
-    pub fn create_avatar(
-        agent_id: Uuid,
-        local_id: u32,
-        position: [f32; 3],
-        name: String,
-    ) -> Self {
+    pub fn create_avatar(agent_id: Uuid, local_id: u32, position: [f32; 3], name: String) -> Self {
         let mut name_value = BytesMut::new();
         name_value.put_slice(b"FirstName STRING RW SV ");
-        name_value.put_slice(name.split_whitespace().next().unwrap_or("Avatar").as_bytes());
+        name_value.put_slice(
+            name.split_whitespace()
+                .next()
+                .unwrap_or("Avatar")
+                .as_bytes(),
+        );
         name_value.put_u8(b'\n');
         name_value.put_slice(b"LastName STRING RW SV ");
-        name_value.put_slice(name.split_whitespace().nth(1).unwrap_or("Resident").as_bytes());
+        name_value.put_slice(
+            name.split_whitespace()
+                .nth(1)
+                .unwrap_or("Resident")
+                .as_bytes(),
+        );
         name_value.put_u8(b'\n');
         name_value.put_slice(b"Title STRING RW SV \n");
 
@@ -833,12 +908,12 @@ impl AvatarObjectData {
             update_flags: 0, // OpenSim uses 0 for avatar update_flags (see LLClientView.cs:7282)
             // Phase 70.7: OpenSim non-zero-encoded version sets specific PBS values for avatars
             // (see LLClientView.cs:7209-7220 - CreateAvatarUpdateBlock non-zc version)
-            path_curve: 16,      // OpenSim: dest[pos++] = 16
-            profile_curve: 1,    // OpenSim: dest[pos++] = 1
+            path_curve: 16,   // OpenSim: dest[pos++] = 16
+            profile_curve: 1, // OpenSim: dest[pos++] = 1
             path_begin: 0,
             path_end: 0,
-            path_scale_x: 100,   // OpenSim: dest[pos++] = 100
-            path_scale_y: 100,   // OpenSim: dest[pos++] = 100
+            path_scale_x: 100, // OpenSim: dest[pos++] = 100
+            path_scale_y: 100, // OpenSim: dest[pos++] = 100
             path_shear_x: 0,
             path_shear_y: 0,
             path_twist: 0,
@@ -952,7 +1027,10 @@ impl AvatarObjectData {
         }
     }
 
-    pub fn create_prim_from_scene_object(obj: &crate::udp::server::SceneObject, _region_handle: u64) -> Self {
+    pub fn create_prim_from_scene_object(
+        obj: &crate::udp::server::SceneObject,
+        _region_handle: u64,
+    ) -> Self {
         let [rx, ry, rz, rw] = obj.rotation;
         let norm = (rx * rx + ry * ry + rz * rz + rw * rw).sqrt();
         let (nx, ny, nz) = if norm > 0.0001 {
@@ -972,8 +1050,7 @@ impl AvatarObjectData {
             Vec::new()
         };
 
-        let is_mesh = extra_params.len() >= 24
-            && extra_params[23] == 5;
+        let is_mesh = extra_params.len() >= 24 && extra_params[23] == 5;
 
         let mut profile_curve = obj.profile_curve;
         let mut profile_begin = obj.profile_begin;
@@ -981,8 +1058,12 @@ impl AvatarObjectData {
         let mut path_scale_y = obj.path_scale_y;
         if is_mesh {
             profile_curve &= 0x0f;
-            if profile_begin == 1 { profile_begin = 9375; }
-            if profile_hollow == 1 { profile_hollow = 27500; }
+            if profile_begin == 1 {
+                profile_begin = 9375;
+            }
+            if profile_hollow == 1 {
+                profile_hollow = 27500;
+            }
             if profile_curve == 0 && path_scale_y < 150 {
                 path_scale_y = 150;
             }
@@ -1038,7 +1119,10 @@ impl AvatarObjectData {
             profile_hollow,
             texture_entry: obj.texture_entry.clone(),
             texture_anim: obj.texture_anim.clone(),
-            name_value: if obj.attachment_point > 0 && obj.item_id != uuid::Uuid::nil() && obj.link_number <= 1 {
+            name_value: if obj.attachment_point > 0
+                && obj.item_id != uuid::Uuid::nil()
+                && obj.link_number <= 1
+            {
                 format!("AttachItemID STRING RW SV {}\n", obj.item_id).into_bytes()
             } else {
                 Vec::new()
@@ -1072,7 +1156,9 @@ impl ObjectUpdateMessage {
         Self {
             region_handle,
             time_dilation: 65535,
-            objects: vec![AvatarObjectData::create_avatar(agent_id, local_id, position, name)],
+            objects: vec![AvatarObjectData::create_avatar(
+                agent_id, local_id, position, name,
+            )],
         }
     }
 
@@ -1093,10 +1179,7 @@ impl ObjectUpdateMessage {
         }
     }
 
-    pub fn create_prim_update(
-        prim_data: AvatarObjectData,
-        region_handle: u64,
-    ) -> Self {
+    pub fn create_prim_update(prim_data: AvatarObjectData, region_handle: u64) -> Self {
         Self {
             region_handle,
             time_dilation: 65535,

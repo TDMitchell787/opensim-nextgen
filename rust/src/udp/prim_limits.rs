@@ -1,6 +1,6 @@
+use dashmap::DashMap;
 use std::sync::atomic::{AtomicU32, Ordering};
 use std::time::SystemTime;
-use dashmap::DashMap;
 use tracing::warn;
 use uuid::Uuid;
 
@@ -65,15 +65,25 @@ impl PrimCreationLimiter {
             max_prims_per_second: 10,
             max_prims_per_minute: 100,
             max_prims_per_agent: std::env::var("OPENSIM_MAX_AGENT_PRIMS")
-                .ok().and_then(|v| v.parse().ok()).unwrap_or(500),
+                .ok()
+                .and_then(|v| v.parse().ok())
+                .unwrap_or(500),
             max_prims_per_region: std::env::var("OPENSIM_MAX_PRIMS")
-                .ok().and_then(|v| v.parse().ok()).unwrap_or(15000),
+                .ok()
+                .and_then(|v| v.parse().ok())
+                .unwrap_or(15000),
             max_physical_prims: std::env::var("OPENSIM_MAX_PHYSICAL_PRIMS")
-                .ok().and_then(|v| v.parse().ok()).unwrap_or(100),
+                .ok()
+                .and_then(|v| v.parse().ok())
+                .unwrap_or(100),
         }
     }
 
-    pub fn check_prim_creation(&self, agent_id: Uuid, is_physical: bool) -> Result<(), PrimDenialReason> {
+    pub fn check_prim_creation(
+        &self,
+        agent_id: Uuid,
+        is_physical: bool,
+    ) -> Result<(), PrimDenialReason> {
         let region_count = self.region_prim_count.load(Ordering::Relaxed);
         if region_count >= self.max_prims_per_region {
             return Err(PrimDenialReason::RegionTotal);
@@ -91,7 +101,8 @@ impl PrimCreationLimiter {
             .unwrap_or_default()
             .as_secs() as u32;
 
-        let stats = self.agent_stats
+        let stats = self
+            .agent_stats
             .entry(agent_id)
             .or_insert_with(|| AgentPrimStats::new(now));
 

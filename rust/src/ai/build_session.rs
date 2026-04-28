@@ -1,7 +1,7 @@
-use std::collections::HashMap;
-use std::sync::Arc;
 use chrono::{DateTime, Utc};
 use serde::{Deserialize, Serialize};
+use std::collections::HashMap;
+use std::sync::Arc;
 use tokio::sync::RwLock;
 use tracing::info;
 use uuid::Uuid;
@@ -38,7 +38,11 @@ impl BuildSession {
     }
 
     pub fn record_object(&mut self, name: String, local_id: u32, prim_uuid: Uuid) {
-        self.created_objects.push(CreatedObject { name, local_id, prim_uuid });
+        self.created_objects.push(CreatedObject {
+            name,
+            local_id,
+            prim_uuid,
+        });
         self.updated_at = Utc::now();
     }
 
@@ -143,13 +147,20 @@ impl BuildSessionStore {
         }
     }
 
-    pub async fn record_created_objects(&self, user_id: Uuid, npc_id: Uuid, objects: &[(String, u32, Uuid)]) {
+    pub async fn record_created_objects(
+        &self,
+        user_id: Uuid,
+        npc_id: Uuid,
+        objects: &[(String, u32, Uuid)],
+    ) {
         if objects.is_empty() {
             return;
         }
         let key = (user_id, npc_id);
         let mut sessions = self.sessions.write().await;
-        let session = sessions.entry(key).or_insert_with(|| BuildSession::new(user_id, npc_id));
+        let session = sessions
+            .entry(key)
+            .or_insert_with(|| BuildSession::new(user_id, npc_id));
         for (name, local_id, prim_uuid) in objects {
             session.record_object(name.clone(), *local_id, *prim_uuid);
         }
@@ -177,7 +188,8 @@ impl BuildSessionStore {
     pub async fn get_context_prompt(&self, user_id: Uuid, npc_id: Uuid) -> String {
         let key = (user_id, npc_id);
         let sessions = self.sessions.read().await;
-        sessions.get(&key)
+        sessions
+            .get(&key)
             .map(|s| s.context_prompt())
             .unwrap_or_default()
     }
@@ -192,8 +204,10 @@ impl BuildSessionStore {
 
     pub async fn get_stale_sessions(&self, max_age: std::time::Duration) -> Vec<(Uuid, String)> {
         let sessions = self.sessions.read().await;
-        let cutoff = Utc::now() - chrono::Duration::from_std(max_age).unwrap_or(chrono::Duration::seconds(600));
-        sessions.values()
+        let cutoff = Utc::now()
+            - chrono::Duration::from_std(max_age).unwrap_or(chrono::Duration::seconds(600));
+        sessions
+            .values()
             .filter(|s| !s.created_objects.is_empty() && s.updated_at < cutoff)
             .map(|s| (s.user_id, s.project_name.clone()))
             .collect()
@@ -218,12 +232,16 @@ impl BuildSessionStore {
                 project_name TEXT NOT NULL DEFAULT '', \
                 created_objects TEXT NOT NULL DEFAULT '[]', \
                 created_at INTEGER NOT NULL, \
-                updated_at INTEGER NOT NULL)"
-        ).execute(pool).await;
+                updated_at INTEGER NOT NULL)",
+        )
+        .execute(pool)
+        .await;
 
         let _ = sqlx::query(
-            "CREATE INDEX IF NOT EXISTS idx_build_sessions_user ON npc_build_sessions(user_id)"
-        ).execute(pool).await;
+            "CREATE INDEX IF NOT EXISTS idx_build_sessions_user ON npc_build_sessions(user_id)",
+        )
+        .execute(pool)
+        .await;
 
         let rows = match sqlx::query_as::<_, (Uuid, Uuid, Uuid, String, String, i32, i32)>(
             "SELECT session_id, user_id, npc_id, project_name, created_objects, created_at, updated_at FROM npc_build_sessions"
@@ -237,8 +255,11 @@ impl BuildSessionStore {
 
         let mut sessions = self.sessions.write().await;
         let mut loaded = 0;
-        for (session_id, user_id, npc_id, project_name, objects_json, created_at, updated_at) in rows {
-            let created_objects: Vec<CreatedObject> = serde_json::from_str(&objects_json).unwrap_or_default();
+        for (session_id, user_id, npc_id, project_name, objects_json, created_at, updated_at) in
+            rows
+        {
+            let created_objects: Vec<CreatedObject> =
+                serde_json::from_str(&objects_json).unwrap_or_default();
             let session = BuildSession {
                 session_id,
                 user_id,
@@ -256,11 +277,16 @@ impl BuildSessionStore {
         }
     }
 
-    async fn load_from_db(&self, pool: &sqlx::PgPool, user_id: Uuid, npc_id: Uuid) -> Result<BuildSession, sqlx::Error> {
+    async fn load_from_db(
+        &self,
+        pool: &sqlx::PgPool,
+        user_id: Uuid,
+        npc_id: Uuid,
+    ) -> Result<BuildSession, sqlx::Error> {
         let row: (Uuid, String, String, i32, i32) = sqlx::query_as(
             "SELECT session_id, project_name, created_objects, created_at, updated_at \
              FROM npc_build_sessions WHERE user_id = $1 AND npc_id = $2 \
-             ORDER BY updated_at DESC LIMIT 1"
+             ORDER BY updated_at DESC LIMIT 1",
         )
         .bind(user_id)
         .bind(npc_id)
@@ -281,7 +307,8 @@ impl BuildSessionStore {
 }
 
 async fn save_to_db(pool: &sqlx::PgPool, session: &BuildSession) -> Result<(), sqlx::Error> {
-    let objects_json = serde_json::to_string(&session.created_objects).unwrap_or_else(|_| "[]".to_string());
+    let objects_json =
+        serde_json::to_string(&session.created_objects).unwrap_or_else(|_| "[]".to_string());
     let created_at = session.created_at.timestamp() as i32;
     let updated_at = session.updated_at.timestamp() as i32;
 

@@ -227,9 +227,7 @@ impl ArchiveJobManager {
     pub async fn get_active_jobs(&self) -> Vec<ArchiveJob> {
         let jobs = self.jobs.read().await;
         jobs.values()
-            .filter(|job| {
-                job.status == JobStatus::Queued || job.status == JobStatus::Running
-            })
+            .filter(|job| job.status == JobStatus::Queued || job.status == JobStatus::Running)
             .cloned()
             .collect()
     }
@@ -295,16 +293,23 @@ mod tests {
         assert_eq!(job.status, JobStatus::Running);
 
         // Update progress
-        manager.update_progress(&job_id, 0.5, Some("Loading assets...".into())).await;
+        manager
+            .update_progress(&job_id, 0.5, Some("Loading assets...".into()))
+            .await;
         let job = manager.get_job(&job_id).await.unwrap();
         assert_eq!(job.progress, 0.5);
 
         // Complete job
-        manager.complete_job(&job_id, JobResult::IarLoad {
-            assets_loaded: 100,
-            folders_created: 10,
-            items_created: 50,
-        }).await;
+        manager
+            .complete_job(
+                &job_id,
+                JobResult::IarLoad {
+                    assets_loaded: 100,
+                    folders_created: 10,
+                    items_created: 50,
+                },
+            )
+            .await;
 
         let job = manager.get_job(&job_id).await.unwrap();
         assert_eq!(job.status, JobStatus::Completed);

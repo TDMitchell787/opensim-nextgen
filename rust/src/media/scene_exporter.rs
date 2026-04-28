@@ -1,6 +1,6 @@
-use std::path::Path;
-use std::io::Write;
 use anyhow::Result;
+use std::io::Write;
+use std::path::Path;
 use tracing::info;
 
 use super::{RenderJob, SceneExportObject};
@@ -22,16 +22,29 @@ pub fn export_scene(job: &RenderJob, meshes_dir: &Path) -> Result<()> {
     let manifest_path = meshes_dir.join("manifest.json");
     std::fs::write(&manifest_path, &manifest)?;
 
-    info!("[MEDIA] Exported {} objects + terrain to {}", job.scene_objects.len(), meshes_dir.display());
+    info!(
+        "[MEDIA] Exported {} objects + terrain to {}",
+        job.scene_objects.len(),
+        meshes_dir.display()
+    );
     Ok(())
 }
 
-fn generate_prim_obj(obj: &SceneExportObject, obj_path: &Path, mtl_path: &Path, index: usize) -> Result<()> {
+fn generate_prim_obj(
+    obj: &SceneExportObject,
+    obj_path: &Path,
+    mtl_path: &Path,
+    index: usize,
+) -> Result<()> {
     let mtl_name = format!("material_{}", index);
 
     let mut mtl_file = std::fs::File::create(mtl_path)?;
     writeln!(mtl_file, "newmtl {}", mtl_name)?;
-    writeln!(mtl_file, "Kd {} {} {}", obj.color[0], obj.color[1], obj.color[2])?;
+    writeln!(
+        mtl_file,
+        "Kd {} {} {}",
+        obj.color[0], obj.color[1], obj.color[2]
+    )?;
     writeln!(mtl_file, "d {}", obj.color[3])?;
     writeln!(mtl_file, "illum 2")?;
 
@@ -54,15 +67,25 @@ fn generate_prim_obj(obj: &SceneExportObject, obj_path: &Path, mtl_path: &Path, 
 
 fn write_box_vertices(f: &mut std::fs::File, _obj: &SceneExportObject) -> Result<()> {
     let verts = [
-        [-0.5, -0.5, -0.5], [ 0.5, -0.5, -0.5], [ 0.5,  0.5, -0.5], [-0.5,  0.5, -0.5],
-        [-0.5, -0.5,  0.5], [ 0.5, -0.5,  0.5], [ 0.5,  0.5,  0.5], [-0.5,  0.5,  0.5],
+        [-0.5, -0.5, -0.5],
+        [0.5, -0.5, -0.5],
+        [0.5, 0.5, -0.5],
+        [-0.5, 0.5, -0.5],
+        [-0.5, -0.5, 0.5],
+        [0.5, -0.5, 0.5],
+        [0.5, 0.5, 0.5],
+        [-0.5, 0.5, 0.5],
     ];
     for v in &verts {
         writeln!(f, "v {} {} {}", v[0], v[1], v[2])?;
     }
     let faces = [
-        [1,2,3,4], [5,8,7,6], [1,5,6,2],
-        [2,6,7,3], [3,7,8,4], [4,8,5,1],
+        [1, 2, 3, 4],
+        [5, 8, 7, 6],
+        [1, 5, 6, 2],
+        [2, 6, 7, 3],
+        [3, 7, 8, 4],
+        [4, 8, 5, 1],
     ];
     for face in &faces {
         writeln!(f, "f {} {} {} {}", face[0], face[1], face[2], face[3])?;
@@ -70,7 +93,11 @@ fn write_box_vertices(f: &mut std::fs::File, _obj: &SceneExportObject) -> Result
     Ok(())
 }
 
-fn write_cylinder_vertices(f: &mut std::fs::File, _obj: &SceneExportObject, segments: u32) -> Result<()> {
+fn write_cylinder_vertices(
+    f: &mut std::fs::File,
+    _obj: &SceneExportObject,
+    segments: u32,
+) -> Result<()> {
     for i in 0..segments {
         let angle = (i as f32 / segments as f32) * std::f32::consts::TAU;
         let x = 0.5 * angle.cos();
@@ -96,7 +123,12 @@ fn write_cylinder_vertices(f: &mut std::fs::File, _obj: &SceneExportObject, segm
     Ok(())
 }
 
-fn write_sphere_vertices(f: &mut std::fs::File, _obj: &SceneExportObject, lon_segs: u32, lat_segs: u32) -> Result<()> {
+fn write_sphere_vertices(
+    f: &mut std::fs::File,
+    _obj: &SceneExportObject,
+    lon_segs: u32,
+    lat_segs: u32,
+) -> Result<()> {
     writeln!(f, "v 0.0 0.0 0.5")?;
     for j in 1..lat_segs {
         let phi = std::f32::consts::PI * j as f32 / lat_segs as f32;
@@ -132,7 +164,12 @@ fn write_sphere_vertices(f: &mut std::fs::File, _obj: &SceneExportObject, lon_se
     Ok(())
 }
 
-fn write_torus_vertices(f: &mut std::fs::File, _obj: &SceneExportObject, major_segs: u32, minor_segs: u32) -> Result<()> {
+fn write_torus_vertices(
+    f: &mut std::fs::File,
+    _obj: &SceneExportObject,
+    major_segs: u32,
+    minor_segs: u32,
+) -> Result<()> {
     let major_r = 0.375;
     let minor_r = 0.125;
 
@@ -163,7 +200,9 @@ fn write_torus_vertices(f: &mut std::fs::File, _obj: &SceneExportObject, major_s
 
 fn generate_terrain_obj(heightmap: &[f32], path: &Path) -> Result<()> {
     let size = (heightmap.len() as f32).sqrt() as usize;
-    if size == 0 { return Ok(()); }
+    if size == 0 {
+        return Ok(());
+    }
 
     let mut f = std::fs::File::create(path)?;
     writeln!(f, "# OpenSim Next Terrain Export")?;
@@ -188,22 +227,30 @@ fn generate_terrain_obj(heightmap: &[f32], path: &Path) -> Result<()> {
         }
     }
 
-    info!("[MEDIA] Terrain exported: {}x{} grid (step={})", grid_size, grid_size, step);
+    info!(
+        "[MEDIA] Terrain exported: {}x{} grid (step={})",
+        grid_size, grid_size, step
+    );
     Ok(())
 }
 
 fn generate_manifest(job: &RenderJob) -> String {
-    let objects: Vec<serde_json::Value> = job.scene_objects.iter().enumerate().map(|(i, obj)| {
-        serde_json::json!({
-            "index": i,
-            "name": obj.name,
-            "file": format!("object_{}.obj", i),
-            "position": obj.position,
-            "rotation": obj.rotation,
-            "scale": obj.scale,
-            "shape_type": obj.shape_type,
+    let objects: Vec<serde_json::Value> = job
+        .scene_objects
+        .iter()
+        .enumerate()
+        .map(|(i, obj)| {
+            serde_json::json!({
+                "index": i,
+                "name": obj.name,
+                "file": format!("object_{}.obj", i),
+                "position": obj.position,
+                "rotation": obj.rotation,
+                "scale": obj.scale,
+                "shape_type": obj.shape_type,
+            })
         })
-    }).collect();
+        .collect();
 
     serde_json::json!({
         "job_id": job.job_id.to_string(),
@@ -211,5 +258,6 @@ fn generate_manifest(job: &RenderJob) -> String {
         "object_count": job.scene_objects.len(),
         "has_terrain": job.terrain_heightmap.is_some(),
         "objects": objects,
-    }).to_string()
+    })
+    .to_string()
 }

@@ -1,12 +1,12 @@
 //! Spatial indexing system for efficient entity queries
-//! 
+//!
 //! This module provides spatial partitioning for efficient entity queries
 //! and collision detection using a grid-based approach.
 
-use std::collections::HashMap;
-use tokio::sync::RwLock;
 use crate::ffi::Vec3;
 use crate::region::scene::entity::EntityId;
+use std::collections::HashMap;
+use tokio::sync::RwLock;
 
 /// Spatial query types
 #[derive(Debug, Clone)]
@@ -78,7 +78,7 @@ impl SpatialIndex {
 
             if old_cell != new_cell {
                 let mut grid = self.grid.write().await;
-                
+
                 // Remove from old cell
                 if let Some(entities) = grid.get_mut(&old_cell) {
                     entities.retain(|&id| id != entity_id);
@@ -88,7 +88,9 @@ impl SpatialIndex {
                 }
 
                 // Add to new cell
-                grid.entry(new_cell).or_insert_with(Vec::new).push(entity_id);
+                grid.entry(new_cell)
+                    .or_insert_with(Vec::new)
+                    .push(entity_id);
             }
         }
         positions.insert(entity_id, new_position);
@@ -103,7 +105,7 @@ impl SpatialIndex {
             SpatialQuery::Radius { center, radius } => {
                 let mut result = Vec::new();
                 let cells = self.get_cells_in_radius(center, radius);
-                
+
                 for cell in cells {
                     if let Some(entities) = grid.get(&cell) {
                         for &entity_id in entities {
@@ -121,7 +123,7 @@ impl SpatialIndex {
             SpatialQuery::Box { min, max } => {
                 let mut result = Vec::new();
                 let cells = self.get_cells_in_box(min, max);
-                
+
                 for cell in cells {
                     if let Some(entities) = grid.get(&cell) {
                         for &entity_id in entities {
@@ -179,9 +181,12 @@ impl SpatialIndex {
 
     /// Check if position is within a box
     fn is_in_box(&self, position: Vec3, min: Vec3, max: Vec3) -> bool {
-        position.x >= min.x && position.x <= max.x &&
-        position.y >= min.y && position.y <= max.y &&
-        position.z >= min.z && position.z <= max.z
+        position.x >= min.x
+            && position.x <= max.x
+            && position.y >= min.y
+            && position.y <= max.y
+            && position.z >= min.z
+            && position.z <= max.z
     }
 
     /// Calculate distance between two positions
@@ -198,10 +203,10 @@ impl SpatialIndex {
 pub enum SpatialError {
     #[error("Invalid query: {0}")]
     InvalidQuery(String),
-    
+
     #[error("Entity not found: {0:?}")]
     EntityNotFound(EntityId),
-    
+
     #[error("Internal error: {0}")]
     Internal(String),
 }
@@ -246,4 +251,4 @@ mod tests {
         assert_eq!(results.len(), 1);
         assert_eq!(results[0], entity_id);
     }
-} 
+}

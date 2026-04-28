@@ -13,7 +13,7 @@ use std::time::Duration;
 use tracing::{debug, info, warn};
 use uuid::Uuid;
 
-use crate::services::traits::{PresenceServiceTrait, PresenceInfo};
+use crate::services::traits::{PresenceInfo, PresenceServiceTrait};
 
 pub struct RemotePresenceService {
     client: Client,
@@ -35,7 +35,11 @@ impl RemotePresenceService {
         }
     }
 
-    async fn send_request(&self, method: &str, params: &HashMap<String, String>) -> Result<HashMap<String, String>> {
+    async fn send_request(
+        &self,
+        method: &str,
+        params: &HashMap<String, String>,
+    ) -> Result<HashMap<String, String>> {
         let url = format!("{}/presence", self.server_uri);
 
         let mut form_data = params.clone();
@@ -43,7 +47,8 @@ impl RemotePresenceService {
 
         debug!("Presence service request: {} to {}", method, url);
 
-        let response = self.client
+        let response = self
+            .client
             .post(&url)
             .form(&form_data)
             .send()
@@ -51,17 +56,23 @@ impl RemotePresenceService {
             .map_err(|e| anyhow!("Presence service request failed: {}", e))?;
 
         if !response.status().is_success() {
-            return Err(anyhow!("Presence service returned status: {}", response.status()));
+            return Err(anyhow!(
+                "Presence service returned status: {}",
+                response.status()
+            ));
         }
 
-        let body = response.text().await
+        let body = response
+            .text()
+            .await
             .map_err(|e| anyhow!("Failed to read presence service response: {}", e))?;
 
         self.parse_response(&body)
     }
 
     fn parse_response(&self, body: &str) -> Result<HashMap<String, String>> {
-        if let Some(xml_result) = crate::services::robust::xml_response::try_parse_xml_to_flat(body) {
+        if let Some(xml_result) = crate::services::robust::xml_response::try_parse_xml_to_flat(body)
+        {
             return Ok(xml_result);
         }
 
@@ -77,31 +88,38 @@ impl RemotePresenceService {
 
     fn params_to_presence_info(&self, params: &HashMap<String, String>) -> PresenceInfo {
         PresenceInfo {
-            user_id: params.get("UserID")
+            user_id: params
+                .get("UserID")
                 .or_else(|| params.get("userid"))
                 .and_then(|s| Uuid::parse_str(s).ok())
                 .unwrap_or_default(),
-            session_id: params.get("SessionID")
+            session_id: params
+                .get("SessionID")
                 .or_else(|| params.get("sessionid"))
                 .and_then(|s| Uuid::parse_str(s).ok())
                 .unwrap_or_default(),
-            secure_session_id: params.get("SecureSessionID")
+            secure_session_id: params
+                .get("SecureSessionID")
                 .or_else(|| params.get("securesessionid"))
                 .and_then(|s| Uuid::parse_str(s).ok())
                 .unwrap_or_default(),
-            region_id: params.get("RegionID")
+            region_id: params
+                .get("RegionID")
                 .or_else(|| params.get("regionid"))
                 .and_then(|s| Uuid::parse_str(s).ok())
                 .unwrap_or_default(),
-            online: params.get("Online")
+            online: params
+                .get("Online")
                 .or_else(|| params.get("online"))
                 .map(|s| s == "True" || s == "true" || s == "1")
                 .unwrap_or(true),
-            login_time: params.get("Login")
+            login_time: params
+                .get("Login")
                 .or_else(|| params.get("login"))
                 .and_then(|s| s.parse().ok())
                 .unwrap_or(0),
-            logout_time: params.get("Logout")
+            logout_time: params
+                .get("Logout")
                 .or_else(|| params.get("logout"))
                 .and_then(|s| s.parse().ok())
                 .unwrap_or(0),
@@ -112,7 +130,9 @@ impl RemotePresenceService {
         let mut presences = Vec::new();
         let mut i = 0;
 
-        while response.contains_key(&format!("UserID_{}", i)) || response.contains_key(&format!("userid_{}", i)) {
+        while response.contains_key(&format!("UserID_{}", i))
+            || response.contains_key(&format!("userid_{}", i))
+        {
             let suffix = format!("_{}", i);
             let mut presence_params = HashMap::new();
 
@@ -136,8 +156,17 @@ impl RemotePresenceService {
 
 #[async_trait]
 impl PresenceServiceTrait for RemotePresenceService {
-    async fn login_agent(&self, user_id: Uuid, session_id: Uuid, secure_session_id: Uuid, region_id: Uuid) -> Result<bool> {
-        info!("Remote: Logging in agent: {} to region: {}", user_id, region_id);
+    async fn login_agent(
+        &self,
+        user_id: Uuid,
+        session_id: Uuid,
+        secure_session_id: Uuid,
+        region_id: Uuid,
+    ) -> Result<bool> {
+        info!(
+            "Remote: Logging in agent: {} to region: {}",
+            user_id, region_id
+        );
 
         let mut params = HashMap::new();
         params.insert("UserID".to_string(), user_id.to_string());
@@ -147,12 +176,16 @@ impl PresenceServiceTrait for RemotePresenceService {
 
         let response = self.send_request("login", &params).await?;
 
-        let result = response.get("result")
+        let result = response
+            .get("result")
             .map(|s| s == "true" || s == "True" || s == "TRUE")
             .unwrap_or(false);
 
         if result {
-            info!("Remote: Agent logged in: {} (session: {})", user_id, session_id);
+            info!(
+                "Remote: Agent logged in: {} (session: {})",
+                user_id, session_id
+            );
         } else {
             warn!("Remote: Failed to login agent: {}", user_id);
         }
@@ -168,13 +201,17 @@ impl PresenceServiceTrait for RemotePresenceService {
 
         let response = self.send_request("logout", &params).await?;
 
-        Ok(response.get("result")
+        Ok(response
+            .get("result")
             .map(|s| s == "true" || s == "True" || s == "TRUE")
             .unwrap_or(false))
     }
 
     async fn report_agent(&self, session_id: Uuid, region_id: Uuid) -> Result<bool> {
-        debug!("Remote: Reporting agent location: {} in region: {}", session_id, region_id);
+        debug!(
+            "Remote: Reporting agent location: {} in region: {}",
+            session_id, region_id
+        );
 
         let mut params = HashMap::new();
         params.insert("SessionID".to_string(), session_id.to_string());
@@ -182,7 +219,8 @@ impl PresenceServiceTrait for RemotePresenceService {
 
         let response = self.send_request("report", &params).await?;
 
-        Ok(response.get("result")
+        Ok(response
+            .get("result")
             .map(|s| s == "true" || s == "True" || s == "TRUE")
             .unwrap_or(false))
     }
@@ -195,7 +233,8 @@ impl PresenceServiceTrait for RemotePresenceService {
 
         let response = self.send_request("getagent", &params).await?;
 
-        let result = response.get("result")
+        let result = response
+            .get("result")
             .map(|s| s != "null" && s != "Failure")
             .unwrap_or(true);
 
@@ -213,7 +252,8 @@ impl PresenceServiceTrait for RemotePresenceService {
             return Ok(Vec::new());
         }
 
-        let user_ids_str = user_ids.iter()
+        let user_ids_str = user_ids
+            .iter()
             .map(|id| id.to_string())
             .collect::<Vec<_>>()
             .join(",");
@@ -241,8 +281,14 @@ mod tests {
         let service = RemotePresenceService::new("http://localhost:8003");
 
         let mut params = HashMap::new();
-        params.insert("UserID".to_string(), "00000000-0000-0000-0000-000000000001".to_string());
-        params.insert("SessionID".to_string(), "00000000-0000-0000-0000-000000000002".to_string());
+        params.insert(
+            "UserID".to_string(),
+            "00000000-0000-0000-0000-000000000001".to_string(),
+        );
+        params.insert(
+            "SessionID".to_string(),
+            "00000000-0000-0000-0000-000000000002".to_string(),
+        );
         params.insert("Online".to_string(), "True".to_string());
 
         let info = service.params_to_presence_info(&params);

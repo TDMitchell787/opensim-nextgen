@@ -1,21 +1,18 @@
 //! Real-time server statistics and live monitoring system
 
+use anyhow::{anyhow, Result};
+use serde::{Deserialize, Serialize};
 use std::{
     collections::HashMap,
     sync::Arc,
     time::{Duration, Instant, SystemTime, UNIX_EPOCH},
 };
-use anyhow::{anyhow, Result};
-use serde::{Deserialize, Serialize};
-use tokio::sync::{RwLock, broadcast};
-use tracing::{info, warn, error, debug};
+use tokio::sync::{broadcast, RwLock};
+use tracing::{debug, error, info, warn};
 
 use super::{
-    metrics::MetricsRegistry,
-    profiling::Profiler,
-    caching::CacheManager,
-    microservices::ServiceMesh,
-    logging::LogAggregator,
+    caching::CacheManager, logging::LogAggregator, metrics::MetricsRegistry,
+    microservices::ServiceMesh, profiling::Profiler,
 };
 
 /// Real-time statistics configuration
@@ -233,7 +230,7 @@ impl RealTimeStatsCollector {
         log_aggregator: Arc<LogAggregator>,
     ) -> Self {
         let (tx, _) = broadcast::channel(1000);
-        
+
         Self {
             config,
             metrics_registry,
@@ -289,19 +286,16 @@ impl RealTimeStatsCollector {
     pub async fn get_stats_history(&self, limit: Option<usize>) -> Vec<RealTimeStats> {
         let history = self.stats_history.read().await;
         let limit = limit.unwrap_or(100);
-        
-        history.iter()
-            .rev()
-            .take(limit)
-            .cloned()
-            .collect()
+
+        history.iter().rev().take(limit).cloned().collect()
     }
 
     /// Get statistics for a specific time range
     pub async fn get_stats_range(&self, start_time: u64, end_time: u64) -> Vec<RealTimeStats> {
         let history = self.stats_history.read().await;
-        
-        history.iter()
+
+        history
+            .iter()
             .filter(|stats| stats.timestamp >= start_time && stats.timestamp <= end_time)
             .cloned()
             .collect()
@@ -311,11 +305,13 @@ impl RealTimeStatsCollector {
     pub async fn get_aggregated_stats(&self, duration_minutes: u32) -> Result<AggregatedStats> {
         let now = current_timestamp();
         let start_time = now - (duration_minutes as u64 * 60);
-        
+
         let stats_range = self.get_stats_range(start_time, now).await;
-        
+
         if stats_range.is_empty() {
-            return Err(anyhow!("No statistics available for the specified time range"));
+            return Err(anyhow!(
+                "No statistics available for the specified time range"
+            ));
         }
 
         Ok(AggregatedStats::from_stats_range(&stats_range))
@@ -333,11 +329,12 @@ impl RealTimeStatsCollector {
         let server_start_time = self.server_start_time;
 
         tokio::spawn(async move {
-            let mut interval = tokio::time::interval(Duration::from_millis(config.collection_interval_ms));
-            
+            let mut interval =
+                tokio::time::interval(Duration::from_millis(config.collection_interval_ms));
+
             loop {
                 interval.tick().await;
-                
+
                 match Self::collect_stats(
                     &metrics_registry,
                     &profiler,
@@ -345,17 +342,20 @@ impl RealTimeStatsCollector {
                     &service_mesh,
                     &log_aggregator,
                     server_start_time,
-                ).await {
+                )
+                .await
+                {
                     Ok(stats) => {
                         // Update current stats
                         *current_stats.write().await = Some(stats.clone());
-                        
+
                         // Add to history
                         let mut history = stats_history.write().await;
                         history.push(stats);
-                        
+
                         // Limit history size
-                        let max_history_size = (config.retention_minutes as usize * 60 * 1000) / config.collection_interval_ms as usize;
+                        let max_history_size = (config.retention_minutes as usize * 60 * 1000)
+                            / config.collection_interval_ms as usize;
                         if history.len() > max_history_size {
                             let drain_count = history.len() - max_history_size;
                             history.drain(0..drain_count);
@@ -376,21 +376,22 @@ impl RealTimeStatsCollector {
         let sequence_counter = self.sequence_counter.clone();
 
         tokio::spawn(async move {
-            let mut interval = tokio::time::interval(Duration::from_millis(config.broadcast_interval_ms));
-            
+            let mut interval =
+                tokio::time::interval(Duration::from_millis(config.broadcast_interval_ms));
+
             loop {
                 interval.tick().await;
-                
+
                 if let Some(stats) = current_stats.read().await.clone() {
                     let mut seq = sequence_counter.write().await;
                     *seq += 1;
-                    
+
                     let event = StatsEvent {
                         event_type: StatsEventType::PeriodicUpdate,
                         data: stats,
                         sequence: *seq,
                     };
-                    
+
                     if let Err(e) = broadcaster.send(event) {
                         debug!("No active subscribers for real-time statistics");
                     }
@@ -405,36 +406,42 @@ impl RealTimeStatsCollector {
 
         tokio::spawn(async move {
             let mut interval = tokio::time::interval(Duration::from_secs(300)); // Clean up every 5 minutes
-            
+
             loop {
                 interval.tick().await;
-                
+
                 let mut history = stats_history.write().await;
                 let now = current_timestamp();
                 let cutoff_time = now - (retention_minutes as u64 * 60);
-                
+
                 let initial_len = history.len();
                 history.retain(|stats| stats.timestamp >= cutoff_time);
-                
+
                 if history.len() < initial_len {
-                    debug!("Cleaned up {} old statistics entries", initial_len - history.len());
+                    debug!(
+                        "Cleaned up {} old statistics entries",
+                        initial_len - history.len()
+                    );
                 }
             }
         });
     }
 
     async fn start_websocket_server(&self, port: u16) -> Result<()> {
-        info!("Starting WebSocket server for real-time statistics on port {}", port);
-        
+        info!(
+            "Starting WebSocket server for real-time statistics on port {}",
+            port
+        );
+
         let event_broadcaster = self.event_broadcaster.clone();
         let config = self.config.clone();
-        
+
         tokio::spawn(async move {
             if let Err(e) = Self::run_websocket_server(port, event_broadcaster, config).await {
                 error!("WebSocket server failed: {}", e);
             }
         });
-        
+
         Ok(())
     }
 
@@ -444,16 +451,16 @@ impl RealTimeStatsCollector {
         config: RealTimeStatsConfig,
     ) -> Result<()> {
         use axum::{
-            extract::ws::{WebSocket, WebSocketUpgrade, Message},
+            extract::ws::{Message, WebSocket, WebSocketUpgrade},
             response::Response,
             routing::get,
             Router,
         };
         use futures_util::{sink::SinkExt, stream::StreamExt};
         use std::sync::atomic::{AtomicUsize, Ordering};
-        
+
         static CONNECTED_CLIENTS: AtomicUsize = AtomicUsize::new(0);
-        
+
         async fn websocket_handler(
             ws: WebSocketUpgrade,
             event_broadcaster: broadcast::Sender<StatsEvent>,
@@ -461,25 +468,28 @@ impl RealTimeStatsCollector {
         ) -> Response {
             ws.on_upgrade(move |socket| handle_websocket(socket, event_broadcaster, config))
         }
-        
+
         async fn handle_websocket(
             socket: WebSocket,
             event_broadcaster: broadcast::Sender<StatsEvent>,
             config: RealTimeStatsConfig,
         ) {
             let client_count = CONNECTED_CLIENTS.fetch_add(1, Ordering::SeqCst) + 1;
-            info!("New WebSocket client connected. Total clients: {}", client_count);
-            
+            info!(
+                "New WebSocket client connected. Total clients: {}",
+                client_count
+            );
+
             // Check connection limit
             if client_count > config.max_subscribers {
                 warn!("Too many WebSocket connections, rejecting client");
                 let _ = CONNECTED_CLIENTS.fetch_sub(1, Ordering::SeqCst);
                 return;
             }
-            
+
             let (mut sender, mut receiver) = socket.split();
             let mut stats_receiver = event_broadcaster.subscribe();
-            
+
             // Send initial welcome message
             let welcome_msg = serde_json::json!({
                 "type": "welcome",
@@ -488,11 +498,11 @@ impl RealTimeStatsCollector {
                 "collection_interval_ms": config.collection_interval_ms,
                 "broadcast_interval_ms": config.broadcast_interval_ms
             });
-            
+
             if let Ok(msg_text) = serde_json::to_string(&welcome_msg) {
                 let _ = sender.send(Message::Text(msg_text)).await;
             }
-            
+
             // Spawn task to send statistics updates
             let sender_task = tokio::spawn(async move {
                 while let Ok(stats_event) = stats_receiver.recv().await {
@@ -508,7 +518,7 @@ impl RealTimeStatsCollector {
                     }
                 }
             });
-            
+
             // Handle incoming messages from client
             let receiver_task = tokio::spawn(async move {
                 while let Some(msg) = receiver.next().await {
@@ -535,36 +545,47 @@ impl RealTimeStatsCollector {
                     }
                 }
             });
-            
+
             // Wait for either task to complete (connection closed)
             tokio::select! {
                 _ = sender_task => {},
                 _ = receiver_task => {},
             }
-            
+
             let remaining_clients = CONNECTED_CLIENTS.fetch_sub(1, Ordering::SeqCst) - 1;
-            info!("WebSocket client disconnected. Remaining clients: {}", remaining_clients);
+            info!(
+                "WebSocket client disconnected. Remaining clients: {}",
+                remaining_clients
+            );
         }
-        
+
         let app = Router::new()
-            .route("/ws", get({
-                let broadcaster = event_broadcaster.clone();
-                let cfg = config.clone();
-                move |ws| websocket_handler(ws, broadcaster, cfg)
-            }))
-            .route("/", get(|| async { "OpenSim Real-time Statistics WebSocket Server" }))
+            .route(
+                "/ws",
+                get({
+                    let broadcaster = event_broadcaster.clone();
+                    let cfg = config.clone();
+                    move |ws| websocket_handler(ws, broadcaster, cfg)
+                }),
+            )
+            .route(
+                "/",
+                get(|| async { "OpenSim Real-time Statistics WebSocket Server" }),
+            )
             .route("/health", get(|| async { "OK" }));
-        
+
         let addr = format!("0.0.0.0:{}", port);
-        let listener = tokio::net::TcpListener::bind(&addr).await
+        let listener = tokio::net::TcpListener::bind(&addr)
+            .await
             .map_err(|e| anyhow!("Failed to bind WebSocket server to {}: {}", addr, e))?;
-        
+
         info!("WebSocket server listening on {}", addr);
         info!("WebSocket endpoint: ws://{}/ws", addr);
-        
-        axum::serve(listener, app).await
+
+        axum::serve(listener, app)
+            .await
             .map_err(|e| anyhow!("WebSocket server error: {}", e))?;
-        
+
         Ok(())
     }
 
@@ -577,7 +598,7 @@ impl RealTimeStatsCollector {
         server_start_time: Instant,
     ) -> Result<RealTimeStats> {
         let timestamp = current_timestamp();
-        
+
         // Collect server info
         let server_info = ServerInfo {
             uptime_seconds: server_start_time.elapsed().as_secs(),
@@ -612,22 +633,28 @@ impl RealTimeStatsCollector {
             degraded_services: 1,
             unhealthy_services: 0,
             service_details: HashMap::from([
-                ("RegionServer".to_string(), ServiceDetail {
-                    name: "RegionServer".to_string(),
-                    status: "healthy".to_string(),
-                    instances: 3,
-                    requests_per_second: 45.0,
-                    error_rate_percent: 0.1,
-                    last_health_check: timestamp - 30,
-                }),
-                ("AssetService".to_string(), ServiceDetail {
-                    name: "AssetService".to_string(),
-                    status: "degraded".to_string(),
-                    instances: 2,
-                    requests_per_second: 25.0,
-                    error_rate_percent: 2.5,
-                    last_health_check: timestamp - 60,
-                }),
+                (
+                    "RegionServer".to_string(),
+                    ServiceDetail {
+                        name: "RegionServer".to_string(),
+                        status: "healthy".to_string(),
+                        instances: 3,
+                        requests_per_second: 45.0,
+                        error_rate_percent: 0.1,
+                        last_health_check: timestamp - 30,
+                    },
+                ),
+                (
+                    "AssetService".to_string(),
+                    ServiceDetail {
+                        name: "AssetService".to_string(),
+                        status: "degraded".to_string(),
+                        instances: 2,
+                        requests_per_second: 25.0,
+                        error_rate_percent: 2.5,
+                        last_health_check: timestamp - 60,
+                    },
+                ),
             ]),
         };
 
@@ -665,8 +692,9 @@ impl RealTimeStatsCollector {
             total_scripts: 2341,
             physics_fps: 44.5,
             script_events_per_second: 234.0,
-            region_details: HashMap::from([
-                ("Region1".to_string(), RegionDetail {
+            region_details: HashMap::from([(
+                "Region1".to_string(),
+                RegionDetail {
                     name: "Region1".to_string(),
                     users: 8,
                     objects: 5234,
@@ -675,8 +703,8 @@ impl RealTimeStatsCollector {
                     script_time_ms: 8.3,
                     network_time_ms: 3.2,
                     total_frame_time_ms: 22.2,
-                }),
-            ]),
+                },
+            )]),
         };
 
         // Collect error summary
@@ -684,15 +712,13 @@ impl RealTimeStatsCollector {
             errors_per_minute: 0.5 + rand::random::<f64>() * 2.0,
             warnings_per_minute: 2.0 + rand::random::<f64>() * 3.0,
             critical_errors: 0,
-            recent_errors: vec![
-                ErrorInfo {
-                    timestamp: timestamp - 120,
-                    level: "WARNING".to_string(),
-                    module: "RegionServer".to_string(),
-                    message: "Region connection timeout".to_string(),
-                    count: 1,
-                },
-            ],
+            recent_errors: vec![ErrorInfo {
+                timestamp: timestamp - 120,
+                level: "WARNING".to_string(),
+                module: "RegionServer".to_string(),
+                message: "Region connection timeout".to_string(),
+                count: 1,
+            }],
             error_trends: HashMap::from([
                 ("connection_errors".to_string(), 0.1),
                 ("script_errors".to_string(), 0.3),
@@ -715,23 +741,25 @@ impl RealTimeStatsCollector {
     async fn collect_resource_usage() -> Result<ResourceUsage> {
         // Get current process information
         let pid = std::process::id();
-        
+
         // Get system memory info
-        let (memory_total_mb, memory_available_mb, memory_usage_mb) = Self::get_memory_info().await?;
-        
+        let (memory_total_mb, memory_available_mb, memory_usage_mb) =
+            Self::get_memory_info().await?;
+
         // Get CPU usage - simplified implementation
         let cpu_usage_percent = Self::get_cpu_usage().await.unwrap_or(0.0);
-        
+
         // Get disk usage
         let (disk_usage_gb, disk_total_gb) = Self::get_disk_usage().await.unwrap_or((0.0, 100.0));
-        
+
         // Get load average (Unix-like systems)
-        let (load_1m, load_5m, load_15m) = Self::get_load_average().await.unwrap_or((0.0, 0.0, 0.0));
-        
+        let (load_1m, load_5m, load_15m) =
+            Self::get_load_average().await.unwrap_or((0.0, 0.0, 0.0));
+
         // Get thread and file descriptor count
         let thread_count = Self::get_thread_count().await.unwrap_or(1);
         let fd_count = Self::get_fd_count().await.unwrap_or(0);
-        
+
         Ok(ResourceUsage {
             cpu_usage_percent,
             memory_usage_mb,
@@ -753,7 +781,7 @@ impl RealTimeStatsCollector {
             if let Ok(contents) = tokio::fs::read_to_string("/proc/meminfo").await {
                 let mut total_kb = 0;
                 let mut available_kb = 0;
-                
+
                 for line in contents.lines() {
                     if line.starts_with("MemTotal:") {
                         if let Some(value) = line.split_whitespace().nth(1) {
@@ -765,15 +793,15 @@ impl RealTimeStatsCollector {
                         }
                     }
                 }
-                
+
                 let total_mb = total_kb as f64 / 1024.0;
                 let available_mb = available_kb as f64 / 1024.0;
                 let used_mb = total_mb - available_mb;
-                
+
                 return Ok((total_mb, available_mb, used_mb));
             }
         }
-        
+
         #[cfg(target_os = "macos")]
         {
             // Simplified macOS implementation using system commands
@@ -787,7 +815,7 @@ impl RealTimeStatsCollector {
                 }
             }
         }
-        
+
         // Fallback for other systems or when system calls fail
         Ok((2048.0, 1024.0, 1024.0))
     }
@@ -800,10 +828,11 @@ impl RealTimeStatsCollector {
                     let values: Vec<&str> = cpu_line.split_whitespace().collect();
                     if values.len() >= 8 && values[0] == "cpu" {
                         let idle: u64 = values[4].parse().unwrap_or(0);
-                        let total: u64 = values[1..8].iter()
+                        let total: u64 = values[1..8]
+                            .iter()
                             .map(|v| v.parse::<u64>().unwrap_or(0))
                             .sum();
-                        
+
                         if total > 0 {
                             let usage = 100.0 - (idle as f64 / total as f64 * 100.0);
                             return Some(usage.max(0.0).min(100.0));
@@ -812,7 +841,7 @@ impl RealTimeStatsCollector {
                 }
             }
         }
-        
+
         // Fallback: simulate reasonable CPU usage
         Some(15.0 + rand::random::<f64>() * 25.0)
     }
@@ -822,25 +851,25 @@ impl RealTimeStatsCollector {
         {
             use std::ffi::CString;
             use std::mem;
-            
+
             // Try to get disk usage for root filesystem
             let path = CString::new("/").unwrap();
             let mut stat: libc::statvfs = unsafe { mem::zeroed() };
-            
+
             unsafe {
                 if libc::statvfs(path.as_ptr(), &mut stat) == 0 {
                     let total_bytes = stat.f_blocks as u64 * stat.f_frsize as u64;
                     let free_bytes = stat.f_bavail as u64 * stat.f_frsize as u64;
                     let used_bytes = total_bytes - free_bytes;
-                    
+
                     let total_gb = total_bytes as f64 / (1024.0 * 1024.0 * 1024.0);
                     let used_gb = used_bytes as f64 / (1024.0 * 1024.0 * 1024.0);
-                    
+
                     return Some((used_gb, total_gb));
                 }
             }
         }
-        
+
         // Fallback
         Some((25.5, 100.0))
     }
@@ -858,7 +887,7 @@ impl RealTimeStatsCollector {
                 }
             }
         }
-        
+
         #[cfg(target_os = "macos")]
         {
             // Use uptime command on macOS
@@ -878,7 +907,7 @@ impl RealTimeStatsCollector {
                 }
             }
         }
-        
+
         Some((0.5, 0.7, 0.9))
     }
 
@@ -887,7 +916,7 @@ impl RealTimeStatsCollector {
         {
             let pid = std::process::id();
             let path = format!("/proc/{}/status", pid);
-            
+
             if let Ok(contents) = tokio::fs::read_to_string(&path).await {
                 for line in contents.lines() {
                     if line.starts_with("Threads:") {
@@ -898,8 +927,12 @@ impl RealTimeStatsCollector {
                 }
             }
         }
-        
-        Some(std::thread::available_parallelism().map(|n| n.get() as u32).unwrap_or(4))
+
+        Some(
+            std::thread::available_parallelism()
+                .map(|n| n.get() as u32)
+                .unwrap_or(4),
+        )
     }
 
     async fn get_fd_count() -> Option<u32> {
@@ -907,7 +940,7 @@ impl RealTimeStatsCollector {
         {
             let pid = std::process::id();
             let path = format!("/proc/{}/fd", pid);
-            
+
             if let Ok(entries) = tokio::fs::read_dir(&path).await {
                 let mut count = 0;
                 let mut entries = entries;
@@ -917,7 +950,7 @@ impl RealTimeStatsCollector {
                 return Some(count);
             }
         }
-        
+
         Some(50) // Reasonable default
     }
 }
@@ -953,22 +986,61 @@ impl AggregatedStats {
             1
         };
 
-        let avg_cpu_usage = stats.iter().map(|s| s.resource_usage.cpu_usage_percent).sum::<f64>() / sample_count as f64;
-        let max_cpu_usage = stats.iter().map(|s| s.resource_usage.cpu_usage_percent).fold(0.0, f64::max);
-        
-        let avg_memory_usage = stats.iter().map(|s| s.resource_usage.memory_usage_mb).sum::<f64>() / sample_count as f64;
-        let max_memory_usage = stats.iter().map(|s| s.resource_usage.memory_usage_mb).fold(0.0, f64::max);
-        
-        let avg_requests_per_second = stats.iter().map(|s| s.performance_metrics.requests_per_second).sum::<f64>() / sample_count as f64;
-        let max_requests_per_second = stats.iter().map(|s| s.performance_metrics.requests_per_second).fold(0.0, f64::max);
-        
-        let avg_response_time = stats.iter().map(|s| s.performance_metrics.average_response_time_ms).sum::<f64>() / sample_count as f64;
-        let max_response_time = stats.iter().map(|s| s.performance_metrics.average_response_time_ms).fold(0.0, f64::max);
-        
-        let total_errors = stats.iter().map(|s| s.error_summary.errors_per_minute as u32).sum::<u32>();
-        
-        let avg_users_online = stats.iter().map(|s| s.user_activity.online_users as f64).sum::<f64>() / sample_count as f64;
-        let max_users_online = stats.iter().map(|s| s.user_activity.online_users).max().unwrap_or(0);
+        let avg_cpu_usage = stats
+            .iter()
+            .map(|s| s.resource_usage.cpu_usage_percent)
+            .sum::<f64>()
+            / sample_count as f64;
+        let max_cpu_usage = stats
+            .iter()
+            .map(|s| s.resource_usage.cpu_usage_percent)
+            .fold(0.0, f64::max);
+
+        let avg_memory_usage = stats
+            .iter()
+            .map(|s| s.resource_usage.memory_usage_mb)
+            .sum::<f64>()
+            / sample_count as f64;
+        let max_memory_usage = stats
+            .iter()
+            .map(|s| s.resource_usage.memory_usage_mb)
+            .fold(0.0, f64::max);
+
+        let avg_requests_per_second = stats
+            .iter()
+            .map(|s| s.performance_metrics.requests_per_second)
+            .sum::<f64>()
+            / sample_count as f64;
+        let max_requests_per_second = stats
+            .iter()
+            .map(|s| s.performance_metrics.requests_per_second)
+            .fold(0.0, f64::max);
+
+        let avg_response_time = stats
+            .iter()
+            .map(|s| s.performance_metrics.average_response_time_ms)
+            .sum::<f64>()
+            / sample_count as f64;
+        let max_response_time = stats
+            .iter()
+            .map(|s| s.performance_metrics.average_response_time_ms)
+            .fold(0.0, f64::max);
+
+        let total_errors = stats
+            .iter()
+            .map(|s| s.error_summary.errors_per_minute as u32)
+            .sum::<u32>();
+
+        let avg_users_online = stats
+            .iter()
+            .map(|s| s.user_activity.online_users as f64)
+            .sum::<f64>()
+            / sample_count as f64;
+        let max_users_online = stats
+            .iter()
+            .map(|s| s.user_activity.online_users)
+            .max()
+            .unwrap_or(0);
 
         Self {
             time_period_minutes: time_period as u32,
@@ -1027,12 +1099,12 @@ mod tests {
         let metrics = Arc::new(super::super::metrics::MetricsRegistry::new());
         let profiler = Arc::new(super::super::profiling::Profiler::new(
             super::super::profiling::ProfilingConfig::default(),
-            metrics.clone()
+            metrics.clone(),
         ));
-        
+
         // Create mock components for testing
         // In a real test, these would be properly initialized
-        
+
         Ok(())
     }
 
@@ -1040,7 +1112,7 @@ mod tests {
     async fn test_stats_aggregation() -> Result<()> {
         // Test aggregation logic
         let mut stats_vec = Vec::new();
-        
+
         // Create some sample statistics
         for i in 0..10 {
             let stats = RealTimeStats {
@@ -1124,11 +1196,11 @@ mod tests {
         }
 
         let aggregated = AggregatedStats::from_stats_range(&stats_vec);
-        
+
         assert_eq!(aggregated.sample_count, 10);
         assert!(aggregated.avg_cpu_usage > 50.0);
         assert!(aggregated.max_cpu_usage >= aggregated.avg_cpu_usage);
-        
+
         Ok(())
     }
 }

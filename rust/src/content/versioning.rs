@@ -2,19 +2,19 @@
 //!
 //! Provides version control, change tracking, and rollback capabilities.
 
-use uuid::Uuid;
+use super::{ContentError, ContentMetadata, ContentResult};
 use chrono::{DateTime, Utc};
 use serde::{Deserialize, Serialize};
+use sha2::{Digest, Sha256};
 use std::collections::HashMap;
 use std::sync::Arc;
 use tokio::sync::RwLock;
 use tracing::{debug, info, warn};
-use sha2::{Sha256, Digest};
-use super::{ContentResult, ContentError, ContentMetadata};
+use uuid::Uuid;
 
 mod version_serde {
-    use serde::{Deserialize, Deserializer, Serialize, Serializer};
     use semver::Version;
+    use serde::{Deserialize, Deserializer, Serialize, Serializer};
 
     pub fn serialize<S>(version: &Version, serializer: S) -> Result<S::Ok, S::Error>
     where
@@ -111,7 +111,8 @@ impl ContentVersionManager {
             v.is_current = false;
         }
 
-        let (new_version_number, parent_version_id) = if let Some(latest) = content_versions.last() {
+        let (new_version_number, parent_version_id) = if let Some(latest) = content_versions.last()
+        {
             let mut ver = latest.version_number.clone();
             ver.patch += 1;
             (ver, Some(latest.version_id))
@@ -147,8 +148,10 @@ impl ContentVersionManager {
             content_versions.drain(0..remove_count);
         }
 
-        info!("Created version {} ({}) for content {}: {}",
-            version_id, new_version_number, content_id, change_description);
+        info!(
+            "Created version {} ({}) for content {}: {}",
+            version_id, new_version_number, content_id, change_description
+        );
 
         Ok(version_id)
     }
@@ -160,7 +163,9 @@ impl ContentVersionManager {
         change_description: String,
         data: Vec<u8>,
     ) -> ContentResult<Uuid> {
-        let version_id = self.create_version(content_id, metadata, change_description).await?;
+        let version_id = self
+            .create_version(content_id, metadata, change_description)
+            .await?;
 
         let mut snapshots = self.version_snapshots.write().await;
         snapshots.insert(version_id, data);
@@ -169,13 +174,20 @@ impl ContentVersionManager {
         Ok(version_id)
     }
 
-    pub async fn get_version_history(&self, content_id: Uuid) -> ContentResult<Vec<ContentVersion>> {
+    pub async fn get_version_history(
+        &self,
+        content_id: Uuid,
+    ) -> ContentResult<Vec<ContentVersion>> {
         let versions = self.versions.read().await;
 
         if let Some(content_versions) = versions.get(&content_id) {
             let mut result: Vec<ContentVersion> = content_versions.clone();
             result.sort_by(|a, b| b.created_at.cmp(&a.created_at));
-            debug!("Retrieved {} versions for content {}", result.len(), content_id);
+            debug!(
+                "Retrieved {} versions for content {}",
+                result.len(),
+                content_id
+            );
             Ok(result)
         } else {
             debug!("No version history for content {}", content_id);
@@ -183,11 +195,16 @@ impl ContentVersionManager {
         }
     }
 
-    pub async fn get_version(&self, content_id: Uuid, version_id: Uuid) -> ContentResult<ContentVersion> {
+    pub async fn get_version(
+        &self,
+        content_id: Uuid,
+        version_id: Uuid,
+    ) -> ContentResult<ContentVersion> {
         let versions = self.versions.read().await;
 
         if let Some(content_versions) = versions.get(&content_id) {
-            content_versions.iter()
+            content_versions
+                .iter()
                 .find(|v| v.version_id == version_id)
                 .cloned()
                 .ok_or_else(|| ContentError::NotFound { id: version_id })
@@ -200,7 +217,8 @@ impl ContentVersionManager {
         let versions = self.versions.read().await;
 
         if let Some(content_versions) = versions.get(&content_id) {
-            content_versions.iter()
+            content_versions
+                .iter()
                 .find(|v| v.is_current)
                 .cloned()
                 .ok_or_else(|| ContentError::NotFound { id: content_id })
@@ -212,16 +230,23 @@ impl ContentVersionManager {
     pub async fn get_version_data(&self, version_id: Uuid) -> ContentResult<Vec<u8>> {
         let snapshots = self.version_snapshots.read().await;
 
-        snapshots.get(&version_id)
+        snapshots
+            .get(&version_id)
             .cloned()
             .ok_or_else(|| ContentError::NotFound { id: version_id })
     }
 
-    pub async fn rollback_to_version(&mut self, content_id: Uuid, version_id: Uuid) -> ContentResult<()> {
+    pub async fn rollback_to_version(
+        &mut self,
+        content_id: Uuid,
+        version_id: Uuid,
+    ) -> ContentResult<()> {
         let mut versions = self.versions.write().await;
 
         if let Some(content_versions) = versions.get_mut(&content_id) {
-            let target_idx = content_versions.iter().position(|v| v.version_id == version_id)
+            let target_idx = content_versions
+                .iter()
+                .position(|v| v.version_id == version_id)
                 .ok_or_else(|| ContentError::NotFound { id: version_id })?;
 
             for v in content_versions.iter_mut() {
@@ -233,7 +258,10 @@ impl ContentVersionManager {
             rollback_version.created_at = Utc::now();
             rollback_version.is_current = true;
             rollback_version.parent_version_id = content_versions.last().map(|v| v.version_id);
-            rollback_version.change_description = format!("Rollback to version {}", content_versions[target_idx].version_number);
+            rollback_version.change_description = format!(
+                "Rollback to version {}",
+                content_versions[target_idx].version_number
+            );
 
             if let Some(latest) = content_versions.last() {
                 let mut new_ver = latest.version_number.clone();
@@ -253,8 +281,10 @@ impl ContentVersionManager {
 
             content_versions.push(rollback_version.clone());
 
-            info!("Rolled back content {} to version {}, created new version {}",
-                content_id, version_id, new_version_id);
+            info!(
+                "Rolled back content {} to version {}, created new version {}",
+                content_id, version_id, new_version_id
+            );
 
             Ok(())
         } else {
@@ -262,7 +292,12 @@ impl ContentVersionManager {
         }
     }
 
-    pub async fn compare_versions(&self, content_id: Uuid, from_version_id: Uuid, to_version_id: Uuid) -> ContentResult<VersionDiff> {
+    pub async fn compare_versions(
+        &self,
+        content_id: Uuid,
+        from_version_id: Uuid,
+        to_version_id: Uuid,
+    ) -> ContentResult<VersionDiff> {
         let from_version = self.get_version(content_id, from_version_id).await?;
         let to_version = self.get_version(content_id, to_version_id).await?;
 
@@ -286,7 +321,8 @@ impl ContentVersionManager {
             });
         }
 
-        let diff_size = (to_version.file_size as i64 - from_version.file_size as i64).unsigned_abs();
+        let diff_size =
+            (to_version.file_size as i64 - from_version.file_size as i64).unsigned_abs();
 
         Ok(VersionDiff {
             from_version: from_version_id,
@@ -296,11 +332,17 @@ impl ContentVersionManager {
         })
     }
 
-    pub async fn delete_version(&mut self, content_id: Uuid, version_id: Uuid) -> ContentResult<()> {
+    pub async fn delete_version(
+        &mut self,
+        content_id: Uuid,
+        version_id: Uuid,
+    ) -> ContentResult<()> {
         let mut versions = self.versions.write().await;
 
         if let Some(content_versions) = versions.get_mut(&content_id) {
-            let idx = content_versions.iter().position(|v| v.version_id == version_id)
+            let idx = content_versions
+                .iter()
+                .position(|v| v.version_id == version_id)
                 .ok_or_else(|| ContentError::NotFound { id: version_id })?;
 
             if content_versions[idx].is_current && content_versions.len() > 1 {
@@ -327,7 +369,11 @@ impl ContentVersionManager {
         }
     }
 
-    pub async fn prune_old_versions(&mut self, content_id: Uuid, keep_count: usize) -> ContentResult<u32> {
+    pub async fn prune_old_versions(
+        &mut self,
+        content_id: Uuid,
+        keep_count: usize,
+    ) -> ContentResult<u32> {
         let mut versions = self.versions.write().await;
 
         if let Some(content_versions) = versions.get_mut(&content_id) {
@@ -339,7 +385,8 @@ impl ContentVersionManager {
             let mut removed = 0u32;
             let mut snapshots = self.version_snapshots.write().await;
 
-            let version_ids_to_remove: Vec<Uuid> = content_versions.iter()
+            let version_ids_to_remove: Vec<Uuid> = content_versions
+                .iter()
                 .take(remove_count)
                 .filter(|v| !v.is_current)
                 .map(|v| v.version_id)
@@ -350,9 +397,13 @@ impl ContentVersionManager {
                 removed += 1;
             }
 
-            content_versions.retain(|v| v.is_current || !version_ids_to_remove.contains(&v.version_id));
+            content_versions
+                .retain(|v| v.is_current || !version_ids_to_remove.contains(&v.version_id));
 
-            info!("Pruned {} old versions from content {}", removed, content_id);
+            info!(
+                "Pruned {} old versions from content {}",
+                removed, content_id
+            );
             Ok(removed)
         } else {
             Ok(0)

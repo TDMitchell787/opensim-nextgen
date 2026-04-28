@@ -2,14 +2,17 @@
 //!
 //! Provides batch import, format conversion, and automated processing.
 
-use std::path::PathBuf;
+use super::{
+    ContentError, ContentImportConfig, ContentQuality, ContentResult, ContentType,
+    ImportNotificationSettings,
+};
+use serde::{Deserialize, Serialize};
 use std::collections::HashMap;
+use std::path::PathBuf;
 use std::sync::Arc;
 use tokio::sync::RwLock;
+use tracing::{debug, error, info, warn};
 use uuid::Uuid;
-use serde::{Deserialize, Serialize};
-use tracing::{debug, info, warn, error};
-use super::{ContentResult, ContentError, ContentType, ContentImportConfig, ContentQuality, ImportNotificationSettings};
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct ContentImportJob {
@@ -151,7 +154,10 @@ impl ContentImportManager {
                         asset_id: asset,
                         source_path: path.clone(),
                         asset_type: target_type.clone(),
-                        file_size: tokio::fs::metadata(&path).await.map(|m| m.len()).unwrap_or(0),
+                        file_size: tokio::fs::metadata(&path)
+                            .await
+                            .map(|m| m.len())
+                            .unwrap_or(0),
                         processing_time_ms: start.elapsed().as_millis() as u32,
                     });
                     debug!("Imported {} successfully", path.display());
@@ -198,8 +204,12 @@ impl ContentImportManager {
 
                 job.progress = 100.0;
 
-                info!("Import job {} completed: {}/{} files imported",
-                    job_id, job.imported_assets.len(), job.total_count);
+                info!(
+                    "Import job {} completed: {}/{} files imported",
+                    job_id,
+                    job.imported_assets.len(),
+                    job.total_count
+                );
             }
         }
 
@@ -214,11 +224,12 @@ impl ContentImportManager {
     ) -> ContentResult<Uuid> {
         if !path.exists() {
             return Err(ContentError::ImportFailed {
-                reason: format!("File not found: {}", path.display())
+                reason: format!("File not found: {}", path.display()),
             });
         }
 
-        let extension = path.extension()
+        let extension = path
+            .extension()
             .map(|e| e.to_string_lossy().to_lowercase())
             .unwrap_or_default();
 
@@ -241,14 +252,18 @@ impl ContentImportManager {
 
         if metadata.len() == 0 {
             return Err(ContentError::ValidationError {
-                reason: "File is empty".to_string()
+                reason: "File is empty".to_string(),
             });
         }
 
         const MAX_FILE_SIZE: u64 = 100 * 1024 * 1024; // 100MB
         if metadata.len() > MAX_FILE_SIZE {
             return Err(ContentError::ValidationError {
-                reason: format!("File too large: {} bytes (max: {} bytes)", metadata.len(), MAX_FILE_SIZE)
+                reason: format!(
+                    "File too large: {} bytes (max: {} bytes)",
+                    metadata.len(),
+                    MAX_FILE_SIZE
+                ),
             });
         }
 
@@ -258,7 +273,7 @@ impl ContentImportManager {
             ContentType::Texture => {
                 if data.len() < 8 {
                     return Err(ContentError::ValidationError {
-                        reason: "File too small to be a valid image".to_string()
+                        reason: "File too small to be a valid image".to_string(),
                     });
                 }
                 let is_valid = data.starts_with(&[0x89, 0x50, 0x4E, 0x47]) || // PNG
@@ -267,7 +282,7 @@ impl ContentImportManager {
                               (data.starts_with(b"RIFF") && data.len() > 12 && &data[8..12] == b"WEBP"); // WEBP
                 if !is_valid {
                     return Err(ContentError::ValidationError {
-                        reason: "Invalid image format".to_string()
+                        reason: "Invalid image format".to_string(),
                     });
                 }
             }
@@ -278,18 +293,27 @@ impl ContentImportManager {
                               data.starts_with(b"fLaC"); // FLAC
                 if !is_valid {
                     return Err(ContentError::ValidationError {
-                        reason: "Invalid audio format".to_string()
+                        reason: "Invalid audio format".to_string(),
                     });
                 }
             }
             ContentType::Model3D => {
-                let extension = path.extension()
+                let extension = path
+                    .extension()
                     .map(|e| e.to_string_lossy().to_lowercase())
                     .unwrap_or_default();
 
                 let is_valid = match extension.as_str() {
-                    "obj" => data.starts_with(b"#") || data.starts_with(b"v ") || data.starts_with(b"mtllib"),
-                    "fbx" => data.len() >= 20 && (&data[0..20] == b"Kaydara FBX Binary  " || data.starts_with(b"; FBX")),
+                    "obj" => {
+                        data.starts_with(b"#")
+                            || data.starts_with(b"v ")
+                            || data.starts_with(b"mtllib")
+                    }
+                    "fbx" => {
+                        data.len() >= 20
+                            && (&data[0..20] == b"Kaydara FBX Binary  "
+                                || data.starts_with(b"; FBX"))
+                    }
                     "gltf" => data.starts_with(b"{"),
                     "glb" => data.len() >= 4 && &data[0..4] == b"glTF",
                     "dae" => data.windows(8).any(|w| w == b"COLLADA"),
@@ -298,7 +322,7 @@ impl ContentImportManager {
 
                 if !is_valid {
                     return Err(ContentError::ValidationError {
-                        reason: format!("Invalid {} model format", extension.to_uppercase())
+                        reason: format!("Invalid {} model format", extension.to_uppercase()),
                     });
                 }
             }
@@ -309,7 +333,10 @@ impl ContentImportManager {
     }
 
     pub async fn get_import_job_status(&self, job_id: Uuid) -> ContentResult<ContentImportJob> {
-        self.jobs.read().await.get(&job_id)
+        self.jobs
+            .read()
+            .await
+            .get(&job_id)
             .cloned()
             .ok_or_else(|| ContentError::NotFound { id: job_id })
     }
@@ -323,13 +350,13 @@ impl ContentImportManager {
                     std::time::SystemTime::now()
                         .duration_since(std::time::UNIX_EPOCH)
                         .unwrap()
-                        .as_secs()
+                        .as_secs(),
                 );
                 info!("Cancelled import job {}", job_id);
                 Ok(())
             } else {
                 Err(ContentError::InvalidOperation {
-                    reason: format!("Cannot cancel job in {:?} status", job.status)
+                    reason: format!("Cannot cancel job in {:?} status", job.status),
                 })
             }
         } else {
@@ -338,7 +365,10 @@ impl ContentImportManager {
     }
 
     pub async fn list_jobs(&self, limit: usize) -> Vec<ContentImportJob> {
-        self.jobs.read().await.values()
+        self.jobs
+            .read()
+            .await
+            .values()
             .take(limit)
             .cloned()
             .collect()
@@ -353,11 +383,9 @@ impl ContentImportManager {
         let mut jobs = self.jobs.write().await;
         let before_count = jobs.len();
 
-        jobs.retain(|_, job| {
-            match job.completed_at {
-                Some(completed) if now - completed > max_age_seconds => false,
-                _ => true,
-            }
+        jobs.retain(|_, job| match job.completed_at {
+            Some(completed) if now - completed > max_age_seconds => false,
+            _ => true,
         });
 
         let removed = before_count - jobs.len();

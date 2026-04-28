@@ -2,16 +2,16 @@
 // Universal mobile client platform supporting iOS/Android VR
 // Building on Phase 32 VR infrastructure for mobile optimization
 
-use crate::vr::VRManager;
-use crate::monitoring::metrics::MetricsCollector;
 use crate::database::DatabaseManager;
+use crate::monitoring::metrics::MetricsCollector;
+use crate::vr::VRManager;
+use anyhow::{Error as AnyhowError, Result};
+use chrono::{DateTime, Utc};
+use serde::{Deserialize, Serialize};
+use std::collections::HashMap;
 use std::sync::Arc;
 use tokio::sync::RwLock;
-use serde::{Deserialize, Serialize};
 use uuid::Uuid;
-use anyhow::{Result, Error as AnyhowError};
-use std::collections::HashMap;
-use chrono::{DateTime, Utc};
 
 #[derive(Debug, Clone)]
 pub struct MobileRuntimeManager {
@@ -131,10 +131,10 @@ impl std::fmt::Display for MobilePlatform {
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub enum TextureCompression {
-    PVRTC,      // iOS
-    ETC2,       // Android
-    ASTC,       // Universal
-    Adaptive,   // Auto-select based on platform
+    PVRTC,    // iOS
+    ETC2,     // Android
+    ASTC,     // Universal
+    Adaptive, // Auto-select based on platform
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
@@ -191,9 +191,9 @@ pub struct ComfortSettings {
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub enum ComfortLevel {
-    Comfortable,    // Maximum comfort features
-    Moderate,       // Balanced comfort/immersion
-    Intense,        // Minimal comfort features
+    Comfortable, // Maximum comfort features
+    Moderate,    // Balanced comfort/immersion
+    Intense,     // Minimal comfort features
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
@@ -381,11 +381,26 @@ pub struct VRRenderedFrame {
 
 #[derive(Debug, Clone)]
 pub enum InputEvent {
-    Touch { x: f32, y: f32, phase: TouchPhase },
-    Gesture { gesture_type: GestureType, data: GestureData },
-    Voice { command: String, confidence: f32 },
-    Controller { controller_id: u32, input_data: ControllerInput },
-    Biometric { auth_result: BiometricResult },
+    Touch {
+        x: f32,
+        y: f32,
+        phase: TouchPhase,
+    },
+    Gesture {
+        gesture_type: GestureType,
+        data: GestureData,
+    },
+    Voice {
+        command: String,
+        confidence: f32,
+    },
+    Controller {
+        controller_id: u32,
+        input_data: ControllerInput,
+    },
+    Biometric {
+        auth_result: BiometricResult,
+    },
 }
 
 #[derive(Debug, Clone)]
@@ -539,9 +554,15 @@ impl MobileRuntimeManager {
             config: config.clone(),
             vr_manager,
             platform_adapters: Arc::new(RwLock::new(HashMap::new())),
-            performance_optimizer: Arc::new(MobilePerformanceOptimizer::new(config.performance_settings.clone()).await?),
-            touch_interface: Arc::new(TouchInterfaceManager::new(config.touch_interface_config.clone()).await?),
-            offline_cache: Arc::new(OfflineCacheManager::new(config.offline_capabilities.clone()).await?),
+            performance_optimizer: Arc::new(
+                MobilePerformanceOptimizer::new(config.performance_settings.clone()).await?,
+            ),
+            touch_interface: Arc::new(
+                TouchInterfaceManager::new(config.touch_interface_config.clone()).await?,
+            ),
+            offline_cache: Arc::new(
+                OfflineCacheManager::new(config.offline_capabilities.clone()).await?,
+            ),
             metrics: metrics.clone(),
             db,
             active_sessions: Arc::new(RwLock::new(HashMap::new())),
@@ -597,7 +618,7 @@ impl MobileRuntimeManager {
         device_info: DeviceInfo,
     ) -> Result<Uuid> {
         let session_id = Uuid::new_v4();
-        
+
         let session = MobileSession {
             session_id,
             user_id,
@@ -619,10 +640,15 @@ impl MobileRuntimeManager {
             session_start: Utc::now(),
         };
 
-        self.active_sessions.write().await.insert(session_id, session);
-        
+        self.active_sessions
+            .write()
+            .await
+            .insert(session_id, session);
+
         // Record session creation metrics
-        self.metrics.record_mobile_session_created(user_id, &platform.to_string()).await;
+        self.metrics
+            .record_mobile_session_created(user_id, &platform.to_string())
+            .await;
 
         Ok(session_id)
     }
@@ -631,10 +657,10 @@ impl MobileRuntimeManager {
         let mut sessions = self.active_sessions.write().await;
         if let Some(session) = sessions.get_mut(&session_id) {
             session.vr_mode_active = true;
-            
+
             // Configure mobile VR settings
             self.configure_mobile_vr(session).await?;
-            
+
             self.metrics.record_mobile_vr_enabled(session.user_id).await;
         }
         Ok(())
@@ -643,12 +669,14 @@ impl MobileRuntimeManager {
     async fn configure_mobile_vr(&self, session: &MobileSession) -> Result<()> {
         // Configure VR-specific settings for mobile
         let vr_settings = &self.config.mobile_vr_settings;
-        
+
         // Apply comfort settings
-        self.apply_comfort_settings(&vr_settings.comfort_settings, session).await?;
-        
+        self.apply_comfort_settings(&vr_settings.comfort_settings, session)
+            .await?;
+
         // Configure controllers
-        self.setup_mobile_controllers(&vr_settings.controller_support, session).await?;
+        self.setup_mobile_controllers(&vr_settings.controller_support, session)
+            .await?;
 
         Ok(())
     }
@@ -674,12 +702,19 @@ impl MobileRuntimeManager {
     }
 
     pub async fn get_active_sessions(&self) -> Vec<MobileSession> {
-        self.active_sessions.read().await.values().cloned().collect()
+        self.active_sessions
+            .read()
+            .await
+            .values()
+            .cloned()
+            .collect()
     }
 
     pub async fn optimize_performance(&self, session_id: Uuid) -> Result<()> {
         if let Some(session) = self.active_sessions.read().await.get(&session_id) {
-            self.performance_optimizer.optimize_for_session(session).await?;
+            self.performance_optimizer
+                .optimize_for_session(session)
+                .await?;
         }
         Ok(())
     }
@@ -698,7 +733,9 @@ impl MobilePerformanceOptimizer {
 
     pub async fn collect_performance_metrics(&self, metrics: &MetricsCollector) -> Result<()> {
         // Collect and record mobile-specific performance metrics
-        metrics.record_custom_metric("mobile_performance_check", 1.0, HashMap::new()).await?;
+        metrics
+            .record_custom_metric("mobile_performance_check", 1.0, HashMap::new())
+            .await?;
         Ok(())
     }
 
@@ -736,24 +773,48 @@ impl MetricsCollector {
         let mut tags = HashMap::new();
         tags.insert("user_id".to_string(), user_id.to_string());
         tags.insert("platform".to_string(), platform.to_string());
-        
-        let _ = self.record_custom_metric("mobile_sessions_created_total", 1.0, tags).await;
+
+        let _ = self
+            .record_custom_metric("mobile_sessions_created_total", 1.0, tags)
+            .await;
     }
 
     pub async fn record_mobile_vr_enabled(&self, user_id: Uuid) {
         let mut tags = HashMap::new();
         tags.insert("user_id".to_string(), user_id.to_string());
-        
-        let _ = self.record_custom_metric("mobile_vr_enabled_total", 1.0, tags).await;
+
+        let _ = self
+            .record_custom_metric("mobile_vr_enabled_total", 1.0, tags)
+            .await;
     }
 
     pub async fn record_mobile_performance(&self, session_id: Uuid, metrics: &PerformanceMetrics) {
         let mut tags = HashMap::new();
         tags.insert("session_id".to_string(), session_id.to_string());
-        
-        let _ = self.record_custom_metric("mobile_fps", metrics.current_fps as f64, tags.clone()).await;
-        let _ = self.record_custom_metric("mobile_frame_time_ms", metrics.frame_time_ms as f64, tags.clone()).await;
-        let _ = self.record_custom_metric("mobile_gpu_utilization", metrics.gpu_utilization as f64, tags.clone()).await;
-        let _ = self.record_custom_metric("mobile_memory_usage_mb", metrics.memory_usage_mb as f64, tags).await;
+
+        let _ = self
+            .record_custom_metric("mobile_fps", metrics.current_fps as f64, tags.clone())
+            .await;
+        let _ = self
+            .record_custom_metric(
+                "mobile_frame_time_ms",
+                metrics.frame_time_ms as f64,
+                tags.clone(),
+            )
+            .await;
+        let _ = self
+            .record_custom_metric(
+                "mobile_gpu_utilization",
+                metrics.gpu_utilization as f64,
+                tags.clone(),
+            )
+            .await;
+        let _ = self
+            .record_custom_metric(
+                "mobile_memory_usage_mb",
+                metrics.memory_usage_mb as f64,
+                tags,
+            )
+            .await;
     }
 }

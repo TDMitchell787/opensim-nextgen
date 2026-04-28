@@ -1,15 +1,13 @@
 use anyhow::{anyhow, Result};
 use async_trait::async_trait;
-use uuid::Uuid;
 use std::collections::HashMap;
-use tracing::{info, warn, debug};
+use tracing::{debug, info, warn};
+use uuid::Uuid;
 
-use crate::services::traits::{
-    UserAgentServiceTrait, HGRegionInfo, AgentCircuitData,
-};
 use crate::services::robust::xmlrpc::{
-    XmlRpcValue, build_xmlrpc_call, parse_xmlrpc_response, struct_to_hashmap,
+    build_xmlrpc_call, parse_xmlrpc_response, struct_to_hashmap, XmlRpcValue,
 };
+use crate::services::traits::{AgentCircuitData, HGRegionInfo, UserAgentServiceTrait};
 
 pub struct UserAgentServiceConnector {
     client: reqwest::Client,
@@ -31,13 +29,18 @@ impl UserAgentServiceConnector {
         Self::new(uas_url)
     }
 
-    async fn xmlrpc_call(&self, method: &str, params: HashMap<String, XmlRpcValue>) -> Result<XmlRpcValue> {
+    async fn xmlrpc_call(
+        &self,
+        method: &str,
+        params: HashMap<String, XmlRpcValue>,
+    ) -> Result<XmlRpcValue> {
         let call_body = build_xmlrpc_call(method, &[XmlRpcValue::Struct(params)]);
         let url = format!("{}/", self.uas_url);
 
         info!("UAS XmlRpc call to {}: method={}", url, method);
 
-        let response = self.client
+        let response = self
+            .client
             .post(&url)
             .header("Content-Type", "text/xml")
             .body(call_body)
@@ -46,10 +49,17 @@ impl UserAgentServiceConnector {
             .map_err(|e| anyhow!("UAS XmlRpc call failed: {}", e))?;
 
         let status = response.status();
-        let body = response.text().await
+        let body = response
+            .text()
+            .await
             .map_err(|e| anyhow!("Failed to read UAS response: {}", e))?;
 
-        debug!("UAS XmlRpc response: status={}, body_len={}, body_preview={}", status, body.len(), &body[..std::cmp::min(body.len(), 500)]);
+        debug!(
+            "UAS XmlRpc response: status={}, body_len={}, body_preview={}",
+            status,
+            body.len(),
+            &body[..std::cmp::min(body.len(), 500)]
+        );
 
         parse_xmlrpc_response(&body)
             .map_err(|e| anyhow!("Failed to parse UAS XmlRpc response: {}", e))
@@ -60,7 +70,10 @@ impl UserAgentServiceConnector {
 impl UserAgentServiceTrait for UserAgentServiceConnector {
     async fn verify_agent(&self, session_id: Uuid, token: &str) -> Result<bool> {
         let mut params = HashMap::new();
-        params.insert("sessionID".to_string(), XmlRpcValue::String(session_id.to_string()));
+        params.insert(
+            "sessionID".to_string(),
+            XmlRpcValue::String(session_id.to_string()),
+        );
         params.insert("token".to_string(), XmlRpcValue::String(token.to_string()));
 
         let result = self.xmlrpc_call("verify_agent", params).await?;
@@ -69,8 +82,14 @@ impl UserAgentServiceTrait for UserAgentServiceConnector {
 
     async fn verify_client(&self, session_id: Uuid, reported_ip: &str) -> Result<bool> {
         let mut params = HashMap::new();
-        params.insert("sessionID".to_string(), XmlRpcValue::String(session_id.to_string()));
-        params.insert("token".to_string(), XmlRpcValue::String(reported_ip.to_string()));
+        params.insert(
+            "sessionID".to_string(),
+            XmlRpcValue::String(session_id.to_string()),
+        );
+        params.insert(
+            "token".to_string(),
+            XmlRpcValue::String(reported_ip.to_string()),
+        );
 
         let result = self.xmlrpc_call("verify_client", params).await?;
         Ok(result.get_bool("result").unwrap_or(false))
@@ -81,7 +100,10 @@ impl UserAgentServiceTrait for UserAgentServiceConnector {
         user_id: Uuid,
     ) -> Result<Option<(HGRegionInfo, [f32; 3], [f32; 3])>> {
         let mut params = HashMap::new();
-        params.insert("userID".to_string(), XmlRpcValue::String(user_id.to_string()));
+        params.insert(
+            "userID".to_string(),
+            XmlRpcValue::String(user_id.to_string()),
+        );
 
         let result = self.xmlrpc_call("get_home_region", params).await?;
 
@@ -91,10 +113,12 @@ impl UserAgentServiceTrait for UserAgentServiceConnector {
         }
 
         let region = HGRegionInfo {
-            region_id: result.get_str("uuid")
+            region_id: result
+                .get_str("uuid")
                 .and_then(|s| Uuid::parse_str(s).ok())
                 .unwrap_or_default(),
-            region_handle: result.get_str("handle")
+            region_handle: result
+                .get_str("handle")
                 .and_then(|s| s.parse::<u64>().ok())
                 .unwrap_or(0),
             external_name: result.get_str("external_name").unwrap_or("").to_string(),
@@ -118,7 +142,10 @@ impl UserAgentServiceTrait for UserAgentServiceConnector {
 
     async fn get_server_urls(&self, user_id: Uuid) -> Result<HashMap<String, String>> {
         let mut params = HashMap::new();
-        params.insert("userID".to_string(), XmlRpcValue::String(user_id.to_string()));
+        params.insert(
+            "userID".to_string(),
+            XmlRpcValue::String(user_id.to_string()),
+        );
 
         let result = self.xmlrpc_call("get_server_urls", params).await?;
 
@@ -134,8 +161,14 @@ impl UserAgentServiceTrait for UserAgentServiceConnector {
 
     async fn logout_agent(&self, user_id: Uuid, session_id: Uuid) -> Result<()> {
         let mut params = HashMap::new();
-        params.insert("userID".to_string(), XmlRpcValue::String(user_id.to_string()));
-        params.insert("sessionID".to_string(), XmlRpcValue::String(session_id.to_string()));
+        params.insert(
+            "userID".to_string(),
+            XmlRpcValue::String(user_id.to_string()),
+        );
+        params.insert(
+            "sessionID".to_string(),
+            XmlRpcValue::String(session_id.to_string()),
+        );
 
         let _ = self.xmlrpc_call("logout_agent", params).await;
         Ok(())
@@ -143,11 +176,20 @@ impl UserAgentServiceTrait for UserAgentServiceConnector {
 
     async fn get_uui(&self, user_id: Uuid, target_user_id: Uuid) -> Result<String> {
         let mut params = HashMap::new();
-        params.insert("userID".to_string(), XmlRpcValue::String(user_id.to_string()));
-        params.insert("targetUserID".to_string(), XmlRpcValue::String(target_user_id.to_string()));
+        params.insert(
+            "userID".to_string(),
+            XmlRpcValue::String(user_id.to_string()),
+        );
+        params.insert(
+            "targetUserID".to_string(),
+            XmlRpcValue::String(target_user_id.to_string()),
+        );
 
         let result = self.xmlrpc_call("get_uui", params).await?;
-        Ok(result.get_str("UUI").unwrap_or(&target_user_id.to_string()).to_string())
+        Ok(result
+            .get_str("UUI")
+            .unwrap_or(&target_user_id.to_string())
+            .to_string())
     }
 
     async fn get_uuid(&self, first: &str, last: &str) -> Result<Option<Uuid>> {
@@ -162,7 +204,8 @@ impl UserAgentServiceTrait for UserAgentServiceConnector {
             return Ok(None);
         }
 
-        result.get_str("userID")
+        result
+            .get_str("userID")
             .and_then(|s| Uuid::parse_str(s).ok())
             .map(Some)
             .ok_or_else(|| anyhow!("Invalid UUID in get_uuid response"))
@@ -175,10 +218,14 @@ impl UserAgentServiceTrait for UserAgentServiceConnector {
         online: bool,
     ) -> Result<Vec<Uuid>> {
         let mut params = HashMap::new();
-        params.insert("userID".to_string(), XmlRpcValue::String(user_id.to_string()));
+        params.insert(
+            "userID".to_string(),
+            XmlRpcValue::String(user_id.to_string()),
+        );
         params.insert("online".to_string(), XmlRpcValue::Bool(online));
 
-        let friend_values: Vec<XmlRpcValue> = friends.iter()
+        let friend_values: Vec<XmlRpcValue> = friends
+            .iter()
             .map(|f| XmlRpcValue::String(f.clone()))
             .collect();
         params.insert("friends".to_string(), XmlRpcValue::Array(friend_values));
@@ -198,14 +245,16 @@ impl UserAgentServiceTrait for UserAgentServiceConnector {
         Ok(online_friends)
     }
 
-    async fn is_agent_coming_home(
-        &self,
-        session_id: Uuid,
-        external_name: &str,
-    ) -> Result<bool> {
+    async fn is_agent_coming_home(&self, session_id: Uuid, external_name: &str) -> Result<bool> {
         let mut params = HashMap::new();
-        params.insert("sessionID".to_string(), XmlRpcValue::String(session_id.to_string()));
-        params.insert("externalName".to_string(), XmlRpcValue::String(external_name.to_string()));
+        params.insert(
+            "sessionID".to_string(),
+            XmlRpcValue::String(session_id.to_string()),
+        );
+        params.insert(
+            "externalName".to_string(),
+            XmlRpcValue::String(external_name.to_string()),
+        );
 
         let result = self.xmlrpc_call("agent_is_coming_home", params).await?;
         Ok(result.get_bool("result").unwrap_or(false))
@@ -239,7 +288,8 @@ impl UserAgentServiceTrait for UserAgentServiceConnector {
             "service_urls": agent.service_urls,
         });
 
-        let response = self.client
+        let response = self
+            .client
             .post(&url)
             .header("Content-Type", "application/json")
             .body(json_body.to_string())
@@ -250,8 +300,15 @@ impl UserAgentServiceTrait for UserAgentServiceConnector {
         let resp_body = response.text().await.unwrap_or_default();
 
         if let Ok(json) = serde_json::from_str::<serde_json::Value>(&resp_body) {
-            let success = json.get("success").and_then(|v| v.as_bool()).unwrap_or(false);
-            let reason = json.get("reason").and_then(|v| v.as_str()).unwrap_or("unknown").to_string();
+            let success = json
+                .get("success")
+                .and_then(|v| v.as_bool())
+                .unwrap_or(false);
+            let reason = json
+                .get("reason")
+                .and_then(|v| v.as_str())
+                .unwrap_or("unknown")
+                .to_string();
             Ok((success, reason))
         } else {
             Ok((false, format!("Invalid response: {}", resp_body)))
@@ -260,7 +317,10 @@ impl UserAgentServiceTrait for UserAgentServiceConnector {
 
     async fn get_user_info(&self, user_id: Uuid) -> Result<HashMap<String, String>> {
         let mut params = HashMap::new();
-        params.insert("userID".to_string(), XmlRpcValue::String(user_id.to_string()));
+        params.insert(
+            "userID".to_string(),
+            XmlRpcValue::String(user_id.to_string()),
+        );
 
         let result = self.xmlrpc_call("get_user_info", params).await?;
         let mut info = HashMap::new();
@@ -277,7 +337,8 @@ impl UserAgentServiceTrait for UserAgentServiceConnector {
 
 fn parse_vector3(s: &str) -> [f32; 3] {
     let trimmed = s.trim_start_matches('<').trim_end_matches('>');
-    let parts: Vec<f32> = trimmed.split(',')
+    let parts: Vec<f32> = trimmed
+        .split(',')
         .filter_map(|p| p.trim().parse().ok())
         .collect();
     [

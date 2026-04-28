@@ -1,4 +1,4 @@
-use base64::{Engine as _, engine::general_purpose::STANDARD};
+use base64::{engine::general_purpose::STANDARD, Engine as _};
 use uuid::Uuid;
 
 pub const ALLOW_VOICE_CHAT: u32 = 0x20000000;

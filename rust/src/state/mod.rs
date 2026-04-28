@@ -2,10 +2,10 @@
 
 pub mod inventory;
 
+use self::inventory::InventoryManager;
 use anyhow::Result;
 use std::sync::Arc;
 use tokio::sync::RwLock;
-use self::inventory::InventoryManager;
 
 /// Manages all persistent state for the simulator.
 #[derive(Clone)]
@@ -19,4 +19,4 @@ impl StateManager {
             inventory_manager: Arc::new(RwLock::new(InventoryManager::new())),
         })
     }
-} 
+}

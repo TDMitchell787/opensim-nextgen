@@ -1,5 +1,5 @@
 //! Community Management for OpenSim Next Social Features
-//! 
+//!
 //! Provides community management capabilities including community creation,
 //! events, content sharing, and community governance.
 

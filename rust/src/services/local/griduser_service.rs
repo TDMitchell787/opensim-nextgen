@@ -1,11 +1,11 @@
-use std::sync::Arc;
 use anyhow::Result;
 use async_trait::async_trait;
+use std::sync::Arc;
+use tracing::{debug, info, warn};
 use uuid::Uuid;
-use tracing::{info, warn, debug};
 
-use crate::services::traits::{GridUserServiceTrait, GridUserInfo};
 use crate::database::DatabaseConnection;
+use crate::services::traits::{GridUserInfo, GridUserServiceTrait};
 
 pub struct LocalGridUserService {
     db: Arc<DatabaseConnection>,
@@ -28,14 +28,28 @@ impl LocalGridUserService {
         use sqlx::Row;
         let user_id: String = row.try_get("userid").unwrap_or_default();
         let home_region_id: Uuid = row.try_get("homeregionid").unwrap_or_default();
-        let home_position: String = row.try_get::<String, _>("homeposition").unwrap_or_else(|_| "<0,0,0>".to_string());
-        let home_look_at: String = row.try_get::<String, _>("homelookat").unwrap_or_else(|_| "<0,0,0>".to_string());
+        let home_position: String = row
+            .try_get::<String, _>("homeposition")
+            .unwrap_or_else(|_| "<0,0,0>".to_string());
+        let home_look_at: String = row
+            .try_get::<String, _>("homelookat")
+            .unwrap_or_else(|_| "<0,0,0>".to_string());
         let last_region_id: Uuid = row.try_get("lastregionid").unwrap_or_default();
-        let last_position: String = row.try_get::<String, _>("lastposition").unwrap_or_else(|_| "<0,0,0>".to_string());
-        let last_look_at: String = row.try_get::<String, _>("lastlookat").unwrap_or_else(|_| "<0,0,0>".to_string());
-        let online_str: String = row.try_get::<String, _>("online").unwrap_or_else(|_| "false".to_string());
-        let login: String = row.try_get::<String, _>("login").unwrap_or_else(|_| "0".to_string());
-        let logout: String = row.try_get::<String, _>("logout").unwrap_or_else(|_| "0".to_string());
+        let last_position: String = row
+            .try_get::<String, _>("lastposition")
+            .unwrap_or_else(|_| "<0,0,0>".to_string());
+        let last_look_at: String = row
+            .try_get::<String, _>("lastlookat")
+            .unwrap_or_else(|_| "<0,0,0>".to_string());
+        let online_str: String = row
+            .try_get::<String, _>("online")
+            .unwrap_or_else(|_| "false".to_string());
+        let login: String = row
+            .try_get::<String, _>("login")
+            .unwrap_or_else(|_| "0".to_string());
+        let logout: String = row
+            .try_get::<String, _>("logout")
+            .unwrap_or_else(|_| "0".to_string());
 
         GridUserInfo {
             user_id,
@@ -59,7 +73,9 @@ impl GridUserServiceTrait for LocalGridUserService {
 
         let now = Self::now_unix();
 
-        let pool = self.db.postgres_pool()
+        let pool = self
+            .db
+            .postgres_pool()
             .ok_or_else(|| anyhow::anyhow!("No PG pool"))?;
 
         sqlx::query(
@@ -67,7 +83,7 @@ impl GridUserServiceTrait for LocalGridUserService {
              lastregionid, lastposition, lastlookat, online, login, logout) \
              VALUES ($1, '00000000-0000-0000-0000-000000000000', '<0,0,0>', '<0,0,0>', \
              '00000000-0000-0000-0000-000000000000', '<0,0,0>', '<0,0,0>', 'true', $2, '0') \
-             ON CONFLICT (userid) DO UPDATE SET online = 'true', login = $2"
+             ON CONFLICT (userid) DO UPDATE SET online = 'true', login = $2",
         )
         .bind(user_id)
         .bind(&now)
@@ -77,12 +93,20 @@ impl GridUserServiceTrait for LocalGridUserService {
         self.get_grid_user_info(user_id).await
     }
 
-    async fn logged_out(&self, user_id: &str, region_id: Uuid, position: &str, look_at: &str) -> Result<bool> {
+    async fn logged_out(
+        &self,
+        user_id: &str,
+        region_id: Uuid,
+        position: &str,
+        look_at: &str,
+    ) -> Result<bool> {
         debug!("[GRIDUSER] User {} is offline", user_id);
 
         let now = Self::now_unix();
 
-        let pool = self.db.postgres_pool()
+        let pool = self
+            .db
+            .postgres_pool()
             .ok_or_else(|| anyhow::anyhow!("No PG pool"))?;
 
         sqlx::query(
@@ -91,7 +115,7 @@ impl GridUserServiceTrait for LocalGridUserService {
              VALUES ($1, '00000000-0000-0000-0000-000000000000', '<0,0,0>', '<0,0,0>', \
              $2::uuid, $3, $4, 'false', '0', $5) \
              ON CONFLICT (userid) DO UPDATE SET online = 'false', logout = $5, \
-             lastregionid = $2::uuid, lastposition = $3, lastlookat = $4"
+             lastregionid = $2::uuid, lastposition = $3, lastlookat = $4",
         )
         .bind(user_id)
         .bind(region_id.to_string())
@@ -104,10 +128,18 @@ impl GridUserServiceTrait for LocalGridUserService {
         Ok(true)
     }
 
-    async fn set_home(&self, user_id: &str, home_id: Uuid, position: &str, look_at: &str) -> Result<bool> {
+    async fn set_home(
+        &self,
+        user_id: &str,
+        home_id: Uuid,
+        position: &str,
+        look_at: &str,
+    ) -> Result<bool> {
         debug!("[GRIDUSER] SetHome for {}: region={}", user_id, home_id);
 
-        let pool = self.db.postgres_pool()
+        let pool = self
+            .db
+            .postgres_pool()
             .ok_or_else(|| anyhow::anyhow!("No PG pool"))?;
 
         sqlx::query(
@@ -127,10 +159,21 @@ impl GridUserServiceTrait for LocalGridUserService {
         Ok(true)
     }
 
-    async fn set_last_position(&self, user_id: &str, region_id: Uuid, position: &str, look_at: &str) -> Result<bool> {
-        debug!("[GRIDUSER] SetLastPosition for {}: region={}", user_id, region_id);
+    async fn set_last_position(
+        &self,
+        user_id: &str,
+        region_id: Uuid,
+        position: &str,
+        look_at: &str,
+    ) -> Result<bool> {
+        debug!(
+            "[GRIDUSER] SetLastPosition for {}: region={}",
+            user_id, region_id
+        );
 
-        let pool = self.db.postgres_pool()
+        let pool = self
+            .db
+            .postgres_pool()
             .ok_or_else(|| anyhow::anyhow!("No PG pool"))?;
 
         sqlx::query(
@@ -151,13 +194,15 @@ impl GridUserServiceTrait for LocalGridUserService {
     }
 
     async fn get_grid_user_info(&self, user_id: &str) -> Result<Option<GridUserInfo>> {
-        let pool = self.db.postgres_pool()
+        let pool = self
+            .db
+            .postgres_pool()
             .ok_or_else(|| anyhow::anyhow!("No PG pool"))?;
 
         let row = sqlx::query(
             "SELECT userid, homeregionid, homeposition, homelookat, \
              lastregionid, lastposition, lastlookat, online, login, logout \
-             FROM griduser WHERE userid = $1"
+             FROM griduser WHERE userid = $1",
         )
         .bind(user_id)
         .fetch_optional(pool)

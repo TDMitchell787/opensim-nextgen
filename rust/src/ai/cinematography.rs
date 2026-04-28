@@ -1,6 +1,11 @@
 use crate::ai::npc_avatar::{CameraWaypoint, CinemaLight};
 
-pub fn generate_orbit_waypoints(center: [f32; 3], radius: f32, height: f32, steps: u32) -> Vec<CameraWaypoint> {
+pub fn generate_orbit_waypoints(
+    center: [f32; 3],
+    radius: f32,
+    height: f32,
+    steps: u32,
+) -> Vec<CameraWaypoint> {
     let mut waypoints = Vec::new();
     let cam_y = center[2] + height;
     for i in 0..steps {
@@ -17,7 +22,12 @@ pub fn generate_orbit_waypoints(center: [f32; 3], radius: f32, height: f32, step
     waypoints
 }
 
-pub fn generate_dolly_waypoints(start: [f32; 3], end: [f32; 3], focus: [f32; 3], steps: u32) -> Vec<CameraWaypoint> {
+pub fn generate_dolly_waypoints(
+    start: [f32; 3],
+    end: [f32; 3],
+    focus: [f32; 3],
+    steps: u32,
+) -> Vec<CameraWaypoint> {
     let mut waypoints = Vec::new();
     for i in 0..=steps {
         let t = i as f32 / steps as f32;
@@ -35,7 +45,12 @@ pub fn generate_dolly_waypoints(start: [f32; 3], end: [f32; 3], focus: [f32; 3],
     waypoints
 }
 
-pub fn generate_crane_waypoints(base: [f32; 3], height: f32, focus: [f32; 3], steps: u32) -> Vec<CameraWaypoint> {
+pub fn generate_crane_waypoints(
+    base: [f32; 3],
+    height: f32,
+    focus: [f32; 3],
+    steps: u32,
+) -> Vec<CameraWaypoint> {
     let mut waypoints = Vec::new();
     for i in 0..=steps {
         let t = i as f32 / steps as f32;
@@ -88,7 +103,12 @@ pub fn generate_reveal_waypoints(subject: [f32; 3], steps: u32) -> Vec<CameraWay
     waypoints
 }
 
-pub fn generate_tracking_waypoints(start: [f32; 3], end: [f32; 3], offset: f32, steps: u32) -> Vec<CameraWaypoint> {
+pub fn generate_tracking_waypoints(
+    start: [f32; 3],
+    end: [f32; 3],
+    offset: f32,
+    steps: u32,
+) -> Vec<CameraWaypoint> {
     let mut waypoints = Vec::new();
     let dx = end[0] - start[0];
     let dy = end[1] - start[1];
@@ -112,8 +132,16 @@ pub fn generate_tracking_waypoints(start: [f32; 3], end: [f32; 3], offset: f32, 
     waypoints
 }
 
-pub fn generate_dutch_waypoints(subject: [f32; 3], distance: f32, steps: u32) -> Vec<CameraWaypoint> {
-    let cam_pos = [subject[0] - distance, subject[1], subject[2] + distance * 0.4];
+pub fn generate_dutch_waypoints(
+    subject: [f32; 3],
+    distance: f32,
+    steps: u32,
+) -> Vec<CameraWaypoint> {
+    let cam_pos = [
+        subject[0] - distance,
+        subject[1],
+        subject[2] + distance * 0.4,
+    ];
     let mut waypoints = Vec::new();
     for i in 0..=steps {
         let t = i as f32 / steps as f32;
@@ -169,12 +197,20 @@ pub fn generate_shot_waypoints(shot_type: &str, subject: [f32; 3]) -> Vec<Camera
     }
 }
 
-pub fn generate_lighting_preset(preset: &str, subject_pos: [f32; 3], distance: f32) -> Vec<CinemaLight> {
+pub fn generate_lighting_preset(
+    preset: &str,
+    subject_pos: [f32; 3],
+    distance: f32,
+) -> Vec<CinemaLight> {
     match preset {
         "rembrandt" => vec![
             CinemaLight {
                 name: "Key Light".into(),
-                position: [subject_pos[0] - distance * 0.7, subject_pos[1] + distance * 0.7, subject_pos[2] + distance * 0.5],
+                position: [
+                    subject_pos[0] - distance * 0.7,
+                    subject_pos[1] + distance * 0.7,
+                    subject_pos[2] + distance * 0.5,
+                ],
                 color: [1.0, 0.95, 0.85],
                 intensity: 0.9,
                 radius: distance * 2.0,
@@ -182,7 +218,11 @@ pub fn generate_lighting_preset(preset: &str, subject_pos: [f32; 3], distance: f
             },
             CinemaLight {
                 name: "Fill Light".into(),
-                position: [subject_pos[0] + distance * 0.5, subject_pos[1] + distance * 0.5, subject_pos[2] + distance * 0.2],
+                position: [
+                    subject_pos[0] + distance * 0.5,
+                    subject_pos[1] + distance * 0.5,
+                    subject_pos[2] + distance * 0.2,
+                ],
                 color: [0.8, 0.85, 1.0],
                 intensity: 0.4,
                 radius: distance * 2.0,
@@ -190,7 +230,11 @@ pub fn generate_lighting_preset(preset: &str, subject_pos: [f32; 3], distance: f
             },
             CinemaLight {
                 name: "Rim Light".into(),
-                position: [subject_pos[0], subject_pos[1] - distance * 0.8, subject_pos[2] + distance * 0.6],
+                position: [
+                    subject_pos[0],
+                    subject_pos[1] - distance * 0.8,
+                    subject_pos[2] + distance * 0.6,
+                ],
                 color: [1.0, 1.0, 1.0],
                 intensity: 0.6,
                 radius: distance * 1.5,
@@ -200,7 +244,11 @@ pub fn generate_lighting_preset(preset: &str, subject_pos: [f32; 3], distance: f
         "butterfly" => vec![
             CinemaLight {
                 name: "Key Light".into(),
-                position: [subject_pos[0], subject_pos[1] + distance * 0.3, subject_pos[2] + distance],
+                position: [
+                    subject_pos[0],
+                    subject_pos[1] + distance * 0.3,
+                    subject_pos[2] + distance,
+                ],
                 color: [1.0, 1.0, 0.95],
                 intensity: 1.0,
                 radius: distance * 2.0,
@@ -208,7 +256,11 @@ pub fn generate_lighting_preset(preset: &str, subject_pos: [f32; 3], distance: f
             },
             CinemaLight {
                 name: "Fill Light".into(),
-                position: [subject_pos[0], subject_pos[1] + distance * 0.3, subject_pos[2] - distance * 0.3],
+                position: [
+                    subject_pos[0],
+                    subject_pos[1] + distance * 0.3,
+                    subject_pos[2] - distance * 0.3,
+                ],
                 color: [0.9, 0.9, 1.0],
                 intensity: 0.3,
                 radius: distance * 1.5,
@@ -218,7 +270,11 @@ pub fn generate_lighting_preset(preset: &str, subject_pos: [f32; 3], distance: f
         "split" => vec![
             CinemaLight {
                 name: "Key Light".into(),
-                position: [subject_pos[0] - distance, subject_pos[1], subject_pos[2] + distance * 0.3],
+                position: [
+                    subject_pos[0] - distance,
+                    subject_pos[1],
+                    subject_pos[2] + distance * 0.3,
+                ],
                 color: [1.0, 1.0, 1.0],
                 intensity: 1.0,
                 radius: distance * 2.0,
@@ -226,7 +282,11 @@ pub fn generate_lighting_preset(preset: &str, subject_pos: [f32; 3], distance: f
             },
             CinemaLight {
                 name: "Edge Light".into(),
-                position: [subject_pos[0] + distance, subject_pos[1], subject_pos[2] + distance * 0.3],
+                position: [
+                    subject_pos[0] + distance,
+                    subject_pos[1],
+                    subject_pos[2] + distance * 0.3,
+                ],
                 color: [0.7, 0.75, 0.8],
                 intensity: 0.3,
                 radius: distance * 1.5,
@@ -236,7 +296,11 @@ pub fn generate_lighting_preset(preset: &str, subject_pos: [f32; 3], distance: f
         "rim" => vec![
             CinemaLight {
                 name: "Rim Left".into(),
-                position: [subject_pos[0] - distance * 0.5, subject_pos[1] - distance * 0.8, subject_pos[2] + distance * 0.4],
+                position: [
+                    subject_pos[0] - distance * 0.5,
+                    subject_pos[1] - distance * 0.8,
+                    subject_pos[2] + distance * 0.4,
+                ],
                 color: [1.0, 1.0, 1.0],
                 intensity: 0.8,
                 radius: distance * 2.0,
@@ -244,7 +308,11 @@ pub fn generate_lighting_preset(preset: &str, subject_pos: [f32; 3], distance: f
             },
             CinemaLight {
                 name: "Rim Right".into(),
-                position: [subject_pos[0] + distance * 0.5, subject_pos[1] - distance * 0.8, subject_pos[2] + distance * 0.4],
+                position: [
+                    subject_pos[0] + distance * 0.5,
+                    subject_pos[1] - distance * 0.8,
+                    subject_pos[2] + distance * 0.4,
+                ],
                 color: [1.0, 1.0, 1.0],
                 intensity: 0.8,
                 radius: distance * 2.0,
@@ -254,7 +322,11 @@ pub fn generate_lighting_preset(preset: &str, subject_pos: [f32; 3], distance: f
         "studio" => vec![
             CinemaLight {
                 name: "Key Light".into(),
-                position: [subject_pos[0] - distance * 0.7, subject_pos[1] + distance * 0.5, subject_pos[2] + distance * 0.5],
+                position: [
+                    subject_pos[0] - distance * 0.7,
+                    subject_pos[1] + distance * 0.5,
+                    subject_pos[2] + distance * 0.5,
+                ],
                 color: [1.0, 0.98, 0.95],
                 intensity: 0.85,
                 radius: distance * 2.0,
@@ -262,7 +334,11 @@ pub fn generate_lighting_preset(preset: &str, subject_pos: [f32; 3], distance: f
             },
             CinemaLight {
                 name: "Fill Light".into(),
-                position: [subject_pos[0] + distance * 0.6, subject_pos[1] + distance * 0.4, subject_pos[2] + distance * 0.3],
+                position: [
+                    subject_pos[0] + distance * 0.6,
+                    subject_pos[1] + distance * 0.4,
+                    subject_pos[2] + distance * 0.3,
+                ],
                 color: [0.9, 0.92, 1.0],
                 intensity: 0.5,
                 radius: distance * 2.0,
@@ -270,7 +346,11 @@ pub fn generate_lighting_preset(preset: &str, subject_pos: [f32; 3], distance: f
             },
             CinemaLight {
                 name: "Rim Light".into(),
-                position: [subject_pos[0], subject_pos[1] - distance * 0.7, subject_pos[2] + distance * 0.5],
+                position: [
+                    subject_pos[0],
+                    subject_pos[1] - distance * 0.7,
+                    subject_pos[2] + distance * 0.5,
+                ],
                 color: [1.0, 1.0, 1.0],
                 intensity: 0.4,
                 radius: distance * 1.5,
@@ -280,7 +360,11 @@ pub fn generate_lighting_preset(preset: &str, subject_pos: [f32; 3], distance: f
         "golden_hour" => vec![
             CinemaLight {
                 name: "Sun Light".into(),
-                position: [subject_pos[0] - distance, subject_pos[1], subject_pos[2] + distance * 0.2],
+                position: [
+                    subject_pos[0] - distance,
+                    subject_pos[1],
+                    subject_pos[2] + distance * 0.2,
+                ],
                 color: [1.0, 0.7, 0.3],
                 intensity: 0.9,
                 radius: distance * 2.5,
@@ -296,23 +380,29 @@ pub fn generate_lighting_preset(preset: &str, subject_pos: [f32; 3], distance: f
             },
             CinemaLight {
                 name: "Warm Backlight".into(),
-                position: [subject_pos[0] + distance * 0.8, subject_pos[1] - distance * 0.5, subject_pos[2] + distance * 0.3],
+                position: [
+                    subject_pos[0] + distance * 0.8,
+                    subject_pos[1] - distance * 0.5,
+                    subject_pos[2] + distance * 0.3,
+                ],
                 color: [1.0, 0.75, 0.4],
                 intensity: 0.5,
                 radius: distance * 2.0,
                 falloff: 0.4,
             },
         ],
-        "noir" => vec![
-            CinemaLight {
-                name: "Hard Side Light".into(),
-                position: [subject_pos[0] - distance, subject_pos[1], subject_pos[2] + distance * 0.3],
-                color: [1.0, 1.0, 1.0],
-                intensity: 1.0,
-                radius: distance * 1.5,
-                falloff: 0.2,
-            },
-        ],
+        "noir" => vec![CinemaLight {
+            name: "Hard Side Light".into(),
+            position: [
+                subject_pos[0] - distance,
+                subject_pos[1],
+                subject_pos[2] + distance * 0.3,
+            ],
+            color: [1.0, 1.0, 1.0],
+            intensity: 1.0,
+            radius: distance * 1.5,
+            falloff: 0.2,
+        }],
         _ => generate_lighting_preset("studio", subject_pos, distance),
     }
 }
@@ -347,7 +437,12 @@ mod tests {
 
     #[test]
     fn test_dolly_waypoints() {
-        let wps = generate_dolly_waypoints([118.0, 128.0, 27.0], [138.0, 128.0, 27.0], [128.0, 128.0, 25.0], 10);
+        let wps = generate_dolly_waypoints(
+            [118.0, 128.0, 27.0],
+            [138.0, 128.0, 27.0],
+            [128.0, 128.0, 25.0],
+            10,
+        );
         assert_eq!(wps.len(), 11);
         assert!((wps[0].position[0] - 118.0).abs() < 0.01);
         assert!((wps[10].position[0] - 138.0).abs() < 0.01);
@@ -394,17 +489,35 @@ mod tests {
 
     #[test]
     fn test_generate_shot_all_types() {
-        for shot in &["orbit", "dolly", "crane", "flyby", "reveal", "tracking", "dutch", "push_in"] {
+        for shot in &[
+            "orbit", "dolly", "crane", "flyby", "reveal", "tracking", "dutch", "push_in",
+        ] {
             let wps = generate_shot_waypoints(shot, [128.0, 128.0, 25.0]);
-            assert!(!wps.is_empty(), "Shot type '{}' should generate waypoints", shot);
+            assert!(
+                !wps.is_empty(),
+                "Shot type '{}' should generate waypoints",
+                shot
+            );
         }
     }
 
     #[test]
     fn test_lighting_presets_all() {
-        for preset in &["rembrandt", "butterfly", "split", "rim", "studio", "golden_hour", "noir"] {
+        for preset in &[
+            "rembrandt",
+            "butterfly",
+            "split",
+            "rim",
+            "studio",
+            "golden_hour",
+            "noir",
+        ] {
             let lights = generate_lighting_preset(preset, [128.0, 128.0, 25.0], 5.0);
-            assert!(!lights.is_empty(), "Preset '{}' should generate lights", preset);
+            assert!(
+                !lights.is_empty(),
+                "Preset '{}' should generate lights",
+                preset
+            );
             for light in &lights {
                 assert!(light.intensity > 0.0 && light.intensity <= 1.0);
                 assert!(light.radius > 0.0);

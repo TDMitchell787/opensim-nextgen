@@ -19,7 +19,9 @@ impl LocalMapImageService {
         } else {
             scope_id
         };
-        std::path::PathBuf::from(&self.tiles_dir).join(scope).join(filename)
+        std::path::PathBuf::from(&self.tiles_dir)
+            .join(scope)
+            .join(filename)
     }
 
     fn tile_filename(zoom: i32, x: i32, y: i32) -> String {

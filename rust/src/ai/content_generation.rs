@@ -2,15 +2,15 @@
 // Revolutionary procedural content creation using generative AI
 // Using ELEGANT ARCHIVE SOLUTION methodology
 
-use crate::monitoring::metrics::MetricsCollector;
+use super::{AIError, ContentParameters, ContentType, GeneratedContent};
 use crate::database::DatabaseManager;
-use super::{AIError, ContentType, ContentParameters, GeneratedContent};
-use std::sync::Arc;
-use std::collections::HashMap;
-use tokio::sync::RwLock;
-use serde::{Deserialize, Serialize};
-use uuid::Uuid;
+use crate::monitoring::metrics::MetricsCollector;
 use chrono::{DateTime, Utc};
+use serde::{Deserialize, Serialize};
+use std::collections::HashMap;
+use std::sync::Arc;
+use tokio::sync::RwLock;
+use uuid::Uuid;
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct GenerationTemplate {
@@ -140,17 +140,27 @@ impl ContentGenerationEngine {
         Ok(engine_arc)
     }
 
-    pub async fn generate_content(&self, content_type: ContentType, parameters: ContentParameters) -> Result<GeneratedContent, AIError> {
+    pub async fn generate_content(
+        &self,
+        content_type: ContentType,
+        parameters: ContentParameters,
+    ) -> Result<GeneratedContent, AIError> {
         // For synchronous generation (blocking)
-        let job_id = self.queue_generation_job(content_type.clone(), parameters).await?;
-        
+        let job_id = self
+            .queue_generation_job(content_type.clone(), parameters)
+            .await?;
+
         // Wait for completion
         self.wait_for_job_completion(job_id).await
     }
 
-    pub async fn queue_generation_job(&self, content_type: ContentType, parameters: ContentParameters) -> Result<Uuid, AIError> {
+    pub async fn queue_generation_job(
+        &self,
+        content_type: ContentType,
+        parameters: ContentParameters,
+    ) -> Result<Uuid, AIError> {
         let job_id = Uuid::new_v4();
-        
+
         let job = GenerationJob {
             job_id,
             content_type,
@@ -164,9 +174,11 @@ impl ContentGenerationEngine {
         };
 
         let mut jobs = self.generation_jobs.write().await;
-        
+
         if jobs.len() >= self.config.max_queue_size {
-            return Err(AIError::ResourceLimitExceeded("Generation queue is full".to_string()));
+            return Err(AIError::ResourceLimitExceeded(
+                "Generation queue is full".to_string(),
+            ));
         }
 
         jobs.insert(job_id, job);
@@ -195,26 +207,32 @@ impl ContentGenerationEngine {
 
         loop {
             if start_time.elapsed() > timeout {
-                return Err(AIError::ResourceLimitExceeded("Generation job timed out".to_string()));
+                return Err(AIError::ResourceLimitExceeded(
+                    "Generation job timed out".to_string(),
+                ));
             }
 
             let job = self.get_job_status(job_id).await?;
-            
+
             match job.status {
                 JobStatus::Completed => {
                     if let Some(result) = job.result {
                         return Ok(result);
                     } else {
-                        return Err(AIError::InferenceFailed("Job completed but no result found".to_string()));
+                        return Err(AIError::InferenceFailed(
+                            "Job completed but no result found".to_string(),
+                        ));
                     }
-                },
+                }
                 JobStatus::Failed => {
-                    let error_msg = job.error_message.unwrap_or_else(|| "Unknown error".to_string());
+                    let error_msg = job
+                        .error_message
+                        .unwrap_or_else(|| "Unknown error".to_string());
                     return Err(AIError::InferenceFailed(error_msg));
-                },
+                }
                 JobStatus::Cancelled => {
                     return Err(AIError::InferenceFailed("Job was cancelled".to_string()));
-                },
+                }
                 _ => {
                     tokio::time::sleep(tokio::time::Duration::from_millis(500)).await;
                 }
@@ -224,7 +242,7 @@ impl ContentGenerationEngine {
 
     async fn start_job_processor(self: Arc<Self>) {
         let engine = self;
-        
+
         // Start multiple worker tasks
         for worker_id in 0..engine.config.max_concurrent_jobs {
             let engine = engine.clone();
@@ -244,13 +262,16 @@ impl ContentGenerationEngine {
 
     async fn job_worker(&self, worker_id: usize) {
         let mut interval = tokio::time::interval(tokio::time::Duration::from_secs(1));
-        
+
         loop {
             interval.tick().await;
-            
+
             if let Some(job_id) = self.get_next_queued_job().await {
                 if let Err(e) = self.process_generation_job(job_id).await {
-                    eprintln!("Worker {} error processing job {}: {}", worker_id, job_id, e);
+                    eprintln!(
+                        "Worker {} error processing job {}: {}",
+                        worker_id, job_id, e
+                    );
                     self.mark_job_failed(job_id, e.to_string()).await;
                 }
             }
@@ -259,43 +280,46 @@ impl ContentGenerationEngine {
 
     async fn get_next_queued_job(&self) -> Option<Uuid> {
         let mut jobs = self.generation_jobs.write().await;
-        
+
         for (job_id, job) in jobs.iter_mut() {
             if matches!(job.status, JobStatus::Queued) {
                 job.status = JobStatus::Processing;
                 return Some(*job_id);
             }
         }
-        
+
         None
     }
 
     async fn process_generation_job(&self, job_id: Uuid) -> Result<(), AIError> {
         let job = {
             let jobs = self.generation_jobs.read().await;
-            jobs.get(&job_id).cloned()
+            jobs.get(&job_id)
+                .cloned()
                 .ok_or_else(|| AIError::ConfigurationError("Job not found".to_string()))?
         };
 
         let start_time = std::time::Instant::now();
-        
+
         // Generate content based on type
         let result = match job.content_type {
             ContentType::Terrain => {
-                self.terrain_generator.generate_terrain(&job.parameters).await?
-            },
+                self.terrain_generator
+                    .generate_terrain(&job.parameters)
+                    .await?
+            }
             ContentType::Architecture => {
-                self.architecture_generator.generate_architecture(&job.parameters).await?
-            },
+                self.architecture_generator
+                    .generate_architecture(&job.parameters)
+                    .await?
+            }
             ContentType::Texture => {
-                self.texture_synthesizer.synthesize_texture(&job.parameters).await?
-            },
-            ContentType::Audio => {
-                self.audio_composer.compose_audio(&job.parameters).await?
-            },
-            ContentType::Story => {
-                self.story_generator.generate_story(&job.parameters).await?
-            },
+                self.texture_synthesizer
+                    .synthesize_texture(&job.parameters)
+                    .await?
+            }
+            ContentType::Audio => self.audio_composer.compose_audio(&job.parameters).await?,
+            ContentType::Story => self.story_generator.generate_story(&job.parameters).await?,
         };
 
         let generation_time = start_time.elapsed().as_millis() as u64;
@@ -314,7 +338,9 @@ impl ContentGenerationEngine {
             });
         }
 
-        self.metrics.record_content_generation_completed(job_id, generation_time).await;
+        self.metrics
+            .record_content_generation_completed(job_id, generation_time)
+            .await;
 
         Ok(())
     }
@@ -330,12 +356,12 @@ impl ContentGenerationEngine {
 
     async fn cleanup_completed_jobs(&self) {
         let mut interval = tokio::time::interval(tokio::time::Duration::from_secs(300)); // 5 minutes
-        
+
         loop {
             interval.tick().await;
-            
+
             let cutoff_time = Utc::now() - chrono::Duration::hours(1); // Keep completed jobs for 1 hour
-            
+
             let mut jobs = self.generation_jobs.write().await;
             jobs.retain(|_, job| {
                 match job.status {
@@ -345,8 +371,8 @@ impl ContentGenerationEngine {
                         } else {
                             true // Keep jobs without completion time
                         }
-                    },
-                    _ => true // Keep active jobs
+                    }
+                    _ => true, // Keep active jobs
                 }
             });
         }
@@ -362,8 +388,12 @@ impl ContentGenerationEngine {
             parameters: vec![
                 TemplateParameter {
                     name: "size".to_string(),
-                    param_type: ParameterType::Selection { 
-                        options: vec!["256x256".to_string(), "512x512".to_string(), "1024x1024".to_string()]
+                    param_type: ParameterType::Selection {
+                        options: vec![
+                            "256x256".to_string(),
+                            "512x512".to_string(),
+                            "1024x1024".to_string(),
+                        ],
                     },
                     default_value: "512x512".to_string(),
                     constraints: vec![],
@@ -408,12 +438,16 @@ impl TerrainGenerator {
     async fn generate_terrain(&self, parameters: &ContentParameters) -> Result<Vec<u8>, AIError> {
         // Simplified terrain generation - in production, this would use actual algorithms
         // like Perlin noise, Diamond-Square, or ML-based generation
-        
-        let size = parameters.additional_params.get("size")
+
+        let size = parameters
+            .additional_params
+            .get("size")
             .and_then(|s| s.parse::<u32>().ok())
             .unwrap_or(512);
-        
-        let roughness = parameters.additional_params.get("roughness")
+
+        let roughness = parameters
+            .additional_params
+            .get("roughness")
             .and_then(|r| r.parse::<f32>().ok())
             .unwrap_or(0.5);
 
@@ -422,7 +456,8 @@ impl TerrainGenerator {
         for y in 0..size {
             for x in 0..size {
                 // Simple noise pattern
-                let height = (((x as f32 * 0.01).sin() + (y as f32 * 0.01).cos()) * roughness * 255.0) as u8;
+                let height =
+                    (((x as f32 * 0.01).sin() + (y as f32 * 0.01).cos()) * roughness * 255.0) as u8;
                 heightmap.push(height);
             }
         }
@@ -439,24 +474,35 @@ impl ArchitectureGenerator {
         Ok(Self)
     }
 
-    async fn generate_architecture(&self, parameters: &ContentParameters) -> Result<Vec<u8>, AIError> {
+    async fn generate_architecture(
+        &self,
+        parameters: &ContentParameters,
+    ) -> Result<Vec<u8>, AIError> {
         // Simplified architecture generation
         // In production, this would use generative AI models for building design
-        
+
         let default_style = "modern".to_string();
-        let style = parameters.additional_params.get("style")
+        let style = parameters
+            .additional_params
+            .get("style")
             .unwrap_or(&default_style);
 
         let default_theme = "default".to_string();
         let theme = parameters.theme.as_ref().unwrap_or(&default_theme);
 
-        let width = parameters.additional_params.get("width")
+        let width = parameters
+            .additional_params
+            .get("width")
             .and_then(|w| w.parse::<f32>().ok())
             .unwrap_or(10.0);
-        let height = parameters.additional_params.get("height")
+        let height = parameters
+            .additional_params
+            .get("height")
             .and_then(|h| h.parse::<f32>().ok())
             .unwrap_or(8.0);
-        let depth = parameters.additional_params.get("depth")
+        let depth = parameters
+            .additional_params
+            .get("depth")
             .and_then(|d| d.parse::<f32>().ok())
             .unwrap_or(10.0);
 
@@ -482,7 +528,7 @@ impl ArchitectureGenerator {
             if style == "modern" { "flat" } else { "gabled" },
             style
         );
-        
+
         Ok(building_data.into_bytes())
     }
 }
@@ -498,8 +544,10 @@ impl TextureSynthesizer {
     async fn synthesize_texture(&self, parameters: &ContentParameters) -> Result<Vec<u8>, AIError> {
         // Simplified texture synthesis
         // In production, this would use ML models like StyleGAN or texture synthesis algorithms
-        
-        let resolution = parameters.additional_params.get("resolution")
+
+        let resolution = parameters
+            .additional_params
+            .get("resolution")
             .and_then(|r| r.parse::<u32>().ok())
             .unwrap_or(256);
 
@@ -528,14 +576,16 @@ impl AudioComposer {
     async fn compose_audio(&self, parameters: &ContentParameters) -> Result<Vec<u8>, AIError> {
         // Simplified audio composition
         // In production, this would use AI music generation models
-        
-        let duration = parameters.additional_params.get("duration")
+
+        let duration = parameters
+            .additional_params
+            .get("duration")
             .and_then(|d| d.parse::<f32>().ok())
             .unwrap_or(30.0); // seconds
 
         let sample_rate = 44100;
         let samples = (duration * sample_rate as f32) as usize;
-        
+
         // Generate simple sine wave
         let mut audio_data = Vec::new();
         for i in 0..samples {
@@ -560,11 +610,13 @@ impl StoryGenerator {
     async fn generate_story(&self, parameters: &ContentParameters) -> Result<Vec<u8>, AIError> {
         // Simplified story generation
         // In production, this would use large language models for creative writing
-        
+
         let default_theme = "adventure".to_string();
         let theme = parameters.theme.as_ref().unwrap_or(&default_theme);
         let default_length = "short".to_string();
-        let length = parameters.additional_params.get("length")
+        let length = parameters
+            .additional_params
+            .get("length")
             .unwrap_or(&default_length);
 
         let story = match (theme.as_str(), length.as_str()) {

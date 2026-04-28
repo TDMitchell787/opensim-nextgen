@@ -1,18 +1,18 @@
 //! Web-based client interface for OpenSim Next
-//! 
+//!
 //! This module provides a simple web interface for testing and demonstrating
 //! the WebSocket functionality of OpenSim Next.
 
-use axum::{
-    routing::get,
-    response::{Html, IntoResponse},
-    Router,
-    http::{StatusCode, header},
-};
-use std::sync::Arc;
 use anyhow::Result;
-use tracing::info;
+use axum::{
+    http::{header, StatusCode},
+    response::{Html, IntoResponse},
+    routing::get,
+    Router,
+};
 use std::path::Path;
+use std::sync::Arc;
+use tracing::info;
 
 /// Web client server for serving the browser-based interface
 pub struct WebClientServer {
@@ -22,7 +22,10 @@ pub struct WebClientServer {
 
 impl WebClientServer {
     pub fn new(port: u16) -> Self {
-        Self { port, ai_router: None }
+        Self {
+            port,
+            ai_router: None,
+        }
     }
 
     pub fn with_ai_router(mut self, router: Router) -> Self {
@@ -56,7 +59,10 @@ impl WebClientServer {
             .route("/css/styles.css", get(styles_handler))
             .route("/js/app.js", get(app_js_handler))
             .route("/js/app-v2.js", get(app_js_v2_handler))
-            .route("/js/multi-instance-server-manager.js", get(multi_instance_js_handler))
+            .route(
+                "/js/multi-instance-server-manager.js",
+                get(multi_instance_js_handler),
+            )
             .route("/client.html", get(client_handler))
             .route("/client.js", get(client_js_handler))
             .route("/health", get(|| async { "OK" }))
@@ -64,7 +70,10 @@ impl WebClientServer {
             .route("/main.dart.js", get(flutter_main_dart_js_handler))
             .route("/flutter.js", get(flutter_js_handler))
             .route("/flutter_bootstrap.js", get(flutter_bootstrap_handler))
-            .route("/flutter_service_worker.js", get(flutter_service_worker_handler))
+            .route(
+                "/flutter_service_worker.js",
+                get(flutter_service_worker_handler),
+            )
             .route("/manifest.json", get(flutter_manifest_handler))
             .route("/assets/*path", get(flutter_assets_assets_handler))
             .route("/canvaskit/*path", get(flutter_canvaskit_handler))
@@ -81,7 +90,7 @@ impl WebClientServer {
             .route("/api/info", get(api_info_proxy));
 
         if let Some(ai) = self.ai_router {
-            use tower_http::cors::{CorsLayer, Any};
+            use tower_http::cors::{Any, CorsLayer};
             let cors = CorsLayer::new()
                 .allow_origin(Any)
                 .allow_methods(Any)
@@ -100,7 +109,7 @@ async fn dashboard_handler() -> impl IntoResponse {
     (
         StatusCode::OK,
         [(header::CONTENT_TYPE, "text/html; charset=utf-8")],
-        html
+        html,
     )
 }
 
@@ -110,7 +119,7 @@ async fn styles_handler() -> impl IntoResponse {
     (
         StatusCode::OK,
         [(header::CONTENT_TYPE, "text/css; charset=utf-8")],
-        css
+        css,
     )
 }
 
@@ -119,8 +128,11 @@ async fn app_js_handler() -> impl IntoResponse {
     let js = include_str!("../../web-frontend/js/app.js");
     (
         StatusCode::OK,
-        [(header::CONTENT_TYPE, "application/javascript; charset=utf-8")],
-        js
+        [(
+            header::CONTENT_TYPE,
+            "application/javascript; charset=utf-8",
+        )],
+        js,
     )
 }
 
@@ -129,8 +141,11 @@ async fn app_js_v2_handler() -> impl IntoResponse {
     let js = include_str!("../../web-frontend/js/app-v2.js");
     (
         StatusCode::OK,
-        [(header::CONTENT_TYPE, "application/javascript; charset=utf-8")],
-        js
+        [(
+            header::CONTENT_TYPE,
+            "application/javascript; charset=utf-8",
+        )],
+        js,
     )
 }
 
@@ -139,8 +154,11 @@ async fn multi_instance_js_handler() -> impl IntoResponse {
     let js = include_str!("../../web-frontend/js/multi-instance-server-manager.js");
     (
         StatusCode::OK,
-        [(header::CONTENT_TYPE, "application/javascript; charset=utf-8")],
-        js
+        [(
+            header::CONTENT_TYPE,
+            "application/javascript; charset=utf-8",
+        )],
+        js,
     )
 }
 
@@ -762,11 +780,8 @@ document.addEventListener('DOMContentLoaded', () => {
     new OpenSimWebClient();
 });
     "#;
-    
-    (
-        [("Content-Type", "application/javascript")],
-        js_content
-    )
+
+    ([("Content-Type", "application/javascript")], js_content)
 }
 
 /// Flutter Web configurator handler - serves the Flutter Web app
@@ -781,11 +796,12 @@ async fn flutter_configurator_handler() -> impl IntoResponse {
                     (header::CONTENT_TYPE, "text/html; charset=utf-8"),
                     (header::CACHE_CONTROL, "no-cache, no-store, must-revalidate"),
                     (header::PRAGMA, "no-cache"),
-                    (header::EXPIRES, "0")
+                    (header::EXPIRES, "0"),
                 ],
-                html
-            ).into_response()
-        },
+                html,
+            )
+                .into_response()
+        }
         Err(_) => {
             // Fallback to a redirect message if Flutter Web isn't built yet
             let fallback_html = r#"
@@ -881,16 +897,19 @@ async fn flutter_configurator_handler() -> impl IntoResponse {
             (
                 StatusCode::OK,
                 [(header::CONTENT_TYPE, "text/html; charset=utf-8")],
-                fallback_html.to_string()
-            ).into_response()
+                fallback_html.to_string(),
+            )
+                .into_response()
         }
     }
 }
 
 /// Flutter Web assets handler - serves Flutter Web static assets
-async fn flutter_assets_handler(axum::extract::Path(path): axum::extract::Path<String>) -> impl IntoResponse {
+async fn flutter_assets_handler(
+    axum::extract::Path(path): axum::extract::Path<String>,
+) -> impl IntoResponse {
     let file_path = format!("./rust/web-frontend/flutter/{}", path);
-    
+
     match std::fs::read(&file_path) {
         Ok(content) => {
             let content_type = match path.split('.').last() {
@@ -903,26 +922,29 @@ async fn flutter_assets_handler(axum::extract::Path(path): axum::extract::Path<S
                 Some("json") => "application/json",
                 _ => "application/octet-stream",
             };
-            
+
             (
-                StatusCode::OK, 
+                StatusCode::OK,
                 [
                     (header::CONTENT_TYPE, content_type),
                     (header::CACHE_CONTROL, "no-cache, no-store, must-revalidate"),
                     (header::PRAGMA, "no-cache"),
-                    (header::EXPIRES, "0")
-                ], 
-                content
-            ).into_response()
+                    (header::EXPIRES, "0"),
+                ],
+                content,
+            )
+                .into_response()
         }
         Err(_) => (StatusCode::NOT_FOUND, "Asset not found").into_response(),
     }
 }
 
 /// Flutter assets/assets handler - serves files from assets/ subdirectory
-async fn flutter_assets_assets_handler(axum::extract::Path(path): axum::extract::Path<String>) -> impl IntoResponse {
+async fn flutter_assets_assets_handler(
+    axum::extract::Path(path): axum::extract::Path<String>,
+) -> impl IntoResponse {
     let file_path = format!("./rust/web-frontend/flutter/assets/{}", path);
-    
+
     match std::fs::read(&file_path) {
         Ok(content) => {
             let content_type = match path.split('.').last() {
@@ -935,26 +957,29 @@ async fn flutter_assets_assets_handler(axum::extract::Path(path): axum::extract:
                 Some("json") => "application/json",
                 _ => "application/octet-stream",
             };
-            
+
             (
-                StatusCode::OK, 
+                StatusCode::OK,
                 [
                     (header::CONTENT_TYPE, content_type),
                     (header::CACHE_CONTROL, "no-cache, no-store, must-revalidate"),
                     (header::PRAGMA, "no-cache"),
-                    (header::EXPIRES, "0")
-                ], 
-                content
-            ).into_response()
+                    (header::EXPIRES, "0"),
+                ],
+                content,
+            )
+                .into_response()
         }
         Err(_) => (StatusCode::NOT_FOUND, "Asset not found").into_response(),
     }
 }
 
 /// Flutter canvaskit handler - serves files from canvaskit/ subdirectory
-async fn flutter_canvaskit_handler(axum::extract::Path(path): axum::extract::Path<String>) -> impl IntoResponse {
+async fn flutter_canvaskit_handler(
+    axum::extract::Path(path): axum::extract::Path<String>,
+) -> impl IntoResponse {
     let file_path = format!("./rust/web-frontend/flutter/canvaskit/{}", path);
-    
+
     match std::fs::read(&file_path) {
         Ok(content) => {
             let content_type = match path.split('.').last() {
@@ -962,26 +987,29 @@ async fn flutter_canvaskit_handler(axum::extract::Path(path): axum::extract::Pat
                 Some("wasm") => "application/wasm",
                 _ => "application/octet-stream",
             };
-            
+
             (
-                StatusCode::OK, 
+                StatusCode::OK,
                 [
                     (header::CONTENT_TYPE, content_type),
                     (header::CACHE_CONTROL, "no-cache, no-store, must-revalidate"),
                     (header::PRAGMA, "no-cache"),
-                    (header::EXPIRES, "0")
-                ], 
-                content
-            ).into_response()
+                    (header::EXPIRES, "0"),
+                ],
+                content,
+            )
+                .into_response()
         }
         Err(_) => (StatusCode::NOT_FOUND, "Asset not found").into_response(),
     }
 }
 
 /// Flutter icons handler - serves files from icons/ subdirectory
-async fn flutter_icons_handler(axum::extract::Path(path): axum::extract::Path<String>) -> impl IntoResponse {
+async fn flutter_icons_handler(
+    axum::extract::Path(path): axum::extract::Path<String>,
+) -> impl IntoResponse {
     let file_path = format!("./rust/web-frontend/flutter/icons/{}", path);
-    
+
     match std::fs::read(&file_path) {
         Ok(content) => {
             let content_type = match path.split('.').last() {
@@ -991,17 +1019,18 @@ async fn flutter_icons_handler(axum::extract::Path(path): axum::extract::Path<St
                 Some("ico") => "image/x-icon",
                 _ => "application/octet-stream",
             };
-            
+
             (
-                StatusCode::OK, 
+                StatusCode::OK,
                 [
                     (header::CONTENT_TYPE, content_type),
                     (header::CACHE_CONTROL, "no-cache, no-store, must-revalidate"),
                     (header::PRAGMA, "no-cache"),
-                    (header::EXPIRES, "0")
-                ], 
-                content
-            ).into_response()
+                    (header::EXPIRES, "0"),
+                ],
+                content,
+            )
+                .into_response()
         }
         Err(_) => (StatusCode::NOT_FOUND, "Asset not found").into_response(),
     }
@@ -1010,7 +1039,12 @@ async fn flutter_icons_handler(axum::extract::Path(path): axum::extract::Path<St
 /// Flutter main.dart.js handler
 async fn flutter_main_dart_js_handler() -> impl IntoResponse {
     match std::fs::read("./rust/web-frontend/flutter/main.dart.js") {
-        Ok(content) => (StatusCode::OK, [(header::CONTENT_TYPE, "application/javascript")], content).into_response(),
+        Ok(content) => (
+            StatusCode::OK,
+            [(header::CONTENT_TYPE, "application/javascript")],
+            content,
+        )
+            .into_response(),
         Err(_) => (StatusCode::NOT_FOUND, "main.dart.js not found").into_response(),
     }
 }
@@ -1018,7 +1052,12 @@ async fn flutter_main_dart_js_handler() -> impl IntoResponse {
 /// Flutter.js handler
 async fn flutter_js_handler() -> impl IntoResponse {
     match std::fs::read("./rust/web-frontend/flutter/flutter.js") {
-        Ok(content) => (StatusCode::OK, [(header::CONTENT_TYPE, "application/javascript")], content).into_response(),
+        Ok(content) => (
+            StatusCode::OK,
+            [(header::CONTENT_TYPE, "application/javascript")],
+            content,
+        )
+            .into_response(),
         Err(_) => (StatusCode::NOT_FOUND, "flutter.js not found").into_response(),
     }
 }
@@ -1026,7 +1065,12 @@ async fn flutter_js_handler() -> impl IntoResponse {
 /// Flutter bootstrap handler
 async fn flutter_bootstrap_handler() -> impl IntoResponse {
     match std::fs::read("./rust/web-frontend/flutter/flutter_bootstrap.js") {
-        Ok(content) => (StatusCode::OK, [(header::CONTENT_TYPE, "application/javascript")], content).into_response(),
+        Ok(content) => (
+            StatusCode::OK,
+            [(header::CONTENT_TYPE, "application/javascript")],
+            content,
+        )
+            .into_response(),
         Err(_) => (StatusCode::NOT_FOUND, "flutter_bootstrap.js not found").into_response(),
     }
 }
@@ -1078,8 +1122,9 @@ self.addEventListener('message', function(event) {
     (
         StatusCode::OK,
         [(header::CONTENT_TYPE, "application/javascript")],
-        minimal_service_worker
-    ).into_response()
+        minimal_service_worker,
+    )
+        .into_response()
 }
 
 /// Flutter manifest handler
@@ -1088,8 +1133,9 @@ async fn flutter_manifest_handler() -> impl IntoResponse {
         Ok(json) => (
             StatusCode::OK,
             [(header::CONTENT_TYPE, "application/json")],
-            json
-        ).into_response(),
+            json,
+        )
+            .into_response(),
         Err(_) => (StatusCode::NOT_FOUND, "Manifest not found").into_response(),
     }
 }
@@ -1459,11 +1505,11 @@ async fn user_manual_handler() -> impl IntoResponse {
 </body>
 </html>
     "#;
-    
+
     (
         StatusCode::OK,
         [(header::CONTENT_TYPE, "text/html; charset=utf-8")],
-        html_content
+        html_content,
     )
 }
 
@@ -1473,8 +1519,9 @@ async fn user_manual_api_handler() -> impl IntoResponse {
         Ok(content) => (
             StatusCode::OK,
             [(header::CONTENT_TYPE, "text/plain; charset=utf-8")],
-            content
-        ).into_response(),
+            content,
+        )
+            .into_response(),
         Err(_) => {
             let fallback_content = r#"# OpenSim Next - User Manual
 
@@ -1527,8 +1574,9 @@ If you need assistance:
             (
                 StatusCode::OK,
                 [(header::CONTENT_TYPE, "text/plain; charset=utf-8")],
-                fallback_content.to_string()
-            ).into_response()
+                fallback_content.to_string(),
+            )
+                .into_response()
         }
     }
 }
@@ -1536,7 +1584,7 @@ If you need assistance:
 #[cfg(test)]
 mod tests {
     use super::*;
-    
+
     #[test]
     fn test_web_client_server_creation() {
         let server = WebClientServer::new(8080);
@@ -1554,12 +1602,21 @@ async fn api_health_proxy() -> impl IntoResponse {
     {
         Ok(response) => {
             if let Ok(text) = response.text().await {
-                (StatusCode::OK, [(header::CONTENT_TYPE, "application/json")], text).into_response()
+                (
+                    StatusCode::OK,
+                    [(header::CONTENT_TYPE, "application/json")],
+                    text,
+                )
+                    .into_response()
             } else {
                 (StatusCode::INTERNAL_SERVER_ERROR, "Failed to read response").into_response()
             }
         }
-        Err(_) => (StatusCode::SERVICE_UNAVAILABLE, "Monitoring service unavailable").into_response(),
+        Err(_) => (
+            StatusCode::SERVICE_UNAVAILABLE,
+            "Monitoring service unavailable",
+        )
+            .into_response(),
     }
 }
 
@@ -1577,7 +1634,11 @@ async fn api_metrics_proxy() -> impl IntoResponse {
                 (StatusCode::INTERNAL_SERVER_ERROR, "Failed to read response").into_response()
             }
         }
-        Err(_) => (StatusCode::SERVICE_UNAVAILABLE, "Monitoring service unavailable").into_response(),
+        Err(_) => (
+            StatusCode::SERVICE_UNAVAILABLE,
+            "Monitoring service unavailable",
+        )
+            .into_response(),
     }
 }
 
@@ -1590,11 +1651,20 @@ async fn api_info_proxy() -> impl IntoResponse {
     {
         Ok(response) => {
             if let Ok(text) = response.text().await {
-                (StatusCode::OK, [(header::CONTENT_TYPE, "application/json")], text).into_response()
+                (
+                    StatusCode::OK,
+                    [(header::CONTENT_TYPE, "application/json")],
+                    text,
+                )
+                    .into_response()
             } else {
                 (StatusCode::INTERNAL_SERVER_ERROR, "Failed to read response").into_response()
             }
         }
-        Err(_) => (StatusCode::SERVICE_UNAVAILABLE, "Monitoring service unavailable").into_response(),
+        Err(_) => (
+            StatusCode::SERVICE_UNAVAILABLE,
+            "Monitoring service unavailable",
+        )
+            .into_response(),
     }
 }

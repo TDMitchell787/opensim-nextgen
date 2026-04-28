@@ -1,5 +1,5 @@
-use bytes::{Bytes, Buf, BufMut, BytesMut};
-use anyhow::{Result, anyhow};
+use anyhow::{anyhow, Result};
+use bytes::{Buf, BufMut, Bytes, BytesMut};
 use tracing::debug;
 
 #[derive(Debug, Clone)]
@@ -10,10 +10,17 @@ pub struct StartPingCheckMessage {
 
 impl StartPingCheckMessage {
     pub fn parse(data: &Bytes) -> Result<Self> {
-        debug!("StartPingCheck parse: {} bytes, data: {:?}", data.len(), data);
+        debug!(
+            "StartPingCheck parse: {} bytes, data: {:?}",
+            data.len(),
+            data
+        );
 
         if data.len() < 5 {
-            return Err(anyhow!("StartPingCheck message too short: {} bytes", data.len()));
+            return Err(anyhow!(
+                "StartPingCheck message too short: {} bytes",
+                data.len()
+            ));
         }
 
         let mut cursor = std::io::Cursor::new(data);
@@ -27,9 +34,15 @@ impl StartPingCheckMessage {
         // Read OldestUnacked (4 bytes, little-endian U32)
         let oldest_unacked = cursor.get_u32_le();
 
-        debug!("Parsed StartPingCheck: ping_id={}, oldest_unacked={}", ping_id, oldest_unacked);
+        debug!(
+            "Parsed StartPingCheck: ping_id={}, oldest_unacked={}",
+            ping_id, oldest_unacked
+        );
 
-        Ok(Self { ping_id, oldest_unacked })
+        Ok(Self {
+            ping_id,
+            oldest_unacked,
+        })
     }
 
     pub fn serialize(&self) -> Vec<u8> {
@@ -47,7 +60,10 @@ pub struct CompletePingCheckMessage {
 impl CompletePingCheckMessage {
     pub fn parse(data: &Bytes) -> Result<Self> {
         if data.len() < 1 {
-            return Err(anyhow!("CompletePingCheck message too short: {} bytes", data.len()));
+            return Err(anyhow!(
+                "CompletePingCheck message too short: {} bytes",
+                data.len()
+            ));
         }
 
         let mut cursor = std::io::Cursor::new(data);
@@ -76,7 +92,10 @@ mod tests {
     fn test_start_ping_check_parsing() {
         let ping_id = 42u8;
         let oldest_unacked = 12345u32;
-        let original = StartPingCheckMessage { ping_id, oldest_unacked };
+        let original = StartPingCheckMessage {
+            ping_id,
+            oldest_unacked,
+        };
 
         let serialized = original.serialize();
         let data = Bytes::from(serialized);
@@ -85,19 +104,19 @@ mod tests {
         assert_eq!(parsed.ping_id, ping_id);
         assert_eq!(parsed.oldest_unacked, oldest_unacked);
     }
-    
+
     #[test]
     fn test_complete_ping_check_parsing() {
         let ping_id = 99u8;
         let original = CompletePingCheckMessage { ping_id };
-        
+
         let serialized = original.serialize();
         let data = Bytes::from(serialized);
         let parsed = CompletePingCheckMessage::parse(&data).unwrap();
-        
+
         assert_eq!(parsed.ping_id, ping_id);
     }
-    
+
     #[test]
     fn test_ping_check_short_data() {
         let data = Bytes::from(vec![1, 2, 3]); // Too short (needs 6 bytes minimum)

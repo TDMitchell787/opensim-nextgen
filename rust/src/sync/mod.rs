@@ -3,15 +3,15 @@
 // Ensures consistent state across all platforms and devices
 
 use crate::avatar::AdvancedAvatarManager;
-use crate::monitoring::metrics::MetricsCollector;
 use crate::database::DatabaseManager;
+use crate::monitoring::metrics::MetricsCollector;
+use anyhow::{Error as AnyhowError, Result};
+use chrono::{DateTime, Utc};
+use serde::{Deserialize, Serialize};
+use std::collections::HashMap;
 use std::sync::Arc;
 use tokio::sync::RwLock;
-use serde::{Deserialize, Serialize};
 use uuid::Uuid;
-use anyhow::{Result, Error as AnyhowError};
-use std::collections::HashMap;
-use chrono::{DateTime, Utc};
 
 #[derive(Debug, Clone)]
 pub struct CrossPlatformSyncEngine {
@@ -51,11 +51,11 @@ pub struct SyncStrategies {
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub enum SyncStrategy {
-    RealTime,           // Immediate sync
-    Periodic,           // Scheduled sync
-    OnDemand,          // User-triggered sync
-    EventDriven,       // Triggered by specific events
-    Hybrid,            // Combination of strategies
+    RealTime,    // Immediate sync
+    Periodic,    // Scheduled sync
+    OnDemand,    // User-triggered sync
+    EventDriven, // Triggered by specific events
+    Hybrid,      // Combination of strategies
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
@@ -69,11 +69,11 @@ pub struct ConflictResolutionConfig {
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub enum ConflictStrategy {
-    ServerWins,        // Server version takes precedence
-    ClientWins,        // Local version takes precedence
-    LastModifiedWins,  // Most recent modification wins
-    UserChoice,        // Prompt user to choose
-    AutoMerge,         // Attempt automatic merge
+    ServerWins,       // Server version takes precedence
+    ClientWins,       // Local version takes precedence
+    LastModifiedWins, // Most recent modification wins
+    UserChoice,       // Prompt user to choose
+    AutoMerge,        // Attempt automatic merge
     KeepBoth,         // Keep both versions
 }
 
@@ -148,13 +148,13 @@ pub struct PlatformPriorities {
 
 #[derive(Debug, Clone, Serialize, Deserialize, Hash, Eq, PartialEq)]
 pub enum ClientPlatform {
-    Desktop,           // Windows/Mac/Linux desktop clients
-    WebBrowser,        // Web browser PWA
-    MobileApp,         // Native mobile apps
-    VRHeadset,         // VR applications
-    TabletApp,         // Tablet-specific applications
-    ConsoleApp,        // Gaming console applications
-    EmbeddedDevice,    // IoT/embedded devices
+    Desktop,        // Windows/Mac/Linux desktop clients
+    WebBrowser,     // Web browser PWA
+    MobileApp,      // Native mobile apps
+    VRHeadset,      // VR applications
+    TabletApp,      // Tablet-specific applications
+    ConsoleApp,     // Gaming console applications
+    EmbeddedDevice, // IoT/embedded devices
 }
 
 #[derive(Debug, Clone)]
@@ -195,8 +195,8 @@ pub struct ActiveSync {
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub enum SyncDirection {
-    Upload,    // Client to server
-    Download,  // Server to client
+    Upload,        // Client to server
+    Download,      // Server to client
     Bidirectional, // Both directions
 }
 
@@ -235,11 +235,11 @@ pub struct SyncMetadata {
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub enum SyncPriority {
-    Critical,   // Must sync immediately
-    High,       // High priority sync
-    Normal,     // Standard priority
-    Low,        // Background sync
-    Deferred,   // Sync when convenient
+    Critical, // Must sync immediately
+    High,     // High priority sync
+    Normal,   // Standard priority
+    Low,      // Background sync
+    Deferred, // Sync when convenient
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
@@ -323,11 +323,7 @@ impl Default for SyncConfig {
                 sync_interval_ms: 1000,
                 batch_sync_enabled: true,
                 batch_size: 10,
-                priority_data_types: vec![
-                    DataType::Avatar,
-                    DataType::Messages,
-                    DataType::Friends,
-                ],
+                priority_data_types: vec![DataType::Avatar, DataType::Messages, DataType::Friends],
             },
             offline_sync: OfflineSyncConfig {
                 enabled: true,
@@ -394,10 +390,14 @@ impl CrossPlatformSyncEngine {
         let engine = Arc::new(Self {
             config: config.clone(),
             state_manager: Arc::new(UniversalStateManager::new(config.clone()).await?),
-            conflict_resolver: Arc::new(ConflictResolver::new(config.conflict_resolution.clone()).await?),
+            conflict_resolver: Arc::new(
+                ConflictResolver::new(config.conflict_resolution.clone()).await?,
+            ),
             sync_scheduler: Arc::new(SyncScheduler::new(config.clone()).await?),
             offline_queue: Arc::new(OfflineSyncQueue::new(config.offline_sync.clone()).await?),
-            real_time_sync: Arc::new(RealTimeSyncManager::new(config.real_time_sync.clone()).await?),
+            real_time_sync: Arc::new(
+                RealTimeSyncManager::new(config.real_time_sync.clone()).await?,
+            ),
             platform_adapters: Arc::new(RwLock::new(HashMap::new())),
             metrics: metrics.clone(),
             db,
@@ -431,7 +431,7 @@ impl CrossPlatformSyncEngine {
 
         tokio::spawn(async move {
             let mut interval = tokio::time::interval(
-                tokio::time::Duration::from_millis(1000) // 1 second intervals
+                tokio::time::Duration::from_millis(1000), // 1 second intervals
             );
 
             loop {
@@ -489,7 +489,7 @@ impl CrossPlatformSyncEngine {
         sync_capabilities: SyncCapabilities,
     ) -> Result<Uuid> {
         let session_id = Uuid::new_v4();
-        
+
         let session = SyncSession {
             session_id,
             user_id,
@@ -510,10 +510,15 @@ impl CrossPlatformSyncEngine {
             session_start: Utc::now(),
         };
 
-        self.active_sync_sessions.write().await.insert(session_id, session);
-        
+        self.active_sync_sessions
+            .write()
+            .await
+            .insert(session_id, session);
+
         // Record sync session creation
-        self.metrics.record_sync_session_created(user_id, &client_platform.to_string()).await;
+        self.metrics
+            .record_sync_session_created(user_id, &client_platform.to_string())
+            .await;
 
         Ok(session_id)
     }
@@ -530,52 +535,53 @@ impl CrossPlatformSyncEngine {
         // Get session
         let session = {
             let sessions = self.active_sync_sessions.read().await;
-            sessions.get(&session_id).cloned()
+            sessions
+                .get(&session_id)
+                .cloned()
                 .ok_or_else(|| AnyhowError::msg("Sync session not found"))?
         };
 
         // Prepare sync data
-        let sync_data = if let Some(adapter) = self.get_platform_adapter(&session.client_platform).await {
-            adapter.prepare_sync_data(data_type.clone(), session.user_id).await?
-        } else {
-            return Err(AnyhowError::msg("Platform adapter not found"));
-        };
+        let sync_data =
+            if let Some(adapter) = self.get_platform_adapter(&session.client_platform).await {
+                adapter
+                    .prepare_sync_data(data_type.clone(), session.user_id)
+                    .await?
+            } else {
+                return Err(AnyhowError::msg("Platform adapter not found"));
+            };
 
         // Perform sync based on strategy
         let sync_result = match self.get_sync_strategy(&data_type) {
-            SyncStrategy::RealTime => {
-                self.real_time_sync.sync_data(&sync_data).await?
-            },
-            SyncStrategy::Periodic => {
-                self.sync_scheduler.schedule_sync(&sync_data).await?
-            },
-            SyncStrategy::OnDemand => {
-                self.perform_immediate_sync(&sync_data).await?
-            },
-            SyncStrategy::EventDriven => {
-                self.handle_event_driven_sync(&sync_data).await?
-            },
-            SyncStrategy::Hybrid => {
-                self.perform_hybrid_sync(&sync_data).await?
-            },
+            SyncStrategy::RealTime => self.real_time_sync.sync_data(&sync_data).await?,
+            SyncStrategy::Periodic => self.sync_scheduler.schedule_sync(&sync_data).await?,
+            SyncStrategy::OnDemand => self.perform_immediate_sync(&sync_data).await?,
+            SyncStrategy::EventDriven => self.handle_event_driven_sync(&sync_data).await?,
+            SyncStrategy::Hybrid => self.perform_hybrid_sync(&sync_data).await?,
         };
 
         // Update session statistics
-        self.update_sync_statistics(session_id, &sync_result).await?;
+        self.update_sync_statistics(session_id, &sync_result)
+            .await?;
 
         // Record metrics
         let duration_ms = (Utc::now() - start_time).num_milliseconds() as u64;
-        self.metrics.record_sync_completed(
-            session.user_id,
-            &data_type.to_string(),
-            duration_ms,
-            sync_result.success,
-        ).await;
+        self.metrics
+            .record_sync_completed(
+                session.user_id,
+                &data_type.to_string(),
+                duration_ms,
+                sync_result.success,
+            )
+            .await;
 
         Ok(sync_result)
     }
 
-    async fn get_platform_adapter(&self, platform: &ClientPlatform) -> Option<Arc<dyn PlatformSyncAdapter>> {
+    async fn get_platform_adapter(
+        &self,
+        platform: &ClientPlatform,
+    ) -> Option<Arc<dyn PlatformSyncAdapter>> {
         self.platform_adapters.read().await.get(platform).cloned()
     }
 
@@ -631,32 +637,47 @@ impl CrossPlatformSyncEngine {
         })
     }
 
-    async fn update_sync_statistics(&self, session_id: Uuid, sync_result: &SyncResult) -> Result<()> {
+    async fn update_sync_statistics(
+        &self,
+        session_id: Uuid,
+        sync_result: &SyncResult,
+    ) -> Result<()> {
         let mut sessions = self.active_sync_sessions.write().await;
         if let Some(session) = sessions.get_mut(&session_id) {
             session.sync_statistics.total_syncs_completed += 1;
             session.sync_statistics.total_bytes_synced += sync_result.bytes_synced;
-            
+
             if sync_result.success {
                 session.sync_statistics.last_successful_sync = Utc::now();
             } else {
                 session.sync_statistics.sync_failures += 1;
             }
-            
+
             // Update average sync time
-            let total_time = session.sync_statistics.average_sync_time_ms * (session.sync_statistics.total_syncs_completed - 1) as f32 + sync_result.sync_duration_ms as f32;
-            session.sync_statistics.average_sync_time_ms = total_time / session.sync_statistics.total_syncs_completed as f32;
+            let total_time = session.sync_statistics.average_sync_time_ms
+                * (session.sync_statistics.total_syncs_completed - 1) as f32
+                + sync_result.sync_duration_ms as f32;
+            session.sync_statistics.average_sync_time_ms =
+                total_time / session.sync_statistics.total_syncs_completed as f32;
         }
         Ok(())
     }
 
-    pub async fn resolve_conflict(&self, conflict_id: Uuid, resolution: ConflictStrategy) -> Result<()> {
-        self.conflict_resolver.resolve_conflict(conflict_id, resolution).await
+    pub async fn resolve_conflict(
+        &self,
+        conflict_id: Uuid,
+        resolution: ConflictStrategy,
+    ) -> Result<()> {
+        self.conflict_resolver
+            .resolve_conflict(conflict_id, resolution)
+            .await
     }
 
     pub async fn get_sync_status(&self, session_id: Uuid) -> Result<SyncSession> {
         let sessions = self.active_sync_sessions.read().await;
-        sessions.get(&session_id).cloned()
+        sessions
+            .get(&session_id)
+            .cloned()
             .ok_or_else(|| AnyhowError::msg("Sync session not found"))
     }
 
@@ -688,11 +709,17 @@ impl ConflictResolver {
     }
 
     pub async fn process_pending_conflicts(&self, metrics: &MetricsCollector) -> Result<()> {
-        metrics.record_custom_metric("conflict_resolver_check", 1.0, HashMap::new()).await?;
+        metrics
+            .record_custom_metric("conflict_resolver_check", 1.0, HashMap::new())
+            .await?;
         Ok(())
     }
 
-    pub async fn resolve_conflict(&self, _conflict_id: Uuid, _resolution: ConflictStrategy) -> Result<()> {
+    pub async fn resolve_conflict(
+        &self,
+        _conflict_id: Uuid,
+        _resolution: ConflictStrategy,
+    ) -> Result<()> {
         Ok(())
     }
 }
@@ -708,7 +735,9 @@ impl SyncScheduler {
     }
 
     pub async fn process_scheduled_syncs(&self, metrics: &MetricsCollector) -> Result<()> {
-        metrics.record_custom_metric("sync_scheduler_check", 1.0, HashMap::new()).await?;
+        metrics
+            .record_custom_metric("sync_scheduler_check", 1.0, HashMap::new())
+            .await?;
         Ok(())
     }
 
@@ -751,7 +780,9 @@ impl RealTimeSyncManager {
     }
 
     pub async fn process_real_time_sync(&self, metrics: &MetricsCollector) -> Result<()> {
-        metrics.record_custom_metric("real_time_sync_check", 1.0, HashMap::new()).await?;
+        metrics
+            .record_custom_metric("real_time_sync_check", 1.0, HashMap::new())
+            .await?;
         Ok(())
     }
 
@@ -774,18 +805,30 @@ impl MetricsCollector {
         let mut tags = HashMap::new();
         tags.insert("user_id".to_string(), user_id.to_string());
         tags.insert("platform".to_string(), platform.to_string());
-        
-        let _ = self.record_custom_metric("sync_sessions_created_total", 1.0, tags).await;
+
+        let _ = self
+            .record_custom_metric("sync_sessions_created_total", 1.0, tags)
+            .await;
     }
 
-    pub async fn record_sync_completed(&self, user_id: Uuid, data_type: &str, duration_ms: u64, success: bool) {
+    pub async fn record_sync_completed(
+        &self,
+        user_id: Uuid,
+        data_type: &str,
+        duration_ms: u64,
+        success: bool,
+    ) {
         let mut tags = HashMap::new();
         tags.insert("user_id".to_string(), user_id.to_string());
         tags.insert("data_type".to_string(), data_type.to_string());
         tags.insert("success".to_string(), success.to_string());
-        
-        let _ = self.record_custom_metric("sync_operations_total", 1.0, tags.clone()).await;
-        let _ = self.record_custom_metric("sync_duration_ms", duration_ms as f64, tags).await;
+
+        let _ = self
+            .record_custom_metric("sync_operations_total", 1.0, tags.clone())
+            .await;
+        let _ = self
+            .record_custom_metric("sync_duration_ms", duration_ms as f64, tags)
+            .await;
     }
 }
 

@@ -6,7 +6,7 @@ use std::time::Duration;
 use tracing::{debug, info, warn};
 use uuid::Uuid;
 
-use crate::services::traits::{AvatarServiceTrait, AvatarData};
+use crate::services::traits::{AvatarData, AvatarServiceTrait};
 
 pub struct RemoteAvatarService {
     client: Client,
@@ -28,7 +28,11 @@ impl RemoteAvatarService {
         }
     }
 
-    async fn send_request(&self, method: &str, params: &HashMap<String, String>) -> Result<HashMap<String, String>> {
+    async fn send_request(
+        &self,
+        method: &str,
+        params: &HashMap<String, String>,
+    ) -> Result<HashMap<String, String>> {
         let url = format!("{}/avatar", self.server_uri);
 
         let mut form_data = params.clone();
@@ -36,7 +40,8 @@ impl RemoteAvatarService {
 
         debug!("Avatar service request: {} to {}", method, url);
 
-        let response = self.client
+        let response = self
+            .client
             .post(&url)
             .form(&form_data)
             .send()
@@ -44,17 +49,23 @@ impl RemoteAvatarService {
             .map_err(|e| anyhow!("Avatar service request failed: {}", e))?;
 
         if !response.status().is_success() {
-            return Err(anyhow!("Avatar service returned status: {}", response.status()));
+            return Err(anyhow!(
+                "Avatar service returned status: {}",
+                response.status()
+            ));
         }
 
-        let body = response.text().await
+        let body = response
+            .text()
+            .await
             .map_err(|e| anyhow!("Failed to read avatar service response: {}", e))?;
 
         self.parse_response(&body)
     }
 
     fn parse_response(&self, body: &str) -> Result<HashMap<String, String>> {
-        if let Some(xml_result) = crate::services::robust::xml_response::try_parse_xml_to_flat(body) {
+        if let Some(xml_result) = crate::services::robust::xml_response::try_parse_xml_to_flat(body)
+        {
             return Ok(xml_result);
         }
 
@@ -79,16 +90,21 @@ impl AvatarServiceTrait for RemoteAvatarService {
 
         let response = self.send_request("getavatar", &params).await?;
 
-        let result = response.get("result")
+        let result = response
+            .get("result")
             .map(|s| s != "null" && s != "Failure")
             .unwrap_or(true);
 
         if !result {
-            return Ok(AvatarData { avatar_type: 1, data: HashMap::new() });
+            return Ok(AvatarData {
+                avatar_type: 1,
+                data: HashMap::new(),
+            });
         }
 
         let mut avatar_data = AvatarData {
-            avatar_type: response.get("AvatarType")
+            avatar_type: response
+                .get("AvatarType")
                 .and_then(|s| s.parse().ok())
                 .unwrap_or(1),
             data: HashMap::new(),
@@ -116,7 +132,8 @@ impl AvatarServiceTrait for RemoteAvatarService {
 
         let response = self.send_request("setavatar", &params).await?;
 
-        Ok(response.get("result")
+        Ok(response
+            .get("result")
             .map(|s| s == "true" || s == "True" || s == "Success")
             .unwrap_or(false))
     }
@@ -129,13 +146,18 @@ impl AvatarServiceTrait for RemoteAvatarService {
 
         let response = self.send_request("resetavatar", &params).await?;
 
-        Ok(response.get("result")
+        Ok(response
+            .get("result")
             .map(|s| s == "true" || s == "True" || s == "Success")
             .unwrap_or(false))
     }
 
     async fn remove_items(&self, principal_id: Uuid, names: &[String]) -> Result<bool> {
-        debug!("Remote: Removing {} avatar items for: {}", names.len(), principal_id);
+        debug!(
+            "Remote: Removing {} avatar items for: {}",
+            names.len(),
+            principal_id
+        );
 
         let mut params = HashMap::new();
         params.insert("UserID".to_string(), principal_id.to_string());
@@ -147,7 +169,8 @@ impl AvatarServiceTrait for RemoteAvatarService {
 
         let response = self.send_request("removeitems", &params).await?;
 
-        Ok(response.get("result")
+        Ok(response
+            .get("result")
             .map(|s| s == "true" || s == "True" || s == "Success")
             .unwrap_or(false))
     }

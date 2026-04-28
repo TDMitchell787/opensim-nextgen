@@ -220,8 +220,11 @@ impl ContentValidator {
                         obj.name, obj.prim_count, self.config.max_prims_per_object
                     ),
                     object_id: Some(obj.id),
-                    details: Some(format!("Consider splitting into {} separate objects",
-                        (obj.prim_count as f32 / self.config.max_prims_per_object as f32).ceil() as u32)),
+                    details: Some(format!(
+                        "Consider splitting into {} separate objects",
+                        (obj.prim_count as f32 / self.config.max_prims_per_object as f32).ceil()
+                            as u32
+                    )),
                     auto_fixable: false,
                 });
             } else if obj.prim_count > self.config.max_prims_per_object * 80 / 100 {
@@ -255,23 +258,32 @@ impl ContentValidator {
 
     pub fn validate_textures(&self, content: &ValidatableContent) -> ValidationResult {
         let mut result = ValidationResult::new();
-        let allowed_formats: HashSet<_> = self.config.allowed_texture_formats.iter()
+        let allowed_formats: HashSet<_> = self
+            .config
+            .allowed_texture_formats
+            .iter()
             .map(|s| s.to_lowercase())
             .collect();
 
         for texture in &content.textures {
-            if texture.width > self.config.max_texture_width ||
-               texture.height > self.config.max_texture_height {
+            if texture.width > self.config.max_texture_width
+                || texture.height > self.config.max_texture_height
+            {
                 result.add_error(ValidationError {
                     error_type: ValidationErrorType::TextureTooLarge,
                     message: format!(
                         "Texture '{}' is {}x{}, exceeds max {}x{}",
-                        texture.name, texture.width, texture.height,
-                        self.config.max_texture_width, self.config.max_texture_height
+                        texture.name,
+                        texture.width,
+                        texture.height,
+                        self.config.max_texture_width,
+                        self.config.max_texture_height
                     ),
                     object_id: texture.object_id,
-                    details: Some(format!("Resize to {}x{} or smaller",
-                        self.config.max_texture_width, self.config.max_texture_height)),
+                    details: Some(format!(
+                        "Resize to {}x{} or smaller",
+                        self.config.max_texture_width, self.config.max_texture_height
+                    )),
                     auto_fixable: true,
                 });
             } else if texture.width > 512 || texture.height > 512 {
@@ -295,7 +307,10 @@ impl ContentValidator {
                         texture.name, texture.format
                     ),
                     object_id: texture.object_id,
-                    details: Some(format!("Supported formats: {:?}", self.config.allowed_texture_formats)),
+                    details: Some(format!(
+                        "Supported formats: {:?}",
+                        self.config.allowed_texture_formats
+                    )),
                     auto_fixable: true,
                 });
             }
@@ -316,7 +331,9 @@ impl ContentValidator {
                         script.name, script.size_bytes, self.config.max_script_size_bytes
                     ),
                     object_id: script.object_id,
-                    details: Some("Consider splitting into multiple scripts or optimizing code".to_string()),
+                    details: Some(
+                        "Consider splitting into multiple scripts or optimizing code".to_string(),
+                    ),
                     auto_fixable: false,
                 });
             }
@@ -349,10 +366,7 @@ impl ContentValidator {
             if script.has_deprecated_functions {
                 result.add_warning(ValidationWarning {
                     warning_type: ValidationWarningType::DeprecatedFeature,
-                    message: format!(
-                        "Script '{}' uses deprecated functions",
-                        script.name
-                    ),
+                    message: format!("Script '{}' uses deprecated functions", script.name),
                     object_id: script.object_id,
                     impact: WarningImpact::Low,
                 });
@@ -408,10 +422,7 @@ impl ContentValidator {
             if !mesh.has_lod_levels {
                 result.add_warning(ValidationWarning {
                     warning_type: ValidationWarningType::UnoptimizedMesh,
-                    message: format!(
-                        "Mesh '{}' lacks LOD levels",
-                        mesh.name
-                    ),
+                    message: format!("Mesh '{}' lacks LOD levels", mesh.name),
                     object_id: mesh.object_id,
                     impact: WarningImpact::Medium,
                 });
@@ -443,7 +454,9 @@ impl ContentValidator {
                     error_type: ValidationErrorType::PhysicsComplexityExceeded,
                     message: format!(
                         "Physics shape for '{}' has {} triangles, exceeds limit of {}",
-                        physics.object_name, physics.triangle_count, self.config.max_physics_triangles
+                        physics.object_name,
+                        physics.triangle_count,
+                        self.config.max_physics_triangles
                     ),
                     object_id: physics.object_id,
                     details: Some("Use simpler collision shape".to_string()),
@@ -544,18 +557,26 @@ impl ContentValidator {
         result.metrics.total_textures = content.textures.len() as u32;
         result.metrics.total_meshes = content.meshes.len() as u32;
 
-        let download_weight: f32 = content.meshes.iter()
+        let download_weight: f32 = content
+            .meshes
+            .iter()
             .map(|m| m.vertex_count as f32 * 0.001 + m.triangle_count as f32 * 0.0005)
             .sum::<f32>()
-            + content.textures.iter()
+            + content
+                .textures
+                .iter()
                 .map(|t| (t.width * t.height) as f32 * 0.00001)
                 .sum::<f32>();
 
-        let physics_weight: f32 = content.physics_shapes.iter()
+        let physics_weight: f32 = content
+            .physics_shapes
+            .iter()
             .map(|p| p.vertex_count as f32 * 0.01 + p.triangle_count as f32 * 0.02)
             .sum();
 
-        let server_weight: f32 = content.scripts.iter()
+        let server_weight: f32 = content
+            .scripts
+            .iter()
             .map(|s| s.complexity_score as f32 * 0.1)
             .sum::<f32>()
             + result.metrics.total_prims as f32 * 0.01;
@@ -569,18 +590,18 @@ impl ContentValidator {
 
     fn generate_suggestions(&self, result: &mut ValidationResult, content: &ValidatableContent) {
         if result.metrics.total_prims > 100 {
-            result.add_suggestion(
-                "Consider using mesh objects to reduce prim count".to_string()
-            );
+            result.add_suggestion("Consider using mesh objects to reduce prim count".to_string());
         }
 
         if result.metrics.total_textures > 20 {
             result.add_suggestion(
-                "Consider using texture atlases to reduce texture count".to_string()
+                "Consider using texture atlases to reduce texture count".to_string(),
             );
         }
 
-        let large_textures = content.textures.iter()
+        let large_textures = content
+            .textures
+            .iter()
             .filter(|t| t.width > 512 || t.height > 512)
             .count();
         if large_textures > 5 {
@@ -592,13 +613,11 @@ impl ContentValidator {
 
         if content.scripts.len() > 10 {
             result.add_suggestion(
-                "Many scripts detected. Consider consolidating into fewer scripts".to_string()
+                "Many scripts detected. Consider consolidating into fewer scripts".to_string(),
             );
         }
 
-        let unoptimized_meshes = content.meshes.iter()
-            .filter(|m| !m.has_lod_levels)
-            .count();
+        let unoptimized_meshes = content.meshes.iter().filter(|m| !m.has_lod_levels).count();
         if unoptimized_meshes > 0 {
             result.add_suggestion(format!(
                 "{} meshes lack LOD levels. Add LODs for better rendering performance",
@@ -737,10 +756,14 @@ pub fn convert_generated_content_to_validatable(
         if !obj.children.is_empty() {
             let obj_id = Uuid::parse_str(&obj.uuid).unwrap_or_else(|_| Uuid::new_v4());
             let positions: Vec<_> = obj.children.iter().map(|c| c.position).collect();
-            let max_distance = positions.iter()
-                .map(|p| ((p.0 - obj.position.0).powi(2) +
-                         (p.1 - obj.position.1).powi(2) +
-                         (p.2 - obj.position.2).powi(2)).sqrt())
+            let max_distance = positions
+                .iter()
+                .map(|p| {
+                    ((p.0 - obj.position.0).powi(2)
+                        + (p.1 - obj.position.1).powi(2)
+                        + (p.2 - obj.position.2).powi(2))
+                    .sqrt()
+                })
                 .fold(0.0_f32, f32::max);
 
             content.linksets.push(ValidatableLinkset {
@@ -802,7 +825,10 @@ mod tests {
 
         let result = validator.validate_content(&content);
         assert!(!result.is_valid);
-        assert!(result.errors.iter().any(|e| e.error_type == ValidationErrorType::PrimLimitExceeded));
+        assert!(result
+            .errors
+            .iter()
+            .any(|e| e.error_type == ValidationErrorType::PrimLimitExceeded));
     }
 
     #[test]
@@ -820,7 +846,10 @@ mod tests {
 
         let result = validator.validate_content(&content);
         assert!(!result.is_valid);
-        assert!(result.errors.iter().any(|e| e.error_type == ValidationErrorType::TextureTooLarge));
+        assert!(result
+            .errors
+            .iter()
+            .any(|e| e.error_type == ValidationErrorType::TextureTooLarge));
     }
 
     #[test]
@@ -838,7 +867,10 @@ mod tests {
 
         let result = validator.validate_content(&content);
         assert!(!result.is_valid);
-        assert!(result.errors.iter().any(|e| e.error_type == ValidationErrorType::InvalidTextureFormat));
+        assert!(result
+            .errors
+            .iter()
+            .any(|e| e.error_type == ValidationErrorType::InvalidTextureFormat));
     }
 
     #[test]

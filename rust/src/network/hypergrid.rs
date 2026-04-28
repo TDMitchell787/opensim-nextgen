@@ -1,17 +1,16 @@
+use anyhow::Result;
 use std::collections::HashMap;
 use std::sync::Arc;
 use tokio::sync::RwLock;
+use tracing::{debug, info, warn};
 use uuid::Uuid;
-use anyhow::Result;
-use tracing::{info, warn, debug};
 
-use crate::services::traits::{
-    GatekeeperServiceTrait, UserAgentServiceTrait,
-    HGRegionInfo, AgentCircuitData,
-};
+use crate::services::hypergrid::uui;
 use crate::services::remote::GatekeeperServiceConnector;
 use crate::services::remote::UserAgentServiceConnector;
-use crate::services::hypergrid::uui;
+use crate::services::traits::{
+    AgentCircuitData, GatekeeperServiceTrait, HGRegionInfo, UserAgentServiceTrait,
+};
 
 #[derive(Debug, Clone)]
 pub struct HypergridConfig {
@@ -129,7 +128,10 @@ impl HypergridManager {
 
         if let Some(ref info) = result {
             self.store_linked_region(info.clone()).await;
-            info!("Linked remote region '{}' (handle={})", info.region_name, info.region_handle);
+            info!(
+                "Linked remote region '{}' (handle={})",
+                info.region_name, info.region_handle
+            );
         }
 
         Ok(result)
@@ -155,13 +157,19 @@ impl HypergridManager {
             None => return Err(anyhow::anyhow!("Invalid HG destination: {}", dest_url)),
         };
 
-        info!("Initiating HG teleport for {} {} to {}:{}", first_name, last_name, gatekeeper_url, region_name);
+        info!(
+            "Initiating HG teleport for {} {} to {}:{}",
+            first_name, last_name, gatekeeper_url, region_name
+        );
 
         let remote_gk = GatekeeperServiceConnector::new(&gatekeeper_url);
         let destination = match remote_gk.link_region(&region_name).await? {
             Some(info) => info,
             None => {
-                warn!("Remote region '{}' not found on {}", region_name, gatekeeper_url);
+                warn!(
+                    "Remote region '{}' not found on {}",
+                    region_name, gatekeeper_url
+                );
                 return Ok(None);
             }
         };
@@ -186,9 +194,15 @@ impl HypergridManager {
             start_pos: [128.0, 128.0, 21.0],
             appearance_serial: 0,
             client_ip: client_ip.to_string(),
-            mac: format!("{:02x}:{:02x}:{:02x}:{:02x}:{:02x}:{:02x}",
-                rand::random::<u8>() | 0x02, rand::random::<u8>(), rand::random::<u8>(),
-                rand::random::<u8>(), rand::random::<u8>(), rand::random::<u8>()),
+            mac: format!(
+                "{:02x}:{:02x}:{:02x}:{:02x}:{:02x}:{:02x}",
+                rand::random::<u8>() | 0x02,
+                rand::random::<u8>(),
+                rand::random::<u8>(),
+                rand::random::<u8>(),
+                rand::random::<u8>(),
+                rand::random::<u8>()
+            ),
             id0: format!("{:032x}", rand::random::<u128>()),
             teleport_flags: 0x100000,
             caps_path: caps_path.clone(),
@@ -203,7 +217,8 @@ impl HypergridManager {
             ..Default::default()
         };
 
-        let (uas_ok, uas_reason) = self.uas
+        let (uas_ok, uas_reason) = self
+            .uas
             .login_agent_to_grid(&agent, &source, &destination, false)
             .await?;
 
@@ -212,11 +227,10 @@ impl HypergridManager {
             return Ok(None);
         }
 
-        let full_dest = match remote_gk.get_hyperlinkregion(
-            destination.region_id,
-            agent_id,
-            &self.config.home_uri,
-        ).await {
+        let full_dest = match remote_gk
+            .get_hyperlinkregion(destination.region_id, agent_id, &self.config.home_uri)
+            .await
+        {
             Ok(Some(info)) => {
                 info!("[HG] get_region returned: name='{}', hostname='{}', internal_port={}, server_uri='{}', handle={}",
                     info.region_name, info.hostname, info.internal_port, info.server_uri, info.region_handle);
@@ -227,7 +241,10 @@ impl HypergridManager {
                 destination.clone()
             }
             Err(e) => {
-                warn!("[HG] get_region failed: {} — using link_region data as fallback", e);
+                warn!(
+                    "[HG] get_region failed: {} — using link_region data as fallback",
+                    e
+                );
                 destination.clone()
             }
         };
@@ -238,25 +255,33 @@ impl HypergridManager {
             } else {
                 &destination.server_uri
             };
-            let close_url = format!("{}agent/{}/{}/",
+            let close_url = format!(
+                "{}agent/{}/{}/",
                 region_uri.trim_end_matches('/').to_owned() + "/",
-                agent_id, full_dest.region_id);
-            info!("[HG] Pre-teleport cleanup: DELETE {} (clear stale agent)", close_url);
+                agent_id,
+                full_dest.region_id
+            );
+            info!(
+                "[HG] Pre-teleport cleanup: DELETE {} (clear stale agent)",
+                close_url
+            );
             match reqwest::Client::builder()
                 .timeout(std::time::Duration::from_secs(5))
                 .build()
                 .unwrap_or_default()
                 .delete(&close_url)
-                .send().await
+                .send()
+                .await
             {
                 Ok(resp) => info!("[HG] Pre-teleport cleanup response: HTTP {}", resp.status()),
-                Err(e) => info!("[HG] Pre-teleport cleanup failed (ok, may not exist): {}", e),
+                Err(e) => info!(
+                    "[HG] Pre-teleport cleanup failed (ok, may not exist): {}",
+                    e
+                ),
             }
         }
 
-        let (gk_ok, gk_reason) = remote_gk
-            .login_agent(&source, &agent, &destination)
-            .await?;
+        let (gk_ok, gk_reason) = remote_gk.login_agent(&source, &agent, &destination).await?;
 
         if !gk_ok {
             warn!("Remote gatekeeper login_agent failed: {}", gk_reason);
@@ -267,15 +292,15 @@ impl HypergridManager {
 
         self.store_linked_region(full_dest.clone()).await;
 
-        info!("HG teleport initiated successfully to {} on {} (caps_path={})", region_name, gatekeeper_url, caps_path);
+        info!(
+            "HG teleport initiated successfully to {} on {} (caps_path={})",
+            region_name, gatekeeper_url, caps_path
+        );
 
         Ok(Some((full_dest, caps_path)))
     }
 
-    pub async fn handle_hg_map_search(
-        &self,
-        query: &str,
-    ) -> Result<Option<HGRegionInfo>> {
+    pub async fn handle_hg_map_search(&self, query: &str) -> Result<Option<HGRegionInfo>> {
         if !uui::is_hg_destination(query) {
             return Ok(None);
         }
@@ -295,7 +320,10 @@ impl HypergridManager {
         urls.insert("SRV_HomeURI".to_string(), ext.clone());
         urls.insert("SRV_GatekeeperURI".to_string(), ext);
         urls.insert("SRV_AssetServerURI".to_string(), robust.clone());
-        urls.insert("SRV_InventoryServerURI".to_string(), format!("{}/hg", robust));
+        urls.insert(
+            "SRV_InventoryServerURI".to_string(),
+            format!("{}/hg", robust),
+        );
         urls.insert("SRV_ProfileServerURI".to_string(), robust.clone());
         urls.insert("SRV_FriendsServerURI".to_string(), robust.clone());
         urls.insert("SRV_IMServerURI".to_string(), robust);
@@ -343,31 +371,79 @@ mod tests {
 
         #[async_trait::async_trait]
         impl GatekeeperServiceTrait for MockGK {
-            async fn link_region(&self, _: &str) -> Result<Option<HGRegionInfo>> { Ok(None) }
-            async fn get_hyperlinkregion(&self, _: Uuid, _: Uuid, _: &str) -> Result<Option<HGRegionInfo>> { Ok(None) }
-            async fn login_agent(&self, _: &HGRegionInfo, _: &AgentCircuitData, _: &HGRegionInfo) -> Result<(bool, String)> { Ok((false, String::new())) }
+            async fn link_region(&self, _: &str) -> Result<Option<HGRegionInfo>> {
+                Ok(None)
+            }
+            async fn get_hyperlinkregion(
+                &self,
+                _: Uuid,
+                _: Uuid,
+                _: &str,
+            ) -> Result<Option<HGRegionInfo>> {
+                Ok(None)
+            }
+            async fn login_agent(
+                &self,
+                _: &HGRegionInfo,
+                _: &AgentCircuitData,
+                _: &HGRegionInfo,
+            ) -> Result<(bool, String)> {
+                Ok((false, String::new()))
+            }
         }
 
         #[async_trait::async_trait]
         impl UserAgentServiceTrait for MockUAS {
-            async fn verify_agent(&self, _: Uuid, _: &str) -> Result<bool> { Ok(false) }
-            async fn verify_client(&self, _: Uuid, _: &str) -> Result<bool> { Ok(false) }
-            async fn get_home_region(&self, _: Uuid) -> Result<Option<(HGRegionInfo, [f32; 3], [f32; 3])>> { Ok(None) }
-            async fn get_server_urls(&self, _: Uuid) -> Result<HashMap<String, String>> { Ok(HashMap::new()) }
-            async fn logout_agent(&self, _: Uuid, _: Uuid) -> Result<()> { Ok(()) }
-            async fn get_uui(&self, _: Uuid, _: Uuid) -> Result<String> { Ok(String::new()) }
-            async fn get_uuid(&self, _: &str, _: &str) -> Result<Option<Uuid>> { Ok(None) }
-            async fn status_notification(&self, _: &[String], _: Uuid, _: bool) -> Result<Vec<Uuid>> { Ok(Vec::new()) }
-            async fn is_agent_coming_home(&self, _: Uuid, _: &str) -> Result<bool> { Ok(false) }
-            async fn login_agent_to_grid(&self, _: &AgentCircuitData, _: &HGRegionInfo, _: &HGRegionInfo, _: bool) -> Result<(bool, String)> { Ok((false, String::new())) }
-            async fn get_user_info(&self, _: Uuid) -> Result<HashMap<String, String>> { Ok(HashMap::new()) }
+            async fn verify_agent(&self, _: Uuid, _: &str) -> Result<bool> {
+                Ok(false)
+            }
+            async fn verify_client(&self, _: Uuid, _: &str) -> Result<bool> {
+                Ok(false)
+            }
+            async fn get_home_region(
+                &self,
+                _: Uuid,
+            ) -> Result<Option<(HGRegionInfo, [f32; 3], [f32; 3])>> {
+                Ok(None)
+            }
+            async fn get_server_urls(&self, _: Uuid) -> Result<HashMap<String, String>> {
+                Ok(HashMap::new())
+            }
+            async fn logout_agent(&self, _: Uuid, _: Uuid) -> Result<()> {
+                Ok(())
+            }
+            async fn get_uui(&self, _: Uuid, _: Uuid) -> Result<String> {
+                Ok(String::new())
+            }
+            async fn get_uuid(&self, _: &str, _: &str) -> Result<Option<Uuid>> {
+                Ok(None)
+            }
+            async fn status_notification(
+                &self,
+                _: &[String],
+                _: Uuid,
+                _: bool,
+            ) -> Result<Vec<Uuid>> {
+                Ok(Vec::new())
+            }
+            async fn is_agent_coming_home(&self, _: Uuid, _: &str) -> Result<bool> {
+                Ok(false)
+            }
+            async fn login_agent_to_grid(
+                &self,
+                _: &AgentCircuitData,
+                _: &HGRegionInfo,
+                _: &HGRegionInfo,
+                _: bool,
+            ) -> Result<(bool, String)> {
+                Ok((false, String::new()))
+            }
+            async fn get_user_info(&self, _: Uuid) -> Result<HashMap<String, String>> {
+                Ok(HashMap::new())
+            }
         }
 
-        let mgr = HypergridManager::new(
-            Arc::new(MockGK),
-            Arc::new(MockUAS),
-            config,
-        );
+        let mgr = HypergridManager::new(Arc::new(MockGK), Arc::new(MockUAS), config);
 
         let urls = mgr.get_service_urls();
         assert_eq!(urls.get("SRV_HomeURI").unwrap(), "http://mygrid.com:8002");

@@ -1,16 +1,24 @@
 use std::collections::HashMap;
-use std::sync::Arc;
 use std::sync::atomic::{AtomicUsize, Ordering};
+use std::sync::Arc;
 use std::time::{Duration, Instant};
 use tokio::sync::RwLock;
-use uuid::Uuid;
 use tracing::{info, warn};
+use uuid::Uuid;
 
-use crate::ai::ml_integration::llm_client::{LocalLLMClient, LLMConfig, ChatMessage, MessageRole, HybridAIConfig};
 use crate::ai::build_session::BuildSessionStore;
-use crate::ai::npc_memory::{NPCMemoryStore, should_store_memory, extract_memory_fact, wants_oar_export, extract_oar_filename};
-use crate::ai::npc_avatar::{NPCAction, NPCResponse, parse_npc_response_with_speaker};
-use crate::ai::skill_modules::{SkillDomain, SkillModule, BuildingModule, ClothingModule, ScriptingModule, LandscapingModule, GuidingModule, MediaModule};
+use crate::ai::ml_integration::llm_client::{
+    ChatMessage, HybridAIConfig, LLMConfig, LocalLLMClient, MessageRole,
+};
+use crate::ai::npc_avatar::{parse_npc_response_with_speaker, NPCAction, NPCResponse};
+use crate::ai::npc_memory::{
+    extract_memory_fact, extract_oar_filename, should_store_memory, wants_oar_export,
+    NPCMemoryStore,
+};
+use crate::ai::skill_modules::{
+    BuildingModule, ClothingModule, GuidingModule, LandscapingModule, MediaModule, ScriptingModule,
+    SkillDomain, SkillModule,
+};
 
 const RATE_LIMIT_MS: u128 = 500;
 const MAX_CONCURRENT_LLM: usize = 4;
@@ -18,8 +26,7 @@ const MAX_MEMORY_FACT_LEN: usize = 500;
 const MAX_MEMORY_PROMPT_CHARS: usize = 2000;
 
 pub const GALADRIEL_AGENT_ID: Uuid = Uuid::from_bytes([
-    0xa0, 0x1a, 0x00, 0x10, 0x00, 0x10, 0x00, 0x10,
-    0x00, 0x10, 0x00, 0x00, 0x00, 0x00, 0x00, 0x10,
+    0xa0, 0x1a, 0x00, 0x10, 0x00, 0x10, 0x00, 0x10, 0x00, 0x10, 0x00, 0x00, 0x00, 0x00, 0x00, 0x10,
 ]);
 
 pub const GALADRIEL_CHANNEL: i32 = -15400;
@@ -92,19 +99,33 @@ impl GaladrielConfig {
                 for line in contents.lines() {
                     let line = line.trim();
                     if line.starts_with('[') && line.ends_with(']') {
-                        in_section = line[1..line.len()-1].eq_ignore_ascii_case("galadriel");
+                        in_section = line[1..line.len() - 1].eq_ignore_ascii_case("galadriel");
                         continue;
                     }
-                    if !in_section { continue; }
+                    if !in_section {
+                        continue;
+                    }
                     if let Some((key, val)) = line.split_once('=') {
                         let key = key.trim();
                         let val = val.trim();
                         match key {
                             "enabled" => config.enabled = val.eq_ignore_ascii_case("true"),
-                            "name" => if !val.is_empty() { config.name = val.to_string(); },
-                            "heartbeat_interval" => { if let Ok(v) = val.parse() { config.heartbeat_interval = v; } },
-                            "heartbeat_greet" => config.heartbeat_greet = val.eq_ignore_ascii_case("true"),
-                            "heartbeat_session_check" => config.heartbeat_session_check = val.eq_ignore_ascii_case("true"),
+                            "name" => {
+                                if !val.is_empty() {
+                                    config.name = val.to_string();
+                                }
+                            }
+                            "heartbeat_interval" => {
+                                if let Ok(v) = val.parse() {
+                                    config.heartbeat_interval = v;
+                                }
+                            }
+                            "heartbeat_greet" => {
+                                config.heartbeat_greet = val.eq_ignore_ascii_case("true")
+                            }
+                            "heartbeat_session_check" => {
+                                config.heartbeat_session_check = val.eq_ignore_ascii_case("true")
+                            }
                             _ => {}
                         }
                     }
@@ -121,7 +142,8 @@ pub fn validate_instance_path(path: &str, instance_dir: &str) -> bool {
     }
     match (
         std::fs::canonicalize(path).or_else(|_| {
-            std::path::Path::new(path).parent()
+            std::path::Path::new(path)
+                .parent()
                 .and_then(|p| std::fs::canonicalize(p).ok())
                 .ok_or(std::io::Error::new(std::io::ErrorKind::NotFound, ""))
         }),
@@ -261,7 +283,7 @@ impl GaladrielBrain {
             let _ = sqlx::query(
                 "INSERT INTO galadriel_conversations (user_id, messages_json, updated_at) \
                  VALUES ($1, $2, $3) \
-                 ON CONFLICT (user_id) DO UPDATE SET messages_json = $2, updated_at = $3"
+                 ON CONFLICT (user_id) DO UPDATE SET messages_json = $2, updated_at = $3",
             )
             .bind(user_id)
             .bind(&json)
@@ -269,7 +291,10 @@ impl GaladrielBrain {
             .execute(pool)
             .await;
         }
-        info!("[GALADRIEL] Saved {} conversation histories to DB", history.len());
+        info!(
+            "[GALADRIEL] Saved {} conversation histories to DB",
+            history.len()
+        );
     }
 
     pub async fn load_conversations(&self, pool: &sqlx::PgPool) {
@@ -277,8 +302,10 @@ impl GaladrielBrain {
             "CREATE TABLE IF NOT EXISTS galadriel_conversations (\
                 user_id UUID PRIMARY KEY, \
                 messages_json TEXT NOT NULL, \
-                updated_at INTEGER NOT NULL)"
-        ).execute(pool).await;
+                updated_at INTEGER NOT NULL)",
+        )
+        .execute(pool)
+        .await;
 
         let rows = match sqlx::query_as::<_, (Uuid, String)>(
             "SELECT user_id, messages_json FROM galadriel_conversations ORDER BY updated_at DESC LIMIT 100"
@@ -301,7 +328,10 @@ impl GaladrielBrain {
             }
         }
         if loaded > 0 {
-            info!("[GALADRIEL] Restored {} conversation histories from DB", loaded);
+            info!(
+                "[GALADRIEL] Restored {} conversation histories from DB",
+                loaded
+            );
         }
     }
 
@@ -317,18 +347,28 @@ impl GaladrielBrain {
         true
     }
 
-    async fn call_llm_with_retry(&self, llm: &LocalLLMClient, history: &[ChatMessage]) -> Result<crate::ai::ml_integration::llm_client::LLMResponse, (String, &'static str)> {
+    async fn call_llm_with_retry(
+        &self,
+        llm: &LocalLLMClient,
+        history: &[ChatMessage],
+    ) -> Result<crate::ai::ml_integration::llm_client::LLMResponse, (String, &'static str)> {
         let history_vec = history.to_vec();
         match llm.chat(&history_vec).await {
             Ok(response) => Ok(response),
             Err(first_err) => {
                 let err_str = first_err.to_string();
-                let is_transient = err_str.contains("timeout") || err_str.contains("connection") || err_str.contains("timed out") || err_str.contains("Connection refused");
+                let is_transient = err_str.contains("timeout")
+                    || err_str.contains("connection")
+                    || err_str.contains("timed out")
+                    || err_str.contains("Connection refused");
                 if !is_transient {
                     warn!("[GALADRIEL] LLM non-transient error: {}", err_str);
                     return Err((err_str, "error"));
                 }
-                info!("[GALADRIEL] LLM transient error, retrying in 2s: {}", err_str);
+                info!(
+                    "[GALADRIEL] LLM transient error, retrying in 2s: {}",
+                    err_str
+                );
                 tokio::time::sleep(Duration::from_secs(2)).await;
                 match llm.chat(&history_vec).await {
                     Ok(response) => Ok(response),
@@ -353,24 +393,41 @@ impl GaladrielBrain {
         }
     }
 
-    pub async fn process_chat(&mut self, speaker_id: Uuid, speaker_name: &str, message: &str) -> NPCResponse {
+    pub async fn process_chat(
+        &mut self,
+        speaker_id: Uuid,
+        speaker_name: &str,
+        message: &str,
+    ) -> NPCResponse {
         let trimmed = message.trim();
         if trimmed.is_empty() {
-            return NPCResponse { chat_text: String::new(), actions: vec![] };
+            return NPCResponse {
+                chat_text: String::new(),
+                actions: vec![],
+            };
         }
         let lower = trimmed.to_lowercase();
 
         if lower == "/mode quiet" {
             self.set_mode(speaker_id, true);
-            return NPCResponse { chat_text: String::new(), actions: vec![] };
+            return NPCResponse {
+                chat_text: String::new(),
+                actions: vec![],
+            };
         }
         if lower == "/mode listen" {
             self.set_mode(speaker_id, false);
-            return NPCResponse { chat_text: String::new(), actions: vec![] };
+            return NPCResponse {
+                chat_text: String::new(),
+                actions: vec![],
+            };
         }
 
         if self.is_muted(&speaker_id) {
-            return NPCResponse { chat_text: String::new(), actions: vec![] };
+            return NPCResponse {
+                chat_text: String::new(),
+                actions: vec![],
+            };
         }
 
         if lower == "help" || lower == "/help" || lower == "galadriel help" {
@@ -382,20 +439,39 @@ impl GaladrielBrain {
 
         if lower.starts_with("forget ") || lower == "forget everything" {
             if let Some(ref mem) = self.memory_store {
-                mem.forget_memories(GALADRIEL_AGENT_ID, speaker_id, if lower == "forget everything" { None } else { Some(&trimmed[7..]) }).await;
+                mem.forget_memories(
+                    GALADRIEL_AGENT_ID,
+                    speaker_id,
+                    if lower == "forget everything" {
+                        None
+                    } else {
+                        Some(&trimmed[7..])
+                    },
+                )
+                .await;
                 let msg = if lower == "forget everything" {
                     format!("Done — I've cleared all my memories about you. Fresh start!")
                 } else {
-                    format!("Done — I've forgotten anything matching '{}'.", &trimmed[7..])
+                    format!(
+                        "Done — I've forgotten anything matching '{}'.",
+                        &trimmed[7..]
+                    )
                 };
-                return NPCResponse { chat_text: msg, actions: vec![] };
+                return NPCResponse {
+                    chat_text: msg,
+                    actions: vec![],
+                };
             }
-            return NPCResponse { chat_text: "I don't have a memory system active right now.".to_string(), actions: vec![] };
+            return NPCResponse {
+                chat_text: "I don't have a memory system active right now.".to_string(),
+                actions: vec![],
+            };
         }
 
         if !self.check_rate_limit(speaker_id).await {
             return NPCResponse {
-                chat_text: "I'm still thinking about your last request — give me a moment!".to_string(),
+                chat_text: "I'm still thinking about your last request — give me a moment!"
+                    .to_string(),
                 actions: vec![],
             };
         }
@@ -403,7 +479,8 @@ impl GaladrielBrain {
         let inflight = self.inflight_llm.load(Ordering::Relaxed);
         if inflight >= MAX_CONCURRENT_LLM {
             return NPCResponse {
-                chat_text: "I'm handling several requests right now. I'll be with you in a moment!".to_string(),
+                chat_text: "I'm handling several requests right now. I'll be with you in a moment!"
+                    .to_string(),
                 actions: vec![],
             };
         }
@@ -424,7 +501,9 @@ impl GaladrielBrain {
             }
 
             let session_ctx = if let Some(ref store) = self.build_sessions {
-                store.get_context_prompt(speaker_id, GALADRIEL_AGENT_ID).await
+                store
+                    .get_context_prompt(speaker_id, GALADRIEL_AGENT_ID)
+                    .await
             } else {
                 String::new()
             };
@@ -476,7 +555,7 @@ impl GaladrielBrain {
 
                     if history.len() > 500 {
                         let system = history[0].clone();
-                        let recent: Vec<_> = history[history.len()-250..].to_vec();
+                        let recent: Vec<_> = history[history.len() - 250..].to_vec();
                         history.clear();
                         history.push(system);
                         history.extend(recent);
@@ -484,11 +563,17 @@ impl GaladrielBrain {
                     }
                     drop(conv_history);
 
-                    info!("[GALADRIEL] Raw LLM response: {}", &response.text[..response.text.len().min(500)]);
+                    info!(
+                        "[GALADRIEL] Raw LLM response: {}",
+                        &response.text[..response.text.len().min(500)]
+                    );
                     let mut resp = parse_npc_response_with_speaker(&response.text, speaker_id);
 
                     if wants_oar_export(&lower)
-                        && !resp.actions.iter().any(|a| matches!(a, NPCAction::ExportOar { .. }))
+                        && !resp
+                            .actions
+                            .iter()
+                            .any(|a| matches!(a, NPCAction::ExportOar { .. }))
                     {
                         let filename = extract_oar_filename(message);
                         info!("[GALADRIEL] OAR intercept: injecting {}", filename);
@@ -501,7 +586,8 @@ impl GaladrielBrain {
                             || resp.chat_text.contains("cannot")
                             || resp.chat_text.contains("not able")
                         {
-                            resp.chat_text = format!("Done! I've exported the region to '{}'.", filename);
+                            resp.chat_text =
+                                format!("Done! I've exported the region to '{}'.", filename);
                         }
                     }
 
@@ -509,7 +595,10 @@ impl GaladrielBrain {
                         match action {
                             NPCAction::ImportMesh { file_path, .. } => {
                                 if !self.validate_path(file_path) {
-                                    info!("[GALADRIEL] Blocked import from outside instance: {}", file_path);
+                                    info!(
+                                        "[GALADRIEL] Blocked import from outside instance: {}",
+                                        file_path
+                                    );
                                 }
                             }
                             NPCAction::BlenderGenerate { .. } => {}
@@ -518,11 +607,11 @@ impl GaladrielBrain {
                     }
 
                     if !self.instance_id.is_empty() {
-                        resp.actions.retain(|action| {
-                            match action {
-                                NPCAction::ImportMesh { file_path, .. } => self.validate_path(file_path),
-                                _ => true,
+                        resp.actions.retain(|action| match action {
+                            NPCAction::ImportMesh { file_path, .. } => {
+                                self.validate_path(file_path)
                             }
+                            _ => true,
                         });
                     }
 
@@ -531,7 +620,13 @@ impl GaladrielBrain {
                             let (fact, category) = extract_memory_fact(message);
                             let sanitized = sanitize_memory_fact(&fact);
                             if !sanitized.is_empty() {
-                                mem.add_memory(GALADRIEL_AGENT_ID, speaker_id, &sanitized, &category).await;
+                                mem.add_memory(
+                                    GALADRIEL_AGENT_ID,
+                                    speaker_id,
+                                    &sanitized,
+                                    &category,
+                                )
+                                .await;
                             }
                         }
                     }
@@ -541,12 +636,20 @@ impl GaladrielBrain {
                             let lower = message.to_lowercase();
                             let project_hint = extract_project_name(&lower);
                             if !project_hint.is_empty() {
-                                store.set_project_name(speaker_id, GALADRIEL_AGENT_ID, &project_hint).await;
+                                store
+                                    .set_project_name(speaker_id, GALADRIEL_AGENT_ID, &project_hint)
+                                    .await;
                             }
                         }
                         for action in &resp.actions {
                             if let NPCAction::DeleteObject { local_id } = action {
-                                store.record_deleted_object(speaker_id, GALADRIEL_AGENT_ID, *local_id).await;
+                                store
+                                    .record_deleted_object(
+                                        speaker_id,
+                                        GALADRIEL_AGENT_ID,
+                                        *local_id,
+                                    )
+                                    .await;
                             }
                         }
                     }
@@ -554,7 +657,10 @@ impl GaladrielBrain {
                     resp
                 }
                 Err((err_msg, failure_type)) => {
-                    warn!("[GALADRIEL] LLM failed after retry: {} (type: {})", err_msg, failure_type);
+                    warn!(
+                        "[GALADRIEL] LLM failed after retry: {} (type: {})",
+                        err_msg, failure_type
+                    );
                     NPCResponse {
                         chat_text: self.llm_error_message(failure_type),
                         actions: vec![],
@@ -589,7 +695,13 @@ fn sanitize_memory_fact(fact: &str) -> String {
 }
 
 fn extract_project_name(message: &str) -> String {
-    let patterns = ["build me a ", "build a ", "create a ", "make a ", "make me a "];
+    let patterns = [
+        "build me a ",
+        "build a ",
+        "create a ",
+        "make a ",
+        "make me a ",
+    ];
     for pat in &patterns {
         if let Some(idx) = message.find(pat) {
             let rest = &message[idx + pat.len()..];
@@ -1178,7 +1290,10 @@ mod tests {
 
     #[test]
     fn test_extract_project_name() {
-        assert_eq!(extract_project_name("build me a wooden table"), "wooden table");
+        assert_eq!(
+            extract_project_name("build me a wooden table"),
+            "wooden table"
+        );
         assert_eq!(extract_project_name("create a red car"), "red car");
         assert_eq!(extract_project_name("hello there"), "");
     }

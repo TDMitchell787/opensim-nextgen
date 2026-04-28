@@ -1,11 +1,11 @@
 //! Analytics Export System
-//! 
+//!
 //! Data export and integration with external BI platforms
 //! for enterprise analytics platform.
 
 use super::*;
-use tracing::info;
 use tokio::sync::RwLock;
+use tracing::info;
 
 /// Export request
 #[derive(Debug, Clone, Serialize, Deserialize)]
@@ -82,23 +82,20 @@ pub struct ExportManager {
 
 impl ExportManager {
     /// Create new export manager
-    pub fn new(
-        database: Arc<DatabaseManager>,
-        config: AnalyticsConfig,
-    ) -> AnalyticsResult<Self> {
+    pub fn new(database: Arc<DatabaseManager>, config: AnalyticsConfig) -> AnalyticsResult<Self> {
         Ok(Self {
             database,
             config,
             active_exports: Arc::new(RwLock::new(HashMap::new())),
         })
     }
-    
+
     /// Initialize export manager
     pub async fn initialize(&self) -> AnalyticsResult<()> {
         info!("Initializing export manager");
         Ok(())
     }
-    
+
     /// Export data
     pub async fn export_data(&self, request: ExportRequest) -> AnalyticsResult<ExportResult> {
         let result = ExportResult {
@@ -111,10 +108,10 @@ impl ExportManager {
             expires_at: Some(Utc::now() + chrono::Duration::days(7)),
             generated_at: Utc::now(),
         };
-        
+
         let mut exports = self.active_exports.write().await;
         exports.insert(result.export_id, result.clone());
-        
+
         Ok(result)
     }
 }

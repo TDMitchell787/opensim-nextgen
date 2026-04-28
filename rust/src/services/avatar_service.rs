@@ -14,15 +14,15 @@ use uuid::Uuid;
 /// Each avatar is stored as multiple rows in the avatars table (key-value pairs)
 #[derive(Debug, Clone)]
 pub struct AvatarData {
-    pub avatar_type: i32,  // 1 = SL avatar
-    pub data: HashMap<String, String>,  // Key-value pairs from database
+    pub avatar_type: i32,              // 1 = SL avatar
+    pub data: HashMap<String, String>, // Key-value pairs from database
 }
 
 impl AvatarData {
     /// Create new empty avatar data (matches OpenSim C# constructor)
     pub fn new() -> Self {
         Self {
-            avatar_type: 1,  // Default to SL avatar
+            avatar_type: 1, // Default to SL avatar
             data: HashMap::new(),
         }
     }
@@ -58,8 +58,11 @@ impl AvatarService {
             principal_id
         )
         .fetch_all(
-            self.database.connection().as_ref().postgres_pool()
-                .ok_or_else(|| anyhow::anyhow!("PostgreSQL pool not available"))?
+            self.database
+                .connection()
+                .as_ref()
+                .postgres_pool()
+                .ok_or_else(|| anyhow::anyhow!("PostgreSQL pool not available"))?,
         )
         .await?;
 
@@ -93,19 +96,22 @@ impl AvatarService {
         // Count attachment points (keys starting with "_ap_")
         // Matches C# lines 91-95
         let count = avatar.data.keys().filter(|k| k.starts_with("_ap_")).count();
-        debug!("[AVATAR SERVICE]: SetAvatar for {}, attachs={}", principal_id, count);
+        debug!(
+            "[AVATAR SERVICE]: SetAvatar for {}, attachs={}",
+            principal_id, count
+        );
 
         // Delete existing avatar data
         // Matches C# line 97: m_Database.Delete("PrincipalID", principalID.ToString())
-        sqlx::query!(
-            "DELETE FROM avatars WHERE principalid = $1",
-            principal_id
-        )
-        .execute(
-            self.database.connection().as_ref().postgres_pool()
-                .ok_or_else(|| anyhow::anyhow!("PostgreSQL pool not available"))?
-        )
-        .await?;
+        sqlx::query!("DELETE FROM avatars WHERE principalid = $1", principal_id)
+            .execute(
+                self.database
+                    .connection()
+                    .as_ref()
+                    .postgres_pool()
+                    .ok_or_else(|| anyhow::anyhow!("PostgreSQL pool not available"))?,
+            )
+            .await?;
 
         // Store AvatarType
         // Matches C# lines 99-107
@@ -119,8 +125,11 @@ impl AvatarService {
             avatar.avatar_type.to_string()
         )
         .execute(
-            self.database.connection().as_ref().postgres_pool()
-                .ok_or_else(|| anyhow::anyhow!("PostgreSQL pool not available"))?
+            self.database
+                .connection()
+                .as_ref()
+                .postgres_pool()
+                .ok_or_else(|| anyhow::anyhow!("PostgreSQL pool not available"))?,
         )
         .await?;
 
@@ -162,14 +171,20 @@ impl AvatarService {
                 final_value
             )
             .execute(
-                self.database.connection().as_ref().postgres_pool()
-                    .ok_or_else(|| anyhow::anyhow!("PostgreSQL pool not available"))?
+                self.database
+                    .connection()
+                    .as_ref()
+                    .postgres_pool()
+                    .ok_or_else(|| anyhow::anyhow!("PostgreSQL pool not available"))?,
             )
             .await
             .map_err(|e| {
                 // If any insert fails, delete all and return error
                 // Matches C# lines 140-143
-                warn!("[AVATAR SERVICE]: Failed to store avatar field {}: {}", key, e);
+                warn!(
+                    "[AVATAR SERVICE]: Failed to store avatar field {}: {}",
+                    key, e
+                );
                 e
             })?;
         }
@@ -182,23 +197,32 @@ impl AvatarService {
     pub async fn reset_avatar(&self, principal_id: Uuid) -> Result<bool> {
         debug!("Resetting avatar data for PrincipalID: {}", principal_id);
 
-        sqlx::query!(
-            "DELETE FROM avatars WHERE principalid = $1",
-            principal_id
-        )
-        .execute(
-            self.database.connection().as_ref().postgres_pool()
-                .ok_or_else(|| anyhow::anyhow!("PostgreSQL pool not available"))?
-        )
-        .await?;
+        sqlx::query!("DELETE FROM avatars WHERE principalid = $1", principal_id)
+            .execute(
+                self.database
+                    .connection()
+                    .as_ref()
+                    .postgres_pool()
+                    .ok_or_else(|| anyhow::anyhow!("PostgreSQL pool not available"))?,
+            )
+            .await?;
 
         Ok(true)
     }
 
     /// Set specific avatar items
     /// Matches: OpenSim.Services.AvatarService.AvatarService::SetItems(UUID, string[], string[])
-    pub async fn set_items(&self, principal_id: Uuid, names: &[String], values: &[String]) -> Result<bool> {
-        debug!("Setting {} avatar items for PrincipalID: {}", names.len(), principal_id);
+    pub async fn set_items(
+        &self,
+        principal_id: Uuid,
+        names: &[String],
+        values: &[String],
+    ) -> Result<bool> {
+        debug!(
+            "Setting {} avatar items for PrincipalID: {}",
+            names.len(),
+            principal_id
+        );
 
         if names.len() != values.len() {
             return Ok(false);
@@ -217,8 +241,11 @@ impl AvatarService {
                 value
             )
             .execute(
-                self.database.connection().as_ref().postgres_pool()
-                    .ok_or_else(|| anyhow::anyhow!("PostgreSQL pool not available"))?
+                self.database
+                    .connection()
+                    .as_ref()
+                    .postgres_pool()
+                    .ok_or_else(|| anyhow::anyhow!("PostgreSQL pool not available"))?,
             )
             .await?;
         }
@@ -229,7 +256,11 @@ impl AvatarService {
     /// Remove specific avatar items
     /// Matches: OpenSim.Services.AvatarService.AvatarService::RemoveItems(UUID, string[])
     pub async fn remove_items(&self, principal_id: Uuid, names: &[String]) -> Result<bool> {
-        debug!("Removing {} avatar items for PrincipalID: {}", names.len(), principal_id);
+        debug!(
+            "Removing {} avatar items for PrincipalID: {}",
+            names.len(),
+            principal_id
+        );
 
         for name in names {
             sqlx::query!(
@@ -238,8 +269,11 @@ impl AvatarService {
                 name
             )
             .execute(
-                self.database.connection().as_ref().postgres_pool()
-                    .ok_or_else(|| anyhow::anyhow!("PostgreSQL pool not available"))?
+                self.database
+                    .connection()
+                    .as_ref()
+                    .postgres_pool()
+                    .ok_or_else(|| anyhow::anyhow!("PostgreSQL pool not available"))?,
             )
             .await?;
         }
@@ -254,7 +288,10 @@ impl AvatarService {
 
         // If avatar has no data, create and store default appearance
         if avatar.data.is_empty() {
-            info!("[AVATAR SERVICE]: Creating default appearance for {}", principal_id);
+            info!(
+                "[AVATAR SERVICE]: Creating default appearance for {}",
+                principal_id
+            );
             let default_avatar = Self::create_default_avatar_data();
             self.set_avatar(principal_id, &default_avatar).await?;
             Ok(default_avatar)
@@ -276,20 +313,44 @@ impl AvatarService {
 
         // Default body wearables (from AvatarWearable.DefaultWearables)
         // Body - shape
-        data.insert("BodyItem".to_string(), "66c41e39-38f9-f75a-024e-585989bfaba9".to_string());
-        data.insert("BodyAsset".to_string(), "66c41e39-38f9-f75a-024e-585989bfab73".to_string());
+        data.insert(
+            "BodyItem".to_string(),
+            "66c41e39-38f9-f75a-024e-585989bfaba9".to_string(),
+        );
+        data.insert(
+            "BodyAsset".to_string(),
+            "66c41e39-38f9-f75a-024e-585989bfab73".to_string(),
+        );
 
         // Skin
-        data.insert("SkinItem".to_string(), "77c41e39-38f9-f75a-024e-585989bfabc9".to_string());
-        data.insert("SkinAsset".to_string(), "77c41e39-38f9-f75a-024e-585989bbabbb".to_string());
+        data.insert(
+            "SkinItem".to_string(),
+            "77c41e39-38f9-f75a-024e-585989bfabc9".to_string(),
+        );
+        data.insert(
+            "SkinAsset".to_string(),
+            "77c41e39-38f9-f75a-024e-585989bbabbb".to_string(),
+        );
 
         // Hair
-        data.insert("HairItem".to_string(), "d342e6c1-b9d2-11dc-95ff-0800200c9a66".to_string());
-        data.insert("HairAsset".to_string(), "d342e6c0-b9d2-11dc-95ff-0800200c9a66".to_string());
+        data.insert(
+            "HairItem".to_string(),
+            "d342e6c1-b9d2-11dc-95ff-0800200c9a66".to_string(),
+        );
+        data.insert(
+            "HairAsset".to_string(),
+            "d342e6c0-b9d2-11dc-95ff-0800200c9a66".to_string(),
+        );
 
         // Eyes
-        data.insert("EyesItem".to_string(), "cdc31054-eed8-4021-994f-4e0c6e861b50".to_string());
-        data.insert("EyesAsset".to_string(), "4bb6fa4d-1cd2-498a-a84c-95c1a0e745a7".to_string());
+        data.insert(
+            "EyesItem".to_string(),
+            "cdc31054-eed8-4021-994f-4e0c6e861b50".to_string(),
+        );
+        data.insert(
+            "EyesAsset".to_string(),
+            "4bb6fa4d-1cd2-498a-a84c-95c1a0e745a7".to_string(),
+        );
 
         // Default visual parameters (218 bytes, all 150 for default appearance)
         // This is a simplified default - real OpenSim has specific values per parameter
@@ -297,10 +358,22 @@ impl AvatarService {
         data.insert("VisualParams".to_string(), visual_params.join(","));
 
         // New style wearables format
-        data.insert("Wearable 0:0".to_string(), "66c41e39-38f9-f75a-024e-585989bfaba9:66c41e39-38f9-f75a-024e-585989bfab73".to_string()); // Shape
-        data.insert("Wearable 1:0".to_string(), "77c41e39-38f9-f75a-024e-585989bfabc9:77c41e39-38f9-f75a-024e-585989bbabbb".to_string()); // Skin
-        data.insert("Wearable 2:0".to_string(), "d342e6c1-b9d2-11dc-95ff-0800200c9a66:d342e6c0-b9d2-11dc-95ff-0800200c9a66".to_string()); // Hair
-        data.insert("Wearable 3:0".to_string(), "cdc31054-eed8-4021-994f-4e0c6e861b50:4bb6fa4d-1cd2-498a-a84c-95c1a0e745a7".to_string()); // Eyes
+        data.insert(
+            "Wearable 0:0".to_string(),
+            "66c41e39-38f9-f75a-024e-585989bfaba9:66c41e39-38f9-f75a-024e-585989bfab73".to_string(),
+        ); // Shape
+        data.insert(
+            "Wearable 1:0".to_string(),
+            "77c41e39-38f9-f75a-024e-585989bfabc9:77c41e39-38f9-f75a-024e-585989bbabbb".to_string(),
+        ); // Skin
+        data.insert(
+            "Wearable 2:0".to_string(),
+            "d342e6c1-b9d2-11dc-95ff-0800200c9a66:d342e6c0-b9d2-11dc-95ff-0800200c9a66".to_string(),
+        ); // Hair
+        data.insert(
+            "Wearable 3:0".to_string(),
+            "cdc31054-eed8-4021-994f-4e0c6e861b50:4bb6fa4d-1cd2-498a-a84c-95c1a0e745a7".to_string(),
+        ); // Eyes
 
         AvatarData {
             avatar_type: 1,
@@ -315,8 +388,8 @@ impl Default for AvatarData {
     }
 }
 
+use crate::services::traits::{AvatarData as TraitAvatarData, AvatarServiceTrait};
 use async_trait::async_trait;
-use crate::services::traits::{AvatarServiceTrait, AvatarData as TraitAvatarData};
 
 #[async_trait]
 impl AvatarServiceTrait for AvatarService {

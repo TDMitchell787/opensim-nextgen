@@ -1,14 +1,14 @@
-use std::sync::Arc;
 use anyhow::Result;
 use async_trait::async_trait;
+use std::sync::Arc;
+use tracing::{debug, info};
 use uuid::Uuid;
-use tracing::{info, debug};
 
-use crate::services::traits::{
-    ProfilesServiceTrait, UserProfileProperties, UserProfilePick,
-    UserClassifiedAdd, UserProfileNotes, UserPreferences,
-};
 use crate::database::DatabaseConnection;
+use crate::services::traits::{
+    ProfilesServiceTrait, UserClassifiedAdd, UserPreferences, UserProfileNotes, UserProfilePick,
+    UserProfileProperties,
+};
 
 pub struct LocalProfilesService {
     db: Arc<DatabaseConnection>,
@@ -23,15 +23,16 @@ impl LocalProfilesService {
 #[async_trait]
 impl ProfilesServiceTrait for LocalProfilesService {
     async fn get_classifieds(&self, creator_id: Uuid) -> Result<Vec<UserClassifiedAdd>> {
-        let pool = self.db.postgres_pool()
+        let pool = self
+            .db
+            .postgres_pool()
             .ok_or_else(|| anyhow::anyhow!("No PG pool"))?;
 
-        let rows = sqlx::query(
-            "SELECT classifieduuid, name FROM userclassifieds WHERE creatoruuid = $1"
-        )
-        .bind(creator_id)
-        .fetch_all(pool)
-        .await?;
+        let rows =
+            sqlx::query("SELECT classifieduuid, name FROM userclassifieds WHERE creatoruuid = $1")
+                .bind(creator_id)
+                .fetch_all(pool)
+                .await?;
 
         let mut result = Vec::new();
         for row in &rows {
@@ -47,14 +48,16 @@ impl ProfilesServiceTrait for LocalProfilesService {
     }
 
     async fn get_classified(&self, classified_id: Uuid) -> Result<Option<UserClassifiedAdd>> {
-        let pool = self.db.postgres_pool()
+        let pool = self
+            .db
+            .postgres_pool()
             .ok_or_else(|| anyhow::anyhow!("No PG pool"))?;
 
         let row = sqlx::query(
             "SELECT classifieduuid, creatoruuid, creationdate, expirationdate, category, \
              name, description, parceluuid, parentestate, snapshotuuid, simname, \
              posglobal, parcelname, classifiedflags, priceforlisting \
-             FROM userclassifieds WHERE classifieduuid = $1"
+             FROM userclassifieds WHERE classifieduuid = $1",
         )
         .bind(classified_id)
         .fetch_optional(pool)
@@ -86,10 +89,15 @@ impl ProfilesServiceTrait for LocalProfilesService {
     }
 
     async fn update_classified(&self, classified: &UserClassifiedAdd) -> Result<bool> {
-        let pool = self.db.postgres_pool()
+        let pool = self
+            .db
+            .postgres_pool()
             .ok_or_else(|| anyhow::anyhow!("No PG pool"))?;
 
-        info!("[PROFILES] update_classified: {} by {}", classified.classified_id, classified.creator_id);
+        info!(
+            "[PROFILES] update_classified: {} by {}",
+            classified.classified_id, classified.creator_id
+        );
 
         sqlx::query(
             "INSERT INTO userclassifieds (classifieduuid, creatoruuid, creationdate, expirationdate, \
@@ -123,7 +131,9 @@ impl ProfilesServiceTrait for LocalProfilesService {
     }
 
     async fn delete_classified(&self, classified_id: Uuid) -> Result<bool> {
-        let pool = self.db.postgres_pool()
+        let pool = self
+            .db
+            .postgres_pool()
             .ok_or_else(|| anyhow::anyhow!("No PG pool"))?;
 
         sqlx::query("DELETE FROM userclassifieds WHERE classifieduuid = $1")
@@ -135,15 +145,15 @@ impl ProfilesServiceTrait for LocalProfilesService {
     }
 
     async fn get_picks(&self, creator_id: Uuid) -> Result<Vec<UserProfilePick>> {
-        let pool = self.db.postgres_pool()
+        let pool = self
+            .db
+            .postgres_pool()
             .ok_or_else(|| anyhow::anyhow!("No PG pool"))?;
 
-        let rows = sqlx::query(
-            "SELECT pickuuid, name FROM userpicks WHERE creatoruuid = $1"
-        )
-        .bind(creator_id)
-        .fetch_all(pool)
-        .await?;
+        let rows = sqlx::query("SELECT pickuuid, name FROM userpicks WHERE creatoruuid = $1")
+            .bind(creator_id)
+            .fetch_all(pool)
+            .await?;
 
         let mut result = Vec::new();
         for row in &rows {
@@ -159,13 +169,15 @@ impl ProfilesServiceTrait for LocalProfilesService {
     }
 
     async fn get_pick(&self, pick_id: Uuid) -> Result<Option<UserProfilePick>> {
-        let pool = self.db.postgres_pool()
+        let pool = self
+            .db
+            .postgres_pool()
             .ok_or_else(|| anyhow::anyhow!("No PG pool"))?;
 
         let row = sqlx::query(
             "SELECT pickuuid, creatoruuid, toppick, parceluuid, name, description, \
              snapshotuuid, user_, originalname, simname, posglobal, sortorder, enabled \
-             FROM userpicks WHERE pickuuid = $1"
+             FROM userpicks WHERE pickuuid = $1",
         )
         .bind(pick_id)
         .fetch_optional(pool)
@@ -195,7 +207,9 @@ impl ProfilesServiceTrait for LocalProfilesService {
     }
 
     async fn update_pick(&self, pick: &UserProfilePick) -> Result<bool> {
-        let pool = self.db.postgres_pool()
+        let pool = self
+            .db
+            .postgres_pool()
             .ok_or_else(|| anyhow::anyhow!("No PG pool"))?;
 
         sqlx::query(
@@ -226,7 +240,9 @@ impl ProfilesServiceTrait for LocalProfilesService {
     }
 
     async fn delete_pick(&self, pick_id: Uuid) -> Result<bool> {
-        let pool = self.db.postgres_pool()
+        let pool = self
+            .db
+            .postgres_pool()
             .ok_or_else(|| anyhow::anyhow!("No PG pool"))?;
 
         sqlx::query("DELETE FROM userpicks WHERE pickuuid = $1")
@@ -238,7 +254,9 @@ impl ProfilesServiceTrait for LocalProfilesService {
     }
 
     async fn get_notes(&self, user_id: Uuid, target_id: Uuid) -> Result<Option<UserProfileNotes>> {
-        let pool = self.db.postgres_pool()
+        let pool = self
+            .db
+            .postgres_pool()
             .ok_or_else(|| anyhow::anyhow!("No PG pool"))?;
 
         let row = sqlx::query(
@@ -263,12 +281,14 @@ impl ProfilesServiceTrait for LocalProfilesService {
     }
 
     async fn update_notes(&self, notes: &UserProfileNotes) -> Result<bool> {
-        let pool = self.db.postgres_pool()
+        let pool = self
+            .db
+            .postgres_pool()
             .ok_or_else(|| anyhow::anyhow!("No PG pool"))?;
 
         sqlx::query(
             "INSERT INTO usernotes (useruuid, targetuuid, notes) VALUES ($1, $2, $3) \
-             ON CONFLICT (useruuid, targetuuid) DO UPDATE SET notes = $3"
+             ON CONFLICT (useruuid, targetuuid) DO UPDATE SET notes = $3",
         )
         .bind(notes.user_id)
         .bind(notes.target_id)
@@ -280,7 +300,9 @@ impl ProfilesServiceTrait for LocalProfilesService {
     }
 
     async fn get_properties(&self, user_id: Uuid) -> Result<Option<UserProfileProperties>> {
-        let pool = self.db.postgres_pool()
+        let pool = self
+            .db
+            .postgres_pool()
             .ok_or_else(|| anyhow::anyhow!("No PG pool"))?;
 
         let row = sqlx::query(
@@ -288,7 +310,7 @@ impl ProfilesServiceTrait for LocalProfilesService {
              profileabouttext, profilefirstimage, profilefirsttext, \
              profilewanttotext, profilewanttomask, profileskillstext, profileskillsmask, \
              profilelanguages \
-             FROM userprofile WHERE useruuid = $1"
+             FROM userprofile WHERE useruuid = $1",
         )
         .bind(user_id)
         .fetch_optional(pool)
@@ -317,7 +339,9 @@ impl ProfilesServiceTrait for LocalProfilesService {
     }
 
     async fn update_properties(&self, props: &UserProfileProperties) -> Result<bool> {
-        let pool = self.db.postgres_pool()
+        let pool = self
+            .db
+            .postgres_pool()
             .ok_or_else(|| anyhow::anyhow!("No PG pool"))?;
 
         sqlx::query(
@@ -330,7 +354,7 @@ impl ProfilesServiceTrait for LocalProfilesService {
              profilepartner = $2, profileurl = $3, profileimage = $4, profileabouttext = $5, \
              profilefirstimage = $6, profilefirsttext = $7, profilewanttotext = $8, \
              profilewanttomask = $9, profileskillstext = $10, profileskillsmask = $11, \
-             profilelanguages = $12"
+             profilelanguages = $12",
         )
         .bind(props.user_id)
         .bind(props.partner_id)
@@ -351,11 +375,13 @@ impl ProfilesServiceTrait for LocalProfilesService {
     }
 
     async fn get_preferences(&self, user_id: Uuid) -> Result<Option<UserPreferences>> {
-        let pool = self.db.postgres_pool()
+        let pool = self
+            .db
+            .postgres_pool()
             .ok_or_else(|| anyhow::anyhow!("No PG pool"))?;
 
         let row = sqlx::query(
-            "SELECT useruuid, imviaemail, visible, email FROM usersettings WHERE useruuid = $1"
+            "SELECT useruuid, imviaemail, visible, email FROM usersettings WHERE useruuid = $1",
         )
         .bind(user_id)
         .fetch_optional(pool)
@@ -381,13 +407,15 @@ impl ProfilesServiceTrait for LocalProfilesService {
     }
 
     async fn update_preferences(&self, prefs: &UserPreferences) -> Result<bool> {
-        let pool = self.db.postgres_pool()
+        let pool = self
+            .db
+            .postgres_pool()
             .ok_or_else(|| anyhow::anyhow!("No PG pool"))?;
 
         sqlx::query(
             "INSERT INTO usersettings (useruuid, imviaemail, visible, email) \
              VALUES ($1, $2, $3, $4) \
-             ON CONFLICT (useruuid) DO UPDATE SET imviaemail = $2, visible = $3, email = $4"
+             ON CONFLICT (useruuid) DO UPDATE SET imviaemail = $2, visible = $3, email = $4",
         )
         .bind(prefs.user_id)
         .bind(prefs.im_via_email)

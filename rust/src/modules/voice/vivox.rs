@@ -8,10 +8,10 @@ use parking_lot::Mutex;
 use tracing::{info, warn};
 use uuid::Uuid;
 
-use crate::modules::traits::{RegionModule, SharedRegionModule, SceneContext, ModuleConfig};
 use super::common::*;
 use super::traits::VoiceHandler;
-use super::vivox_api::{VivoxApiClient, ChannelConfig};
+use super::vivox_api::{ChannelConfig, VivoxApiClient};
+use crate::modules::traits::{ModuleConfig, RegionModule, SceneContext, SharedRegionModule};
 
 pub struct VivoxVoiceModule {
     enabled: bool,
@@ -42,11 +42,7 @@ impl VivoxVoiceModule {
         self.enabled
     }
 
-    fn get_or_create_channel(
-        &self,
-        channel_name: &str,
-        channel_desc: &str,
-    ) -> Result<String> {
+    fn get_or_create_channel(&self, channel_name: &str, channel_desc: &str) -> Result<String> {
         {
             let cache = self.channel_cache.lock();
             if let Some(uri) = cache.get(channel_name) {
@@ -54,7 +50,9 @@ impl VivoxVoiceModule {
             }
         }
 
-        let api = self.api_client.as_ref()
+        let api = self
+            .api_client
+            .as_ref()
             .ok_or_else(|| anyhow::anyhow!("Vivox API client not initialized"))?;
         let api = api.clone();
         let name = channel_name.to_string();
@@ -112,7 +110,8 @@ impl VoiceHandler for VivoxVoiceModule {
                         match create_code.as_str() {
                             "201" => {
                                 api.admin_login().await?;
-                                let (_, retry_code) = api.create_account(&agentname, &password).await?;
+                                let (_, retry_code) =
+                                    api.create_account(&agentname, &password).await?;
                                 if retry_code != "200" && retry_code.to_lowercase() != "ok" {
                                     warn!("[Vivox] Account creation retry failed: {}", retry_code);
                                 }
@@ -159,16 +158,30 @@ impl VoiceHandler for VivoxVoiceModule {
         }
 
         if !estate_allow_voice {
-            return Ok(build_parcel_voice_response(parcel_local_id, region_name, ""));
+            return Ok(build_parcel_voice_response(
+                parcel_local_id,
+                region_name,
+                "",
+            ));
         }
         if (parcel_flags & ALLOW_VOICE_CHAT) == 0 {
-            return Ok(build_parcel_voice_response(parcel_local_id, region_name, ""));
+            return Ok(build_parcel_voice_response(
+                parcel_local_id,
+                region_name,
+                "",
+            ));
         }
 
         let (channel_name, channel_desc) = if is_estate_channel(parcel_flags) {
-            (region_uuid.to_string(), format!("{}:{}", region_name, region_name))
+            (
+                region_uuid.to_string(),
+                format!("{}:{}", region_name, region_name),
+            )
         } else {
-            (parcel_uuid.to_string(), format!("{}:{}", region_name, parcel_name))
+            (
+                parcel_uuid.to_string(),
+                format!("{}:{}", region_name, parcel_name),
+            )
         };
 
         let channel_uri = match self.get_or_create_channel(&channel_name, &channel_desc) {
@@ -179,7 +192,11 @@ impl VoiceHandler for VivoxVoiceModule {
             }
         };
 
-        Ok(build_parcel_voice_response(parcel_local_id, region_name, &channel_uri))
+        Ok(build_parcel_voice_response(
+            parcel_local_id,
+            region_name,
+            &channel_uri,
+        ))
     }
 
     fn voice_enabled(&self) -> bool {
@@ -216,15 +233,30 @@ impl RegionModule for VivoxVoiceModule {
         self.channel_config = ChannelConfig {
             channel_type: config.get_or("vivox_channel_type", "positional"),
             channel_mode: config.get_or("vivox_channel_mode", "open"),
-            roll_off: config.get_or("vivox_channel_roll_off", "2.0").parse().unwrap_or(2.0),
-            distance_model: config.get_or("vivox_channel_distance_model", "2").parse().unwrap_or(2),
-            max_range: config.get_or("vivox_channel_max_range", "60").parse().unwrap_or(60),
-            clamping_distance: config.get_or("vivox_channel_clamping_distance", "10").parse().unwrap_or(10),
+            roll_off: config
+                .get_or("vivox_channel_roll_off", "2.0")
+                .parse()
+                .unwrap_or(2.0),
+            distance_model: config
+                .get_or("vivox_channel_distance_model", "2")
+                .parse()
+                .unwrap_or(2),
+            max_range: config
+                .get_or("vivox_channel_max_range", "60")
+                .parse()
+                .unwrap_or(60),
+            clamping_distance: config
+                .get_or("vivox_channel_clamping_distance", "10")
+                .parse()
+                .unwrap_or(10),
         };
 
         let api = VivoxApiClient::new(&server, &admin_user, &admin_password, dump_xml);
         if let Err(e) = api.admin_login().await {
-            warn!("[Vivox] Admin login failed: {} - module stays enabled, will retry", e);
+            warn!(
+                "[Vivox] Admin login failed: {} - module stays enabled, will retry",
+                e
+            );
         }
         self.api_client = Some(Arc::new(api));
 
@@ -250,8 +282,12 @@ impl RegionModule for VivoxVoiceModule {
         Ok(())
     }
 
-    fn as_any(&self) -> &dyn Any { self }
-    fn as_any_mut(&mut self) -> &mut dyn Any { self }
+    fn as_any(&self) -> &dyn Any {
+        self
+    }
+    fn as_any_mut(&mut self) -> &mut dyn Any {
+        self
+    }
 }
 
 #[async_trait]

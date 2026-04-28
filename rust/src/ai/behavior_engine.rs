@@ -1,15 +1,15 @@
 use std::collections::{HashMap, HashSet};
 use std::sync::Arc;
 use std::time::Instant;
-use uuid::Uuid;
 use tokio::time::{interval, Duration};
 use tracing::info;
+use uuid::Uuid;
 
-use crate::udp::server::AvatarMovementState;
-use crate::udp::action_bridge::ActionBridge;
 use super::behavior_config::NpcBehaviorConfig;
-use super::behaviors::{self, BehaviorAction, WanderState, PatrolState};
+use super::behaviors::{self, BehaviorAction, PatrolState, WanderState};
 use super::movement_controller::MovementController;
+use crate::udp::action_bridge::ActionBridge;
+use crate::udp::server::AvatarMovementState;
 
 pub struct SpeakerInfo {
     pub agent_id: Uuid,
@@ -43,17 +43,22 @@ impl BehaviorEngine {
     ) -> Self {
         let npc_states: HashMap<Uuid, NpcRuntimeState> = {
             let states = avatar_states.read();
-            npc_configs.keys()
+            npc_configs
+                .keys()
                 .map(|id| {
-                    let home = states.get(id)
+                    let home = states
+                        .get(id)
                         .map(|s| s.position)
                         .unwrap_or([128.0, 128.0, 25.0]);
-                    (*id, NpcRuntimeState {
-                        home_position: home,
-                        greeted_avatars: HashSet::new(),
-                        wander_state: WanderState::default(),
-                        patrol_state: PatrolState::default(),
-                    })
+                    (
+                        *id,
+                        NpcRuntimeState {
+                            home_position: home,
+                            greeted_avatars: HashSet::new(),
+                            wander_state: WanderState::default(),
+                            patrol_state: PatrolState::default(),
+                        },
+                    )
                 })
                 .collect()
         };
@@ -83,11 +88,13 @@ impl BehaviorEngine {
 
         let (npc_data, viewer_avatars) = {
             let states = self.avatar_states.read();
-            let npcs: Vec<(Uuid, [f32; 3])> = states.iter()
+            let npcs: Vec<(Uuid, [f32; 3])> = states
+                .iter()
                 .filter(|(_, s)| s.is_npc)
                 .map(|(id, s)| (*id, s.position))
                 .collect();
-            let viewers: Vec<(Uuid, [f32; 3])> = states.iter()
+            let viewers: Vec<(Uuid, [f32; 3])> = states
+                .iter()
                 .filter(|(_, s)| !s.is_npc)
                 .map(|(id, s)| (*id, s.position))
                 .collect();
@@ -96,7 +103,9 @@ impl BehaviorEngine {
 
         let speaker_info: Option<(Uuid, [f32; 3], Instant)> = {
             let speaker = self.last_speaker.read();
-            speaker.as_ref().map(|s| (s.agent_id, s.position, s.timestamp))
+            speaker
+                .as_ref()
+                .map(|s| (s.agent_id, s.position, s.timestamp))
         };
 
         let mut say_actions: Vec<(Uuid, String, [f32; 3], String)> = Vec::new();
@@ -113,7 +122,8 @@ impl BehaviorEngine {
 
             let npc_name = {
                 let states = self.avatar_states.read();
-                states.get(npc_id)
+                states
+                    .get(npc_id)
                     .and_then(|s| s.npc_name.clone())
                     .unwrap_or_default()
             };
@@ -127,7 +137,9 @@ impl BehaviorEngine {
                 });
                 if !any_nearby {
                     MovementController::apply_action(
-                        &self.avatar_states, *npc_id, &BehaviorAction::Stop,
+                        &self.avatar_states,
+                        *npc_id,
+                        &BehaviorAction::Stop,
                     );
                     continue;
                 }
@@ -153,7 +165,8 @@ impl BehaviorEngine {
                         let dist_sq = dx * dx + dy * dy;
                         if dist_sq < 400.0 {
                             MovementController::apply_action(
-                                &self.avatar_states, *npc_id,
+                                &self.avatar_states,
+                                *npc_id,
                                 &BehaviorAction::FacePosition(*speaker_pos),
                             );
                         }
@@ -169,7 +182,9 @@ impl BehaviorEngine {
             };
             if conversing {
                 MovementController::apply_action(
-                    &self.avatar_states, *npc_id, &BehaviorAction::Stop,
+                    &self.avatar_states,
+                    *npc_id,
+                    &BehaviorAction::Stop,
                 );
                 continue;
             }
@@ -204,11 +219,18 @@ impl BehaviorEngine {
                     for action in &actions {
                         match action {
                             BehaviorAction::Say(msg) => {
-                                say_actions.push((*npc_id, msg.clone(), *npc_pos, npc_name.clone()));
+                                say_actions.push((
+                                    *npc_id,
+                                    msg.clone(),
+                                    *npc_pos,
+                                    npc_name.clone(),
+                                ));
                             }
                             _ => {
                                 MovementController::apply_action(
-                                    &self.avatar_states, *npc_id, action,
+                                    &self.avatar_states,
+                                    *npc_id,
+                                    action,
                                 );
                             }
                         }

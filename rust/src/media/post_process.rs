@@ -1,5 +1,5 @@
+use anyhow::{anyhow, Result};
 use std::path::Path;
-use anyhow::{Result, anyhow};
 use tracing::{info, warn};
 
 pub async fn apply_gimp_filter(
@@ -24,14 +24,14 @@ pub async fn apply_gimp_filter(
         }
     };
 
-    info!("[MEDIA] Applying GIMP filter '{}' to {}", filter_name, frames_dir.display());
+    info!(
+        "[MEDIA] Applying GIMP filter '{}' to {}",
+        filter_name,
+        frames_dir.display()
+    );
 
     let output = tokio::process::Command::new(gimp_path)
-        .args([
-            "-i",
-            "-b", &script,
-            "-b", "(gimp-quit 0)",
-        ])
+        .args(["-i", "-b", &script, "-b", "(gimp-quit 0)"])
         .stdout(std::process::Stdio::piped())
         .stderr(std::process::Stdio::piped())
         .output()
@@ -39,7 +39,10 @@ pub async fn apply_gimp_filter(
 
     if !output.status.success() {
         let stderr = String::from_utf8_lossy(&output.stderr);
-        warn!("[MEDIA] GIMP filter warning: {}", stderr.lines().last().unwrap_or(""));
+        warn!(
+            "[MEDIA] GIMP filter warning: {}",
+            stderr.lines().last().unwrap_or("")
+        );
     }
 
     info!("[MEDIA] GIMP filter '{}' applied", filter_name);

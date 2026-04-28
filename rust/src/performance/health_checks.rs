@@ -1,20 +1,20 @@
 //! Automated health checks and system monitoring
 
-use std::{
-    collections::HashMap,
-    sync::Arc,
-    time::{Duration, Instant},
-    net::SocketAddr,
-};
 use anyhow::{anyhow, Result};
 use serde::{Deserialize, Serialize};
+use std::{
+    collections::HashMap,
+    net::SocketAddr,
+    sync::Arc,
+    time::{Duration, Instant},
+};
 use tokio::sync::RwLock;
-use tracing::{info, warn, error, debug};
+use tracing::{debug, error, info, warn};
 
 use super::{
-    metrics::MetricsRegistry,
-    microservices::{ServiceMesh, ServiceType, ServiceHealth},
     logging::LogAggregator,
+    metrics::MetricsRegistry,
+    microservices::{ServiceHealth, ServiceMesh, ServiceType},
     realtime_stats::RealTimeStatsCollector,
 };
 
@@ -50,10 +50,20 @@ impl Default for HealthCheckConfig {
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub enum NotificationChannel {
     Log,
-    Email { recipients: Vec<String> },
-    Webhook { url: String, headers: HashMap<String, String> },
-    Slack { webhook_url: String, channel: String },
-    PagerDuty { service_key: String },
+    Email {
+        recipients: Vec<String>,
+    },
+    Webhook {
+        url: String,
+        headers: HashMap<String, String>,
+    },
+    Slack {
+        webhook_url: String,
+        channel: String,
+    },
+    PagerDuty {
+        service_key: String,
+    },
 }
 
 /// Health check types
@@ -252,7 +262,7 @@ impl HealthCheckSystem {
     /// Execute a specific health check manually
     pub async fn execute_check(&self, check_id: &str) -> Result<HealthCheckResult> {
         let checks = self.checks.read().await;
-        
+
         if let Some(context) = checks.get(check_id) {
             self.perform_health_check(&context.check).await
         } else {
@@ -263,7 +273,8 @@ impl HealthCheckSystem {
     /// Get current system health summary
     pub async fn get_health_summary(&self) -> Result<SystemHealthSummary> {
         let results = self.results.read().await;
-        let recent_results: Vec<_> = results.iter()
+        let recent_results: Vec<_> = results
+            .iter()
             .filter(|r| {
                 let age = chrono::Utc::now().signed_duration_since(r.timestamp);
                 age.num_minutes() < 5 // Last 5 minutes
@@ -286,9 +297,18 @@ impl HealthCheckSystem {
         }
 
         let total_checks = recent_results.len() as u32;
-        let healthy_checks = recent_results.iter().filter(|r| r.status == HealthStatus::Healthy).count() as u32;
-        let warning_checks = recent_results.iter().filter(|r| r.status == HealthStatus::Warning).count() as u32;
-        let critical_checks = recent_results.iter().filter(|r| r.status == HealthStatus::Critical).count() as u32;
+        let healthy_checks = recent_results
+            .iter()
+            .filter(|r| r.status == HealthStatus::Healthy)
+            .count() as u32;
+        let warning_checks = recent_results
+            .iter()
+            .filter(|r| r.status == HealthStatus::Warning)
+            .count() as u32;
+        let critical_checks = recent_results
+            .iter()
+            .filter(|r| r.status == HealthStatus::Critical)
+            .count() as u32;
 
         let overall_status = if critical_checks > 0 {
             HealthStatus::Critical
@@ -301,9 +321,11 @@ impl HealthCheckSystem {
         };
 
         let uptime_percentage = (healthy_checks as f64 / total_checks as f64) * 100.0;
-        let mean_response_time_ms = recent_results.iter()
+        let mean_response_time_ms = recent_results
+            .iter()
             .map(|r| r.response_time_ms as f64)
-            .sum::<f64>() / recent_results.len() as f64;
+            .sum::<f64>()
+            / recent_results.len() as f64;
 
         Ok(SystemHealthSummary {
             overall_status,
@@ -321,18 +343,24 @@ impl HealthCheckSystem {
     /// Get active alerts
     pub async fn get_active_alerts(&self) -> Vec<HealthAlert> {
         let alerts = self.alerts.read().await;
-        alerts.iter()
+        alerts
+            .iter()
             .filter(|alert| alert.resolved_at.is_none())
             .cloned()
             .collect()
     }
 
     /// Get health check history
-    pub async fn get_check_history(&self, check_id: &str, limit: Option<usize>) -> Vec<HealthCheckResult> {
+    pub async fn get_check_history(
+        &self,
+        check_id: &str,
+        limit: Option<usize>,
+    ) -> Vec<HealthCheckResult> {
         let results = self.results.read().await;
         let limit = limit.unwrap_or(100);
-        
-        results.iter()
+
+        results
+            .iter()
             .filter(|r| r.check_id == check_id)
             .rev()
             .take(limit)
@@ -354,9 +382,7 @@ impl HealthCheckSystem {
                 critical: true,
                 dependencies: vec![],
                 check_config: HealthCheckConfig::default(),
-                metadata: HashMap::from([
-                    ("service_type".to_string(), "RegionServer".to_string()),
-                ]),
+                metadata: HashMap::from([("service_type".to_string(), "RegionServer".to_string())]),
             },
             HealthCheck {
                 id: "asset_service_health".to_string(),
@@ -369,9 +395,7 @@ impl HealthCheckSystem {
                 critical: false,
                 dependencies: vec![],
                 check_config: HealthCheckConfig::default(),
-                metadata: HashMap::from([
-                    ("service_type".to_string(), "AssetService".to_string()),
-                ]),
+                metadata: HashMap::from([("service_type".to_string(), "AssetService".to_string())]),
             },
             // Database health check
             HealthCheck {
@@ -462,13 +486,43 @@ impl HealthCheckSystem {
 
     async fn register_health_metrics(&self) -> Result<()> {
         let labels = HashMap::new();
-        
-        self.metrics_registry.register_gauge("health_check_status", "Health check status (1=healthy, 0=unhealthy)", labels.clone()).await?;
-        self.metrics_registry.register_histogram("health_check_duration_ms", "Health check execution duration", labels.clone()).await?;
-        self.metrics_registry.register_counter("health_check_executions_total", "Total health check executions", labels.clone()).await?;
-        self.metrics_registry.register_counter("health_check_failures_total", "Total health check failures", labels.clone()).await?;
-        self.metrics_registry.register_gauge("system_health_score", "Overall system health score (0-100)", labels.clone()).await?;
-        
+
+        self.metrics_registry
+            .register_gauge(
+                "health_check_status",
+                "Health check status (1=healthy, 0=unhealthy)",
+                labels.clone(),
+            )
+            .await?;
+        self.metrics_registry
+            .register_histogram(
+                "health_check_duration_ms",
+                "Health check execution duration",
+                labels.clone(),
+            )
+            .await?;
+        self.metrics_registry
+            .register_counter(
+                "health_check_executions_total",
+                "Total health check executions",
+                labels.clone(),
+            )
+            .await?;
+        self.metrics_registry
+            .register_counter(
+                "health_check_failures_total",
+                "Total health check failures",
+                labels.clone(),
+            )
+            .await?;
+        self.metrics_registry
+            .register_gauge(
+                "system_health_score",
+                "Overall system health score (0-100)",
+                labels.clone(),
+            )
+            .await?;
+
         Ok(())
     }
 
@@ -498,11 +552,11 @@ impl HealthCheckSystem {
                 // Execute checks
                 for (check_id, check) in checks_to_run {
                     let start_time = Instant::now();
-                    
+
                     match Self::perform_health_check_static(&check).await {
                         Ok(mut result) => {
                             result.response_time_ms = start_time.elapsed().as_millis() as u64;
-                            
+
                             // Update check context
                             {
                                 let mut checks_guard = checks.write().await;
@@ -512,10 +566,11 @@ impl HealthCheckSystem {
                                     } else {
                                         config.recovery_check_interval_seconds
                                     };
-                                    
-                                    context.next_check_time = now + Duration::from_secs(next_interval);
+
+                                    context.next_check_time =
+                                        now + Duration::from_secs(next_interval);
                                     context.last_result = Some(result.clone());
-                                    
+
                                     if result.status == HealthStatus::Healthy {
                                         context.failure_count = 0;
                                         context.last_success = Some(result.timestamp);
@@ -545,23 +600,38 @@ impl HealthCheckSystem {
                                     resolved_at: None,
                                     notification_sent: false,
                                 };
-                                
+
                                 alerts.write().await.push(alert);
                             }
 
                             // Update metrics
-                            let status_value = if result.status == HealthStatus::Healthy { 1.0 } else { 0.0 };
+                            let status_value = if result.status == HealthStatus::Healthy {
+                                1.0
+                            } else {
+                                0.0
+                            };
                             let _ = metrics.set_gauge("health_check_status", status_value).await;
-                            let _ = metrics.observe_histogram("health_check_duration_ms", result.response_time_ms as f64).await;
-                            let _ = metrics.increment_counter("health_check_executions_total", 1.0).await;
-                            
+                            let _ = metrics
+                                .observe_histogram(
+                                    "health_check_duration_ms",
+                                    result.response_time_ms as f64,
+                                )
+                                .await;
+                            let _ = metrics
+                                .increment_counter("health_check_executions_total", 1.0)
+                                .await;
+
                             if result.status != HealthStatus::Healthy {
-                                let _ = metrics.increment_counter("health_check_failures_total", 1.0).await;
+                                let _ = metrics
+                                    .increment_counter("health_check_failures_total", 1.0)
+                                    .await;
                             }
                         }
                         Err(e) => {
                             error!("Health check execution failed for {}: {}", check_id, e);
-                            let _ = metrics.increment_counter("health_check_failures_total", 1.0).await;
+                            let _ = metrics
+                                .increment_counter("health_check_failures_total", 1.0)
+                                .await;
                         }
                     }
                 }
@@ -602,10 +672,11 @@ impl HealthCheckSystem {
                 // Process alerts
                 for alert in alerts_to_process {
                     Self::send_alert_notifications(&alert, &config.notification_channels).await;
-                    
+
                     // Mark as sent
                     let mut alerts_guard = alerts.write().await;
-                    if let Some(existing_alert) = alerts_guard.iter_mut().find(|a| a.id == alert.id) {
+                    if let Some(existing_alert) = alerts_guard.iter_mut().find(|a| a.id == alert.id)
+                    {
                         existing_alert.notification_sent = true;
                     }
                 }
@@ -625,7 +696,8 @@ impl HealthCheckSystem {
                 // Calculate overall system health score
                 let health_score = {
                     let results_guard = results.read().await;
-                    let recent_results: Vec<_> = results_guard.iter()
+                    let recent_results: Vec<_> = results_guard
+                        .iter()
                         .filter(|r| {
                             let age = chrono::Utc::now().signed_duration_since(r.timestamp);
                             age.num_minutes() < 5
@@ -635,7 +707,8 @@ impl HealthCheckSystem {
                     if recent_results.is_empty() {
                         0.0
                     } else {
-                        let healthy_count = recent_results.iter()
+                        let healthy_count = recent_results
+                            .iter()
                             .filter(|r| r.status == HealthStatus::Healthy)
                             .count();
                         (healthy_count as f64 / recent_results.len() as f64) * 100.0
@@ -662,33 +735,15 @@ impl HealthCheckSystem {
                 // Check service health via service mesh
                 Self::check_service_health(check).await
             }
-            HealthCheckType::Database => {
-                Self::check_database_health(check).await
-            }
-            HealthCheckType::Cache => {
-                Self::check_cache_health(check).await
-            }
-            HealthCheckType::Memory => {
-                Self::check_memory_health(check).await
-            }
-            HealthCheckType::CPU => {
-                Self::check_cpu_health(check).await
-            }
-            HealthCheckType::DiskSpace => {
-                Self::check_disk_health(check).await
-            }
-            HealthCheckType::Network => {
-                Self::check_network_health(check).await
-            }
-            HealthCheckType::FileSystem => {
-                Self::check_filesystem_health(check).await
-            }
-            HealthCheckType::ExternalAPI => {
-                Self::check_external_api_health(check).await
-            }
-            HealthCheckType::Custom => {
-                Self::check_custom_health(check).await
-            }
+            HealthCheckType::Database => Self::check_database_health(check).await,
+            HealthCheckType::Cache => Self::check_cache_health(check).await,
+            HealthCheckType::Memory => Self::check_memory_health(check).await,
+            HealthCheckType::CPU => Self::check_cpu_health(check).await,
+            HealthCheckType::DiskSpace => Self::check_disk_health(check).await,
+            HealthCheckType::Network => Self::check_network_health(check).await,
+            HealthCheckType::FileSystem => Self::check_filesystem_health(check).await,
+            HealthCheckType::ExternalAPI => Self::check_external_api_health(check).await,
+            HealthCheckType::Custom => Self::check_custom_health(check).await,
         };
 
         Ok(HealthCheckResult {
@@ -702,17 +757,30 @@ impl HealthCheckSystem {
         })
     }
 
-    async fn check_service_health(check: &HealthCheck) -> (HealthStatus, String, HashMap<String, serde_json::Value>, Option<String>) {
+    async fn check_service_health(
+        check: &HealthCheck,
+    ) -> (
+        HealthStatus,
+        String,
+        HashMap<String, serde_json::Value>,
+        Option<String>,
+    ) {
         // Simulate service health check
         let healthy = rand::random::<f64>() > 0.1; // 90% success rate
-        
+
         if healthy {
             (
                 HealthStatus::Healthy,
                 "Service is responding normally".to_string(),
                 HashMap::from([
-                    ("response_time_ms".to_string(), serde_json::Value::Number(serde_json::Number::from(25))),
-                    ("instances_healthy".to_string(), serde_json::Value::Number(serde_json::Number::from(3))),
+                    (
+                        "response_time_ms".to_string(),
+                        serde_json::Value::Number(serde_json::Number::from(25)),
+                    ),
+                    (
+                        "instances_healthy".to_string(),
+                        serde_json::Value::Number(serde_json::Number::from(3)),
+                    ),
                 ]),
                 None,
             )
@@ -726,17 +794,32 @@ impl HealthCheckSystem {
         }
     }
 
-    async fn check_database_health(_check: &HealthCheck) -> (HealthStatus, String, HashMap<String, serde_json::Value>, Option<String>) {
+    async fn check_database_health(
+        _check: &HealthCheck,
+    ) -> (
+        HealthStatus,
+        String,
+        HashMap<String, serde_json::Value>,
+        Option<String>,
+    ) {
         // Simulate database health check
         let response_time = 5.0 + rand::random::<f64>() * 20.0;
-        
+
         if response_time < 15.0 {
             (
                 HealthStatus::Healthy,
                 "Database connection is healthy".to_string(),
                 HashMap::from([
-                    ("response_time_ms".to_string(), serde_json::Value::Number(serde_json::Number::from_f64(response_time).unwrap())),
-                    ("active_connections".to_string(), serde_json::Value::Number(serde_json::Number::from(12))),
+                    (
+                        "response_time_ms".to_string(),
+                        serde_json::Value::Number(
+                            serde_json::Number::from_f64(response_time).unwrap(),
+                        ),
+                    ),
+                    (
+                        "active_connections".to_string(),
+                        serde_json::Value::Number(serde_json::Number::from(12)),
+                    ),
                 ]),
                 None,
             )
@@ -744,158 +827,295 @@ impl HealthCheckSystem {
             (
                 HealthStatus::Warning,
                 "Database response time is high".to_string(),
-                HashMap::from([
-                    ("response_time_ms".to_string(), serde_json::Value::Number(serde_json::Number::from_f64(response_time).unwrap())),
-                ]),
+                HashMap::from([(
+                    "response_time_ms".to_string(),
+                    serde_json::Value::Number(serde_json::Number::from_f64(response_time).unwrap()),
+                )]),
                 None,
             )
         }
     }
 
-    async fn check_cache_health(_check: &HealthCheck) -> (HealthStatus, String, HashMap<String, serde_json::Value>, Option<String>) {
+    async fn check_cache_health(
+        _check: &HealthCheck,
+    ) -> (
+        HealthStatus,
+        String,
+        HashMap<String, serde_json::Value>,
+        Option<String>,
+    ) {
         // Simulate cache health check
         let hit_rate = 85.0 + rand::random::<f64>() * 10.0;
-        
+
         (
             HealthStatus::Healthy,
             "Cache is operating normally".to_string(),
             HashMap::from([
-                ("hit_rate_percent".to_string(), serde_json::Value::Number(serde_json::Number::from_f64(hit_rate).unwrap())),
-                ("memory_usage_mb".to_string(), serde_json::Value::Number(serde_json::Number::from(256))),
+                (
+                    "hit_rate_percent".to_string(),
+                    serde_json::Value::Number(serde_json::Number::from_f64(hit_rate).unwrap()),
+                ),
+                (
+                    "memory_usage_mb".to_string(),
+                    serde_json::Value::Number(serde_json::Number::from(256)),
+                ),
             ]),
             None,
         )
     }
 
-    async fn check_memory_health(check: &HealthCheck) -> (HealthStatus, String, HashMap<String, serde_json::Value>, Option<String>) {
+    async fn check_memory_health(
+        check: &HealthCheck,
+    ) -> (
+        HealthStatus,
+        String,
+        HashMap<String, serde_json::Value>,
+        Option<String>,
+    ) {
         // Simulate memory usage check
         let usage_percent = 45.0 + rand::random::<f64>() * 40.0;
-        
-        let warning_threshold: f64 = check.metadata.get("warning_threshold")
+
+        let warning_threshold: f64 = check
+            .metadata
+            .get("warning_threshold")
             .and_then(|v| v.parse().ok())
             .unwrap_or(80.0);
-        let critical_threshold: f64 = check.metadata.get("critical_threshold")
+        let critical_threshold: f64 = check
+            .metadata
+            .get("critical_threshold")
             .and_then(|v| v.parse().ok())
             .unwrap_or(95.0);
 
         let (status, message) = if usage_percent >= critical_threshold {
-            (HealthStatus::Critical, format!("Memory usage critical: {:.1}%", usage_percent))
+            (
+                HealthStatus::Critical,
+                format!("Memory usage critical: {:.1}%", usage_percent),
+            )
         } else if usage_percent >= warning_threshold {
-            (HealthStatus::Warning, format!("Memory usage high: {:.1}%", usage_percent))
+            (
+                HealthStatus::Warning,
+                format!("Memory usage high: {:.1}%", usage_percent),
+            )
         } else {
-            (HealthStatus::Healthy, format!("Memory usage normal: {:.1}%", usage_percent))
+            (
+                HealthStatus::Healthy,
+                format!("Memory usage normal: {:.1}%", usage_percent),
+            )
         };
 
         (
             status,
             message,
             HashMap::from([
-                ("usage_percent".to_string(), serde_json::Value::Number(serde_json::Number::from_f64(usage_percent).unwrap())),
-                ("used_mb".to_string(), serde_json::Value::Number(serde_json::Number::from(1024))),
-                ("total_mb".to_string(), serde_json::Value::Number(serde_json::Number::from(2048))),
+                (
+                    "usage_percent".to_string(),
+                    serde_json::Value::Number(serde_json::Number::from_f64(usage_percent).unwrap()),
+                ),
+                (
+                    "used_mb".to_string(),
+                    serde_json::Value::Number(serde_json::Number::from(1024)),
+                ),
+                (
+                    "total_mb".to_string(),
+                    serde_json::Value::Number(serde_json::Number::from(2048)),
+                ),
             ]),
             None,
         )
     }
 
-    async fn check_cpu_health(check: &HealthCheck) -> (HealthStatus, String, HashMap<String, serde_json::Value>, Option<String>) {
+    async fn check_cpu_health(
+        check: &HealthCheck,
+    ) -> (
+        HealthStatus,
+        String,
+        HashMap<String, serde_json::Value>,
+        Option<String>,
+    ) {
         // Simulate CPU usage check
         let usage_percent = 20.0 + rand::random::<f64>() * 60.0;
-        
-        let warning_threshold: f64 = check.metadata.get("warning_threshold")
+
+        let warning_threshold: f64 = check
+            .metadata
+            .get("warning_threshold")
             .and_then(|v| v.parse().ok())
             .unwrap_or(80.0);
-        let critical_threshold: f64 = check.metadata.get("critical_threshold")
+        let critical_threshold: f64 = check
+            .metadata
+            .get("critical_threshold")
             .and_then(|v| v.parse().ok())
             .unwrap_or(95.0);
 
         let (status, message) = if usage_percent >= critical_threshold {
-            (HealthStatus::Critical, format!("CPU usage critical: {:.1}%", usage_percent))
+            (
+                HealthStatus::Critical,
+                format!("CPU usage critical: {:.1}%", usage_percent),
+            )
         } else if usage_percent >= warning_threshold {
-            (HealthStatus::Warning, format!("CPU usage high: {:.1}%", usage_percent))
+            (
+                HealthStatus::Warning,
+                format!("CPU usage high: {:.1}%", usage_percent),
+            )
         } else {
-            (HealthStatus::Healthy, format!("CPU usage normal: {:.1}%", usage_percent))
+            (
+                HealthStatus::Healthy,
+                format!("CPU usage normal: {:.1}%", usage_percent),
+            )
         };
 
         (
             status,
             message,
             HashMap::from([
-                ("usage_percent".to_string(), serde_json::Value::Number(serde_json::Number::from_f64(usage_percent).unwrap())),
-                ("load_average_1m".to_string(), serde_json::Value::Number(serde_json::Number::from_f64(1.2).unwrap())),
+                (
+                    "usage_percent".to_string(),
+                    serde_json::Value::Number(serde_json::Number::from_f64(usage_percent).unwrap()),
+                ),
+                (
+                    "load_average_1m".to_string(),
+                    serde_json::Value::Number(serde_json::Number::from_f64(1.2).unwrap()),
+                ),
             ]),
             None,
         )
     }
 
-    async fn check_disk_health(check: &HealthCheck) -> (HealthStatus, String, HashMap<String, serde_json::Value>, Option<String>) {
+    async fn check_disk_health(
+        check: &HealthCheck,
+    ) -> (
+        HealthStatus,
+        String,
+        HashMap<String, serde_json::Value>,
+        Option<String>,
+    ) {
         // Simulate disk space check
         let usage_percent = 45.0 + rand::random::<f64>() * 40.0;
-        
-        let warning_threshold: f64 = check.metadata.get("warning_threshold")
+
+        let warning_threshold: f64 = check
+            .metadata
+            .get("warning_threshold")
             .and_then(|v| v.parse().ok())
             .unwrap_or(85.0);
-        let critical_threshold: f64 = check.metadata.get("critical_threshold")
+        let critical_threshold: f64 = check
+            .metadata
+            .get("critical_threshold")
             .and_then(|v| v.parse().ok())
             .unwrap_or(95.0);
 
         let (status, message) = if usage_percent >= critical_threshold {
-            (HealthStatus::Critical, format!("Disk space critical: {:.1}%", usage_percent))
+            (
+                HealthStatus::Critical,
+                format!("Disk space critical: {:.1}%", usage_percent),
+            )
         } else if usage_percent >= warning_threshold {
-            (HealthStatus::Warning, format!("Disk space high: {:.1}%", usage_percent))
+            (
+                HealthStatus::Warning,
+                format!("Disk space high: {:.1}%", usage_percent),
+            )
         } else {
-            (HealthStatus::Healthy, format!("Disk space normal: {:.1}%", usage_percent))
+            (
+                HealthStatus::Healthy,
+                format!("Disk space normal: {:.1}%", usage_percent),
+            )
         };
 
         (
             status,
             message,
             HashMap::from([
-                ("usage_percent".to_string(), serde_json::Value::Number(serde_json::Number::from_f64(usage_percent).unwrap())),
-                ("used_gb".to_string(), serde_json::Value::Number(serde_json::Number::from(45))),
-                ("total_gb".to_string(), serde_json::Value::Number(serde_json::Number::from(100))),
+                (
+                    "usage_percent".to_string(),
+                    serde_json::Value::Number(serde_json::Number::from_f64(usage_percent).unwrap()),
+                ),
+                (
+                    "used_gb".to_string(),
+                    serde_json::Value::Number(serde_json::Number::from(45)),
+                ),
+                (
+                    "total_gb".to_string(),
+                    serde_json::Value::Number(serde_json::Number::from(100)),
+                ),
             ]),
             None,
         )
     }
 
-    async fn check_network_health(_check: &HealthCheck) -> (HealthStatus, String, HashMap<String, serde_json::Value>, Option<String>) {
+    async fn check_network_health(
+        _check: &HealthCheck,
+    ) -> (
+        HealthStatus,
+        String,
+        HashMap<String, serde_json::Value>,
+        Option<String>,
+    ) {
         // Simulate network health check
         (
             HealthStatus::Healthy,
             "Network connectivity is good".to_string(),
             HashMap::from([
-                ("latency_ms".to_string(), serde_json::Value::Number(serde_json::Number::from(15))),
-                ("packet_loss_percent".to_string(), serde_json::Value::Number(serde_json::Number::from(0))),
+                (
+                    "latency_ms".to_string(),
+                    serde_json::Value::Number(serde_json::Number::from(15)),
+                ),
+                (
+                    "packet_loss_percent".to_string(),
+                    serde_json::Value::Number(serde_json::Number::from(0)),
+                ),
             ]),
             None,
         )
     }
 
-    async fn check_filesystem_health(_check: &HealthCheck) -> (HealthStatus, String, HashMap<String, serde_json::Value>, Option<String>) {
+    async fn check_filesystem_health(
+        _check: &HealthCheck,
+    ) -> (
+        HealthStatus,
+        String,
+        HashMap<String, serde_json::Value>,
+        Option<String>,
+    ) {
         // Simulate filesystem health check
         (
             HealthStatus::Healthy,
             "Filesystem is accessible".to_string(),
             HashMap::from([
-                ("read_time_ms".to_string(), serde_json::Value::Number(serde_json::Number::from(5))),
-                ("write_time_ms".to_string(), serde_json::Value::Number(serde_json::Number::from(8))),
+                (
+                    "read_time_ms".to_string(),
+                    serde_json::Value::Number(serde_json::Number::from(5)),
+                ),
+                (
+                    "write_time_ms".to_string(),
+                    serde_json::Value::Number(serde_json::Number::from(8)),
+                ),
             ]),
             None,
         )
     }
 
-    async fn check_external_api_health(_check: &HealthCheck) -> (HealthStatus, String, HashMap<String, serde_json::Value>, Option<String>) {
+    async fn check_external_api_health(
+        _check: &HealthCheck,
+    ) -> (
+        HealthStatus,
+        String,
+        HashMap<String, serde_json::Value>,
+        Option<String>,
+    ) {
         // Simulate external API health check
         let healthy = rand::random::<f64>() > 0.05; // 95% success rate
-        
+
         if healthy {
             (
                 HealthStatus::Healthy,
                 "External API is responding".to_string(),
                 HashMap::from([
-                    ("status_code".to_string(), serde_json::Value::Number(serde_json::Number::from(200))),
-                    ("response_time_ms".to_string(), serde_json::Value::Number(serde_json::Number::from(150))),
+                    (
+                        "status_code".to_string(),
+                        serde_json::Value::Number(serde_json::Number::from(200)),
+                    ),
+                    (
+                        "response_time_ms".to_string(),
+                        serde_json::Value::Number(serde_json::Number::from(150)),
+                    ),
                 ]),
                 None,
             )
@@ -909,7 +1129,14 @@ impl HealthCheckSystem {
         }
     }
 
-    async fn check_custom_health(_check: &HealthCheck) -> (HealthStatus, String, HashMap<String, serde_json::Value>, Option<String>) {
+    async fn check_custom_health(
+        _check: &HealthCheck,
+    ) -> (
+        HealthStatus,
+        String,
+        HashMap<String, serde_json::Value>,
+        Option<String>,
+    ) {
         // Placeholder for custom health checks
         (
             HealthStatus::Healthy,
@@ -922,27 +1149,37 @@ impl HealthCheckSystem {
     async fn send_alert_notifications(alert: &HealthAlert, channels: &[NotificationChannel]) {
         for channel in channels {
             match channel {
-                NotificationChannel::Log => {
-                    match alert.status {
-                        HealthStatus::Critical => error!("CRITICAL HEALTH ALERT: {}", alert.message),
-                        HealthStatus::Warning => warn!("WARNING HEALTH ALERT: {}", alert.message),
-                        _ => info!("HEALTH ALERT: {}", alert.message),
-                    }
-                }
+                NotificationChannel::Log => match alert.status {
+                    HealthStatus::Critical => error!("CRITICAL HEALTH ALERT: {}", alert.message),
+                    HealthStatus::Warning => warn!("WARNING HEALTH ALERT: {}", alert.message),
+                    _ => info!("HEALTH ALERT: {}", alert.message),
+                },
                 NotificationChannel::Email { recipients } => {
-                    info!("Would send email alert to {:?}: {}", recipients, alert.message);
+                    info!(
+                        "Would send email alert to {:?}: {}",
+                        recipients, alert.message
+                    );
                     // In a real implementation, this would send actual emails
                 }
                 NotificationChannel::Webhook { url, headers: _ } => {
                     info!("Would send webhook alert to {}: {}", url, alert.message);
                     // In a real implementation, this would make HTTP requests
                 }
-                NotificationChannel::Slack { webhook_url, channel } => {
-                    info!("Would send Slack alert to {} in {}: {}", webhook_url, channel, alert.message);
+                NotificationChannel::Slack {
+                    webhook_url,
+                    channel,
+                } => {
+                    info!(
+                        "Would send Slack alert to {} in {}: {}",
+                        webhook_url, channel, alert.message
+                    );
                     // In a real implementation, this would post to Slack
                 }
                 NotificationChannel::PagerDuty { service_key } => {
-                    info!("Would send PagerDuty alert with key {}: {}", service_key, alert.message);
+                    info!(
+                        "Would send PagerDuty alert with key {}: {}",
+                        service_key, alert.message
+                    );
                     // In a real implementation, this would integrate with PagerDuty
                 }
             }
@@ -958,10 +1195,10 @@ mod tests {
     async fn test_health_check_system() -> Result<()> {
         let config = HealthCheckConfig::default();
         let metrics = Arc::new(super::super::metrics::MetricsRegistry::new());
-        
+
         // Create mock components for testing
         // In a real test, these would be properly initialized
-        
+
         Ok(())
     }
 
@@ -982,10 +1219,10 @@ mod tests {
         };
 
         let result = HealthCheckSystem::perform_health_check_static(&check).await?;
-        
+
         assert_eq!(result.check_id, "test_check");
         assert!(result.response_time_ms > 0);
-        
+
         Ok(())
     }
 
@@ -993,9 +1230,9 @@ mod tests {
     async fn test_system_health_summary() -> Result<()> {
         let config = HealthCheckConfig::default();
         let metrics = Arc::new(super::super::metrics::MetricsRegistry::new());
-        
+
         // Test would verify health summary calculation
-        
+
         Ok(())
     }
 }

@@ -11,9 +11,9 @@ use super::{CommunityConfig, ComponentHealth};
 use anyhow::Result;
 use serde::{Deserialize, Serialize};
 use std::collections::HashMap;
+use std::sync::Arc;
 use std::time::{SystemTime, UNIX_EPOCH};
 use tokio::sync::RwLock;
-use std::sync::Arc;
 
 /// Content moderation system
 pub struct ContentModerator {
@@ -50,13 +50,13 @@ impl ContentModerator {
 
         // Initialize filter engine
         self.filter_engine.write().await.initialize().await?;
-        
+
         // Initialize spam detection
         self.spam_detector.write().await.initialize().await?;
-        
+
         // Initialize rule engine
         self.rule_engine.write().await.initialize().await?;
-        
+
         // Load moderation rules
         self.load_moderation_rules().await?;
 
@@ -124,15 +124,30 @@ impl ContentModerator {
     pub async fn moderate_content(&self, content: &ContentSubmission) -> Result<ModerationResult> {
         // Analyze content
         let analysis = self.content_analyzer.write().await.analyze(content).await?;
-        
+
         // Check spam detection
-        let spam_check = self.spam_detector.write().await.check_spam(&analysis).await?;
-        
+        let spam_check = self
+            .spam_detector
+            .write()
+            .await
+            .check_spam(&analysis)
+            .await?;
+
         // Apply filters
-        let filter_result = self.filter_engine.write().await.filter_content(&analysis).await?;
-        
+        let filter_result = self
+            .filter_engine
+            .write()
+            .await
+            .filter_content(&analysis)
+            .await?;
+
         // Apply rules
-        let rule_result = self.rule_engine.write().await.apply_rules(&analysis, &spam_check, &filter_result).await?;
+        let rule_result = self
+            .rule_engine
+            .write()
+            .await
+            .apply_rules(&analysis, &spam_check, &filter_result)
+            .await?;
 
         // Create moderation result
         let moderation_result = ModerationResult {
@@ -147,17 +162,21 @@ impl ContentModerator {
 
         // Add to moderation queue if manual review needed
         if rule_result.requires_manual_review {
-            self.moderation_queue.write().await.add_item(ModerationQueueItem {
-                id: generate_queue_id(),
-                content_id: content.id.clone(),
-                content_type: content.content_type.clone(),
-                submitter_id: content.submitter_id.clone(),
-                analysis: analysis.clone(),
-                priority: self.calculate_priority(&analysis),
-                created_at: get_current_timestamp(),
-                status: QueueItemStatus::Pending,
-                assigned_moderator: None,
-            }).await?;
+            self.moderation_queue
+                .write()
+                .await
+                .add_item(ModerationQueueItem {
+                    id: generate_queue_id(),
+                    content_id: content.id.clone(),
+                    content_type: content.content_type.clone(),
+                    submitter_id: content.submitter_id.clone(),
+                    analysis: analysis.clone(),
+                    priority: self.calculate_priority(&analysis),
+                    created_at: get_current_timestamp(),
+                    status: QueueItemStatus::Pending,
+                    assigned_moderator: None,
+                })
+                .await?;
         }
 
         Ok(moderation_result)
@@ -195,14 +214,14 @@ impl ContentModerator {
     /// Get content moderation health status
     pub async fn health_check(&self) -> Result<ComponentHealth> {
         let start_time = SystemTime::now();
-        
+
         // Test all components
         let _filter_healthy = self.filter_engine.read().await.is_healthy();
         let _spam_healthy = self.spam_detector.read().await.is_healthy();
         let _queue_healthy = self.moderation_queue.read().await.is_healthy();
-        
+
         let response_time = start_time.elapsed().unwrap().as_millis() as u64;
-        
+
         Ok(ComponentHealth {
             status: "healthy".to_string(),
             response_time_ms: response_time,
@@ -351,9 +370,11 @@ impl FilterEngine {
 
     pub async fn filter_content(&mut self, analysis: &ContentAnalysis) -> Result<FilterResult> {
         self.reviewed_count += 1;
-        
+
         // Simple profanity detection for demo
-        let has_profanity = self.profanity_patterns.iter()
+        let has_profanity = self
+            .profanity_patterns
+            .iter()
             .any(|pattern| analysis.content_id.contains(pattern));
 
         if has_profanity {
@@ -362,7 +383,11 @@ impl FilterEngine {
 
         Ok(FilterResult {
             filtered: has_profanity,
-            reasons: if has_profanity { vec!["Profanity detected".to_string()] } else { Vec::new() },
+            reasons: if has_profanity {
+                vec!["Profanity detected".to_string()]
+            } else {
+                Vec::new()
+            },
             confidence: if has_profanity { 0.9 } else { 0.1 },
         })
     }
@@ -415,7 +440,7 @@ impl SpamDetector {
     pub async fn check_spam(&mut self, analysis: &ContentAnalysis) -> Result<SpamCheckResult> {
         // Simple spam detection for demo
         let is_spam = analysis.risk_score > 0.7;
-        
+
         if is_spam {
             self.spam_detected_count += 1;
         }
@@ -423,7 +448,11 @@ impl SpamDetector {
         Ok(SpamCheckResult {
             is_spam,
             confidence: analysis.confidence_score,
-            reasons: if is_spam { vec!["High risk score".to_string()] } else { Vec::new() },
+            reasons: if is_spam {
+                vec!["High risk score".to_string()]
+            } else {
+                Vec::new()
+            },
         })
     }
 
@@ -456,7 +485,7 @@ impl ContentAnalyzer {
         // Basic content analysis for demo
         let content_length = content.content.len();
         let risk_score = if content_length > 1000 { 0.3 } else { 0.1 };
-        
+
         Ok(ContentAnalysis {
             content_id: content.id.clone(),
             risk_score,
@@ -476,9 +505,7 @@ pub struct RuleEngine {
 
 impl RuleEngine {
     pub fn new() -> Self {
-        Self {
-            rules: Vec::new(),
-        }
+        Self { rules: Vec::new() }
     }
 
     pub async fn initialize(&mut self) -> Result<()> {
@@ -489,7 +516,12 @@ impl RuleEngine {
         self.rules.push(rule);
     }
 
-    pub async fn apply_rules(&self, analysis: &ContentAnalysis, spam_check: &SpamCheckResult, filter_result: &FilterResult) -> Result<RuleApplicationResult> {
+    pub async fn apply_rules(
+        &self,
+        analysis: &ContentAnalysis,
+        spam_check: &SpamCheckResult,
+        filter_result: &FilterResult,
+    ) -> Result<RuleApplicationResult> {
         let mut actions = Vec::new();
         let mut reasons = Vec::new();
         let mut final_status = ModerationStatus::Approved;
@@ -511,21 +543,21 @@ impl RuleEngine {
             if should_apply {
                 actions.push(rule.action.clone());
                 reasons.push(format!("Rule applied: {}", rule.name));
-                
+
                 match rule.action {
                     ModerationAction::AutoHide => final_status = ModerationStatus::Hidden,
                     ModerationAction::AutoRemove => final_status = ModerationStatus::Removed,
                     ModerationAction::Flag => {
                         final_status = ModerationStatus::Flagged;
                         requires_manual_review = true;
-                    },
-                    _ => {},
+                    }
+                    _ => {}
                 }
             }
         }
 
         let auto_moderated = !requires_manual_review && !actions.is_empty();
-        
+
         Ok(RuleApplicationResult {
             final_status,
             actions,
@@ -583,9 +615,7 @@ pub struct ModerationQueue {
 
 impl ModerationQueue {
     pub fn new() -> Self {
-        Self {
-            items: Vec::new(),
-        }
+        Self { items: Vec::new() }
     }
 
     pub async fn add_item(&mut self, item: ModerationQueueItem) -> Result<()> {
@@ -594,7 +624,8 @@ impl ModerationQueue {
     }
 
     pub fn get_pending_count(&self) -> u64 {
-        self.items.iter()
+        self.items
+            .iter()
             .filter(|item| item.status == QueueItemStatus::Pending)
             .count() as u64
     }

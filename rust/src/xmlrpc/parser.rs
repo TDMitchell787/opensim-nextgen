@@ -1,9 +1,9 @@
-use std::collections::HashMap;
-use anyhow::{Result, anyhow};
-use serde_json::Value;
-use tracing::{debug, error};
-use quick_xml::Reader;
+use anyhow::{anyhow, Result};
 use quick_xml::events::Event;
+use quick_xml::Reader;
+use serde_json::Value;
+use std::collections::HashMap;
+use tracing::{debug, error};
 
 #[derive(Debug, Clone)]
 pub struct LoginRequest {
@@ -94,82 +94,87 @@ pub struct XmlRpcParser;
 impl XmlRpcParser {
     pub fn parse_login_request(xml_body: &str) -> Result<LoginRequest> {
         debug!("Parsing XMLRPC login request");
-        
+
         // Verify this is a login_to_simulator request
         if !xml_body.contains("<methodName>login_to_simulator</methodName>") {
             return Err(anyhow!("Not a login_to_simulator request"));
         }
-        
+
         let mut request = LoginRequest::default();
 
         // DIAGNOSTIC: Log raw XMLRPC for viewer comparison debugging
         let preview_len = xml_body.len().min(500);
-        debug!("🔍 XMLRPC RAW (first {} chars): {}", preview_len, &xml_body[..preview_len]);
+        debug!(
+            "🔍 XMLRPC RAW (first {} chars): {}",
+            preview_len,
+            &xml_body[..preview_len]
+        );
 
         // Simple XML parsing for required fields with diagnostic logging
         let first_result = Self::extract_xml_string_value(xml_body, "first");
         debug!("🔍 EXTRACT 'first': {:?}", first_result);
-        request.first = first_result
-            .ok_or_else(|| anyhow!("Missing 'first' field"))?;
+        request.first = first_result.ok_or_else(|| anyhow!("Missing 'first' field"))?;
 
         let last_result = Self::extract_xml_string_value(xml_body, "last");
         debug!("🔍 EXTRACT 'last': {:?}", last_result);
-        request.last = last_result
-            .ok_or_else(|| anyhow!("Missing 'last' field"))?;
-            
+        request.last = last_result.ok_or_else(|| anyhow!("Missing 'last' field"))?;
+
         request.passwd = Self::extract_xml_string_value(xml_body, "passwd")
             .ok_or_else(|| anyhow!("Missing 'passwd' field"))?;
-        
+
         // Debug log the received password for troubleshooting
         debug!("Received password field: '{}'", request.passwd);
-        
+
         // Parse optional fields with defaults
         if let Some(start) = Self::extract_xml_string_value(xml_body, "start") {
             request.start = start;
         }
-        
+
         if let Some(channel) = Self::extract_xml_string_value(xml_body, "channel") {
             request.channel = channel;
         }
-        
+
         if let Some(version) = Self::extract_xml_string_value(xml_body, "version") {
             request.version = version;
         }
-        
+
         if let Some(platform) = Self::extract_xml_string_value(xml_body, "platform") {
             request.platform = platform;
         }
-        
+
         if let Some(user_agent) = Self::extract_xml_string_value(xml_body, "user_agent") {
             request.user_agent = user_agent;
         }
-        
+
         // Hardware information
         if let Some(address_size) = Self::extract_xml_string_value(xml_body, "address_size") {
             request.address_size = address_size;
         }
-        
+
         if let Some(cpu_brand) = Self::extract_xml_string_value(xml_body, "cpu_brand") {
             request.cpu_brand = cpu_brand;
         }
-        
+
         if let Some(memory) = Self::extract_xml_string_value(xml_body, "memory") {
             request.memory = memory;
         }
-        
+
         // Machine identification
         if let Some(machine_id) = Self::extract_xml_string_value(xml_body, "machine_id") {
             request.machine_id = machine_id;
         }
-        
+
         if let Some(mac) = Self::extract_xml_string_value(xml_body, "mac") {
             request.mac = mac;
         }
-        
-        debug!("Successfully parsed login request for {} {}", request.first, request.last);
+
+        debug!(
+            "Successfully parsed login request for {} {}",
+            request.first, request.last
+        );
         Ok(request)
     }
-    
+
     fn extract_xml_string_value(xml_body: &str, field_name: &str) -> Option<String> {
         // Simple XML parsing to find <name>field_name</name> followed by <value><string>VALUE</string></value>
         let name_pattern = format!("<name>{}</name>", field_name);
@@ -199,7 +204,7 @@ mod tests {
         assert!(request.agree_to_tos);
         assert!(!request.options.is_empty());
     }
-    
+
     #[test]
     fn test_parse_simple_login_request() {
         let xml = r#"<?xml version="1.0"?>

@@ -1,7 +1,7 @@
-use std::collections::HashMap;
 use anyhow::{anyhow, Result};
 use quick_xml::events::{BytesEnd, BytesStart, BytesText, Event};
 use quick_xml::{Reader, Writer};
+use std::collections::HashMap;
 use std::io::Cursor;
 
 #[derive(Debug, Clone)]
@@ -348,22 +348,38 @@ fn skip_to_end_tag(reader: &mut Reader<&[u8]>, tag: &str) -> Result<()> {
 pub fn build_xmlrpc_call(method: &str, params: &[XmlRpcValue]) -> String {
     let mut writer = Writer::new(Cursor::new(Vec::new()));
 
-    writer.write_event(Event::Decl(quick_xml::events::BytesDecl::new("1.0", None, None))).ok();
+    writer
+        .write_event(Event::Decl(quick_xml::events::BytesDecl::new(
+            "1.0", None, None,
+        )))
+        .ok();
 
-    writer.write_event(Event::Start(BytesStart::new("methodCall"))).ok();
-    writer.write_event(Event::Start(BytesStart::new("methodName"))).ok();
+    writer
+        .write_event(Event::Start(BytesStart::new("methodCall")))
+        .ok();
+    writer
+        .write_event(Event::Start(BytesStart::new("methodName")))
+        .ok();
     writer.write_event(Event::Text(BytesText::new(method))).ok();
-    writer.write_event(Event::End(BytesEnd::new("methodName"))).ok();
+    writer
+        .write_event(Event::End(BytesEnd::new("methodName")))
+        .ok();
 
-    writer.write_event(Event::Start(BytesStart::new("params"))).ok();
+    writer
+        .write_event(Event::Start(BytesStart::new("params")))
+        .ok();
     for param in params {
-        writer.write_event(Event::Start(BytesStart::new("param"))).ok();
+        writer
+            .write_event(Event::Start(BytesStart::new("param")))
+            .ok();
         write_xmlrpc_value(&mut writer, param);
         writer.write_event(Event::End(BytesEnd::new("param"))).ok();
     }
     writer.write_event(Event::End(BytesEnd::new("params"))).ok();
 
-    writer.write_event(Event::End(BytesEnd::new("methodCall"))).ok();
+    writer
+        .write_event(Event::End(BytesEnd::new("methodCall")))
+        .ok();
 
     let result = writer.into_inner().into_inner();
     String::from_utf8(result).unwrap_or_default()
@@ -372,15 +388,27 @@ pub fn build_xmlrpc_call(method: &str, params: &[XmlRpcValue]) -> String {
 pub fn build_xmlrpc_response(value: &XmlRpcValue) -> String {
     let mut writer = Writer::new(Cursor::new(Vec::new()));
 
-    writer.write_event(Event::Decl(quick_xml::events::BytesDecl::new("1.0", None, None))).ok();
+    writer
+        .write_event(Event::Decl(quick_xml::events::BytesDecl::new(
+            "1.0", None, None,
+        )))
+        .ok();
 
-    writer.write_event(Event::Start(BytesStart::new("methodResponse"))).ok();
-    writer.write_event(Event::Start(BytesStart::new("params"))).ok();
-    writer.write_event(Event::Start(BytesStart::new("param"))).ok();
+    writer
+        .write_event(Event::Start(BytesStart::new("methodResponse")))
+        .ok();
+    writer
+        .write_event(Event::Start(BytesStart::new("params")))
+        .ok();
+    writer
+        .write_event(Event::Start(BytesStart::new("param")))
+        .ok();
     write_xmlrpc_value(&mut writer, value);
     writer.write_event(Event::End(BytesEnd::new("param"))).ok();
     writer.write_event(Event::End(BytesEnd::new("params"))).ok();
-    writer.write_event(Event::End(BytesEnd::new("methodResponse"))).ok();
+    writer
+        .write_event(Event::End(BytesEnd::new("methodResponse")))
+        .ok();
 
     let result = writer.into_inner().into_inner();
     String::from_utf8(result).unwrap_or_default()
@@ -389,50 +417,87 @@ pub fn build_xmlrpc_response(value: &XmlRpcValue) -> String {
 pub fn build_xmlrpc_fault(code: i32, msg: &str) -> String {
     let mut fault = HashMap::new();
     fault.insert("faultCode".to_string(), XmlRpcValue::Int(code));
-    fault.insert("faultString".to_string(), XmlRpcValue::String(msg.to_string()));
+    fault.insert(
+        "faultString".to_string(),
+        XmlRpcValue::String(msg.to_string()),
+    );
 
     let mut writer = Writer::new(Cursor::new(Vec::new()));
 
-    writer.write_event(Event::Decl(quick_xml::events::BytesDecl::new("1.0", None, None))).ok();
-    writer.write_event(Event::Start(BytesStart::new("methodResponse"))).ok();
-    writer.write_event(Event::Start(BytesStart::new("fault"))).ok();
+    writer
+        .write_event(Event::Decl(quick_xml::events::BytesDecl::new(
+            "1.0", None, None,
+        )))
+        .ok();
+    writer
+        .write_event(Event::Start(BytesStart::new("methodResponse")))
+        .ok();
+    writer
+        .write_event(Event::Start(BytesStart::new("fault")))
+        .ok();
     write_xmlrpc_value(&mut writer, &XmlRpcValue::Struct(fault));
     writer.write_event(Event::End(BytesEnd::new("fault"))).ok();
-    writer.write_event(Event::End(BytesEnd::new("methodResponse"))).ok();
+    writer
+        .write_event(Event::End(BytesEnd::new("methodResponse")))
+        .ok();
 
     let result = writer.into_inner().into_inner();
     String::from_utf8(result).unwrap_or_default()
 }
 
 fn write_xmlrpc_value(writer: &mut Writer<Cursor<Vec<u8>>>, value: &XmlRpcValue) {
-    writer.write_event(Event::Start(BytesStart::new("value"))).ok();
+    writer
+        .write_event(Event::Start(BytesStart::new("value")))
+        .ok();
 
     match value {
         XmlRpcValue::String(s) => {
-            writer.write_event(Event::Start(BytesStart::new("string"))).ok();
+            writer
+                .write_event(Event::Start(BytesStart::new("string")))
+                .ok();
             writer.write_event(Event::Text(BytesText::new(s))).ok();
             writer.write_event(Event::End(BytesEnd::new("string"))).ok();
         }
         XmlRpcValue::Int(i) => {
-            writer.write_event(Event::Start(BytesStart::new("int"))).ok();
-            writer.write_event(Event::Text(BytesText::new(&i.to_string()))).ok();
+            writer
+                .write_event(Event::Start(BytesStart::new("int")))
+                .ok();
+            writer
+                .write_event(Event::Text(BytesText::new(&i.to_string())))
+                .ok();
             writer.write_event(Event::End(BytesEnd::new("int"))).ok();
         }
         XmlRpcValue::Bool(b) => {
-            writer.write_event(Event::Start(BytesStart::new("boolean"))).ok();
-            writer.write_event(Event::Text(BytesText::new(if *b { "1" } else { "0" }))).ok();
-            writer.write_event(Event::End(BytesEnd::new("boolean"))).ok();
+            writer
+                .write_event(Event::Start(BytesStart::new("boolean")))
+                .ok();
+            writer
+                .write_event(Event::Text(BytesText::new(if *b { "1" } else { "0" })))
+                .ok();
+            writer
+                .write_event(Event::End(BytesEnd::new("boolean")))
+                .ok();
         }
         XmlRpcValue::Double(d) => {
-            writer.write_event(Event::Start(BytesStart::new("double"))).ok();
-            writer.write_event(Event::Text(BytesText::new(&d.to_string()))).ok();
+            writer
+                .write_event(Event::Start(BytesStart::new("double")))
+                .ok();
+            writer
+                .write_event(Event::Text(BytesText::new(&d.to_string())))
+                .ok();
             writer.write_event(Event::End(BytesEnd::new("double"))).ok();
         }
         XmlRpcValue::Struct(map) => {
-            writer.write_event(Event::Start(BytesStart::new("struct"))).ok();
+            writer
+                .write_event(Event::Start(BytesStart::new("struct")))
+                .ok();
             for (key, val) in map {
-                writer.write_event(Event::Start(BytesStart::new("member"))).ok();
-                writer.write_event(Event::Start(BytesStart::new("name"))).ok();
+                writer
+                    .write_event(Event::Start(BytesStart::new("member")))
+                    .ok();
+                writer
+                    .write_event(Event::Start(BytesStart::new("name")))
+                    .ok();
                 writer.write_event(Event::Text(BytesText::new(key))).ok();
                 writer.write_event(Event::End(BytesEnd::new("name"))).ok();
                 write_xmlrpc_value(writer, val);
@@ -441,8 +506,12 @@ fn write_xmlrpc_value(writer: &mut Writer<Cursor<Vec<u8>>>, value: &XmlRpcValue)
             writer.write_event(Event::End(BytesEnd::new("struct"))).ok();
         }
         XmlRpcValue::Array(items) => {
-            writer.write_event(Event::Start(BytesStart::new("array"))).ok();
-            writer.write_event(Event::Start(BytesStart::new("data"))).ok();
+            writer
+                .write_event(Event::Start(BytesStart::new("array")))
+                .ok();
+            writer
+                .write_event(Event::Start(BytesStart::new("data")))
+                .ok();
             for item in items {
                 write_xmlrpc_value(writer, item);
             }
@@ -487,7 +556,10 @@ mod tests {
     #[test]
     fn test_build_and_parse_call() {
         let mut params_map = HashMap::new();
-        params_map.insert("region_name".to_string(), XmlRpcValue::String("Welcome".to_string()));
+        params_map.insert(
+            "region_name".to_string(),
+            XmlRpcValue::String("Welcome".to_string()),
+        );
         let params = vec![XmlRpcValue::Struct(params_map)];
 
         let xml = build_xmlrpc_call("link_region", &params);
@@ -503,15 +575,24 @@ mod tests {
     #[test]
     fn test_build_and_parse_response() {
         let mut result = HashMap::new();
-        result.insert("result".to_string(), XmlRpcValue::String("true".to_string()));
-        result.insert("uuid".to_string(), XmlRpcValue::String("00000000-0000-0000-0000-000000000001".to_string()));
+        result.insert(
+            "result".to_string(),
+            XmlRpcValue::String("true".to_string()),
+        );
+        result.insert(
+            "uuid".to_string(),
+            XmlRpcValue::String("00000000-0000-0000-0000-000000000001".to_string()),
+        );
 
         let xml = build_xmlrpc_response(&XmlRpcValue::Struct(result));
         assert!(xml.contains("methodResponse"));
 
         let parsed = parse_xmlrpc_response(&xml).unwrap();
         assert_eq!(parsed.get_str("result"), Some("true"));
-        assert_eq!(parsed.get_str("uuid"), Some("00000000-0000-0000-0000-000000000001"));
+        assert_eq!(
+            parsed.get_str("uuid"),
+            Some("00000000-0000-0000-0000-000000000001")
+        );
     }
 
     #[test]

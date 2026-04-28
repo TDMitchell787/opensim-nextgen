@@ -1,14 +1,14 @@
 //! Handles object-related messages for Second Life protocol
 
-use std::{collections::HashMap, sync::Arc};
 use anyhow::{anyhow, Result};
+use std::{collections::HashMap, sync::Arc};
 use tracing::info;
 use uuid::Uuid;
 
 use crate::{
-    network::{session::Session, llsd::LLSDValue},
-    region::RegionManager,
     asset::AssetManager,
+    network::{llsd::LLSDValue, session::Session},
+    region::RegionManager,
 };
 
 /// Represents a 3D position
@@ -31,10 +31,10 @@ pub struct Quaternion {
 /// Object types supported in the virtual world
 #[derive(Debug, Clone, PartialEq)]
 pub enum ObjectType {
-    Primitive,    // Basic geometric shapes (cube, sphere, etc.)
-    Mesh,        // Custom mesh objects
-    Attachment,  // Objects attached to avatars
-    HUD,         // Heads-up display objects
+    Primitive,  // Basic geometric shapes (cube, sphere, etc.)
+    Mesh,       // Custom mesh objects
+    Attachment, // Objects attached to avatars
+    HUD,        // Heads-up display objects
 }
 
 /// Permission flags for objects
@@ -49,9 +49,9 @@ pub struct ObjectPermissions {
 impl Default for ObjectPermissions {
     fn default() -> Self {
         Self {
-            owner_mask: 0x7FFFFFFF,  // Full permissions for owner
-            group_mask: 0x00000000,  // No group permissions
-            everyone_mask: 0x00000000, // No public permissions
+            owner_mask: 0x7FFFFFFF,      // Full permissions for owner
+            group_mask: 0x00000000,      // No group permissions
+            everyone_mask: 0x00000000,   // No public permissions
             next_owner_mask: 0x00082000, // Transfer and modify for next owner
         }
     }
@@ -70,12 +70,12 @@ pub struct SimObject {
     pub rotation: Quaternion,
     pub scale: Vector3,
     pub permissions: ObjectPermissions,
-    pub asset_id: Option<String>,  // For mesh objects
-    pub texture_ids: Vec<String>,  // Texture assets applied to faces
-    pub is_phantom: bool,          // Whether object has physics collision
-    pub is_temporary: bool,        // Whether object is temporary
-    pub created_at: u64,           // Unix timestamp
-    pub updated_at: u64,           // Unix timestamp
+    pub asset_id: Option<String>, // For mesh objects
+    pub texture_ids: Vec<String>, // Texture assets applied to faces
+    pub is_phantom: bool,         // Whether object has physics collision
+    pub is_temporary: bool,       // Whether object is temporary
+    pub created_at: u64,          // Unix timestamp
+    pub updated_at: u64,          // Unix timestamp
 }
 
 /// Handles object-related messages
@@ -102,10 +102,13 @@ impl ObjectHandler {
         let object = self.parse_object_from_llsd(object_data, &agent_id.to_string())?;
 
         // Validate object creation permissions
-        self.validate_object_creation(&object, &agent_id.to_string(), &region_manager).await?;
+        self.validate_object_creation(&object, &agent_id.to_string(), &region_manager)
+            .await?;
 
         // Create object in region
-        let object_id = region_manager.add_object(object.clone()).await
+        let object_id = region_manager
+            .add_object(object.clone())
+            .await
             .map_err(|e| anyhow!("Failed to add object to region: {}", e))?;
 
         info!("Created object {} for session {}", object_id, session_id);
@@ -114,7 +117,10 @@ impl ObjectHandler {
         let mut response = HashMap::new();
         response.insert("success".to_string(), LLSDValue::Boolean(true));
         response.insert("object_id".to_string(), LLSDValue::String(object_id));
-        response.insert("message".to_string(), LLSDValue::String("Object created successfully".to_string()));
+        response.insert(
+            "message".to_string(),
+            LLSDValue::String("Object created successfully".to_string()),
+        );
 
         Ok(LLSDValue::Map(response))
     }
@@ -132,10 +138,15 @@ impl ObjectHandler {
         let agent_id = session_guard.agent_id.clone();
         drop(session_guard);
 
-        info!("Handling object update for object {} from session {}", object_id, session_id);
+        info!(
+            "Handling object update for object {} from session {}",
+            object_id, session_id
+        );
 
         // Get existing object
-        let existing_object = region_manager.get_object(object_id).await
+        let existing_object = region_manager
+            .get_object(object_id)
+            .await
             .map_err(|e| anyhow!("Failed to get object: {}", e))?
             .ok_or_else(|| anyhow!("Object not found: {}", object_id))?;
 
@@ -148,7 +159,9 @@ impl ObjectHandler {
         let updated_object = self.apply_object_updates(existing_object, update_data)?;
 
         // Update object in region
-        region_manager.update_object(object_id, updated_object).await
+        region_manager
+            .update_object(object_id, updated_object)
+            .await
             .map_err(|e| anyhow!("Failed to update object: {}", e))?;
 
         info!("Updated object {} for session {}", object_id, session_id);
@@ -156,8 +169,14 @@ impl ObjectHandler {
         // Return success response
         let mut response = HashMap::new();
         response.insert("success".to_string(), LLSDValue::Boolean(true));
-        response.insert("object_id".to_string(), LLSDValue::String(object_id.to_string()));
-        response.insert("message".to_string(), LLSDValue::String("Object updated successfully".to_string()));
+        response.insert(
+            "object_id".to_string(),
+            LLSDValue::String(object_id.to_string()),
+        );
+        response.insert(
+            "message".to_string(),
+            LLSDValue::String("Object updated successfully".to_string()),
+        );
 
         Ok(LLSDValue::Map(response))
     }
@@ -174,10 +193,15 @@ impl ObjectHandler {
         let agent_id = session_guard.agent_id.clone();
         drop(session_guard);
 
-        info!("Handling object deletion for object {} from session {}", object_id, session_id);
+        info!(
+            "Handling object deletion for object {} from session {}",
+            object_id, session_id
+        );
 
         // Get existing object to check permissions
-        let existing_object = region_manager.get_object(object_id).await
+        let existing_object = region_manager
+            .get_object(object_id)
+            .await
             .map_err(|e| anyhow!("Failed to get object: {}", e))?
             .ok_or_else(|| anyhow!("Object not found: {}", object_id))?;
 
@@ -187,7 +211,9 @@ impl ObjectHandler {
         }
 
         // Remove object from region
-        region_manager.remove_object(object_id).await
+        region_manager
+            .remove_object(object_id)
+            .await
             .map_err(|e| anyhow!("Failed to remove object: {}", e))?;
 
         info!("Deleted object {} for session {}", object_id, session_id);
@@ -195,8 +221,14 @@ impl ObjectHandler {
         // Return success response
         let mut response = HashMap::new();
         response.insert("success".to_string(), LLSDValue::Boolean(true));
-        response.insert("object_id".to_string(), LLSDValue::String(object_id.to_string()));
-        response.insert("message".to_string(), LLSDValue::String("Object deleted successfully".to_string()));
+        response.insert(
+            "object_id".to_string(),
+            LLSDValue::String(object_id.to_string()),
+        );
+        response.insert(
+            "message".to_string(),
+            LLSDValue::String("Object deleted successfully".to_string()),
+        );
 
         Ok(LLSDValue::Map(response))
     }
@@ -212,10 +244,15 @@ impl ObjectHandler {
         let session_id = session_guard.session_id.clone();
         drop(session_guard);
 
-        info!("Handling object query for object {} from session {}", object_id, session_id);
+        info!(
+            "Handling object query for object {} from session {}",
+            object_id, session_id
+        );
 
         // Get object from region
-        let object = region_manager.get_object(object_id).await
+        let object = region_manager
+            .get_object(object_id)
+            .await
             .map_err(|e| anyhow!("Failed to get object: {}", e))?
             .ok_or_else(|| anyhow!("Object not found: {}", object_id))?;
 
@@ -252,7 +289,11 @@ impl ObjectHandler {
                 let z = self.extract_float(&arr[2])?;
                 Vector3 { x, y, z }
             }
-            _ => Vector3 { x: 128.0, y: 128.0, z: 21.0 }, // Default region center
+            _ => Vector3 {
+                x: 128.0,
+                y: 128.0,
+                z: 21.0,
+            }, // Default region center
         };
 
         // Parse rotation
@@ -264,7 +305,12 @@ impl ObjectHandler {
                 let w = self.extract_float(&arr[3])?;
                 Quaternion { x, y, z, w }
             }
-            _ => Quaternion { x: 0.0, y: 0.0, z: 0.0, w: 1.0 }, // Identity rotation
+            _ => Quaternion {
+                x: 0.0,
+                y: 0.0,
+                z: 0.0,
+                w: 1.0,
+            }, // Identity rotation
         };
 
         // Parse scale
@@ -275,7 +321,11 @@ impl ObjectHandler {
                 let z = self.extract_float(&arr[2])?;
                 Vector3 { x, y, z }
             }
-            _ => Vector3 { x: 1.0, y: 1.0, z: 1.0 }, // Default unit scale
+            _ => Vector3 {
+                x: 1.0,
+                y: 1.0,
+                z: 1.0,
+            }, // Default unit scale
         };
 
         let current_time = std::time::SystemTime::now()
@@ -315,13 +365,17 @@ impl ObjectHandler {
         // - Land permissions (does user own the land or have build rights?)
         // - Object limits (prim count, script limits, etc.)
         // - Avatar permissions (is user banned, suspended, etc.)
-        
+
         // For now, allow all object creation
         Ok(())
     }
 
     /// Applies updates to an existing object
-    fn apply_object_updates(&self, mut object: SimObject, update_data: LLSDValue) -> Result<SimObject> {
+    fn apply_object_updates(
+        &self,
+        mut object: SimObject,
+        update_data: LLSDValue,
+    ) -> Result<SimObject> {
         let map = match update_data {
             LLSDValue::Map(m) => m,
             _ => return Err(anyhow!("Update data must be a map")),
@@ -380,8 +434,14 @@ impl ObjectHandler {
 
         map.insert("id".to_string(), LLSDValue::String(object.id.clone()));
         map.insert("name".to_string(), LLSDValue::String(object.name.clone()));
-        map.insert("description".to_string(), LLSDValue::String(object.description.clone()));
-        map.insert("owner_id".to_string(), LLSDValue::String(object.owner_id.clone()));
+        map.insert(
+            "description".to_string(),
+            LLSDValue::String(object.description.clone()),
+        );
+        map.insert(
+            "owner_id".to_string(),
+            LLSDValue::String(object.owner_id.clone()),
+        );
 
         // Position array
         let position = vec![
@@ -408,10 +468,22 @@ impl ObjectHandler {
         ];
         map.insert("scale".to_string(), LLSDValue::Array(scale));
 
-        map.insert("is_phantom".to_string(), LLSDValue::Boolean(object.is_phantom));
-        map.insert("is_temporary".to_string(), LLSDValue::Boolean(object.is_temporary));
-        map.insert("created_at".to_string(), LLSDValue::Integer(object.created_at as i32));
-        map.insert("updated_at".to_string(), LLSDValue::Integer(object.updated_at as i32));
+        map.insert(
+            "is_phantom".to_string(),
+            LLSDValue::Boolean(object.is_phantom),
+        );
+        map.insert(
+            "is_temporary".to_string(),
+            LLSDValue::Boolean(object.is_temporary),
+        );
+        map.insert(
+            "created_at".to_string(),
+            LLSDValue::Integer(object.created_at as i32),
+        );
+        map.insert(
+            "updated_at".to_string(),
+            LLSDValue::Integer(object.updated_at as i32),
+        );
 
         Ok(LLSDValue::Map(map))
     }

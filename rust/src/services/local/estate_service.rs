@@ -1,10 +1,10 @@
-use std::sync::Arc;
 use anyhow::Result;
 use async_trait::async_trait;
+use std::sync::Arc;
 use tracing::{debug, warn};
 
-use crate::services::traits::{EstateServiceTrait, EstateSettings, EstateBan};
 use crate::database::DatabaseConnection;
+use crate::services::traits::{EstateBan, EstateServiceTrait, EstateSettings};
 
 pub struct LocalEstateService {
     db: Arc<DatabaseConnection>,
@@ -19,8 +19,14 @@ impl LocalEstateService {
         v != 0
     }
 
-    async fn load_estate_extras(&self, estate_id: i32, settings: &mut EstateSettings) -> Result<()> {
-        let pool = self.db.postgres_pool()
+    async fn load_estate_extras(
+        &self,
+        estate_id: i32,
+        settings: &mut EstateSettings,
+    ) -> Result<()> {
+        let pool = self
+            .db
+            .postgres_pool()
             .ok_or_else(|| anyhow::anyhow!("No PG pool"))?;
 
         let managers = sqlx::query("SELECT uuid FROM estate_managers WHERE estateid = $1")
@@ -57,7 +63,7 @@ impl LocalEstateService {
         }
 
         let bans = sqlx::query(
-            "SELECT banneduuid, bannedip, bannedipmask, bantime FROM estateban WHERE estateid = $1"
+            "SELECT banneduuid, bannedip, bannedipmask, bantime FROM estateban WHERE estateid = $1",
         )
         .bind(estate_id)
         .fetch_all(pool)
@@ -79,12 +85,20 @@ impl LocalEstateService {
         use sqlx::Row;
         EstateSettings {
             estate_id: row.try_get::<i32, _>("estateid").unwrap_or(1),
-            estate_name: row.try_get::<String, _>("estatename").unwrap_or_else(|_| "My Estate".to_string()),
-            estate_owner: row.try_get::<String, _>("estateowner").unwrap_or_else(|_| "00000000-0000-0000-0000-000000000000".to_string()),
+            estate_name: row
+                .try_get::<String, _>("estatename")
+                .unwrap_or_else(|_| "My Estate".to_string()),
+            estate_owner: row
+                .try_get::<String, _>("estateowner")
+                .unwrap_or_else(|_| "00000000-0000-0000-0000-000000000000".to_string()),
             parent_estate_id: row.try_get::<i32, _>("parentestateid").unwrap_or(0),
-            abuse_email_to_estate_owner: Self::bool_from_int(row.try_get("abuseemailtoestateowner").unwrap_or(1)),
+            abuse_email_to_estate_owner: Self::bool_from_int(
+                row.try_get("abuseemailtoestateowner").unwrap_or(1),
+            ),
             deny_anonymous: Self::bool_from_int(row.try_get("denyanonymous").unwrap_or(0)),
-            reset_home_on_teleport: Self::bool_from_int(row.try_get("resethomeonteleport").unwrap_or(0)),
+            reset_home_on_teleport: Self::bool_from_int(
+                row.try_get("resethomeonteleport").unwrap_or(0),
+            ),
             fixed_sun: Self::bool_from_int(row.try_get("fixedsun").unwrap_or(0)),
             deny_transacted: Self::bool_from_int(row.try_get("denytransacted").unwrap_or(0)),
             block_dwell: Self::bool_from_int(row.try_get("blockdwell").unwrap_or(0)),
@@ -93,19 +107,31 @@ impl LocalEstateService {
             use_global_time: Self::bool_from_int(row.try_get("useglobaltime").unwrap_or(1)),
             price_per_meter: row.try_get("pricepermeter").unwrap_or(1),
             tax_free: Self::bool_from_int(row.try_get("taxfree").unwrap_or(0)),
-            allow_direct_teleport: Self::bool_from_int(row.try_get("allowdirectteleport").unwrap_or(1)),
+            allow_direct_teleport: Self::bool_from_int(
+                row.try_get("allowdirectteleport").unwrap_or(1),
+            ),
             redirect_grid_x: row.try_get("redirectgridx").unwrap_or(0),
             redirect_grid_y: row.try_get("redirectgridy").unwrap_or(0),
-            sun_position: row.try_get::<f32, _>("sunposition").map(|v| v as f64).unwrap_or(0.0),
+            sun_position: row
+                .try_get::<f32, _>("sunposition")
+                .map(|v| v as f64)
+                .unwrap_or(0.0),
             estate_skip_scripts: Self::bool_from_int(row.try_get("estateskipscripts").unwrap_or(0)),
-            billable_factor: row.try_get::<f32, _>("billablefactor").map(|v| v as f64).unwrap_or(1.0),
+            billable_factor: row
+                .try_get::<f32, _>("billablefactor")
+                .map(|v| v as f64)
+                .unwrap_or(1.0),
             public_access: Self::bool_from_int(row.try_get("publicaccess").unwrap_or(1)),
             abuse_email: row.try_get::<String, _>("abuseemail").unwrap_or_default(),
             deny_minors: Self::bool_from_int(row.try_get("denyminors").unwrap_or(0)),
             allow_landmark: Self::bool_from_int(row.try_get("allowlandmark").unwrap_or(1)),
-            allow_parcel_changes: Self::bool_from_int(row.try_get("allowparcelchanges").unwrap_or(1)),
+            allow_parcel_changes: Self::bool_from_int(
+                row.try_get("allowparcelchanges").unwrap_or(1),
+            ),
             allow_set_home: Self::bool_from_int(row.try_get("allowsethome").unwrap_or(1)),
-            allow_environment_override: Self::bool_from_int(row.try_get("allowenviromentoverride").unwrap_or(0)),
+            allow_environment_override: Self::bool_from_int(
+                row.try_get("allowenviromentoverride").unwrap_or(0),
+            ),
             estate_managers: Vec::new(),
             estate_users: Vec::new(),
             estate_groups: Vec::new(),
@@ -116,14 +142,20 @@ impl LocalEstateService {
 
 #[async_trait]
 impl EstateServiceTrait for LocalEstateService {
-    async fn load_estate_by_region(&self, region_id: &str, create: bool) -> Result<Option<EstateSettings>> {
-        let pool = self.db.postgres_pool()
+    async fn load_estate_by_region(
+        &self,
+        region_id: &str,
+        create: bool,
+    ) -> Result<Option<EstateSettings>> {
+        let pool = self
+            .db
+            .postgres_pool()
             .ok_or_else(|| anyhow::anyhow!("No PG pool"))?;
 
         let row = sqlx::query(
             "SELECT es.* FROM estate_settings es \
              JOIN estate_map em ON es.estateid = em.estateid \
-             WHERE em.regionid = $1"
+             WHERE em.regionid = $1",
         )
         .bind(region_id)
         .fetch_optional(pool)
@@ -132,28 +164,29 @@ impl EstateServiceTrait for LocalEstateService {
         match row {
             Some(r) => {
                 let mut settings = Self::row_to_settings(&r);
-                self.load_estate_extras(settings.estate_id, &mut settings).await?;
+                self.load_estate_extras(settings.estate_id, &mut settings)
+                    .await?;
                 Ok(Some(settings))
             }
             None => {
                 if create {
-                    let default_row = sqlx::query(
-                        "SELECT * FROM estate_settings WHERE estateid = 1"
-                    )
-                    .fetch_optional(pool)
-                    .await?;
+                    let default_row =
+                        sqlx::query("SELECT * FROM estate_settings WHERE estateid = 1")
+                            .fetch_optional(pool)
+                            .await?;
 
                     if let Some(r) = default_row {
                         sqlx::query(
                             "INSERT INTO estate_map (regionid, estateid) VALUES ($1, 1) \
-                             ON CONFLICT (regionid) DO NOTHING"
+                             ON CONFLICT (regionid) DO NOTHING",
                         )
                         .bind(region_id)
                         .execute(pool)
                         .await?;
 
                         let mut settings = Self::row_to_settings(&r);
-                        self.load_estate_extras(settings.estate_id, &mut settings).await?;
+                        self.load_estate_extras(settings.estate_id, &mut settings)
+                            .await?;
                         debug!("[ESTATE] Linked region {} to default estate 1", region_id);
                         Ok(Some(settings))
                     } else {
@@ -167,7 +200,9 @@ impl EstateServiceTrait for LocalEstateService {
     }
 
     async fn load_estate_by_id(&self, estate_id: i32) -> Result<Option<EstateSettings>> {
-        let pool = self.db.postgres_pool()
+        let pool = self
+            .db
+            .postgres_pool()
             .ok_or_else(|| anyhow::anyhow!("No PG pool"))?;
 
         let row = sqlx::query("SELECT * FROM estate_settings WHERE estateid = $1")
@@ -178,7 +213,8 @@ impl EstateServiceTrait for LocalEstateService {
         match row {
             Some(r) => {
                 let mut settings = Self::row_to_settings(&r);
-                self.load_estate_extras(settings.estate_id, &mut settings).await?;
+                self.load_estate_extras(settings.estate_id, &mut settings)
+                    .await?;
                 Ok(Some(settings))
             }
             None => Ok(None),
@@ -186,10 +222,18 @@ impl EstateServiceTrait for LocalEstateService {
     }
 
     async fn store_estate_settings(&self, settings: &EstateSettings) -> Result<bool> {
-        let pool = self.db.postgres_pool()
+        let pool = self
+            .db
+            .postgres_pool()
             .ok_or_else(|| anyhow::anyhow!("No PG pool"))?;
 
-        let b = |v: bool| -> i32 { if v { 1 } else { 0 } };
+        let b = |v: bool| -> i32 {
+            if v {
+                1
+            } else {
+                0
+            }
+        };
 
         sqlx::query(
             "UPDATE estate_settings SET \
@@ -202,7 +246,7 @@ impl EstateServiceTrait for LocalEstateService {
              publicaccess = $22, abuseemail = $23, denyminors = $24, \
              allowlandmark = $25, allowparcelchanges = $26, allowsethome = $27, \
              allowenviromentoverride = $28 \
-             WHERE estateid = $1"
+             WHERE estateid = $1",
         )
         .bind(settings.estate_id)
         .bind(&settings.estate_name)
@@ -240,24 +284,31 @@ impl EstateServiceTrait for LocalEstateService {
     }
 
     async fn link_region(&self, region_id: &str, estate_id: i32) -> Result<bool> {
-        let pool = self.db.postgres_pool()
+        let pool = self
+            .db
+            .postgres_pool()
             .ok_or_else(|| anyhow::anyhow!("No PG pool"))?;
 
         sqlx::query(
             "INSERT INTO estate_map (regionid, estateid) VALUES ($1, $2) \
-             ON CONFLICT (regionid) DO UPDATE SET estateid = $2"
+             ON CONFLICT (regionid) DO UPDATE SET estateid = $2",
         )
         .bind(region_id)
         .bind(estate_id)
         .execute(pool)
         .await?;
 
-        debug!("[ESTATE] Linked region {} to estate {}", region_id, estate_id);
+        debug!(
+            "[ESTATE] Linked region {} to estate {}",
+            region_id, estate_id
+        );
         Ok(true)
     }
 
     async fn get_regions(&self, estate_id: i32) -> Result<Vec<String>> {
-        let pool = self.db.postgres_pool()
+        let pool = self
+            .db
+            .postgres_pool()
             .ok_or_else(|| anyhow::anyhow!("No PG pool"))?;
 
         let rows = sqlx::query("SELECT regionid FROM estate_map WHERE estateid = $1")
@@ -277,7 +328,9 @@ impl EstateServiceTrait for LocalEstateService {
     }
 
     async fn get_estates_by_name(&self, name: &str) -> Result<Vec<i32>> {
-        let pool = self.db.postgres_pool()
+        let pool = self
+            .db
+            .postgres_pool()
             .ok_or_else(|| anyhow::anyhow!("No PG pool"))?;
 
         let rows = sqlx::query("SELECT estateid FROM estate_settings WHERE estatename = $1")
@@ -296,7 +349,9 @@ impl EstateServiceTrait for LocalEstateService {
     }
 
     async fn get_estates_by_owner(&self, owner_id: &str) -> Result<Vec<i32>> {
-        let pool = self.db.postgres_pool()
+        let pool = self
+            .db
+            .postgres_pool()
             .ok_or_else(|| anyhow::anyhow!("No PG pool"))?;
 
         let rows = sqlx::query("SELECT estateid FROM estate_settings WHERE estateowner = $1")
@@ -315,7 +370,9 @@ impl EstateServiceTrait for LocalEstateService {
     }
 
     async fn get_estates_all(&self) -> Result<Vec<i32>> {
-        let pool = self.db.postgres_pool()
+        let pool = self
+            .db
+            .postgres_pool()
             .ok_or_else(|| anyhow::anyhow!("No PG pool"))?;
 
         let rows = sqlx::query("SELECT estateid FROM estate_settings ORDER BY estateid")

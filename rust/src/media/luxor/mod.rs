@@ -1,26 +1,26 @@
 pub mod camera;
-pub mod lighting;
-pub mod scene_capture;
 pub mod geometry;
-pub mod shading;
-pub mod raytracer;
-pub mod post_process;
-pub mod video;
-pub mod hud_protocol;
 pub mod gpu;
+pub mod hud_protocol;
+pub mod lighting;
+pub mod post_process;
+pub mod raytracer;
+pub mod scene_capture;
+pub mod shading;
+pub mod video;
 
+use anyhow::{anyhow, Result};
+use serde::{Deserialize, Serialize};
 use std::path::PathBuf;
 use std::sync::Arc;
-use anyhow::{Result, anyhow};
-use uuid::Uuid;
-use serde::{Serialize, Deserialize};
 use tracing::{info, warn};
+use uuid::Uuid;
 
-use camera::{CameraRig, CameraPreset};
-use lighting::{LightingRig, LightingPreset};
-use raytracer::{RenderQuality, LuxorRaytracer};
+use camera::{CameraPreset, CameraRig};
+use lighting::{LightingPreset, LightingRig};
 use post_process::PostEffect;
-use scene_capture::{SceneGeometry, CapturedPrim};
+use raytracer::{LuxorRaytracer, RenderQuality};
+use scene_capture::{CapturedPrim, SceneGeometry};
 use video::VideoJob;
 
 pub const LUXOR_CHANNEL: i32 = -15500;
@@ -77,7 +77,9 @@ impl ScreenSize {
             "banner" | "header" | "32x9" => Some(ScreenSize::Banner),
             _ => {
                 if let Some((w_str, h_str)) = name.split_once('x') {
-                    if let (Ok(w), Ok(h)) = (w_str.trim().parse::<u32>(), h_str.trim().parse::<u32>()) {
+                    if let (Ok(w), Ok(h)) =
+                        (w_str.trim().parse::<u32>(), h_str.trim().parse::<u32>())
+                    {
                         if w > 0 && h > 0 && w <= 7680 && h <= 7680 {
                             return Some(ScreenSize::Custom(w, h));
                         }
@@ -248,7 +250,9 @@ impl LuxorDirector {
         height: u32,
     ) -> Vec<u8> {
         self.render_pixels_gpu(scene, camera, lighting, quality, width, height)
-            .unwrap_or_else(|| self.render_pixels_cpu(scene, camera, lighting, quality, width, height))
+            .unwrap_or_else(|| {
+                self.render_pixels_cpu(scene, camera, lighting, quality, width, height)
+            })
     }
 
     pub fn render_snapshot(
@@ -259,13 +263,23 @@ impl LuxorDirector {
         self.ensure_directories()?;
 
         let (width, height) = request.output.size.resolution();
-        let backend = if self.gpu_renderer.is_some() { "GPU" } else { "CPU" };
-        info!("[LUXOR] Rendering snapshot '{}' at {}x{} ({:?}) via {}",
-            request.name, width, height, request.output.quality, backend);
+        let backend = if self.gpu_renderer.is_some() {
+            "GPU"
+        } else {
+            "CPU"
+        };
+        info!(
+            "[LUXOR] Rendering snapshot '{}' at {}x{} ({:?}) via {}",
+            request.name, width, height, request.output.quality, backend
+        );
 
         let mut img = self.render_pixels(
-            scene, &request.camera, &request.lighting,
-            request.output.quality, width, height,
+            scene,
+            &request.camera,
+            &request.lighting,
+            request.output.quality,
+            width,
+            height,
         );
 
         for effect in &request.output.effects {
@@ -277,9 +291,8 @@ impl LuxorDirector {
         let filename = format!("luxor_{}_{}.{}", request.name, timestamp, ext);
         let output_path = self.output_base.join("images").join(&filename);
 
-        let img_buf = image::ImageBuffer::<image::Rgba<u8>, Vec<u8>>::from_raw(
-            width, height, img,
-        ).ok_or_else(|| anyhow!("Failed to create image buffer"))?;
+        let img_buf = image::ImageBuffer::<image::Rgba<u8>, Vec<u8>>::from_raw(width, height, img)
+            .ok_or_else(|| anyhow!("Failed to create image buffer"))?;
 
         match request.output.format {
             OutputFormat::Png => img_buf.save_with_format(&output_path, image::ImageFormat::Png)?,
@@ -290,8 +303,13 @@ impl LuxorDirector {
             OutputFormat::Bmp => img_buf.save_with_format(&output_path, image::ImageFormat::Bmp)?,
         }
 
-        info!("[LUXOR] Snapshot saved: {} ({} bytes)", output_path.display(),
-            std::fs::metadata(&output_path).map(|m| m.len()).unwrap_or(0));
+        info!(
+            "[LUXOR] Snapshot saved: {} ({} bytes)",
+            output_path.display(),
+            std::fs::metadata(&output_path)
+                .map(|m| m.len())
+                .unwrap_or(0)
+        );
 
         Ok(output_path)
     }
@@ -308,17 +326,21 @@ impl LuxorDirector {
 
         for (frame_idx, cam) in interpolated_cameras.iter().enumerate() {
             let mut img = self.render_pixels(
-                scene, cam, &request.lighting,
-                request.output.quality, width, height,
+                scene,
+                cam,
+                &request.lighting,
+                request.output.quality,
+                width,
+                height,
             );
 
             for effect in &request.output.effects {
                 post_process::apply_effect(&mut img, effect, width, height);
             }
 
-            let img_buf = image::ImageBuffer::<image::Rgba<u8>, Vec<u8>>::from_raw(
-                width, height, img,
-            ).ok_or_else(|| anyhow!("Failed to create frame buffer"))?;
+            let img_buf =
+                image::ImageBuffer::<image::Rgba<u8>, Vec<u8>>::from_raw(width, height, img)
+                    .ok_or_else(|| anyhow!("Failed to create frame buffer"))?;
 
             let frame_path = frames_dir.join(format!("frame_{:04}.png", frame_idx));
             img_buf.save_with_format(&frame_path, image::ImageFormat::Png)?;
@@ -341,12 +363,20 @@ impl LuxorDirector {
         let fps = request.job.fps;
         let total_frames = request.job.total_frames();
 
-        let backend = if self.gpu_renderer.is_some() { "GPU" } else { "CPU" };
-        info!("[LUXOR] Rendering video '{}' — {} frames at {}x{} {}fps ({:?}) via {}",
-            request.name, total_frames, width, height, fps, request.output.quality, backend);
+        let backend = if self.gpu_renderer.is_some() {
+            "GPU"
+        } else {
+            "CPU"
+        };
+        info!(
+            "[LUXOR] Rendering video '{}' — {} frames at {}x{} {}fps ({:?}) via {}",
+            request.name, total_frames, width, height, fps, request.output.quality, backend
+        );
 
         let timestamp = chrono::Local::now().format("%Y%m%d_%H%M%S");
-        let frames_dir = self.output_base.join("temp")
+        let frames_dir = self
+            .output_base
+            .join("temp")
             .join(format!("luxor_frames_{}", timestamp));
         std::fs::create_dir_all(&frames_dir)?;
 
@@ -356,24 +386,25 @@ impl LuxorDirector {
         let frames_dir_clone = frames_dir.clone();
         tokio::task::spawn_blocking(move || {
             director.render_video_frames(&scene_clone, &request_clone, &frames_dir_clone)
-        }).await.map_err(|e| anyhow!("Frame render task panicked: {}", e))??;
+        })
+        .await
+        .map_err(|e| anyhow!("Frame render task panicked: {}", e))??;
 
         let video_filename = format!("luxor_{}_{}.mp4", request.name, timestamp);
         let video_path = self.output_base.join("video").join(&video_filename);
 
-        crate::media::encoder::encode_video(
-            &self.ffmpeg_path,
-            &frames_dir,
-            &video_path,
-            fps,
-        ).await?;
+        crate::media::encoder::encode_video(&self.ffmpeg_path, &frames_dir, &video_path, fps)
+            .await?;
 
         if let Err(e) = std::fs::remove_dir_all(&frames_dir) {
             warn!("[LUXOR] Failed to clean temp frames: {}", e);
         }
 
-        info!("[LUXOR] Video saved: {} ({} bytes)", video_path.display(),
-            std::fs::metadata(&video_path).map(|m| m.len()).unwrap_or(0));
+        info!(
+            "[LUXOR] Video saved: {} ({} bytes)",
+            video_path.display(),
+            std::fs::metadata(&video_path).map(|m| m.len()).unwrap_or(0)
+        );
 
         Ok(video_path)
     }
@@ -397,14 +428,17 @@ mod tests {
         assert_eq!(ScreenSize::from_name("4k"), Some(ScreenSize::UHD4K));
         assert_eq!(ScreenSize::from_name("1080p"), Some(ScreenSize::FullHD));
         assert_eq!(ScreenSize::from_name("square"), Some(ScreenSize::Square));
-        assert_eq!(ScreenSize::from_name("800x600"), Some(ScreenSize::Custom(800, 600)));
+        assert_eq!(
+            ScreenSize::from_name("800x600"),
+            Some(ScreenSize::Custom(800, 600))
+        );
         assert_eq!(ScreenSize::from_name("invalid"), None);
     }
 
     #[test]
     fn test_aspect_ratios() {
         let ratio_16_9 = ScreenSize::FullHD.aspect_ratio();
-        assert!((ratio_16_9 - 16.0/9.0).abs() < 0.01);
+        assert!((ratio_16_9 - 16.0 / 9.0).abs() < 0.01);
 
         let ratio_1_1 = ScreenSize::Square.aspect_ratio();
         assert!((ratio_1_1 - 1.0).abs() < 0.01);

@@ -1,7 +1,7 @@
-use uuid::Uuid;
-use bytes::{Bytes, Buf};
-use anyhow::{Result, anyhow};
+use anyhow::{anyhow, Result};
+use bytes::{Buf, Bytes};
 use tracing::debug;
+use uuid::Uuid;
 
 #[derive(Debug, Clone)]
 pub struct UseCircuitCodeMessage {
@@ -12,10 +12,17 @@ pub struct UseCircuitCodeMessage {
 
 impl UseCircuitCodeMessage {
     pub fn parse(data: &Bytes) -> Result<Self> {
-        debug!("UseCircuitCode packet data ({} bytes): {:02x?}", data.len(), &data[..data.len().min(50)]);
+        debug!(
+            "UseCircuitCode packet data ({} bytes): {:02x?}",
+            data.len(),
+            &data[..data.len().min(50)]
+        );
 
         if data.len() < 36 {
-            return Err(anyhow!("UseCircuitCode message too short: {} bytes (expected 36)", data.len()));
+            return Err(anyhow!(
+                "UseCircuitCode message too short: {} bytes (expected 36)",
+                data.len()
+            ));
         }
 
         let mut cursor = std::io::Cursor::new(data);
@@ -70,7 +77,7 @@ impl UseCircuitCodeMessage {
 
         Uuid::from_bytes(reordered)
     }
-    
+
     pub fn serialize(&self) -> Vec<u8> {
         let mut data = Vec::with_capacity(36);
 
@@ -120,22 +127,22 @@ mod tests {
         let agent_id = Uuid::new_v4();
         let session_id = Uuid::new_v4();
         let circuit_code = 12345u32;
-        
+
         let original = UseCircuitCodeMessage {
             agent_id,
             session_id,
             circuit_code,
         };
-        
+
         let serialized = original.serialize();
         let data = Bytes::from(serialized);
         let parsed = UseCircuitCodeMessage::parse(&data).unwrap();
-        
+
         assert_eq!(parsed.agent_id, agent_id);
         assert_eq!(parsed.session_id, session_id);
         assert_eq!(parsed.circuit_code, circuit_code);
     }
-    
+
     #[test]
     fn test_use_circuit_code_short_data() {
         let data = Bytes::from(vec![1, 2, 3]); // Too short

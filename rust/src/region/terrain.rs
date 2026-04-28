@@ -3,10 +3,10 @@
 //! This module handles the creation, modification, and serialization
 //! of terrain data for OpenSim regions.
 
-use std::sync::Arc;
-use tokio::sync::RwLock;
 use crate::ffi::physics::PhysicsBridge;
 use anyhow::Result;
+use std::sync::Arc;
+use tokio::sync::RwLock;
 
 /// Terrain configuration
 #[derive(Debug, Clone, serde::Serialize, serde::Deserialize)]
@@ -38,9 +38,7 @@ pub enum TerrainGeneration {
         lacunarity: f32,
     },
     /// Heightmap from file
-    Heightmap {
-        file_path: String,
-    },
+    Heightmap { file_path: String },
     /// Custom terrain function
     Custom {
         generator: String, // Function name or script
@@ -146,7 +144,7 @@ impl TerrainManager {
     pub fn new(config: TerrainConfig, physics_bridge: Arc<PhysicsBridge>) -> Self {
         let height_count = config.width_samples * config.height_samples;
         let heights = vec![config.base_height; height_count];
-        
+
         Self {
             config,
             heights: RwLock::new(heights),
@@ -170,10 +168,22 @@ impl TerrainManager {
         };
 
         // Apply noise generation
-        self.apply_noise(&mut heights, &region, self.config.noise.amplitude, self.config.noise.frequency, self.config.width_samples)?;
+        self.apply_noise(
+            &mut heights,
+            &region,
+            self.config.noise.amplitude,
+            self.config.noise.frequency,
+            self.config.width_samples,
+        )?;
 
         // Apply smoothing
-        self.apply_smoothing(&mut heights, &region, self.config.smoothing.radius, self.config.smoothing.strength, self.config.width_samples)?;
+        self.apply_smoothing(
+            &mut heights,
+            &region,
+            self.config.smoothing.radius,
+            self.config.smoothing.strength,
+            self.config.width_samples,
+        )?;
 
         // Update statistics
         let mut stats = self.stats.write().await;
@@ -198,10 +208,25 @@ impl TerrainManager {
                 self.apply_lower(&mut heights, region, amount)?;
             }
             TerrainOperation::Smooth { radius, strength } => {
-                self.apply_smoothing(&mut heights, region, radius, strength, self.config.width_samples)?;
+                self.apply_smoothing(
+                    &mut heights,
+                    region,
+                    radius,
+                    strength,
+                    self.config.width_samples,
+                )?;
             }
-            TerrainOperation::Noise { amplitude, frequency } => {
-                self.apply_noise(&mut heights, region, amplitude, frequency, self.config.width_samples)?;
+            TerrainOperation::Noise {
+                amplitude,
+                frequency,
+            } => {
+                self.apply_noise(
+                    &mut heights,
+                    region,
+                    amplitude,
+                    frequency,
+                    self.config.width_samples,
+                )?;
             }
         }
 
@@ -215,10 +240,10 @@ impl TerrainManager {
     /// Get height at a specific position
     pub async fn get_height(&self, x: f32, z: f32) -> Result<f32, TerrainError> {
         let heights = self.heights.read().await;
-        
+
         let x_sample = ((x / self.config.scale) * (self.config.width_samples - 1) as f32) as usize;
         let z_sample = ((z / self.config.scale) * (self.config.height_samples - 1) as f32) as usize;
-        
+
         if x_sample >= self.config.width_samples || z_sample >= self.config.height_samples {
             return Err(TerrainError::PositionOutOfBounds { x, z });
         }
@@ -290,8 +315,11 @@ impl TerrainManager {
                         let nx = x as i32 + dx;
                         let ny = y as i32 + dy;
 
-                        if nx >= 0 && nx < self.config.width_samples as i32 &&
-                           ny >= 0 && ny < self.config.height_samples as i32 {
+                        if nx >= 0
+                            && nx < self.config.width_samples as i32
+                            && ny >= 0
+                            && ny < self.config.height_samples as i32
+                        {
                             let index = (ny as usize) * self.config.width_samples + (nx as usize);
                             sum += heights[index];
                             count += 1;
@@ -324,10 +352,10 @@ impl TerrainManager {
             for x in region.x..(region.x + region.width) {
                 let x_float = x as f32 * frequency;
                 let z_float = y as f32 * frequency;
-                
+
                 let noise_value = self.simple_noise(x_float, z_float);
                 let index = (y as usize) * self.config.width_samples + (x as usize);
-                
+
                 if index < heights.len() {
                     heights[index] += noise_value * amplitude;
                 }
@@ -340,21 +368,23 @@ impl TerrainManager {
     fn simple_noise(&self, x: f32, z: f32) -> f32 {
         let x_int = x as u32;
         let z_int = z as u32;
-        
+
         // Fix the bitwise XOR operations by using consistent u32 types
         let h10 = ((x_int + 1) * 73856093_u32 ^ (z_int * 19349663_u32)).wrapping_rem(10000) as f32;
-        let h01 = ((x_int * 73856093_u32) ^ ((z_int + 1) * 19349663_u32)).wrapping_rem(10000) as f32;
-        let h11 = (((x_int + 1) * 73856093_u32) ^ ((z_int + 1) * 19349663_u32)).wrapping_rem(10000) as f32;
-        
+        let h01 =
+            ((x_int * 73856093_u32) ^ ((z_int + 1) * 19349663_u32)).wrapping_rem(10000) as f32;
+        let h11 = (((x_int + 1) * 73856093_u32) ^ ((z_int + 1) * 19349663_u32)).wrapping_rem(10000)
+            as f32;
+
         let fx = x - x_int as f32;
         let fz = z - z_int as f32;
-        
+
         let h00 = 0.0;
-        
+
         // Bilinear interpolation
         let h0 = h00 * (1.0 - fx) + h10 * fx;
         let h1 = h01 * (1.0 - fx) + h11 * fx;
-        
+
         h0 * (1.0 - fz) + h1 * fz
     }
 }
@@ -377,13 +407,13 @@ pub enum TerrainOperation {
 pub enum TerrainError {
     #[error("Position out of bounds: x={x}, z={z}")]
     PositionOutOfBounds { x: f32, z: f32 },
-    
+
     #[error("Invalid region: {0}")]
     InvalidRegion(String),
-    
+
     #[error("File I/O error: {0}")]
     FileError(#[from] std::io::Error),
-    
+
     #[error("Internal error: {0}")]
     Internal(String),
 }
@@ -397,7 +427,7 @@ mod tests {
         let config = TerrainConfig::default();
         let physics_bridge = Arc::new(crate::ffi::physics::PhysicsBridge::new().unwrap());
         let terrain = TerrainManager::new(config, physics_bridge);
-        
+
         let stats = terrain.get_stats().await;
         assert_eq!(stats.height_samples, 256 * 256);
     }
@@ -407,9 +437,9 @@ mod tests {
         let config = TerrainConfig::default();
         let physics_bridge = Arc::new(crate::ffi::physics::PhysicsBridge::new().unwrap());
         let terrain = TerrainManager::new(config, physics_bridge);
-        
+
         terrain.generate_terrain().await.unwrap();
-        
+
         let height = terrain.get_height(0.0, 0.0).await.unwrap();
         assert!(height >= 0.0);
     }
@@ -419,20 +449,20 @@ mod tests {
         let config = TerrainConfig::default();
         let physics_bridge = Arc::new(crate::ffi::physics::PhysicsBridge::new().unwrap());
         let terrain = TerrainManager::new(config, physics_bridge);
-        
+
         terrain.generate_terrain().await.unwrap();
-        
+
         let region = TerrainRegion {
             x: 0,
             y: 0,
             width: 10,
             height: 10,
         };
-        
+
         let operation = TerrainOperation::Raise { amount: 5.0 };
         terrain.modify_terrain(&region, operation).await.unwrap();
-        
+
         let height = terrain.get_height(5.0, 5.0).await.unwrap();
         assert!(height > 0.0);
     }
-} 
+}

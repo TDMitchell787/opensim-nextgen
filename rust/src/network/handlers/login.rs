@@ -1,82 +1,82 @@
 //! Login sequence handlers for Second Life viewer protocol
-//! 
+//!
 //! This module implements the complete login flow including:
 //! - Login request validation
-//! - User authentication 
+//! - User authentication
 //! - Session establishment
 //! - Avatar creation and placement
 //! - Login response generation
 
+use anyhow::{anyhow, Result};
+use chrono::{DateTime, Utc};
+use rand;
+use serde::{Deserialize, Serialize};
 use std::sync::Arc;
 use tokio::sync::RwLock;
+use tracing::{debug, error, info, warn};
 use uuid::Uuid;
-use serde::{Deserialize, Serialize};
-use tracing::{info, warn, error, debug};
-use anyhow::{Result, anyhow};
-use chrono::{Utc, DateTime};
-use rand;
 
 use crate::{
+    asset::AssetManager,
+    database::user_accounts::{UserAccount, UserAccountDatabase},
+    login_state::{LoginError, LoginState, LoginStateMachine, LoginStateManager},
     network::{
         llsd::LLSDValue,
-        session::{Session, SessionManager},
         security::SecurityManager,
+        session::{Session, SessionManager},
     },
     region::{
+        avatar::{appearance::Appearance, Avatar},
         RegionManager,
-        avatar::{Avatar, appearance::Appearance},
     },
     state::StateManager,
-    asset::AssetManager,
-    database::user_accounts::{UserAccountDatabase, UserAccount},
-    login_state::{LoginState, LoginStateMachine, LoginStateManager, LoginError},
 };
 use sqlx::Row;
 
 /// Login request message from viewer (Second Life viewer protocol compliant)
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct LoginRequest {
-    pub method: String,           // "login_to_simulator"
-    pub first: String,            // First name
-    pub last: String,             // Last name
-    pub passwd: String,           // Password hash ($1$ MD5 hash or plaintext)
-    pub start: String,            // Start location ("home", "last", or region name)
-    pub channel: String,          // Viewer channel (e.g., "Second Life Release")
-    pub version: String,          // Viewer version (e.g., "6.4.21.550742")
-    pub platform: String,         // Platform (Windows, Mac, Linux)
-    pub mac: String,              // MAC address (often empty in modern viewers)
-    pub id0: String,              // Hardware ID (machine identifier)
-    pub agree_to_tos: bool,       // Terms of Service agreement
-    pub read_critical: bool,      // Critical message acknowledgment
-    pub viewer_digest: String,    // Viewer hash for verification
-    pub options: Vec<String>,     // Login options (e.g., ["inventory-root", "inventory-skeleton"])
-    
+    pub method: String,        // "login_to_simulator"
+    pub first: String,         // First name
+    pub last: String,          // Last name
+    pub passwd: String,        // Password hash ($1$ MD5 hash or plaintext)
+    pub start: String,         // Start location ("home", "last", or region name)
+    pub channel: String,       // Viewer channel (e.g., "Second Life Release")
+    pub version: String,       // Viewer version (e.g., "6.4.21.550742")
+    pub platform: String,      // Platform (Windows, Mac, Linux)
+    pub mac: String,           // MAC address (often empty in modern viewers)
+    pub id0: String,           // Hardware ID (machine identifier)
+    pub agree_to_tos: bool,    // Terms of Service agreement
+    pub read_critical: bool,   // Critical message acknowledgment
+    pub viewer_digest: String, // Viewer hash for verification
+    pub options: Vec<String>,  // Login options (e.g., ["inventory-root", "inventory-skeleton"])
+
     // Additional SL viewer protocol fields
-    pub address_size: Option<u32>,     // Address size (32/64 bit)
-    pub extended_errors: Option<bool>, // Request extended error information
-    pub host_id: Option<String>,       // Host identifier
-    pub mfa_hash: Option<String>,      // Multi-factor authentication hash
-    pub token: Option<String>,         // Authentication token
-    pub request_creds: Option<bool>,   // Request credentials in response
-    pub skipoptional: Option<bool>,    // Skip optional login data
+    pub address_size: Option<u32>,      // Address size (32/64 bit)
+    pub extended_errors: Option<bool>,  // Request extended error information
+    pub host_id: Option<String>,        // Host identifier
+    pub mfa_hash: Option<String>,       // Multi-factor authentication hash
+    pub token: Option<String>,          // Authentication token
+    pub request_creds: Option<bool>,    // Request credentials in response
+    pub skipoptional: Option<bool>,     // Skip optional login data
     pub inventory_host: Option<String>, // Inventory service host
-    pub want_to_login: Option<bool>,   // Explicit login intent
+    pub want_to_login: Option<bool>,    // Explicit login intent
 }
 
 /// Login response message to viewer (Second Life viewer protocol compliant)
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct LoginResponse {
-    pub login: String,            // "true" or "false"
-    pub message: String,          // Login message or error
-    pub reason: String,           // Success reason or error details
-    
+    pub login: String,   // "true" or "false"
+    pub message: String, // Login message or error
+    pub reason: String,  // Success reason or error details
+
     // Session information (only if successful)
     pub session_id: Option<Uuid>,
     pub secure_session_id: Option<Uuid>,
     pub agent_id: Option<Uuid>,
     pub first_name: Option<String>,
     pub last_name: Option<String>,
-    
+
     // Region information (only if successful)
     pub sim_ip: Option<String>,
     pub sim_port: Option<u16>,
@@ -84,19 +84,19 @@ pub struct LoginResponse {
     pub region_y: Option<u32>,
     pub region_size_x: Option<u32>,
     pub region_size_y: Option<u32>,
-    
+
     // Avatar information (only if successful)
     pub look_at: Option<[f32; 3]>,
-    pub agent_access: Option<String>,        // "M", "PG", "A" (Mature, PG, Adult)
-    pub agent_access_max: Option<String>,    // Maximum access level
+    pub agent_access: Option<String>, // "M", "PG", "A" (Mature, PG, Adult)
+    pub agent_access_max: Option<String>, // Maximum access level
     pub start_location: Option<String>,
-    
+
     // Inventory and assets (only if successful)
     pub inventory_root: Option<Vec<InventoryFolder>>,
     pub inventory_skeleton: Option<Vec<InventoryItem>>,
     pub inventory_lib_root: Option<Vec<InventoryFolder>>,
     pub inventory_lib_owner: Option<Vec<InventoryItem>>,
-    
+
     // Additional login data
     pub login_flags: Option<Vec<LoginFlag>>,
     pub global_textures: Option<Vec<GlobalTexture>>,
@@ -112,14 +112,14 @@ pub struct LoginResponse {
     pub gendered: Option<String>,
     pub ever_logged_in: Option<String>,
     pub seconds_since_epoch: Option<u64>,
-    
+
     // Additional SL viewer protocol fields
-    pub circuit_code: Option<u32>,           // Circuit code for UDP messaging
-    pub sim_port_udp: Option<u16>,           // UDP port for region connection
-    pub inventory_host: Option<String>,      // Inventory service host
-    pub seed_capability: Option<String>,     // Seed capability URL
+    pub circuit_code: Option<u32>, // Circuit code for UDP messaging
+    pub sim_port_udp: Option<u16>, // UDP port for region connection
+    pub inventory_host: Option<String>, // Inventory service host
+    pub seed_capability: Option<String>, // Seed capability URL
     pub capabilities: Option<Vec<Capability>>, // Service capabilities
-    pub home: Option<HomeLocation>,          // Home location information
+    pub home: Option<HomeLocation>, // Home location information
     pub buddy_list: Option<Vec<BuddyListEntry>>, // Friends list
     pub gestures: Option<Vec<GestureEntry>>, // Active gestures
     pub region_info: Option<RegionLoginInfo>, // Detailed region information
@@ -314,51 +314,53 @@ impl LoginHandler {
             login_state_manager: Arc::new(RwLock::new(LoginStateManager::new())),
         }
     }
-    
+
     /// Processes a login request and returns a login response
     pub async fn handle_login_request(
         &self,
         request: LoginRequest,
         client_ip: std::net::SocketAddr,
     ) -> Result<LoginResponse> {
-        info!("Processing login request for user: {} {} from {}", 
-              request.first, request.last, client_ip);
-        
+        info!(
+            "Processing login request for user: {} {} from {}",
+            request.first, request.last, client_ip
+        );
+
         // Create new login session with state machine
         let session_id = Uuid::new_v4();
         let mut state_machine = {
             let mut state_manager = self.login_state_manager.write().await;
             state_manager.create_session(session_id).clone()
         };
-        
+
         // Transition to login authentication state
         if let Err(e) = state_machine.transition_to(LoginState::LoginAuthInit) {
             error!("Failed to transition to LoginAuthInit state: {}", e);
             return Ok(self.create_error_response(
                 "Login failed",
-                "Internal server error during login initialization"
+                "Internal server error during login initialization",
             ));
         }
-        
+
         // Validate request format
         if let Err(e) = self.validate_login_request(&request).await {
             warn!("Login request validation failed: {}", e);
-            state_machine.transition_to(LoginState::Failed(LoginError::InvalidCredentials)).ok();
-            return Ok(self.create_error_response(
-                "Login failed",
-                &format!("Invalid login request: {}", e)
-            ));
+            state_machine
+                .transition_to(LoginState::Failed(LoginError::InvalidCredentials))
+                .ok();
+            return Ok(self
+                .create_error_response("Login failed", &format!("Invalid login request: {}", e)));
         }
-        
+
         // Transition to XML-RPC login state
         if let Err(e) = state_machine.transition_to(LoginState::XmlrpcLogin) {
             error!("Failed to transition to XmlrpcLogin state: {}", e);
             return Ok(self.create_error_response(
                 "Login failed",
-                "Internal server error during login processing"
+                "Internal server error during login processing",
             ));
         }
-        
+
         // Authenticate user
         let user_account = match self.authenticate_user(&request).await {
             Ok(account) => {
@@ -367,74 +369,92 @@ impl LoginHandler {
                     error!("Failed to transition to LoginProcessResponse state: {}", e);
                     return Ok(self.create_error_response(
                         "Login failed",
-                        "Internal server error during authentication processing"
+                        "Internal server error during authentication processing",
                     ));
                 }
                 account
-            },
+            }
             Err(e) => {
-                warn!("Authentication failed for {} {}: {}", request.first, request.last, e);
-                state_machine.transition_to(LoginState::Failed(LoginError::XmlrpcAuthFailed(e.to_string()))).ok();
+                warn!(
+                    "Authentication failed for {} {}: {}",
+                    request.first, request.last, e
+                );
+                state_machine
+                    .transition_to(LoginState::Failed(LoginError::XmlrpcAuthFailed(
+                        e.to_string(),
+                    )))
+                    .ok();
                 return Ok(self.create_error_response(
-                    "Login failed", 
-                    "Authentication failed. Please check your username and password."
+                    "Login failed",
+                    "Authentication failed. Please check your username and password.",
                 ));
             }
         };
-        
+
         // Check for existing session
-        if self.session_manager.has_active_session(&user_account.id.to_string()).await {
-            warn!("User {} {} already has an active session", request.first, request.last);
-            state_machine.transition_to(LoginState::Failed(LoginError::NetworkFailed("Already logged in".to_string()))).ok();
+        if self
+            .session_manager
+            .has_active_session(&user_account.id.to_string())
+            .await
+        {
+            warn!(
+                "User {} {} already has an active session",
+                request.first, request.last
+            );
+            state_machine
+                .transition_to(LoginState::Failed(LoginError::NetworkFailed(
+                    "Already logged in".to_string(),
+                )))
+                .ok();
             return Ok(self.create_error_response(
                 "Login failed",
-                "You are already logged in. Please try again in a few moments."
+                "You are already logged in. Please try again in a few moments.",
             ));
         }
-        
+
         // Transition to world initialization
         if let Err(e) = state_machine.transition_to(LoginState::WorldInit) {
             error!("Failed to transition to WorldInit state: {}", e);
             return Ok(self.create_error_response(
                 "Login failed",
-                "Internal server error during world initialization"
+                "Internal server error during world initialization",
             ));
         }
-        
+
         // Create new session
-        let (session_id_actual, secure_session_id) = self.create_user_session(
-            &user_account,
-            &request,
-            client_ip
-        ).await?;
-        
+        let (session_id_actual, secure_session_id) = self
+            .create_user_session(&user_account, &request, client_ip)
+            .await?;
+
         // Set agent ID in state machine
         state_machine.set_agent_id(user_account.id);
-        
+
         // Find appropriate region for login
         let region_info = self.determine_login_region(&request, &user_account).await?;
-        
+
         // Transition to agent send state
         if let Err(e) = state_machine.transition_to(LoginState::AgentSend) {
             error!("Failed to transition to AgentSend state: {}", e);
             return Ok(self.create_error_response(
                 "Login failed",
-                "Internal server error during agent initialization"
+                "Internal server error during agent initialization",
             ));
         }
-        
+
         // Create or load avatar
-        let avatar = self.create_or_load_avatar(&user_account, &region_info).await?;
-        
+        let avatar = self
+            .create_or_load_avatar(&user_account, &region_info)
+            .await?;
+
         // Transition to started state
         if let Err(e) = state_machine.transition_to(LoginState::Started) {
             error!("Failed to transition to Started state: {}", e);
             return Ok(self.create_error_response(
                 "Login failed",
-                "Internal server error during login completion"
+                "Internal server error during login completion",
             ));
         }
-        
+
         // Update state manager with completed session
         {
             let mut state_manager = self.login_state_manager.write().await;
@@ -442,60 +462,71 @@ impl LoginHandler {
                 *stored_state = state_machine.clone();
             }
         }
-        
+
         // Generate circuit code once for this login session
         let circuit_code = rand::random::<u32>();
-        info!("🎯 Generated coordinated circuit code: {} for user: {} {}", circuit_code, user_account.first_name, user_account.last_name);
-        
+        info!(
+            "🎯 Generated coordinated circuit code: {} for user: {} {}",
+            circuit_code, user_account.first_name, user_account.last_name
+        );
+
         // Generate successful login response
-        let response = self.create_success_response(
-            &user_account,
-            session_id_actual,
-            secure_session_id,
-            &region_info,
-            &avatar,
-            &request,
-            circuit_code
-        ).await?;
-        
-        info!("Login successful for user: {} {} (Agent: {})", 
-              request.first, request.last, user_account.id);
-        
+        let response = self
+            .create_success_response(
+                &user_account,
+                session_id_actual,
+                secure_session_id,
+                &region_info,
+                &avatar,
+                &request,
+                circuit_code,
+            )
+            .await?;
+
+        info!(
+            "Login successful for user: {} {} (Agent: {})",
+            request.first, request.last, user_account.id
+        );
+
         Ok(response)
     }
-    
+
     /// Validates the login request format and required fields
     async fn validate_login_request(&self, request: &LoginRequest) -> Result<()> {
         if request.method != "login_to_simulator" {
             return Err(anyhow!("Invalid login method: {}", request.method));
         }
-        
+
         if request.first.trim().is_empty() || request.last.trim().is_empty() {
             return Err(anyhow!("First and last names are required"));
         }
-        
+
         if request.passwd.is_empty() {
             return Err(anyhow!("Password is required"));
         }
-        
+
         if !request.agree_to_tos {
             return Err(anyhow!("You must agree to the Terms of Service"));
         }
-        
+
         // Validate viewer information
         if request.channel.is_empty() || request.version.is_empty() {
             return Err(anyhow!("Viewer information is required"));
         }
-        
+
         Ok(())
     }
-    
+
     /// Authenticates user credentials against the database
     async fn authenticate_user(&self, request: &LoginRequest) -> Result<UserAccount> {
         let username = format!("{} {}", request.first, request.last);
-        
+
         // EADS: Use OpenSim-compatible authentication with PostgreSQL
-        match self.user_account_database.authenticate_user_opensim(&request.first, &request.last, &request.passwd).await {
+        match self
+            .user_account_database
+            .authenticate_user_opensim(&request.first, &request.last, &request.passwd)
+            .await
+        {
             Ok(Some(user_account)) => {
                 // Check if account is active (using user_level >= 0 as active indicator)
                 if user_account.user_level < 0 {
@@ -512,17 +543,22 @@ impl LoginHandler {
                 if error_msg.contains("stub mode") {
                     info!("Database in stub mode, using direct SQLite authentication");
                 } else {
-                    info!("Database authentication failed: {}, trying direct SQLite fallback", e);
+                    info!(
+                        "Database authentication failed: {}, trying direct SQLite fallback",
+                        e
+                    );
                 }
             }
         }
-        
+
         // EADS: No SQLite fallback - PostgreSQL authentication required
-        Err(anyhow!("Authentication failed: user not found or invalid credentials"))
+        Err(anyhow!(
+            "Authentication failed: user not found or invalid credentials"
+        ))
     }
-    
+
     // EADS: SQLite authentication removed - PostgreSQL only
-    
+
     /// Creates a new user session
     async fn create_user_session(
         &self,
@@ -532,7 +568,7 @@ impl LoginHandler {
     ) -> Result<(Uuid, Uuid)> {
         let session_id = Uuid::new_v4();
         let secure_session_id = Uuid::new_v4();
-        
+
         let mut session = Session::new(user_account.id.to_string(), client_ip);
         session.session_id = session_id.to_string();
         session.agent_id = user_account.id;
@@ -544,15 +580,20 @@ impl LoginHandler {
             platform: request.platform.clone(),
             channel: request.channel.clone(),
         });
-        
+
         // Store session
-        self.session_manager.create_session(session).await
+        self.session_manager
+            .create_session(session)
+            .await
             .map_err(|e| anyhow::anyhow!("Failed to create session: {}", e))?;
-        
-        debug!("Created session {} for user {}", session_id, user_account.id);
+
+        debug!(
+            "Created session {} for user {}",
+            session_id, user_account.id
+        );
         Ok((session_id, secure_session_id))
     }
-    
+
     /// Determines which region the user should log into
     async fn determine_login_region(
         &self,
@@ -566,7 +607,7 @@ impl LoginHandler {
                     Ok(region) => region,
                     Err(_) => self.get_default_region(),
                 }
-            },
+            }
             "last" => {
                 // Use user's last location if available, otherwise home/default
                 match self.get_user_last_region(user_account).await {
@@ -574,9 +615,9 @@ impl LoginHandler {
                     Err(_) => match self.get_user_home_region(user_account).await {
                         Ok(region) => region,
                         Err(_) => self.get_default_region(),
-                    }
+                    },
                 }
-            },
+            }
             region_name => {
                 // Try to find the specified region
                 match self.find_region_by_name(region_name).await {
@@ -591,13 +632,15 @@ impl LoginHandler {
                 }
             }
         };
-        
-        debug!("Login region determined: {} for user {}", 
-               region_info.name, user_account.id);
-        
+
+        debug!(
+            "Login region determined: {} for user {}",
+            region_info.name, user_account.id
+        );
+
         Ok(region_info)
     }
-    
+
     /// Creates or loads avatar for the user
     async fn create_or_load_avatar(
         &self,
@@ -605,54 +648,70 @@ impl LoginHandler {
         region_info: &RegionInfo,
     ) -> Result<Avatar> {
         // Try to load existing avatar
-        if let Ok(existing_avatar) = self.region_manager
-            .get_avatar(&user_account.id.to_string()).await {
+        if let Ok(existing_avatar) = self
+            .region_manager
+            .get_avatar(&user_account.id.to_string())
+            .await
+        {
             debug!("Loaded existing avatar for user {}", user_account.id);
             return Ok(existing_avatar);
         }
-        
+
         // Create new avatar
         let mut avatar = Avatar::new(
             user_account.id,
             user_account.first_name.clone(),
             user_account.last_name.clone(),
         );
-        
+
         // Load user appearance from preferences or use default
-        avatar.appearance = self.get_user_appearance(user_account).await.unwrap_or_else(|_| {
-            // Default to appropriate gender based on user preferences or fallback
-            match user_account.first_name.to_lowercase().as_str() {
-                // Common female names - use female appearance
-                name if ["alice", "anna", "beth", "carol", "diana", "emma", "fiona", "grace", 
-                         "helen", "iris", "jane", "kate", "lisa", "mary", "nina", "olivia",
-                         "paula", "quinn", "rose", "sara", "tina", "una", "vera", "wendy"].contains(&name) => {
-                    Appearance::default_female()
-                },
-                // Common male names - use male appearance  
-                name if ["adam", "bob", "carl", "dave", "eric", "frank", "greg", "henry",
-                         "ivan", "jack", "kyle", "luke", "mike", "nick", "owen", "paul",
-                         "quincy", "rick", "steve", "tom", "ulrich", "victor", "will", "xavier"].contains(&name) => {
-                    Appearance::default_male()
-                },
-                // Default fallback based on account creation preferences or female default
-                _ => Appearance::default_female()
-            }
-        });
-        
+        avatar.appearance = self
+            .get_user_appearance(user_account)
+            .await
+            .unwrap_or_else(|_| {
+                // Default to appropriate gender based on user preferences or fallback
+                match user_account.first_name.to_lowercase().as_str() {
+                    // Common female names - use female appearance
+                    name if [
+                        "alice", "anna", "beth", "carol", "diana", "emma", "fiona", "grace",
+                        "helen", "iris", "jane", "kate", "lisa", "mary", "nina", "olivia", "paula",
+                        "quinn", "rose", "sara", "tina", "una", "vera", "wendy",
+                    ]
+                    .contains(&name) =>
+                    {
+                        Appearance::default_female()
+                    }
+                    // Common male names - use male appearance
+                    name if [
+                        "adam", "bob", "carl", "dave", "eric", "frank", "greg", "henry", "ivan",
+                        "jack", "kyle", "luke", "mike", "nick", "owen", "paul", "quincy", "rick",
+                        "steve", "tom", "ulrich", "victor", "will", "xavier",
+                    ]
+                    .contains(&name) =>
+                    {
+                        Appearance::default_male()
+                    }
+                    // Default fallback based on account creation preferences or female default
+                    _ => Appearance::default_female(),
+                }
+            });
+
         // Set initial position in region based on region info and user's last known position
         let (start_x, start_y, start_z) = self.calculate_spawn_position(user_account, region_info);
         avatar.set_position(start_x, start_y, start_z);
         avatar.set_look_at(1.0, 0.0, 0.0); // Looking east
-        
+
         // Add avatar to region
         self.region_manager.add_avatar(avatar.clone()).await?;
-        
-        info!("Created new avatar for user {} in region {}", 
-              user_account.id, region_info.name);
-        
+
+        info!(
+            "Created new avatar for user {} in region {}",
+            user_account.id, region_info.name
+        );
+
         Ok(avatar)
     }
-    
+
     /// Creates a successful login response
     async fn create_success_response(
         &self,
@@ -666,28 +725,33 @@ impl LoginHandler {
     ) -> Result<LoginResponse> {
         let inventory = self.get_user_inventory(user_account).await?;
         let global_textures = self.get_global_textures().await?;
-        
+
         // Use the coordinated circuit code passed from the main handler
-        info!("🔧 Using coordinated circuit code: {} in create_success_response", circuit_code);
-        
+        info!(
+            "🔧 Using coordinated circuit code: {} in create_success_response",
+            circuit_code
+        );
+
         // Create capabilities for this session
-        let capabilities = self.create_session_capabilities(session_id, user_account).await?;
-        
+        let capabilities = self
+            .create_session_capabilities(session_id, user_account)
+            .await?;
+
         // Create home location information
         let home_location = self.create_home_location(user_account, region_info).await?;
-        
+
         Ok(LoginResponse {
             login: "true".to_string(),
             message: "Welcome to OpenSim Next!".to_string(),
             reason: "successful login".to_string(),
-            
+
             // Session information
             session_id: Some(session_id),
             secure_session_id: Some(secure_session_id),
             agent_id: Some(user_account.id),
             first_name: Some(user_account.first_name.clone()),
             last_name: Some(user_account.last_name.clone()),
-            
+
             // Region information
             sim_ip: Some(region_info.ip.clone()),
             sim_port: Some(region_info.port),
@@ -695,19 +759,19 @@ impl LoginHandler {
             region_y: Some(region_info.y),
             region_size_x: Some(region_info.size_x),
             region_size_y: Some(region_info.size_y),
-            
+
             // Avatar information
             look_at: Some(avatar.look_at),
             agent_access: Some("M".to_string()), // Mature access
             agent_access_max: Some("A".to_string()), // Adult access
             start_location: Some(request.start.clone()),
-            
+
             // Inventory
             inventory_root: Some(inventory.root_folders),
             inventory_skeleton: Some(inventory.items),
             inventory_lib_root: Some(vec![]), // Library folders (empty for now)
             inventory_lib_owner: Some(vec![]), // Library items (empty for now)
-            
+
             // Additional data
             login_flags: Some(self.get_login_flags().await),
             global_textures: Some(global_textures),
@@ -725,13 +789,15 @@ impl LoginHandler {
             gendered: Some("Y".to_string()),
             ever_logged_in: Some("Y".to_string()),
             seconds_since_epoch: Some(Utc::now().timestamp() as u64),
-            
+
             // SL viewer protocol fields
             circuit_code: Some(circuit_code),
             sim_port_udp: Some(region_info.port + 1), // UDP port typically +1 from HTTP
             inventory_host: Some(format!("{}:{}", region_info.ip, region_info.port)),
-            seed_capability: Some(format!("http://{}:{}/cap/{}", 
-                                        region_info.ip, region_info.port, session_id)),
+            seed_capability: Some(format!(
+                "http://{}:{}/cap/{}",
+                region_info.ip, region_info.port, session_id
+            )),
             capabilities: Some(capabilities),
             home: Some(home_location),
             buddy_list: Some(self.get_user_friends(user_account).await?),
@@ -739,9 +805,12 @@ impl LoginHandler {
             region_info: Some(RegionLoginInfo {
                 // CRITICAL: region_handle uses METER coordinates, not grid coordinates
                 // Grid (1000, 1000) → Meters (256000, 256000)
-                region_handle: (((region_info.x as u64) * 256) << 32) | ((region_info.y as u64) * 256),
-                seed_capability: format!("http://{}:{}/cap/{}", 
-                                       region_info.ip, region_info.port, session_id),
+                region_handle: (((region_info.x as u64) * 256) << 32)
+                    | ((region_info.y as u64) * 256),
+                seed_capability: format!(
+                    "http://{}:{}/cap/{}",
+                    region_info.ip, region_info.port, session_id
+                ),
                 sim_access: "M".to_string(), // Mature
                 agent_movement_complete: false,
             }),
@@ -753,14 +822,14 @@ impl LoginHandler {
             }),
         })
     }
-    
+
     /// Creates an error login response
     fn create_error_response(&self, message: &str, reason: &str) -> LoginResponse {
         LoginResponse {
             login: "false".to_string(),
             message: message.to_string(),
             reason: reason.to_string(),
-            
+
             // All optional fields are None for error responses
             session_id: None,
             secure_session_id: None,
@@ -795,7 +864,7 @@ impl LoginHandler {
             gendered: None,
             ever_logged_in: None,
             seconds_since_epoch: None,
-            
+
             // SL viewer protocol fields (all None for errors)
             circuit_code: None,
             sim_port_udp: None,
@@ -811,9 +880,9 @@ impl LoginHandler {
             login_response_config: None,
         }
     }
-    
+
     // Helper methods for region and inventory management
-    
+
     async fn get_user_home_region(&self, user_account: &UserAccount) -> Result<RegionInfo> {
         // Check if user has a home region set in database
         if let Some(home_region_id) = user_account.home_region_id {
@@ -830,16 +899,19 @@ impl LoginHandler {
                         size_x: region_info.size_x,
                         size_y: region_info.size_y,
                     });
-                },
+                }
                 Err(_) => {
-                    warn!("User's home region {} not found, using default", home_region_id);
+                    warn!(
+                        "User's home region {} not found, using default",
+                        home_region_id
+                    );
                 }
             }
         }
-        
+
         Err(anyhow!("Home region not set or not found"))
     }
-    
+
     async fn get_user_last_region(&self, user_account: &UserAccount) -> Result<RegionInfo> {
         // For now, use home position from user account if available
         if user_account.home_position_x != 0.0 || user_account.home_position_y != 0.0 {
@@ -847,7 +919,7 @@ impl LoginHandler {
             // OpenSim regions are typically 256x256, positioned on a grid
             let region_x = (user_account.home_position_x / 256.0) as u32 * 256;
             let region_y = (user_account.home_position_y / 256.0) as u32 * 256;
-            
+
             return Ok(RegionInfo {
                 name: format!("Region at ({}, {})", region_x, region_y),
                 ip: "127.0.0.1".to_string(),
@@ -858,10 +930,10 @@ impl LoginHandler {
                 size_y: 256,
             });
         }
-        
+
         Err(anyhow!("Last location not available"))
     }
-    
+
     async fn find_region_by_name(&self, region_name: &str) -> Result<RegionInfo> {
         // Try to find region by name in the region manager
         match self.region_manager.find_region_by_name(region_name).await {
@@ -874,10 +946,10 @@ impl LoginHandler {
                 size_x: region_info.size_x,
                 size_y: region_info.size_y,
             }),
-            Err(_) => Err(anyhow!("Region '{}' not found", region_name))
+            Err(_) => Err(anyhow!("Region '{}' not found", region_name)),
         }
     }
-    
+
     fn get_default_region(&self) -> RegionInfo {
         RegionInfo {
             name: "Default Region".to_string(),
@@ -889,7 +961,7 @@ impl LoginHandler {
             size_y: 256,
         }
     }
-    
+
     /// Automatically assign a suitable region for login based on load balancing
     async fn auto_assign_region(&self, _user_account: &UserAccount) -> Result<RegionInfo> {
         // Get all available regions and find the least loaded one
@@ -910,18 +982,25 @@ impl LoginHandler {
             }
         }
     }
-    
+
     /// Calculate optimal spawn position for avatar in the region
-    fn calculate_spawn_position(&self, user_account: &UserAccount, region_info: &RegionInfo) -> (f32, f32, f32) {
+    fn calculate_spawn_position(
+        &self,
+        user_account: &UserAccount,
+        region_info: &RegionInfo,
+    ) -> (f32, f32, f32) {
         // Use user's home position if it's within the current region
         let region_min_x = region_info.x as f32;
         let region_max_x = region_min_x + region_info.size_x as f32;
         let region_min_y = region_info.y as f32;
         let region_max_y = region_min_y + region_info.size_y as f32;
-        
+
         // Check if user's home position is within this region
-        if user_account.home_position_x >= region_min_x && user_account.home_position_x < region_max_x &&
-           user_account.home_position_y >= region_min_y && user_account.home_position_y < region_max_y {
+        if user_account.home_position_x >= region_min_x
+            && user_account.home_position_x < region_max_x
+            && user_account.home_position_y >= region_min_y
+            && user_account.home_position_y < region_max_y
+        {
             // Use the user's home position
             return (
                 user_account.home_position_x,
@@ -929,27 +1008,23 @@ impl LoginHandler {
                 user_account.home_position_z.max(22.0), // Ensure minimum height
             );
         }
-        
+
         // Otherwise, calculate a safe spawn position
         let center_x = region_min_x + (region_info.size_x as f32 / 2.0);
         let center_y = region_min_y + (region_info.size_y as f32 / 2.0);
         let spawn_height = 25.0; // Safe height above ground
-        
+
         // Add small random offset to avoid spawning multiple users in exact same spot
         let offset_x = (rand::random::<f32>() - 0.5) * 10.0; // ±5 meters
         let offset_y = (rand::random::<f32>() - 0.5) * 10.0; // ±5 meters
-        
-        (
-            center_x + offset_x,
-            center_y + offset_y,
-            spawn_height,
-        )
+
+        (center_x + offset_x, center_y + offset_y, spawn_height)
     }
-    
+
     async fn get_user_inventory(&self, user_account: &UserAccount) -> Result<UserInventory> {
         // Load user's inventory from database
         debug!("Loading inventory for user: {}", user_account.id);
-        
+
         // For now, we'll create a basic inventory structure if it doesn't exist
         // In a full implementation, this would load from the inventory database
         let root_folder = InventoryFolder {
@@ -959,7 +1034,7 @@ impl LoginHandler {
             type_default: 8, // Root folder type
             version: 1,
         };
-        
+
         // Create essential subfolders
         let clothing_folder = InventoryFolder {
             folder_id: Uuid::new_v4(),
@@ -968,7 +1043,7 @@ impl LoginHandler {
             type_default: 5, // Clothing folder type
             version: 1,
         };
-        
+
         let objects_folder = InventoryFolder {
             folder_id: Uuid::new_v4(),
             parent_id: Some(user_account.id),
@@ -976,7 +1051,7 @@ impl LoginHandler {
             type_default: 6, // Objects folder type
             version: 1,
         };
-        
+
         let textures_folder = InventoryFolder {
             folder_id: Uuid::new_v4(),
             parent_id: Some(user_account.id),
@@ -984,7 +1059,7 @@ impl LoginHandler {
             type_default: 0, // Texture folder type
             version: 1,
         };
-        
+
         let sounds_folder = InventoryFolder {
             folder_id: Uuid::new_v4(),
             parent_id: Some(user_account.id),
@@ -992,7 +1067,7 @@ impl LoginHandler {
             type_default: 1, // Sound folder type
             version: 1,
         };
-        
+
         let scripts_folder = InventoryFolder {
             folder_id: Uuid::new_v4(),
             parent_id: Some(user_account.id),
@@ -1000,7 +1075,7 @@ impl LoginHandler {
             type_default: 10, // LSL Text folder type
             version: 1,
         };
-        
+
         let landmarks_folder = InventoryFolder {
             folder_id: Uuid::new_v4(),
             parent_id: Some(user_account.id),
@@ -1008,10 +1083,10 @@ impl LoginHandler {
             type_default: 3, // Landmark folder type
             version: 1,
         };
-        
+
         // Create default items for new users
         let mut items = Vec::new();
-        
+
         // Add default shape item
         items.push(InventoryItem {
             item_id: Uuid::new_v4(),
@@ -1039,7 +1114,7 @@ impl LoginHandler {
             desc: "Default avatar body shape".to_string(),
             creation_date: chrono::Utc::now().timestamp() as u32,
         });
-        
+
         // Add default skin item
         items.push(InventoryItem {
             item_id: Uuid::new_v4(),
@@ -1067,7 +1142,7 @@ impl LoginHandler {
             desc: "Default avatar skin".to_string(),
             creation_date: chrono::Utc::now().timestamp() as u32,
         });
-        
+
         // Add default hair item
         items.push(InventoryItem {
             item_id: Uuid::new_v4(),
@@ -1095,7 +1170,7 @@ impl LoginHandler {
             desc: "Default avatar hair".to_string(),
             creation_date: chrono::Utc::now().timestamp() as u32,
         });
-        
+
         Ok(UserInventory {
             root_folders: vec![
                 root_folder,
@@ -1109,7 +1184,7 @@ impl LoginHandler {
             items,
         })
     }
-    
+
     async fn get_global_textures(&self) -> Result<Vec<GlobalTexture>> {
         // Default textures for sky, moon, sun
         Ok(vec![GlobalTexture {
@@ -1118,7 +1193,7 @@ impl LoginHandler {
             sun_texture_id: Uuid::parse_str("cce0f112-878f-4586-a2e2-a8f104bba271")?,
         }])
     }
-    
+
     async fn get_login_flags(&self) -> Vec<LoginFlag> {
         vec![
             LoginFlag {
@@ -1135,12 +1210,16 @@ impl LoginHandler {
             },
         ]
     }
-    
+
     /// Create session capabilities for Second Life viewer protocol
-    async fn create_session_capabilities(&self, session_id: Uuid, user_account: &UserAccount) -> Result<Vec<Capability>> {
+    async fn create_session_capabilities(
+        &self,
+        session_id: Uuid,
+        user_account: &UserAccount,
+    ) -> Result<Vec<Capability>> {
         // Essential capabilities that SL viewers expect
         let base_url = format!("http://127.0.0.1:9000/cap/{}", session_id);
-        
+
         Ok(vec![
             Capability {
                 name: "AvatarPickerSearch".to_string(),
@@ -1308,13 +1387,17 @@ impl LoginHandler {
             },
         ])
     }
-    
+
     /// Create home location information for the user
-    async fn create_home_location(&self, user_account: &UserAccount, region_info: &RegionInfo) -> Result<HomeLocation> {
+    async fn create_home_location(
+        &self,
+        user_account: &UserAccount,
+        region_info: &RegionInfo,
+    ) -> Result<HomeLocation> {
         // CRITICAL: region_handle uses METER coordinates, not grid coordinates
         // Grid (1000, 1000) → Meters (256000, 256000)
         let region_handle = (((region_info.x as u64) * 256) << 32) | ((region_info.y as u64) * 256);
-        
+
         Ok(HomeLocation {
             region_handle,
             position: [
@@ -1325,88 +1408,102 @@ impl LoginHandler {
             look_at: [1.0, 0.0, 0.0], // Default look direction
         })
     }
-    
+
     /// Get user's friends list
     async fn get_user_friends(&self, user_account: &UserAccount) -> Result<Vec<BuddyListEntry>> {
         // Load user's friends from database
         debug!("Loading friends list for user: {}", user_account.id);
-        
+
         // In a full implementation, this would query a friends/relationships table
         // For now, we'll create a basic friends list structure
-        
+
         // This would typically be:
-        // SELECT friend_id, rights_given, rights_received 
-        // FROM user_friends 
+        // SELECT friend_id, rights_given, rights_received
+        // FROM user_friends
         // WHERE user_id = $1 AND status = 'accepted'
-        
+
         let mut friends = Vec::new();
-        
+
         // For demonstration, add some default system contacts if this is a new user
         // In production, this would be loaded from database
-        
+
         // Add system administrator as friend (if exists)
-        if user_account.user_level >= 0 { // Active user
+        if user_account.user_level >= 0 {
+            // Active user
             friends.push(BuddyListEntry {
-                buddy_id: Uuid::parse_str("00000000-0000-0000-0000-000000000001").unwrap_or_default(),
+                buddy_id: Uuid::parse_str("00000000-0000-0000-0000-000000000001")
+                    .unwrap_or_default(),
                 buddy_rights_given: 0x1F, // Basic friend rights
                 buddy_rights_has: 0x1F,   // Reciprocal rights
             });
         }
-        
+
         // Add welcome bot as friend for new users
-        if user_account.user_flags == 0 { // New user indicator
+        if user_account.user_flags == 0 {
+            // New user indicator
             friends.push(BuddyListEntry {
-                buddy_id: Uuid::parse_str("00000000-0000-0000-0000-000000000002").unwrap_or_default(),
+                buddy_id: Uuid::parse_str("00000000-0000-0000-0000-000000000002")
+                    .unwrap_or_default(),
                 buddy_rights_given: 0x0F, // Limited rights for bot
                 buddy_rights_has: 0x01,   // Bot can see online status
             });
         }
-        
-        debug!("Loaded {} friends for user {}", friends.len(), user_account.id);
+
+        debug!(
+            "Loaded {} friends for user {}",
+            friends.len(),
+            user_account.id
+        );
         Ok(friends)
     }
-    
+
     /// Get user's active gestures
     async fn get_user_gestures(&self, user_account: &UserAccount) -> Result<Vec<GestureEntry>> {
         // Load user's active gestures from database
         debug!("Loading active gestures for user: {}", user_account.id);
-        
+
         // In a full implementation, this would query a user_gestures table
         // For now, we'll provide some default gestures
-        
+
         // This would typically be:
-        // SELECT item_id, asset_id FROM user_gestures 
+        // SELECT item_id, asset_id FROM user_gestures
         // WHERE user_id = $1 AND is_active = true
-        
+
         let mut gestures = Vec::new();
-        
+
         // Add some default gestures for all users
         // These would typically be loaded from the user's inventory
-        
+
         // Default wave gesture
         gestures.push(GestureEntry {
             item_id: Uuid::parse_str("11111111-1111-1111-1111-111111111111").unwrap_or_default(),
             asset_id: Uuid::parse_str("22222222-2222-2222-2222-222222222222").unwrap_or_default(),
         });
-        
+
         // Default hello gesture
         gestures.push(GestureEntry {
             item_id: Uuid::parse_str("33333333-3333-3333-3333-333333333333").unwrap_or_default(),
             asset_id: Uuid::parse_str("44444444-4444-4444-4444-444444444444").unwrap_or_default(),
         });
-        
+
         // Default dance gesture for users with positive standing
         if user_account.user_level > 0 {
             gestures.push(GestureEntry {
-                item_id: Uuid::parse_str("55555555-5555-5555-5555-555555555555").unwrap_or_default(),
-                asset_id: Uuid::parse_str("66666666-6666-6666-6666-666666666666").unwrap_or_default(),
+                item_id: Uuid::parse_str("55555555-5555-5555-5555-555555555555")
+                    .unwrap_or_default(),
+                asset_id: Uuid::parse_str("66666666-6666-6666-6666-666666666666")
+                    .unwrap_or_default(),
             });
         }
-        
-        debug!("Loaded {} active gestures for user {}", gestures.len(), user_account.id);
+
+        debug!(
+            "Loaded {} active gestures for user {}",
+            gestures.len(),
+            user_account.id
+        );
         Ok(gestures)
     }
-    
+
     /// Get initial outfit configurations
     async fn get_initial_outfits(&self) -> Vec<InitialOutfitFolder> {
         vec![
@@ -1420,22 +1517,26 @@ impl LoginHandler {
             },
         ]
     }
-    
+
     /// Get user appearance from database or preferences
     async fn get_user_appearance(&self, user_account: &UserAccount) -> Result<Appearance> {
         // Try to load saved appearance from database first
         // For now, we'll check if the user has appearance preferences stored
         debug!("Loading appearance for user: {}", user_account.id);
-        
+
         // This would typically query a user preferences table or avatar appearance table
         // For now, we'll create a basic appearance based on user's stored preferences
         // In a full implementation, this would load from a dedicated appearances table
-        
+
         // Check if user has gender preference stored (this would come from registration)
-        let is_male = user_account.first_name.to_lowercase().chars().next()
+        let is_male = user_account
+            .first_name
+            .to_lowercase()
+            .chars()
+            .next()
             .map(|c| c as u32 % 2 == 0) // Simple heuristic for demo
             .unwrap_or(false);
-            
+
         if is_male {
             Ok(Appearance::default_male())
         } else {
@@ -1475,17 +1576,12 @@ impl LoginServer {
     }
 
     pub async fn start(&self) -> Result<()> {
-        use axum::{
-            routing::post,
-            Router,
-            response::Json,
-            extract::Form,
-        };
-        use std::collections::HashMap;
+        use axum::{extract::Form, response::Json, routing::post, Router};
         use serde_json::json;
+        use std::collections::HashMap;
 
         let user_db = self.user_db.clone();
-        
+
         let app = Router::new()
             .route("/", post(handle_login))
             .route("/login", post(handle_login))
@@ -1498,10 +1594,10 @@ impl LoginServer {
 
         let addr = format!("0.0.0.0:{}", self.port);
         info!("Starting login server on {}", addr);
-        
+
         let listener = tokio::net::TcpListener::bind(&addr).await?;
         axum::serve(listener, app).await?;
-        
+
         Ok(())
     }
 }
@@ -1513,13 +1609,14 @@ async fn handle_login(
     headers: axum::http::HeaderMap,
     body: axum::body::Bytes,
 ) -> axum::response::Response {
-    use serde_json::json;
-    use axum::response::{Json, Response};
     use axum::http::StatusCode;
-    
+    use axum::response::{Json, Response};
+    use serde_json::json;
+
     // Check Content-Type to determine if this is XML-RPC or form data
     // Support various viewer implementations (Cool Viewer, Singularity, Firestorm, etc.)
-    let content_type = headers.get("content-type")
+    let content_type = headers
+        .get("content-type")
         .and_then(|v| v.to_str().ok())
         .unwrap_or("");
 
@@ -1533,42 +1630,47 @@ async fn handle_login(
         // Handle XML-RPC request from Second Life viewer
         let xml_body = String::from_utf8_lossy(&body);
         info!("Received XML-RPC login request: {}", xml_body);
-        
+
         // Parse XML-RPC parameters (simple extraction for OpenSim compatibility)
         let first = extract_xml_param(&xml_body, "first").unwrap_or_default();
         let last = extract_xml_param(&xml_body, "last").unwrap_or_default();
         let passwd = extract_xml_param(&xml_body, "passwd").unwrap_or_default();
-        
+
         (first, last, passwd)
     } else {
         // Handle form data request
         let form_data = String::from_utf8_lossy(&body);
-        let parsed_form: std::collections::HashMap<String, String> = 
+        let parsed_form: std::collections::HashMap<String, String> =
             serde_urlencoded::from_str(&form_data).unwrap_or_default();
-        
+
         let first = parsed_form.get("first").unwrap_or(&"".to_string()).clone();
         let last = parsed_form.get("last").unwrap_or(&"".to_string()).clone();
         let passwd = parsed_form.get("passwd").unwrap_or(&"".to_string()).clone();
-        
+
         (first, last, passwd)
     };
-    
+
     info!("Login attempt: {} {}", first, last);
-    
+
     // Try to authenticate with fallback
     let username = format!("{} {}", first, last);
-    
+
     // EADS: PostgreSQL-only authentication
-    let user_result = user_db.authenticate_user_opensim(&first, &last, &passwd).await;
-    
+    let user_result = user_db
+        .authenticate_user_opensim(&first, &last, &passwd)
+        .await;
+
     let result = match user_result {
         Ok(Some(user)) => {
             info!("Login successful for: {}", username);
-            
+
             // FIXED: Use viewer-compatible circuit code (Cool Viewer sends 16776960)
             let circuit_code = 16776960u32; // 0x00FF0100 - Cool Viewer protocol constant
-            info!("🎯 Using viewer-compatible circuit code: {} for user: {}", circuit_code, username);
-            
+            info!(
+                "🎯 Using viewer-compatible circuit code: {} for user: {}",
+                circuit_code, username
+            );
+
             json!({
                 "login": "true",
                 "message": "Welcome to OpenSim Next!",
@@ -1590,7 +1692,7 @@ async fn handle_login(
                 "seed_capability": format!("http://localhost:8080/cap/{}", uuid::Uuid::new_v4()),
                 "inventory_host": "localhost:8080"
             })
-        },
+        }
         Ok(None) => {
             warn!("Login failed - invalid credentials: {}", username);
             json!({
@@ -1598,17 +1700,17 @@ async fn handle_login(
                 "message": "Invalid username or password",
                 "reason": "Authentication failed"
             })
-        },
+        }
         Err(e) => {
             error!("Login error: {}", e);
             json!({
-                "login": "false", 
+                "login": "false",
                 "message": "Server error during login",
                 "reason": format!("Error: {}", e)
             })
         }
     };
-    
+
     // Return XML-RPC response if XML request, JSON if form request
     if is_xmlrpc {
         // Return XML-RPC response for Second Life viewers
@@ -1647,7 +1749,8 @@ fn extract_xml_param(xml: &str, param_name: &str) -> Option<String> {
 fn format_xml_rpc_response(json_result: &serde_json::Value) -> String {
     if json_result.get("login").and_then(|v| v.as_str()) == Some("true") {
         // Success response with complete inventory data
-        format!(r#"<?xml version="1.0"?>
+        format!(
+            r#"<?xml version="1.0"?>
 <methodResponse>
 <params>
 <param>
@@ -1727,17 +1830,39 @@ fn format_xml_rpc_response(json_result: &serde_json::Value) -> String {
 </param>
 </params>
 </methodResponse>"#,
-            json_result.get("session_id").and_then(|v| v.as_str()).unwrap_or("00000000-0000-0000-0000-000000000000"),
-            json_result.get("agent_id").and_then(|v| v.as_str()).unwrap_or("00000000-0000-0000-0000-000000000000"),
-            json_result.get("first_name").and_then(|v| v.as_str()).unwrap_or(""),
-            json_result.get("last_name").and_then(|v| v.as_str()).unwrap_or(""),
-            json_result.get("circuit_code").and_then(|v| v.as_u64()).unwrap_or(123456),
-            json_result.get("secure_session_id").and_then(|v| v.as_str()).unwrap_or("00000000-0000-0000-0000-000000000000"),
-            json_result.get("session_id").and_then(|v| v.as_str()).unwrap_or("00000000-0000-0000-0000-000000000000")
+            json_result
+                .get("session_id")
+                .and_then(|v| v.as_str())
+                .unwrap_or("00000000-0000-0000-0000-000000000000"),
+            json_result
+                .get("agent_id")
+                .and_then(|v| v.as_str())
+                .unwrap_or("00000000-0000-0000-0000-000000000000"),
+            json_result
+                .get("first_name")
+                .and_then(|v| v.as_str())
+                .unwrap_or(""),
+            json_result
+                .get("last_name")
+                .and_then(|v| v.as_str())
+                .unwrap_or(""),
+            json_result
+                .get("circuit_code")
+                .and_then(|v| v.as_u64())
+                .unwrap_or(123456),
+            json_result
+                .get("secure_session_id")
+                .and_then(|v| v.as_str())
+                .unwrap_or("00000000-0000-0000-0000-000000000000"),
+            json_result
+                .get("session_id")
+                .and_then(|v| v.as_str())
+                .unwrap_or("00000000-0000-0000-0000-000000000000")
         )
     } else {
-        // Error response  
-        format!(r#"<?xml version="1.0"?>
+        // Error response
+        format!(
+            r#"<?xml version="1.0"?>
 <methodResponse>
 <params>
 <param>
@@ -1751,8 +1876,14 @@ fn format_xml_rpc_response(json_result: &serde_json::Value) -> String {
 </param>
 </params>
 </methodResponse>"#,
-            json_result.get("message").and_then(|v| v.as_str()).unwrap_or("Login failed"),
-            json_result.get("reason").and_then(|v| v.as_str()).unwrap_or("Authentication failed")
+            json_result
+                .get("message")
+                .and_then(|v| v.as_str())
+                .unwrap_or("Login failed"),
+            json_result
+                .get("reason")
+                .and_then(|v| v.as_str())
+                .unwrap_or("Authentication failed")
         )
     }
 }

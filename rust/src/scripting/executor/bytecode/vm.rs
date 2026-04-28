@@ -1,8 +1,8 @@
-use std::collections::HashMap;
 use anyhow::{anyhow, Result};
+use std::collections::HashMap;
 
-use crate::scripting::{LSLValue, LSLVector, LSLRotation};
 use super::opcodes::*;
+use crate::scripting::{LSLRotation, LSLValue, LSLVector};
 
 const DEFAULT_MAX_INSTRUCTIONS: u64 = 100_000;
 const MAX_STACK_SIZE: usize = 4096;
@@ -78,7 +78,9 @@ impl Vm {
                 }
                 OpCode::StoreGlobal(idx) => {
                     let val = self.pop()?;
-                    let name = chunk.global_names.get(*idx as usize)
+                    let name = chunk
+                        .global_names
+                        .get(*idx as usize)
                         .ok_or_else(|| anyhow!("Invalid global index {}", idx))?
                         .clone();
                     self.globals.insert(name, val);
@@ -146,9 +148,13 @@ impl Vm {
                 }
 
                 OpCode::LoadGlobal(idx) => {
-                    let name = chunk.global_names.get(idx as usize)
+                    let name = chunk
+                        .global_names
+                        .get(idx as usize)
                         .ok_or_else(|| anyhow!("Invalid global index {}", idx))?;
-                    let val = self.globals.get(name)
+                    let val = self
+                        .globals
+                        .get(name)
                         .cloned()
                         .unwrap_or(LSLValue::Integer(0));
                     self.stack.push(val);
@@ -156,18 +162,20 @@ impl Vm {
 
                 OpCode::StoreGlobal(idx) => {
                     let val = self.pop()?;
-                    let name = chunk.global_names.get(idx as usize)
+                    let name = chunk
+                        .global_names
+                        .get(idx as usize)
                         .ok_or_else(|| anyhow!("Invalid global index {}", idx))?
                         .clone();
                     self.globals.insert(name, val);
                 }
 
                 OpCode::LoadLocal(idx) => {
-                    let base = self.call_stack.last()
-                        .map(|f| f.locals_base)
-                        .unwrap_or(0);
+                    let base = self.call_stack.last().map(|f| f.locals_base).unwrap_or(0);
                     let actual = base + idx as usize;
-                    let val = self.locals.get(actual)
+                    let val = self
+                        .locals
+                        .get(actual)
                         .cloned()
                         .unwrap_or(LSLValue::Integer(0));
                     self.stack.push(val);
@@ -175,9 +183,7 @@ impl Vm {
 
                 OpCode::StoreLocal(idx) => {
                     let val = self.pop()?;
-                    let base = self.call_stack.last()
-                        .map(|f| f.locals_base)
-                        .unwrap_or(0);
+                    let base = self.call_stack.last().map(|f| f.locals_base).unwrap_or(0);
                     let actual = base + idx as usize;
                     while self.locals.len() <= actual {
                         self.locals.push(LSLValue::Integer(0));
@@ -225,47 +231,72 @@ impl Vm {
                 OpCode::Eq => {
                     let b = self.pop()?;
                     let a = self.pop()?;
-                    self.stack.push(LSLValue::Integer(if self.values_equal(&a, &b) { 1 } else { 0 }));
+                    self.stack
+                        .push(LSLValue::Integer(if self.values_equal(&a, &b) {
+                            1
+                        } else {
+                            0
+                        }));
                 }
                 OpCode::Ne => {
                     let b = self.pop()?;
                     let a = self.pop()?;
-                    self.stack.push(LSLValue::Integer(if !self.values_equal(&a, &b) { 1 } else { 0 }));
+                    self.stack
+                        .push(LSLValue::Integer(if !self.values_equal(&a, &b) {
+                            1
+                        } else {
+                            0
+                        }));
                 }
                 OpCode::Lt => {
                     let b = self.pop()?.to_float();
                     let a = self.pop()?.to_float();
-                    self.stack.push(LSLValue::Integer(if a < b { 1 } else { 0 }));
+                    self.stack
+                        .push(LSLValue::Integer(if a < b { 1 } else { 0 }));
                 }
                 OpCode::Gt => {
                     let b = self.pop()?.to_float();
                     let a = self.pop()?.to_float();
-                    self.stack.push(LSLValue::Integer(if a > b { 1 } else { 0 }));
+                    self.stack
+                        .push(LSLValue::Integer(if a > b { 1 } else { 0 }));
                 }
                 OpCode::Le => {
                     let b = self.pop()?.to_float();
                     let a = self.pop()?.to_float();
-                    self.stack.push(LSLValue::Integer(if a <= b { 1 } else { 0 }));
+                    self.stack
+                        .push(LSLValue::Integer(if a <= b { 1 } else { 0 }));
                 }
                 OpCode::Ge => {
                     let b = self.pop()?.to_float();
                     let a = self.pop()?.to_float();
-                    self.stack.push(LSLValue::Integer(if a >= b { 1 } else { 0 }));
+                    self.stack
+                        .push(LSLValue::Integer(if a >= b { 1 } else { 0 }));
                 }
 
                 OpCode::LogicalAnd => {
                     let b = self.pop()?;
                     let a = self.pop()?;
-                    self.stack.push(LSLValue::Integer(if a.is_true() && b.is_true() { 1 } else { 0 }));
+                    self.stack
+                        .push(LSLValue::Integer(if a.is_true() && b.is_true() {
+                            1
+                        } else {
+                            0
+                        }));
                 }
                 OpCode::LogicalOr => {
                     let b = self.pop()?;
                     let a = self.pop()?;
-                    self.stack.push(LSLValue::Integer(if a.is_true() || b.is_true() { 1 } else { 0 }));
+                    self.stack
+                        .push(LSLValue::Integer(if a.is_true() || b.is_true() {
+                            1
+                        } else {
+                            0
+                        }));
                 }
                 OpCode::LogicalNot => {
                     let a = self.pop()?;
-                    self.stack.push(LSLValue::Integer(if a.is_true() { 0 } else { 1 }));
+                    self.stack
+                        .push(LSLValue::Integer(if a.is_true() { 0 } else { 1 }));
                 }
 
                 OpCode::CastInteger => {
@@ -370,7 +401,9 @@ impl Vm {
                 }
 
                 OpCode::Call(func_idx) => {
-                    let func_name = chunk.function_names.get(func_idx as usize)
+                    let func_name = chunk
+                        .function_names
+                        .get(func_idx as usize)
                         .ok_or_else(|| anyhow!("Invalid function index {}", func_idx))?
                         .clone();
 
@@ -452,7 +485,11 @@ impl Vm {
         }
     }
 
-    fn execute_function_chunk(&mut self, chunk: &Chunk, program: &BytecodeProgram) -> Result<LSLValue> {
+    fn execute_function_chunk(
+        &mut self,
+        chunk: &Chunk,
+        program: &BytecodeProgram,
+    ) -> Result<LSLValue> {
         let saved_ip = self.ip;
         self.ip = 0;
 
@@ -475,38 +512,48 @@ impl Vm {
                 OpCode::Push(val) => {
                     self.stack.push(val);
                 }
-                OpCode::Pop => { self.stack.pop(); }
+                OpCode::Pop => {
+                    self.stack.pop();
+                }
                 OpCode::Dup => {
                     let val = self.peek()?.clone();
                     self.stack.push(val);
                 }
 
                 OpCode::LoadGlobal(idx) => {
-                    let name = chunk.global_names.get(idx as usize)
+                    let name = chunk
+                        .global_names
+                        .get(idx as usize)
                         .ok_or_else(|| anyhow!("Invalid global index"))?;
-                    let val = self.globals.get(name).cloned().unwrap_or(LSLValue::Integer(0));
+                    let val = self
+                        .globals
+                        .get(name)
+                        .cloned()
+                        .unwrap_or(LSLValue::Integer(0));
                     self.stack.push(val);
                 }
                 OpCode::StoreGlobal(idx) => {
                     let val = self.pop()?;
-                    let name = chunk.global_names.get(idx as usize)
+                    let name = chunk
+                        .global_names
+                        .get(idx as usize)
                         .ok_or_else(|| anyhow!("Invalid global index"))?
                         .clone();
                     self.globals.insert(name, val);
                 }
                 OpCode::LoadLocal(idx) => {
-                    let base = self.call_stack.last()
-                        .map(|f| f.locals_base)
-                        .unwrap_or(0);
+                    let base = self.call_stack.last().map(|f| f.locals_base).unwrap_or(0);
                     let actual = base + idx as usize;
-                    let val = self.locals.get(actual).cloned().unwrap_or(LSLValue::Integer(0));
+                    let val = self
+                        .locals
+                        .get(actual)
+                        .cloned()
+                        .unwrap_or(LSLValue::Integer(0));
                     self.stack.push(val);
                 }
                 OpCode::StoreLocal(idx) => {
                     let val = self.pop()?;
-                    let base = self.call_stack.last()
-                        .map(|f| f.locals_base)
-                        .unwrap_or(0);
+                    let base = self.call_stack.last().map(|f| f.locals_base).unwrap_or(0);
                     let actual = base + idx as usize;
                     while self.locals.len() <= actual {
                         self.locals.push(LSLValue::Integer(0));
@@ -554,56 +601,102 @@ impl Vm {
                 OpCode::Eq => {
                     let b = self.pop()?;
                     let a = self.pop()?;
-                    self.stack.push(LSLValue::Integer(if self.values_equal(&a, &b) { 1 } else { 0 }));
+                    self.stack
+                        .push(LSLValue::Integer(if self.values_equal(&a, &b) {
+                            1
+                        } else {
+                            0
+                        }));
                 }
                 OpCode::Ne => {
                     let b = self.pop()?;
                     let a = self.pop()?;
-                    self.stack.push(LSLValue::Integer(if !self.values_equal(&a, &b) { 1 } else { 0 }));
+                    self.stack
+                        .push(LSLValue::Integer(if !self.values_equal(&a, &b) {
+                            1
+                        } else {
+                            0
+                        }));
                 }
                 OpCode::Lt => {
                     let b = self.pop()?.to_float();
                     let a = self.pop()?.to_float();
-                    self.stack.push(LSLValue::Integer(if a < b { 1 } else { 0 }));
+                    self.stack
+                        .push(LSLValue::Integer(if a < b { 1 } else { 0 }));
                 }
                 OpCode::Gt => {
                     let b = self.pop()?.to_float();
                     let a = self.pop()?.to_float();
-                    self.stack.push(LSLValue::Integer(if a > b { 1 } else { 0 }));
+                    self.stack
+                        .push(LSLValue::Integer(if a > b { 1 } else { 0 }));
                 }
                 OpCode::Le => {
                     let b = self.pop()?.to_float();
                     let a = self.pop()?.to_float();
-                    self.stack.push(LSLValue::Integer(if a <= b { 1 } else { 0 }));
+                    self.stack
+                        .push(LSLValue::Integer(if a <= b { 1 } else { 0 }));
                 }
                 OpCode::Ge => {
                     let b = self.pop()?.to_float();
                     let a = self.pop()?.to_float();
-                    self.stack.push(LSLValue::Integer(if a >= b { 1 } else { 0 }));
+                    self.stack
+                        .push(LSLValue::Integer(if a >= b { 1 } else { 0 }));
                 }
 
                 OpCode::LogicalAnd => {
                     let b = self.pop()?;
                     let a = self.pop()?;
-                    self.stack.push(LSLValue::Integer(if a.is_true() && b.is_true() { 1 } else { 0 }));
+                    self.stack
+                        .push(LSLValue::Integer(if a.is_true() && b.is_true() {
+                            1
+                        } else {
+                            0
+                        }));
                 }
                 OpCode::LogicalOr => {
                     let b = self.pop()?;
                     let a = self.pop()?;
-                    self.stack.push(LSLValue::Integer(if a.is_true() || b.is_true() { 1 } else { 0 }));
+                    self.stack
+                        .push(LSLValue::Integer(if a.is_true() || b.is_true() {
+                            1
+                        } else {
+                            0
+                        }));
                 }
                 OpCode::LogicalNot => {
                     let a = self.pop()?;
-                    self.stack.push(LSLValue::Integer(if a.is_true() { 0 } else { 1 }));
+                    self.stack
+                        .push(LSLValue::Integer(if a.is_true() { 0 } else { 1 }));
                 }
 
-                OpCode::CastInteger => { let v = self.pop()?; self.stack.push(v.coerce("integer")); }
-                OpCode::CastFloat => { let v = self.pop()?; self.stack.push(v.coerce("float")); }
-                OpCode::CastString => { let v = self.pop()?; self.stack.push(v.coerce("string")); }
-                OpCode::CastKey => { let v = self.pop()?; self.stack.push(v.coerce("key")); }
-                OpCode::CastVector => { let v = self.pop()?; self.stack.push(v.coerce("vector")); }
-                OpCode::CastRotation => { let v = self.pop()?; self.stack.push(v.coerce("rotation")); }
-                OpCode::CastList => { let v = self.pop()?; self.stack.push(v.coerce("list")); }
+                OpCode::CastInteger => {
+                    let v = self.pop()?;
+                    self.stack.push(v.coerce("integer"));
+                }
+                OpCode::CastFloat => {
+                    let v = self.pop()?;
+                    self.stack.push(v.coerce("float"));
+                }
+                OpCode::CastString => {
+                    let v = self.pop()?;
+                    self.stack.push(v.coerce("string"));
+                }
+                OpCode::CastKey => {
+                    let v = self.pop()?;
+                    self.stack.push(v.coerce("key"));
+                }
+                OpCode::CastVector => {
+                    let v = self.pop()?;
+                    self.stack.push(v.coerce("vector"));
+                }
+                OpCode::CastRotation => {
+                    let v = self.pop()?;
+                    self.stack.push(v.coerce("rotation"));
+                }
+                OpCode::CastList => {
+                    let v = self.pop()?;
+                    self.stack.push(v.coerce("list"));
+                }
 
                 OpCode::MakeVector => self.make_vector()?,
                 OpCode::MakeRotation => self.make_rotation()?,
@@ -657,18 +750,26 @@ impl Vm {
                     self.stack.push(result);
                 }
 
-                OpCode::Jump(target) => { self.ip = target as usize; }
+                OpCode::Jump(target) => {
+                    self.ip = target as usize;
+                }
                 OpCode::JumpIfFalse(target) => {
                     let val = self.peek()?;
-                    if !val.is_true() { self.ip = target as usize; }
+                    if !val.is_true() {
+                        self.ip = target as usize;
+                    }
                 }
                 OpCode::JumpIfTrue(target) => {
                     let val = self.peek()?;
-                    if val.is_true() { self.ip = target as usize; }
+                    if val.is_true() {
+                        self.ip = target as usize;
+                    }
                 }
 
                 OpCode::Call(func_idx) => {
-                    let func_name = chunk.function_names.get(func_idx as usize)
+                    let func_name = chunk
+                        .function_names
+                        .get(func_idx as usize)
                         .ok_or_else(|| anyhow!("Invalid function index"))?
                         .clone();
 
@@ -803,24 +904,39 @@ impl Vm {
         let a = self.pop()?;
         let result = match (&a, &b) {
             (LSLValue::Integer(x), LSLValue::Integer(y)) => {
-                if *y == 0 { LSLValue::Integer(0) }
-                else { LSLValue::Integer(x / y) }
+                if *y == 0 {
+                    LSLValue::Integer(0)
+                } else {
+                    LSLValue::Integer(x / y)
+                }
             }
             (LSLValue::Float(x), LSLValue::Float(y)) => {
-                if *y == 0.0 { LSLValue::Float(0.0) }
-                else { LSLValue::Float(x / y) }
+                if *y == 0.0 {
+                    LSLValue::Float(0.0)
+                } else {
+                    LSLValue::Float(x / y)
+                }
             }
             (LSLValue::Integer(x), LSLValue::Float(y)) => {
-                if *y == 0.0 { LSLValue::Float(0.0) }
-                else { LSLValue::Float(*x as f32 / y) }
+                if *y == 0.0 {
+                    LSLValue::Float(0.0)
+                } else {
+                    LSLValue::Float(*x as f32 / y)
+                }
             }
             (LSLValue::Float(x), LSLValue::Integer(y)) => {
-                if *y == 0 { LSLValue::Float(0.0) }
-                else { LSLValue::Float(x / *y as f32) }
+                if *y == 0 {
+                    LSLValue::Float(0.0)
+                } else {
+                    LSLValue::Float(x / *y as f32)
+                }
             }
             (LSLValue::Vector(x), LSLValue::Float(y)) => {
-                if *y == 0.0 { LSLValue::Vector(LSLVector::zero()) }
-                else { LSLValue::Vector(*x / *y) }
+                if *y == 0.0 {
+                    LSLValue::Vector(LSLVector::zero())
+                } else {
+                    LSLValue::Vector(*x / *y)
+                }
             }
             _ => LSLValue::Integer(0),
         };
@@ -833,8 +949,11 @@ impl Vm {
         let a = self.pop()?;
         let result = match (&a, &b) {
             (LSLValue::Integer(x), LSLValue::Integer(y)) => {
-                if *y == 0 { LSLValue::Integer(0) }
-                else { LSLValue::Integer(x % y) }
+                if *y == 0 {
+                    LSLValue::Integer(0)
+                } else {
+                    LSLValue::Integer(x % y)
+                }
             }
             _ => LSLValue::Integer(0),
         };
@@ -847,8 +966,17 @@ impl Vm {
         let result = match a {
             LSLValue::Integer(i) => LSLValue::Integer(-i),
             LSLValue::Float(f) => LSLValue::Float(-f),
-            LSLValue::Vector(v) => LSLValue::Vector(LSLVector { x: -v.x, y: -v.y, z: -v.z }),
-            LSLValue::Rotation(r) => LSLValue::Rotation(LSLRotation { x: -r.x, y: -r.y, z: -r.z, s: -r.s }),
+            LSLValue::Vector(v) => LSLValue::Vector(LSLVector {
+                x: -v.x,
+                y: -v.y,
+                z: -v.z,
+            }),
+            LSLValue::Rotation(r) => LSLValue::Rotation(LSLRotation {
+                x: -r.x,
+                y: -r.y,
+                z: -r.z,
+                s: -r.s,
+            }),
             _ => LSLValue::Integer(0),
         };
         self.stack.push(result);
@@ -868,7 +996,8 @@ impl Vm {
         let z = self.pop()?.to_float();
         let y = self.pop()?.to_float();
         let x = self.pop()?.to_float();
-        self.stack.push(LSLValue::Rotation(LSLRotation { x, y, z, s }));
+        self.stack
+            .push(LSLValue::Rotation(LSLRotation { x, y, z, s }));
         Ok(())
     }
 

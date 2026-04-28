@@ -1,11 +1,11 @@
-use uuid::Uuid;
+use anyhow::{anyhow, Result};
+use chrono::{DateTime, Duration, Utc};
+use parking_lot::RwLock;
+use rand::Rng;
 use std::collections::HashMap;
 use std::sync::Arc;
-use parking_lot::RwLock;
-use chrono::{DateTime, Utc, Duration};
-use anyhow::{Result, anyhow};
-use rand::Rng;
 use tracing::{debug, info, warn};
+use uuid::Uuid;
 
 #[derive(Debug, Clone)]
 pub struct LoginSession {
@@ -40,7 +40,9 @@ impl LoginSession {
         sim_ip: String,
         sim_port: u16,
     ) -> Self {
-        Self::new_with_region(agent_id, first_name, last_name, sim_ip, sim_port, 256000, 256000)
+        Self::new_with_region(
+            agent_id, first_name, last_name, sim_ip, sim_port, 256000, 256000,
+        )
     }
 
     pub fn new_with_region(
@@ -79,11 +81,11 @@ impl LoginSession {
             region_size_y: 256,
         }
     }
-    
+
     pub fn update_activity(&mut self) {
         self.last_activity = Utc::now();
     }
-    
+
     pub fn is_expired(&self, timeout_minutes: i64) -> bool {
         let timeout = Duration::minutes(timeout_minutes);
         Utc::now() - self.last_activity > timeout
@@ -120,7 +122,12 @@ impl SessionManager {
         Self::new_with_region_size(region_x_meters, region_y_meters, 256, 256)
     }
 
-    pub fn new_with_region_size(region_x_meters: u32, region_y_meters: u32, region_size_x: u32, region_size_y: u32) -> Self {
+    pub fn new_with_region_size(
+        region_x_meters: u32,
+        region_y_meters: u32,
+        region_size_x: u32,
+        region_size_y: u32,
+    ) -> Self {
         Self {
             sessions: Arc::new(RwLock::new(HashMap::new())),
             agent_sessions: Arc::new(RwLock::new(HashMap::new())),
@@ -132,7 +139,7 @@ impl SessionManager {
             next_avatar_local_id: Arc::new(std::sync::atomic::AtomicU32::new(1)),
         }
     }
-    
+
     pub fn create_session(
         &self,
         agent_id: Uuid,
@@ -141,35 +148,54 @@ impl SessionManager {
         sim_ip: String,
         sim_port: u16,
     ) -> Result<LoginSession> {
-        debug!("🔍 SESSION TRACE: Starting create_session for agent: {}", agent_id);
-        let mut session = LoginSession::new_with_region(
-            agent_id, first_name, last_name, sim_ip, sim_port,
-            self.region_x_meters, self.region_y_meters,
+        debug!(
+            "🔍 SESSION TRACE: Starting create_session for agent: {}",
+            agent_id
         );
-        session.local_id = self.next_avatar_local_id.fetch_add(1, std::sync::atomic::Ordering::SeqCst);
+        let mut session = LoginSession::new_with_region(
+            agent_id,
+            first_name,
+            last_name,
+            sim_ip,
+            sim_port,
+            self.region_x_meters,
+            self.region_y_meters,
+        );
+        session.local_id = self
+            .next_avatar_local_id
+            .fetch_add(1, std::sync::atomic::Ordering::SeqCst);
         session.region_size_x = self.region_size_x;
         session.region_size_y = self.region_size_y;
-        info!("🔍 SESSION: Assigned local_id={} to agent {}", session.local_id, agent_id);
+        info!(
+            "🔍 SESSION: Assigned local_id={} to agent {}",
+            session.local_id, agent_id
+        );
         debug!("🔍 SESSION TRACE: LoginSession::new completed");
-        
+
         // Check for existing session and remove it
         debug!("🔍 SESSION TRACE: Checking for existing session");
         let old_circuit_code = {
             let agent_sessions = self.agent_sessions.read();
             agent_sessions.get(&agent_id).copied()
         }; // Read lock is released here
-        
+
         if let Some(old_circuit_code) = old_circuit_code {
-            debug!("🔍 SESSION TRACE: Found existing session with circuit code: {}, removing it", old_circuit_code);
+            debug!(
+                "🔍 SESSION TRACE: Found existing session with circuit code: {}, removing it",
+                old_circuit_code
+            );
             self.remove_session(old_circuit_code)?;
             debug!("🔍 SESSION TRACE: Successfully removed old session");
         } else {
             debug!("🔍 SESSION TRACE: No existing session found");
         }
-        
+
         let circuit_code = session.circuit_code;
-        debug!("🔍 SESSION TRACE: About to store session with circuit code: {}", circuit_code);
-        
+        debug!(
+            "🔍 SESSION TRACE: About to store session with circuit code: {}",
+            circuit_code
+        );
+
         // Store the session
         {
             debug!("🔍 SESSION TRACE: About to acquire session locks");
@@ -177,23 +203,23 @@ impl SessionManager {
             debug!("🔍 SESSION TRACE: Acquired sessions write lock");
             let mut agent_sessions = self.agent_sessions.write();
             debug!("🔍 SESSION TRACE: Acquired agent_sessions write lock");
-            
+
             sessions.insert(circuit_code, session.clone());
             debug!("🔍 SESSION TRACE: Inserted session into sessions map");
             agent_sessions.insert(agent_id, circuit_code);
             debug!("🔍 SESSION TRACE: Inserted agent mapping");
         }
         debug!("🔍 SESSION TRACE: Released session locks");
-        
+
         info!(
             "Created new login session for {} {} with circuit code {}",
             session.first_name, session.last_name, circuit_code
         );
         debug!("🔍 SESSION TRACE: create_session completed successfully");
-        
+
         Ok(session)
     }
-    
+
     pub fn register_external_session(
         &self,
         agent_id: Uuid,
@@ -245,7 +271,7 @@ impl SessionManager {
     pub fn get_session_by_circuit_code(&self, circuit_code: u32) -> Option<LoginSession> {
         self.sessions.read().get(&circuit_code).cloned()
     }
-    
+
     pub fn get_session_by_agent_id(&self, agent_id: Uuid) -> Option<LoginSession> {
         let agent_sessions = self.agent_sessions.read();
         if let Some(circuit_code) = agent_sessions.get(&agent_id) {
@@ -254,12 +280,12 @@ impl SessionManager {
             None
         }
     }
-    
+
     pub fn get_all_sessions(&self) -> Vec<LoginSession> {
         let sessions = self.sessions.read();
         sessions.values().cloned().collect()
     }
-    
+
     pub fn update_session_activity(&self, circuit_code: u32) -> Result<()> {
         let mut sessions = self.sessions.write();
         if let Some(session) = sessions.get_mut(&circuit_code) {
@@ -267,19 +293,25 @@ impl SessionManager {
             debug!("Updated activity for circuit code {}", circuit_code);
             Ok(())
         } else {
-            Err(anyhow!("Session not found for circuit code {}", circuit_code))
+            Err(anyhow!(
+                "Session not found for circuit code {}",
+                circuit_code
+            ))
         }
     }
-    
+
     pub fn remove_session(&self, circuit_code: u32) -> Result<()> {
-        debug!("🔍 REMOVE SESSION TRACE: Starting remove_session for circuit code: {}", circuit_code);
+        debug!(
+            "🔍 REMOVE SESSION TRACE: Starting remove_session for circuit code: {}",
+            circuit_code
+        );
         debug!("🔍 REMOVE SESSION TRACE: About to acquire sessions write lock");
         let mut sessions = self.sessions.write();
         debug!("🔍 REMOVE SESSION TRACE: Acquired sessions write lock");
         debug!("🔍 REMOVE SESSION TRACE: About to acquire agent_sessions write lock");
         let mut agent_sessions = self.agent_sessions.write();
         debug!("🔍 REMOVE SESSION TRACE: Acquired agent_sessions write lock");
-        
+
         if let Some(session) = sessions.remove(&circuit_code) {
             debug!("🔍 REMOVE SESSION TRACE: Found session to remove, removing agent mapping");
             agent_sessions.remove(&session.agent_id);
@@ -290,34 +322,52 @@ impl SessionManager {
             debug!("🔍 REMOVE SESSION TRACE: remove_session completed successfully");
             Ok(())
         } else {
-            debug!("🔍 REMOVE SESSION TRACE: Session not found for circuit code: {}", circuit_code);
-            Err(anyhow!("Session not found for circuit code {}", circuit_code))
+            debug!(
+                "🔍 REMOVE SESSION TRACE: Session not found for circuit code: {}",
+                circuit_code
+            );
+            Err(anyhow!(
+                "Session not found for circuit code {}",
+                circuit_code
+            ))
         }
     }
-    
+
     pub fn validate_session(&self, agent_id: Uuid, session_id: Uuid, circuit_code: u32) -> bool {
-        debug!("🔍 VALIDATE SESSION: circuit={}, agent={}, session={}", circuit_code, agent_id, session_id);
+        debug!(
+            "🔍 VALIDATE SESSION: circuit={}, agent={}, session={}",
+            circuit_code, agent_id, session_id
+        );
 
         if let Some(session) = self.get_session_by_circuit_code(circuit_code) {
-            debug!("🔍 VALIDATE SESSION: Found session - stored_agent={}, stored_session={}", session.agent_id, session.session_id);
+            debug!(
+                "🔍 VALIDATE SESSION: Found session - stored_agent={}, stored_session={}",
+                session.agent_id, session.session_id
+            );
 
             let agent_match = session.agent_id == agent_id;
             let session_match = session.session_id == session_id;
             let not_expired = !session.is_expired(self.session_timeout_minutes);
 
-            debug!("🔍 VALIDATE SESSION: agent_match={}, session_match={}, not_expired={}", agent_match, session_match, not_expired);
+            debug!(
+                "🔍 VALIDATE SESSION: agent_match={}, session_match={}, not_expired={}",
+                agent_match, session_match, not_expired
+            );
 
             agent_match && session_match && not_expired
         } else {
-            warn!("🔍 VALIDATE SESSION: No session found for circuit_code={}", circuit_code);
+            warn!(
+                "🔍 VALIDATE SESSION: No session found for circuit_code={}",
+                circuit_code
+            );
             false
         }
     }
-    
+
     pub fn cleanup_expired_sessions(&self) -> usize {
         let mut sessions = self.sessions.write();
         let mut agent_sessions = self.agent_sessions.write();
-        
+
         let expired_circuits: Vec<u32> = sessions
             .iter()
             .filter_map(|(circuit_code, session)| {
@@ -328,9 +378,9 @@ impl SessionManager {
                 }
             })
             .collect();
-        
+
         let count = expired_circuits.len();
-        
+
         for circuit_code in expired_circuits {
             if let Some(session) = sessions.remove(&circuit_code) {
                 agent_sessions.remove(&session.agent_id);
@@ -340,7 +390,7 @@ impl SessionManager {
                 );
             }
         }
-        
+
         count
     }
 
@@ -351,7 +401,10 @@ impl SessionManager {
             debug!("Updated handshake time for circuit code {}", circuit_code);
             Ok(())
         } else {
-            Err(anyhow!("Session not found for circuit code {}", circuit_code))
+            Err(anyhow!(
+                "Session not found for circuit code {}",
+                circuit_code
+            ))
         }
     }
 
@@ -359,10 +412,16 @@ impl SessionManager {
         let mut sessions = self.sessions.write();
         if let Some(session) = sessions.get_mut(&circuit_code) {
             session.implicit_login_completed = completed;
-            debug!("Set login_completed={} for circuit code {}", completed, circuit_code);
+            debug!(
+                "Set login_completed={} for circuit code {}",
+                completed, circuit_code
+            );
             Ok(())
         } else {
-            Err(anyhow!("Session not found for circuit code {}", circuit_code))
+            Err(anyhow!(
+                "Session not found for circuit code {}",
+                circuit_code
+            ))
         }
     }
 
@@ -371,10 +430,16 @@ impl SessionManager {
         if let Some(session) = sessions.get_mut(&circuit_code) {
             session.region_handshake_reply_count += 1;
             let count = session.region_handshake_reply_count;
-            debug!("Incremented handshake_reply_count to {} for circuit code {}", count, circuit_code);
+            debug!(
+                "Incremented handshake_reply_count to {} for circuit code {}",
+                count, circuit_code
+            );
             Ok(count)
         } else {
-            Err(anyhow!("Session not found for circuit code {}", circuit_code))
+            Err(anyhow!(
+                "Session not found for circuit code {}",
+                circuit_code
+            ))
         }
     }
 
@@ -382,10 +447,16 @@ impl SessionManager {
         let mut sessions = self.sessions.write();
         if let Some(session) = sessions.get_mut(&circuit_code) {
             session.timer_breakthrough_used = used;
-            debug!("Set timer_breakthrough_used={} for circuit code {}", used, circuit_code);
+            debug!(
+                "Set timer_breakthrough_used={} for circuit code {}",
+                used, circuit_code
+            );
             Ok(())
         } else {
-            Err(anyhow!("Session not found for circuit code {}", circuit_code))
+            Err(anyhow!(
+                "Session not found for circuit code {}",
+                circuit_code
+            ))
         }
     }
 
@@ -399,7 +470,10 @@ impl SessionManager {
             info!("Reset session state for circuit code {}", circuit_code);
             Ok(())
         } else {
-            Err(anyhow!("Session not found for circuit code {}", circuit_code))
+            Err(anyhow!(
+                "Session not found for circuit code {}",
+                circuit_code
+            ))
         }
     }
 
@@ -468,66 +542,80 @@ mod tests {
     fn test_session_creation() {
         let manager = SessionManager::new();
         let agent_id = Uuid::new_v4();
-        
-        let session = manager.create_session(
-            agent_id,
-            "John".to_string(),
-            "Doe".to_string(),
-            "127.0.0.1".to_string(),
-            9000,
-        ).unwrap();
-        
+
+        let session = manager
+            .create_session(
+                agent_id,
+                "John".to_string(),
+                "Doe".to_string(),
+                "127.0.0.1".to_string(),
+                9000,
+            )
+            .unwrap();
+
         assert_eq!(session.agent_id, agent_id);
         assert_eq!(session.first_name, "John");
         assert_eq!(session.last_name, "Doe");
         assert_eq!(manager.get_active_session_count(), 1);
-        
+
         // Test retrieval by circuit code
-        let retrieved = manager.get_session_by_circuit_code(session.circuit_code).unwrap();
+        let retrieved = manager
+            .get_session_by_circuit_code(session.circuit_code)
+            .unwrap();
         assert_eq!(retrieved.agent_id, agent_id);
-        
+
         // Test retrieval by agent ID
         let retrieved = manager.get_session_by_agent_id(agent_id).unwrap();
         assert_eq!(retrieved.circuit_code, session.circuit_code);
     }
-    
+
     #[test]
     fn test_session_validation() {
         let manager = SessionManager::new();
         let agent_id = Uuid::new_v4();
-        
-        let session = manager.create_session(
-            agent_id,
-            "Test".to_string(),
-            "User".to_string(),
-            "127.0.0.1".to_string(),
-            9000,
-        ).unwrap();
-        
+
+        let session = manager
+            .create_session(
+                agent_id,
+                "Test".to_string(),
+                "User".to_string(),
+                "127.0.0.1".to_string(),
+                9000,
+            )
+            .unwrap();
+
         assert!(manager.validate_session(agent_id, session.session_id, session.circuit_code));
-        assert!(!manager.validate_session(Uuid::new_v4(), session.session_id, session.circuit_code));
+        assert!(!manager.validate_session(
+            Uuid::new_v4(),
+            session.session_id,
+            session.circuit_code
+        ));
         assert!(!manager.validate_session(agent_id, Uuid::new_v4(), session.circuit_code));
         assert!(!manager.validate_session(agent_id, session.session_id, 999999));
     }
-    
+
     #[test]
     fn test_session_removal() {
         let manager = SessionManager::new();
         let agent_id = Uuid::new_v4();
-        
-        let session = manager.create_session(
-            agent_id,
-            "Test".to_string(),
-            "User".to_string(),
-            "127.0.0.1".to_string(),
-            9000,
-        ).unwrap();
-        
+
+        let session = manager
+            .create_session(
+                agent_id,
+                "Test".to_string(),
+                "User".to_string(),
+                "127.0.0.1".to_string(),
+                9000,
+            )
+            .unwrap();
+
         assert_eq!(manager.get_active_session_count(), 1);
-        
+
         manager.remove_session(session.circuit_code).unwrap();
         assert_eq!(manager.get_active_session_count(), 0);
-        assert!(manager.get_session_by_circuit_code(session.circuit_code).is_none());
+        assert!(manager
+            .get_session_by_circuit_code(session.circuit_code)
+            .is_none());
         assert!(manager.get_session_by_agent_id(agent_id).is_none());
     }
 }

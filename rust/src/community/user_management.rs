@@ -11,9 +11,9 @@ use super::{CommunityConfig, ComponentHealth};
 use anyhow::Result;
 use serde::{Deserialize, Serialize};
 use std::collections::HashMap;
+use std::sync::Arc;
 use std::time::{SystemTime, UNIX_EPOCH};
 use tokio::sync::RwLock;
-use std::sync::Arc;
 
 /// User management system
 pub struct UserManager {
@@ -47,10 +47,10 @@ impl UserManager {
 
         // Setup OAuth providers
         self.setup_oauth_providers().await?;
-        
+
         // Create default admin user if needed
         self.create_default_admin().await?;
-        
+
         // Initialize activity tracking
         self.activity_tracker.write().await.initialize().await?;
 
@@ -63,31 +63,37 @@ impl UserManager {
         let mut providers = self.oauth_providers.write().await;
 
         if self.config.authentication.github_oauth_enabled {
-            providers.insert("github".to_string(), OAuthProvider {
-                id: "github".to_string(),
-                name: "GitHub".to_string(),
-                client_id: std::env::var("GITHUB_CLIENT_ID").unwrap_or_default(),
-                client_secret: std::env::var("GITHUB_CLIENT_SECRET").unwrap_or_default(),
-                authorize_url: "https://github.com/login/oauth/authorize".to_string(),
-                token_url: "https://github.com/login/oauth/access_token".to_string(),
-                user_info_url: "https://api.github.com/user".to_string(),
-                scopes: vec!["user:email".to_string()],
-                enabled: true,
-            });
+            providers.insert(
+                "github".to_string(),
+                OAuthProvider {
+                    id: "github".to_string(),
+                    name: "GitHub".to_string(),
+                    client_id: std::env::var("GITHUB_CLIENT_ID").unwrap_or_default(),
+                    client_secret: std::env::var("GITHUB_CLIENT_SECRET").unwrap_or_default(),
+                    authorize_url: "https://github.com/login/oauth/authorize".to_string(),
+                    token_url: "https://github.com/login/oauth/access_token".to_string(),
+                    user_info_url: "https://api.github.com/user".to_string(),
+                    scopes: vec!["user:email".to_string()],
+                    enabled: true,
+                },
+            );
         }
 
         if self.config.authentication.discord_oauth_enabled {
-            providers.insert("discord".to_string(), OAuthProvider {
-                id: "discord".to_string(),
-                name: "Discord".to_string(),
-                client_id: std::env::var("DISCORD_CLIENT_ID").unwrap_or_default(),
-                client_secret: std::env::var("DISCORD_CLIENT_SECRET").unwrap_or_default(),
-                authorize_url: "https://discord.com/api/oauth2/authorize".to_string(),
-                token_url: "https://discord.com/api/oauth2/token".to_string(),
-                user_info_url: "https://discord.com/api/users/@me".to_string(),
-                scopes: vec!["identify".to_string(), "email".to_string()],
-                enabled: true,
-            });
+            providers.insert(
+                "discord".to_string(),
+                OAuthProvider {
+                    id: "discord".to_string(),
+                    name: "Discord".to_string(),
+                    client_id: std::env::var("DISCORD_CLIENT_ID").unwrap_or_default(),
+                    client_secret: std::env::var("DISCORD_CLIENT_SECRET").unwrap_or_default(),
+                    authorize_url: "https://discord.com/api/oauth2/authorize".to_string(),
+                    token_url: "https://discord.com/api/oauth2/token".to_string(),
+                    user_info_url: "https://discord.com/api/users/@me".to_string(),
+                    scopes: vec!["identify".to_string(), "email".to_string()],
+                    enabled: true,
+                },
+            );
         }
 
         Ok(())
@@ -96,7 +102,7 @@ impl UserManager {
     /// Create default admin user
     async fn create_default_admin(&self) -> Result<()> {
         let mut users = self.users.write().await;
-        
+
         if users.is_empty() {
             let admin_user = User {
                 id: "admin".to_string(),
@@ -142,7 +148,7 @@ impl UserManager {
     /// Register new user
     pub async fn register_user(&self, registration: UserRegistration) -> Result<User> {
         let user_id = generate_user_id();
-        
+
         // Check if username or email already exists
         let users = self.users.read().await;
         for user in users.values() {
@@ -194,14 +200,17 @@ impl UserManager {
         };
 
         // Add user to storage
-        self.users.write().await.insert(user_id.clone(), user.clone());
+        self.users
+            .write()
+            .await
+            .insert(user_id.clone(), user.clone());
 
         // Track registration event
-        self.activity_tracker.write().await.track_event(
-            user_id,
-            ActivityEvent::UserRegistered,
-            None,
-        ).await?;
+        self.activity_tracker
+            .write()
+            .await
+            .track_event(user_id, ActivityEvent::UserRegistered, None)
+            .await?;
 
         Ok(user)
     }
@@ -215,20 +224,32 @@ impl UserManager {
             id: session_id.clone(),
             user_id: credentials.username.clone(), // In real implementation, would lookup user_id
             created_at: get_current_timestamp(),
-            expires_at: get_current_timestamp() + (self.config.authentication.session_timeout_hours as u64 * 3600),
+            expires_at: get_current_timestamp()
+                + (self.config.authentication.session_timeout_hours as u64 * 3600),
             last_accessed_at: get_current_timestamp(),
             ip_address: credentials.ip_address.clone(),
             user_agent: credentials.user_agent.clone(),
         };
 
-        self.sessions.write().await.insert(session_id.clone(), session.clone());
+        self.sessions
+            .write()
+            .await
+            .insert(session_id.clone(), session.clone());
 
         // Track login event
-        self.activity_tracker.write().await.track_event(
-            credentials.username,
-            ActivityEvent::UserLogin,
-            credentials.ip_address.as_ref().map(|ip| ip.clone()).or_else(|| Some(String::new())),
-        ).await?;
+        self.activity_tracker
+            .write()
+            .await
+            .track_event(
+                credentials.username,
+                ActivityEvent::UserLogin,
+                credentials
+                    .ip_address
+                    .as_ref()
+                    .map(|ip| ip.clone())
+                    .or_else(|| Some(String::new())),
+            )
+            .await?;
 
         Ok(session)
     }
@@ -239,13 +260,15 @@ impl UserManager {
         let sessions = self.sessions.read().await;
 
         let total_users = users.len() as u64;
-        let active_users_24h = sessions.values()
+        let active_users_24h = sessions
+            .values()
             .filter(|s| s.last_accessed_at >= get_current_timestamp() - 86400)
             .count() as u64;
 
         // Calculate new users today
         let today_start = get_today_start_timestamp();
-        let new_users_today = users.values()
+        let new_users_today = users
+            .values()
             .filter(|u| u.created_at >= today_start)
             .count() as u64;
 
@@ -254,22 +277,28 @@ impl UserManager {
             active_users_24h,
             new_users_today,
             total_sessions: sessions.len() as u64,
-            verified_users: users.values().filter(|u| u.status == UserStatus::Active).count() as u64,
-            pending_verification: users.values().filter(|u| u.status == UserStatus::PendingVerification).count() as u64,
+            verified_users: users
+                .values()
+                .filter(|u| u.status == UserStatus::Active)
+                .count() as u64,
+            pending_verification: users
+                .values()
+                .filter(|u| u.status == UserStatus::PendingVerification)
+                .count() as u64,
         })
     }
 
     /// Get user management health status
     pub async fn health_check(&self) -> Result<ComponentHealth> {
         let start_time = SystemTime::now();
-        
+
         // Test all components
         let _users_count = self.users.read().await.len();
         let _sessions_count = self.sessions.read().await.len();
         let _providers_count = self.oauth_providers.read().await.len();
-        
+
         let response_time = start_time.elapsed().unwrap().as_millis() as u64;
-        
+
         Ok(ComponentHealth {
             status: "healthy".to_string(),
             response_time_ms: response_time,
@@ -408,9 +437,7 @@ pub struct ActivityTracker {
 
 impl ActivityTracker {
     pub fn new() -> Self {
-        Self {
-            events: Vec::new(),
-        }
+        Self { events: Vec::new() }
     }
 
     pub async fn initialize(&mut self) -> Result<()> {
@@ -418,7 +445,12 @@ impl ActivityTracker {
         Ok(())
     }
 
-    pub async fn track_event(&mut self, user_id: String, event: ActivityEvent, metadata: Option<String>) -> Result<()> {
+    pub async fn track_event(
+        &mut self,
+        user_id: String,
+        event: ActivityEvent,
+        metadata: Option<String>,
+    ) -> Result<()> {
         let record = ActivityEventRecord {
             id: generate_event_id(),
             user_id,

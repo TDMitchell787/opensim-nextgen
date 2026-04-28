@@ -1,4 +1,4 @@
-use noise::{NoiseFn, Fbm, Perlin, RidgedMulti, SuperSimplex, Worley};
+use noise::{Fbm, NoiseFn, Perlin, RidgedMulti, SuperSimplex, Worley};
 use tracing::info;
 
 #[derive(Debug, Clone)]
@@ -50,7 +50,10 @@ pub fn generate(params: &TerrainParams) -> Vec<f32> {
         "plateau" => generate_plateau(seed, size, scale, roughness),
         "volcanic" => generate_volcanic(seed, size, scale, roughness),
         _ => {
-            info!("[TERRAIN] Unknown preset '{}', falling back to rolling_hills", params.preset);
+            info!(
+                "[TERRAIN] Unknown preset '{}', falling back to rolling_hills",
+                params.preset
+            );
             generate_rolling_hills(seed, size, scale, roughness)
         }
     };
@@ -198,7 +201,13 @@ fn generate_desert(seed: u32, size: u32, scale: f32, roughness: f32) -> Vec<f32>
     heightmap
 }
 
-fn generate_tropical(seed: u32, size: u32, scale: f32, roughness: f32, water_level: f32) -> Vec<f32> {
+fn generate_tropical(
+    seed: u32,
+    size: u32,
+    scale: f32,
+    roughness: f32,
+    water_level: f32,
+) -> Vec<f32> {
     let mut fbm = Fbm::<Perlin>::new(seed);
     fbm.octaves = octave_count(roughness);
     fbm.frequency = 2.0;
@@ -346,7 +355,12 @@ fn generate_volcanic(seed: u32, size: u32, scale: f32, roughness: f32) -> Vec<f3
     heightmap
 }
 
-pub fn generate_grid_tile(params: &TerrainParams, grid_size: u32, grid_x: u32, grid_y: u32) -> Vec<f32> {
+pub fn generate_grid_tile(
+    params: &TerrainParams,
+    grid_size: u32,
+    grid_x: u32,
+    grid_y: u32,
+) -> Vec<f32> {
     let seed = if params.seed == 0 {
         rand::random::<u32>()
     } else {
@@ -404,7 +418,11 @@ pub fn generate_grid_tile(params: &TerrainParams, grid_size: u32, grid_x: u32, g
                     let dist = ((cx * cx + cy * cy) as f32).sqrt() * 2.0;
                     let cone = (1.0 - dist * 1.2).max(0.0);
                     let cone_curved = cone * cone * 0.8 + cone * 0.2;
-                    let crater = if dist < 0.08 { -0.15 * (1.0 - dist / 0.08) } else { 0.0 };
+                    let crater = if dist < 0.08 {
+                        -0.15 * (1.0 - dist / 0.08)
+                    } else {
+                        0.0
+                    };
                     let r = ridged.get([gx * 4.0, gy * 4.0]) as f32 * 0.15;
                     10.0 + (cone_curved + crater + r) * 70.0
                 }
@@ -420,7 +438,9 @@ pub fn generate_grid_tile(params: &TerrainParams, grid_size: u32, grid_x: u32, g
 
     info!(
         "[TERRAIN] Grid tile ({},{}) generated: {} values, range {:.1}..{:.1}",
-        grid_x, grid_y, heightmap.len(),
+        grid_x,
+        grid_y,
+        heightmap.len(),
         heightmap.iter().cloned().fold(f32::INFINITY, f32::min),
         heightmap.iter().cloned().fold(f32::NEG_INFINITY, f32::max),
     );
@@ -429,8 +449,14 @@ pub fn generate_grid_tile(params: &TerrainParams, grid_size: u32, grid_x: u32, g
 }
 
 pub const PRESET_NAMES: &[&str] = &[
-    "island", "mountains", "rolling_hills", "desert",
-    "tropical", "canyon", "plateau", "volcanic",
+    "island",
+    "mountains",
+    "rolling_hills",
+    "desert",
+    "tropical",
+    "canyon",
+    "plateau",
+    "volcanic",
 ];
 
 pub fn preset_description(preset: &str) -> &str {
@@ -605,7 +631,10 @@ mod tests {
         assert!(
             range_hi > range_lo,
             "Higher scale ({:.1}) should have more range ({:.1}) than lower ({:.1}, {:.1})",
-            1.5, range_hi, 0.5, range_lo
+            1.5,
+            range_hi,
+            0.5,
+            range_lo
         );
     }
 
@@ -624,7 +653,11 @@ mod tests {
     fn test_preset_descriptions() {
         for preset in PRESET_NAMES {
             let desc = preset_description(preset);
-            assert!(!desc.contains("Unknown"), "Preset '{}' should have description", preset);
+            assert!(
+                !desc.contains("Unknown"),
+                "Preset '{}' should have description",
+                preset
+            );
         }
     }
 }

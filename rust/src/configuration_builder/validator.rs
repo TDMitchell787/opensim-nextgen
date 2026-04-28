@@ -18,7 +18,12 @@ impl ConfigurationValidator {
         self.validate_system_requirements(&config.system_requirements, &mut warnings);
 
         if let Some(container_config) = &config.container_config {
-            self.validate_container_config(container_config, &config.deployment_type, &mut errors, &mut warnings);
+            self.validate_container_config(
+                container_config,
+                &config.deployment_type,
+                &mut errors,
+                &mut warnings,
+            );
         }
 
         ValidationResult {
@@ -46,7 +51,9 @@ impl ConfigurationValidator {
             warnings.push(ValidationWarning {
                 field: "opensim_ini.grid_name".to_string(),
                 message: "Grid name is very long and may be truncated in viewers".to_string(),
-                suggestion: Some("Consider using a shorter grid name (max 64 characters)".to_string()),
+                suggestion: Some(
+                    "Consider using a shorter grid name (max 64 characters)".to_string(),
+                ),
             });
         }
 
@@ -107,10 +114,14 @@ impl ConfigurationValidator {
     ) {
         match provider {
             DatabaseProvider::Sqlite => {
-                if !connection_string.contains("Data Source=") && !connection_string.contains("Filename=") {
+                if !connection_string.contains("Data Source=")
+                    && !connection_string.contains("Filename=")
+                {
                     errors.push(ValidationError {
                         field: "opensim_ini.connection_string".to_string(),
-                        message: "SQLite connection string must include 'Data Source=' or 'Filename='".to_string(),
+                        message:
+                            "SQLite connection string must include 'Data Source=' or 'Filename='"
+                                .to_string(),
                         code: "INVALID_CONNECTION_STRING".to_string(),
                     });
                 }
@@ -126,7 +137,8 @@ impl ConfigurationValidator {
                 if !connection_string.contains("Database=") {
                     warnings.push(ValidationWarning {
                         field: "opensim_ini.connection_string".to_string(),
-                        message: "PostgreSQL connection string should include 'Database='".to_string(),
+                        message: "PostgreSQL connection string should include 'Database='"
+                            .to_string(),
                         suggestion: Some("Add 'Database=opensim' to connection string".to_string()),
                     });
                 }
@@ -135,14 +147,18 @@ impl ConfigurationValidator {
                 if !connection_string.contains("Server=") && !connection_string.contains("Host=") {
                     errors.push(ValidationError {
                         field: "opensim_ini.connection_string".to_string(),
-                        message: "MySQL/MariaDB connection string must include 'Server=' or 'Host='".to_string(),
+                        message:
+                            "MySQL/MariaDB connection string must include 'Server=' or 'Host='"
+                                .to_string(),
                         code: "INVALID_CONNECTION_STRING".to_string(),
                     });
                 }
             }
         }
 
-        if connection_string.contains("password=password") || connection_string.contains("Pwd=password") {
+        if connection_string.contains("password=password")
+            || connection_string.contains("Pwd=password")
+        {
             warnings.push(ValidationWarning {
                 field: "opensim_ini.connection_string".to_string(),
                 message: "Default password detected in connection string".to_string(),
@@ -173,7 +189,10 @@ impl ConfigurationValidator {
             });
         }
 
-        let uuid_regex = Regex::new(r"^[0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{12}$").unwrap();
+        let uuid_regex = Regex::new(
+            r"^[0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{12}$",
+        )
+        .unwrap();
         if !uuid_regex.is_match(&config.region_uuid) {
             errors.push(ValidationError {
                 field: "region_ini.region_uuid".to_string(),
@@ -194,7 +213,10 @@ impl ConfigurationValidator {
         if !valid_sizes.contains(&config.size_x) {
             warnings.push(ValidationWarning {
                 field: "region_ini.size_x".to_string(),
-                message: format!("Non-standard region size {}. Standard sizes are: 256, 512, 768, 1024", config.size_x),
+                message: format!(
+                    "Non-standard region size {}. Standard sizes are: 256, 512, 768, 1024",
+                    config.size_x
+                ),
                 suggestion: Some("Use standard sizes for best compatibility".to_string()),
             });
         }
@@ -202,7 +224,10 @@ impl ConfigurationValidator {
         if !valid_sizes.contains(&config.size_y) {
             warnings.push(ValidationWarning {
                 field: "region_ini.size_y".to_string(),
-                message: format!("Non-standard region size {}. Standard sizes are: 256, 512, 768, 1024", config.size_y),
+                message: format!(
+                    "Non-standard region size {}. Standard sizes are: 256, 512, 768, 1024",
+                    config.size_y
+                ),
                 suggestion: Some("Use standard sizes for best compatibility".to_string()),
             });
         }
@@ -211,7 +236,9 @@ impl ConfigurationValidator {
             warnings.push(ValidationWarning {
                 field: "region_ini.size".to_string(),
                 message: "Very large regions may have performance issues".to_string(),
-                suggestion: Some("Consider using smaller regions or a var-region approach".to_string()),
+                suggestion: Some(
+                    "Consider using smaller regions or a var-region approach".to_string(),
+                ),
             });
         }
 
@@ -235,7 +262,9 @@ impl ConfigurationValidator {
             warnings.push(ValidationWarning {
                 field: "region_ini.max_agents".to_string(),
                 message: "Very high max agents may cause performance issues".to_string(),
-                suggestion: Some("Consider limiting to 200 agents or less for stability".to_string()),
+                suggestion: Some(
+                    "Consider limiting to 200 agents or less for stability".to_string(),
+                ),
             });
         }
 
@@ -318,7 +347,9 @@ impl ConfigurationValidator {
         errors: &mut Vec<ValidationError>,
         warnings: &mut Vec<ValidationWarning>,
     ) {
-        if *deployment_type == DeploymentType::Docker || *deployment_type == DeploymentType::Kubernetes {
+        if *deployment_type == DeploymentType::Docker
+            || *deployment_type == DeploymentType::Kubernetes
+        {
             if config.memory_limit_mb < 256 {
                 errors.push(ValidationError {
                     field: "container_config.memory_limit_mb".to_string(),
@@ -337,11 +368,19 @@ impl ConfigurationValidator {
         }
 
         if *deployment_type == DeploymentType::Kubernetes {
-            if config.namespace.is_none() || config.namespace.as_ref().map(|s| s.trim().is_empty()).unwrap_or(true) {
+            if config.namespace.is_none()
+                || config
+                    .namespace
+                    .as_ref()
+                    .map(|s| s.trim().is_empty())
+                    .unwrap_or(true)
+            {
                 warnings.push(ValidationWarning {
                     field: "container_config.namespace".to_string(),
                     message: "No namespace specified, will use 'opensim' default".to_string(),
-                    suggestion: Some("Consider specifying a namespace for better organization".to_string()),
+                    suggestion: Some(
+                        "Consider specifying a namespace for better organization".to_string(),
+                    ),
                 });
             }
 
@@ -357,7 +396,9 @@ impl ConfigurationValidator {
                 warnings.push(ValidationWarning {
                     field: "container_config.replicas".to_string(),
                     message: "High replica count may cause resource contention".to_string(),
-                    suggestion: Some("OpenSim regions typically run better with fewer replicas".to_string()),
+                    suggestion: Some(
+                        "OpenSim regions typically run better with fewer replicas".to_string(),
+                    ),
                 });
             }
         }
@@ -425,7 +466,10 @@ mod tests {
 
         let result = validator.validate(&config);
         assert!(!result.valid);
-        assert!(result.errors.iter().any(|e| e.field.contains("region_uuid")));
+        assert!(result
+            .errors
+            .iter()
+            .any(|e| e.field.contains("region_uuid")));
     }
 
     #[test]

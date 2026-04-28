@@ -4,19 +4,19 @@
 //! - PostgreSQL (production recommended)
 //! - MySQL/MariaDB (legacy compatibility)
 
-use std::time::Duration;
 use anyhow::{anyhow, Result};
 use serde::{Deserialize, Serialize};
-use sqlx::{Pool, Postgres, MySql, Row, Executor, Database, Error as SqlxError};
-use tracing::{info, warn, debug};
+use sqlx::{Database, Error as SqlxError, Executor, MySql, Pool, Postgres, Row};
 use std::future::Future;
+use std::time::Duration;
+use tracing::{debug, info, warn};
 
 /// Supported database types
 #[derive(Debug, Clone, Serialize, Deserialize, PartialEq)]
 pub enum DatabaseType {
     PostgreSQL,
     MySQL,
-    MariaDB,  // Same as MySQL but with version detection
+    MariaDB, // Same as MySQL but with version detection
 }
 
 impl std::fmt::Display for DatabaseType {
@@ -126,11 +126,11 @@ impl<'a> DatabasePoolRef<'a> {
             Self::PostgreSQL(pool) => {
                 let tx = pool.begin().await?;
                 Ok(DatabaseTransaction::PostgreSQL(tx))
-            },
+            }
             Self::MySQL(pool) => {
                 let tx = pool.begin().await?;
                 Ok(DatabaseTransaction::MySQL(tx))
-            },
+            }
         }
     }
 
@@ -142,18 +142,22 @@ impl<'a> DatabasePoolRef<'a> {
                 Ok(QueryResult {
                     rows_affected: result.rows_affected(),
                 })
-            },
+            }
             Self::MySQL(pool) => {
                 let result = sqlx::query(query).execute(*pool).await?;
                 Ok(QueryResult {
                     rows_affected: result.rows_affected(),
                 })
-            },
+            }
         }
     }
 
     /// Execute a query with bindings on the database pool
-    pub async fn execute_with_params(&self, query: &str, params: Vec<QueryParam>) -> Result<QueryResult> {
+    pub async fn execute_with_params(
+        &self,
+        query: &str,
+        params: Vec<QueryParam>,
+    ) -> Result<QueryResult> {
         match self {
             Self::PostgreSQL(pool) => {
                 let mut q = sqlx::query(query);
@@ -171,7 +175,7 @@ impl<'a> DatabasePoolRef<'a> {
                 Ok(QueryResult {
                     rows_affected: result.rows_affected(),
                 })
-            },
+            }
             Self::MySQL(pool) => {
                 let mut q = sqlx::query(query);
                 for param in params {
@@ -188,7 +192,7 @@ impl<'a> DatabasePoolRef<'a> {
                 Ok(QueryResult {
                     rows_affected: result.rows_affected(),
                 })
-            },
+            }
         }
     }
 
@@ -223,11 +227,11 @@ impl DatabaseTransaction {
             Self::PostgreSQL(tx) => {
                 tx.commit().await?;
                 Ok(())
-            },
+            }
             Self::MySQL(tx) => {
                 tx.commit().await?;
                 Ok(())
-            },
+            }
         }
     }
 
@@ -272,7 +276,13 @@ impl Default for MultiDatabaseConfig {
 
 impl MultiDatabaseConfig {
     /// Create configuration for PostgreSQL
-    pub fn postgresql(host: &str, port: u16, database: &str, username: &str, password: &str) -> Self {
+    pub fn postgresql(
+        host: &str,
+        port: u16,
+        database: &str,
+        username: &str,
+        password: &str,
+    ) -> Self {
         Self {
             database_type: DatabaseType::PostgreSQL,
             connection_string: format!(
@@ -299,16 +309,20 @@ impl MultiDatabaseConfig {
         }
     }
 
-
     /// Parse configuration from environment variables
     pub fn from_env() -> Result<Self> {
         let database_url = std::env::var("DATABASE_URL")
             .unwrap_or_else(|_| "postgresql://opensim@localhost/opensim_pg".to_string());
-        
+
         let database_type = DatabaseType::from_url(&database_url)?;
-        
+
         let max_connections = std::env::var("DB_MAX_CONNECTIONS")
-            .unwrap_or_else(|_| database_type.features().max_connections_recommended.to_string())
+            .unwrap_or_else(|_| {
+                database_type
+                    .features()
+                    .max_connections_recommended
+                    .to_string()
+            })
             .parse()
             .unwrap_or(database_type.features().max_connections_recommended);
 
@@ -342,7 +356,6 @@ impl DatabaseConnection {
         }
     }
 
-
     /// Get pool reference for backwards compatibility with legacy code
     /// Returns a DatabasePoolRef that can be used with existing SQLx code
     pub fn pool(&self) -> DatabasePoolRef {
@@ -359,9 +372,11 @@ impl DatabaseConnection {
 
     /// Create new database connection based on configuration
     pub async fn new(config: &MultiDatabaseConfig) -> Result<Self> {
-        info!("Connecting to {} database: {}", 
-              format!("{:?}", config.database_type).to_lowercase(),
-              Self::sanitize_url(&config.connection_string));
+        info!(
+            "Connecting to {} database: {}",
+            format!("{:?}", config.database_type).to_lowercase(),
+            Self::sanitize_url(&config.connection_string)
+        );
 
         match config.database_type {
             DatabaseType::PostgreSQL => {
@@ -373,9 +388,9 @@ impl DatabaseConnection {
                     .max_lifetime(Duration::from_secs(config.max_lifetime_seconds))
                     .connect(&config.connection_string)
                     .await?;
-                
+
                 Ok(Self::PostgreSQL(pool))
-            },
+            }
             DatabaseType::MySQL | DatabaseType::MariaDB => {
                 let pool = sqlx::mysql::MySqlPoolOptions::new()
                     .max_connections(config.max_connections)
@@ -385,9 +400,9 @@ impl DatabaseConnection {
                     .max_lifetime(Duration::from_secs(config.max_lifetime_seconds))
                     .connect(&config.connection_string)
                     .await?;
-                
+
                 Ok(Self::MySQL(pool))
-            },
+            }
         }
     }
 
@@ -408,21 +423,17 @@ impl DatabaseConnection {
     pub async fn test_connection(&self) -> Result<()> {
         match self {
             Self::PostgreSQL(pool) => {
-                let row: (i64,) = sqlx::query_as("SELECT 1::bigint")
-                    .fetch_one(pool)
-                    .await?;
+                let row: (i64,) = sqlx::query_as("SELECT 1::bigint").fetch_one(pool).await?;
                 if row.0 != 1 {
                     return Err(anyhow!("PostgreSQL connection test failed"));
                 }
-            },
+            }
             Self::MySQL(pool) => {
-                let row: (i64,) = sqlx::query_as("SELECT 1")
-                    .fetch_one(pool)
-                    .await?;
+                let row: (i64,) = sqlx::query_as("SELECT 1").fetch_one(pool).await?;
                 if row.0 != 1 {
                     return Err(anyhow!("MySQL connection test failed"));
                 }
-            },
+            }
         }
         Ok(())
     }
@@ -433,11 +444,11 @@ impl DatabaseConnection {
             Self::PostgreSQL(pool) => {
                 info!("Running PostgreSQL migrations");
                 sqlx::migrate!("./migrations/postgres").run(pool).await?;
-            },
+            }
             Self::MySQL(pool) => {
                 info!("Running MySQL migrations");
                 sqlx::migrate!("./migrations/mysql").run(pool).await?;
-            },
+            }
         }
         Ok(())
     }
@@ -468,11 +479,11 @@ impl DatabaseConnection {
             Self::PostgreSQL(pool) => {
                 let tx = pool.begin().await?;
                 Ok(DatabaseTransaction::PostgreSQL(tx))
-            },
+            }
             Self::MySQL(pool) => {
                 let tx = pool.begin().await?;
                 Ok(DatabaseTransaction::MySQL(tx))
-            },
+            }
         }
     }
 
@@ -505,36 +516,143 @@ impl DatabaseConnection {
         }
 
         let assets = vec![
-            AssetEntry { id: Uuid::parse_str("66c41e39-38f9-f75a-024e-585989bfab73").unwrap(), name: "Default Shape", description: "Default avatar shape", asset_type: 13, data: super::initialization::create_ruth_shape_data() },
-            AssetEntry { id: Uuid::parse_str("77c41e39-38f9-f75a-024e-585989bbabbb").unwrap(), name: "Default Skin", description: "Default avatar skin", asset_type: 13, data: super::initialization::create_ruth_skin_data() },
-            AssetEntry { id: Uuid::parse_str("d342e6c0-b9d2-11dc-95ff-0800200c9a66").unwrap(), name: "Default Hair", description: "Default avatar hair", asset_type: 13, data: super::initialization::create_ruth_hair_data() },
-            AssetEntry { id: Uuid::parse_str("4bb6fa4d-1cd2-498a-a84c-95c1a0e745a7").unwrap(), name: "Default Eyes", description: "Default avatar eyes", asset_type: 13, data: super::initialization::create_ruth_eyes_data() },
-            AssetEntry { id: Uuid::parse_str("00000000-38f9-1111-024e-222222111110").unwrap(), name: "Default Shirt", description: "Default avatar shirt", asset_type: 5, data: super::initialization::create_ruth_shirt_data() },
-            AssetEntry { id: Uuid::parse_str("00000000-38f9-1111-024e-222222111120").unwrap(), name: "Default Pants", description: "Default avatar pants", asset_type: 5, data: super::initialization::create_ruth_pants_data() },
-            AssetEntry { id: Uuid::parse_str("5748decc-f629-461c-9a36-a35a221fe21f").unwrap(), name: "Default Clothing Texture", description: "White clothing texture", asset_type: 0, data: super::initialization::create_default_j2k_texture() },
-            AssetEntry { id: Uuid::parse_str("7ca39b4c-bd19-4699-aff7-f93fd03d3e7b").unwrap(), name: "Default Hair Texture", description: "Brown hair texture", asset_type: 0, data: super::initialization::create_default_j2k_texture() },
-            AssetEntry { id: Uuid::parse_str("6522e74d-1660-4e7f-b601-6f48c1659a77").unwrap(), name: "Default Eyes Texture", description: "Brown eyes texture", asset_type: 0, data: super::initialization::create_default_j2k_texture() },
-            AssetEntry { id: Uuid::parse_str("00000000-0000-1111-9999-000000000012").unwrap(), name: "Default Skin Head Texture", description: "Default skin head", asset_type: 0, data: super::initialization::create_default_j2k_texture() },
-            AssetEntry { id: Uuid::parse_str("00000000-0000-1111-9999-000000000010").unwrap(), name: "Default Skin Upper Texture", description: "Default skin upper body", asset_type: 0, data: super::initialization::create_default_j2k_texture() },
-            AssetEntry { id: Uuid::parse_str("00000000-0000-1111-9999-000000000011").unwrap(), name: "Default Skin Lower Texture", description: "Default skin lower body", asset_type: 0, data: super::initialization::create_default_j2k_texture() },
-            AssetEntry { id: Uuid::parse_str("5a9f4a74-30f2-821c-b88d-70499d3e7183").unwrap(), name: "Baked Head Texture", description: "Ruth baked head texture for AvatarAppearance", asset_type: 0, data: super::initialization::load_ruth_head_texture() },
-            AssetEntry { id: Uuid::parse_str("ae2de45c-d252-50b8-5c6e-19f39ce79317").unwrap(), name: "Baked Upper Body Texture", description: "Ruth baked upper body texture for AvatarAppearance", asset_type: 0, data: super::initialization::load_ruth_upper_texture() },
-            AssetEntry { id: Uuid::parse_str("24daea5f-0539-cfcf-047f-fbc40b2786ba").unwrap(), name: "Baked Lower Body Texture", description: "Ruth baked lower body texture for AvatarAppearance", asset_type: 0, data: super::initialization::load_ruth_lower_texture() },
-            AssetEntry { id: Uuid::parse_str("52cc6bb6-2ee5-e632-d3ad-50197b1dcb8a").unwrap(), name: "Baked Eyes Texture", description: "Ruth baked eyes texture for AvatarAppearance", asset_type: 0, data: super::initialization::load_ruth_eyes_texture() },
-            AssetEntry { id: Uuid::parse_str("09aac1fb-6bce-0bee-7d44-caac6dbb6c63").unwrap(), name: "Baked Hair Texture", description: "Ruth baked hair texture for AvatarAppearance", asset_type: 0, data: super::initialization::load_ruth_hair_texture() },
-            AssetEntry { id: Uuid::parse_str("c228d1cf-4b5d-4ba8-84f4-899a0796aa97").unwrap(), name: "Default Skin Texture", description: "Default skin texture (base)", asset_type: 0, data: super::initialization::create_default_j2k_texture() },
+            AssetEntry {
+                id: Uuid::parse_str("66c41e39-38f9-f75a-024e-585989bfab73").unwrap(),
+                name: "Default Shape",
+                description: "Default avatar shape",
+                asset_type: 13,
+                data: super::initialization::create_ruth_shape_data(),
+            },
+            AssetEntry {
+                id: Uuid::parse_str("77c41e39-38f9-f75a-024e-585989bbabbb").unwrap(),
+                name: "Default Skin",
+                description: "Default avatar skin",
+                asset_type: 13,
+                data: super::initialization::create_ruth_skin_data(),
+            },
+            AssetEntry {
+                id: Uuid::parse_str("d342e6c0-b9d2-11dc-95ff-0800200c9a66").unwrap(),
+                name: "Default Hair",
+                description: "Default avatar hair",
+                asset_type: 13,
+                data: super::initialization::create_ruth_hair_data(),
+            },
+            AssetEntry {
+                id: Uuid::parse_str("4bb6fa4d-1cd2-498a-a84c-95c1a0e745a7").unwrap(),
+                name: "Default Eyes",
+                description: "Default avatar eyes",
+                asset_type: 13,
+                data: super::initialization::create_ruth_eyes_data(),
+            },
+            AssetEntry {
+                id: Uuid::parse_str("00000000-38f9-1111-024e-222222111110").unwrap(),
+                name: "Default Shirt",
+                description: "Default avatar shirt",
+                asset_type: 5,
+                data: super::initialization::create_ruth_shirt_data(),
+            },
+            AssetEntry {
+                id: Uuid::parse_str("00000000-38f9-1111-024e-222222111120").unwrap(),
+                name: "Default Pants",
+                description: "Default avatar pants",
+                asset_type: 5,
+                data: super::initialization::create_ruth_pants_data(),
+            },
+            AssetEntry {
+                id: Uuid::parse_str("5748decc-f629-461c-9a36-a35a221fe21f").unwrap(),
+                name: "Default Clothing Texture",
+                description: "White clothing texture",
+                asset_type: 0,
+                data: super::initialization::create_default_j2k_texture(),
+            },
+            AssetEntry {
+                id: Uuid::parse_str("7ca39b4c-bd19-4699-aff7-f93fd03d3e7b").unwrap(),
+                name: "Default Hair Texture",
+                description: "Brown hair texture",
+                asset_type: 0,
+                data: super::initialization::create_default_j2k_texture(),
+            },
+            AssetEntry {
+                id: Uuid::parse_str("6522e74d-1660-4e7f-b601-6f48c1659a77").unwrap(),
+                name: "Default Eyes Texture",
+                description: "Brown eyes texture",
+                asset_type: 0,
+                data: super::initialization::create_default_j2k_texture(),
+            },
+            AssetEntry {
+                id: Uuid::parse_str("00000000-0000-1111-9999-000000000012").unwrap(),
+                name: "Default Skin Head Texture",
+                description: "Default skin head",
+                asset_type: 0,
+                data: super::initialization::create_default_j2k_texture(),
+            },
+            AssetEntry {
+                id: Uuid::parse_str("00000000-0000-1111-9999-000000000010").unwrap(),
+                name: "Default Skin Upper Texture",
+                description: "Default skin upper body",
+                asset_type: 0,
+                data: super::initialization::create_default_j2k_texture(),
+            },
+            AssetEntry {
+                id: Uuid::parse_str("00000000-0000-1111-9999-000000000011").unwrap(),
+                name: "Default Skin Lower Texture",
+                description: "Default skin lower body",
+                asset_type: 0,
+                data: super::initialization::create_default_j2k_texture(),
+            },
+            AssetEntry {
+                id: Uuid::parse_str("5a9f4a74-30f2-821c-b88d-70499d3e7183").unwrap(),
+                name: "Baked Head Texture",
+                description: "Ruth baked head texture for AvatarAppearance",
+                asset_type: 0,
+                data: super::initialization::load_ruth_head_texture(),
+            },
+            AssetEntry {
+                id: Uuid::parse_str("ae2de45c-d252-50b8-5c6e-19f39ce79317").unwrap(),
+                name: "Baked Upper Body Texture",
+                description: "Ruth baked upper body texture for AvatarAppearance",
+                asset_type: 0,
+                data: super::initialization::load_ruth_upper_texture(),
+            },
+            AssetEntry {
+                id: Uuid::parse_str("24daea5f-0539-cfcf-047f-fbc40b2786ba").unwrap(),
+                name: "Baked Lower Body Texture",
+                description: "Ruth baked lower body texture for AvatarAppearance",
+                asset_type: 0,
+                data: super::initialization::load_ruth_lower_texture(),
+            },
+            AssetEntry {
+                id: Uuid::parse_str("52cc6bb6-2ee5-e632-d3ad-50197b1dcb8a").unwrap(),
+                name: "Baked Eyes Texture",
+                description: "Ruth baked eyes texture for AvatarAppearance",
+                asset_type: 0,
+                data: super::initialization::load_ruth_eyes_texture(),
+            },
+            AssetEntry {
+                id: Uuid::parse_str("09aac1fb-6bce-0bee-7d44-caac6dbb6c63").unwrap(),
+                name: "Baked Hair Texture",
+                description: "Ruth baked hair texture for AvatarAppearance",
+                asset_type: 0,
+                data: super::initialization::load_ruth_hair_texture(),
+            },
+            AssetEntry {
+                id: Uuid::parse_str("c228d1cf-4b5d-4ba8-84f4-899a0796aa97").unwrap(),
+                name: "Default Skin Texture",
+                description: "Default skin texture (base)",
+                asset_type: 0,
+                data: super::initialization::create_default_j2k_texture(),
+            },
         ];
 
         let mut seeded = 0;
         match self {
             Self::PostgreSQL(pool) => {
                 for asset in &assets {
-                    let exists: Option<i64> = sqlx::query_scalar(
-                        "SELECT 1::bigint FROM assets WHERE id = $1"
-                    )
-                    .bind(asset.id)
-                    .fetch_optional(pool)
-                    .await?;
+                    let exists: Option<i64> =
+                        sqlx::query_scalar("SELECT 1::bigint FROM assets WHERE id = $1")
+                            .bind(asset.id)
+                            .fetch_optional(pool)
+                            .await?;
 
                     if exists.is_none() {
                         sqlx::query(
@@ -554,12 +672,11 @@ impl DatabaseConnection {
             }
             Self::MySQL(pool) => {
                 for asset in &assets {
-                    let exists: Option<i64> = sqlx::query_scalar(
-                        "SELECT 1 FROM assets WHERE id = ?"
-                    )
-                    .bind(asset.id.to_string())
-                    .fetch_optional(pool)
-                    .await?;
+                    let exists: Option<i64> =
+                        sqlx::query_scalar("SELECT 1 FROM assets WHERE id = ?")
+                            .bind(asset.id.to_string())
+                            .fetch_optional(pool)
+                            .await?;
 
                     if exists.is_none() {
                         sqlx::query(
@@ -580,7 +697,10 @@ impl DatabaseConnection {
         }
 
         if seeded > 0 {
-            info!("Seeded {} default Ruth avatar assets (including baked textures) into database", seeded);
+            info!(
+                "Seeded {} default Ruth avatar assets (including baked textures) into database",
+                seeded
+            );
         } else {
             info!("All default Ruth avatar assets (including baked textures) already present");
         }
@@ -634,7 +754,7 @@ impl DatabaseConnection {
                 } else {
                     DatabaseHealth::Healthy
                 }
-            },
+            }
             Err(e) => DatabaseHealth::Critical(e.to_string()),
         }
     }
@@ -646,24 +766,36 @@ mod tests {
 
     #[test]
     fn test_database_type_detection() {
-        assert_eq!(DatabaseType::from_url("postgresql://localhost/test").unwrap(), DatabaseType::PostgreSQL);
-        assert_eq!(DatabaseType::from_url("postgres://localhost/test").unwrap(), DatabaseType::PostgreSQL);
-        assert_eq!(DatabaseType::from_url("mysql://localhost/test").unwrap(), DatabaseType::MySQL);
-        assert_eq!(DatabaseType::from_url("mariadb://localhost/test").unwrap(), DatabaseType::MariaDB);
-        
+        assert_eq!(
+            DatabaseType::from_url("postgresql://localhost/test").unwrap(),
+            DatabaseType::PostgreSQL
+        );
+        assert_eq!(
+            DatabaseType::from_url("postgres://localhost/test").unwrap(),
+            DatabaseType::PostgreSQL
+        );
+        assert_eq!(
+            DatabaseType::from_url("mysql://localhost/test").unwrap(),
+            DatabaseType::MySQL
+        );
+        assert_eq!(
+            DatabaseType::from_url("mariadb://localhost/test").unwrap(),
+            DatabaseType::MariaDB
+        );
+
         assert!(DatabaseType::from_url("unsupported://localhost/test").is_err());
     }
 
     #[test]
     fn test_database_config_creation() {
-        let pg_config = MultiDatabaseConfig::postgresql("localhost", 5432, "opensim", "user", "pass");
+        let pg_config =
+            MultiDatabaseConfig::postgresql("localhost", 5432, "opensim", "user", "pass");
         assert_eq!(pg_config.database_type, DatabaseType::PostgreSQL);
         assert!(pg_config.connection_string.contains("postgresql://"));
 
         let mysql_config = MultiDatabaseConfig::mysql("localhost", 3306, "opensim", "user", "pass");
         assert_eq!(mysql_config.database_type, DatabaseType::MySQL);
         assert!(mysql_config.connection_string.contains("mysql://"));
-
     }
 
     #[test]

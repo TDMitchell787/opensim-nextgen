@@ -1,13 +1,13 @@
-use anyhow::Result;
-use serde::{Deserialize, Serialize};
-use sqlx::{Pool, Postgres, Row};
-use tracing::{info, warn, error, debug};
-use uuid::Uuid;
-use chrono::{DateTime, Utc};
-use std::collections::HashMap;
-use std::sync::Arc;
 use crate::database::multi_backend::DatabasePoolRef;
 use crate::database::sqlite_admin::SqliteAdmin;
+use anyhow::Result;
+use chrono::{DateTime, Utc};
+use serde::{Deserialize, Serialize};
+use sqlx::{Pool, Postgres, Row};
+use std::collections::HashMap;
+use std::sync::Arc;
+use tracing::{debug, error, info, warn};
+use uuid::Uuid;
 
 #[derive(Debug, Serialize, Deserialize, Clone)]
 pub struct CreateUserRequest {
@@ -151,7 +151,7 @@ pub struct DatabaseAdmin {
 
 impl DatabaseAdmin {
     pub fn new(pool: sqlx::Pool<Postgres>) -> Self {
-        Self { 
+        Self {
             pool: Some(pool),
             sqlite_admin: None,
             stub_mode: false,
@@ -163,8 +163,10 @@ impl DatabaseAdmin {
         if self.stub_mode {
             return Err(anyhow::anyhow!("Operation not implemented for SQLite backend. Please use PostgreSQL for admin operations."));
         }
-        
-        self.pool.as_ref().ok_or_else(|| anyhow::anyhow!("Database pool not available"))
+
+        self.pool
+            .as_ref()
+            .ok_or_else(|| anyhow::anyhow!("Database pool not available"))
     }
 
     /// Helper to create stub response for admin operations
@@ -180,8 +182,10 @@ impl DatabaseAdmin {
     /// Create a stub admin interface for SQLite compatibility mode
     /// This creates a minimal admin interface that returns "not implemented" for operations
     pub fn new_stub() -> Self {
-        warn!("Creating stub DatabaseAdmin - admin operations will return 'not implemented' errors");
-        Self { 
+        warn!(
+            "Creating stub DatabaseAdmin - admin operations will return 'not implemented' errors"
+        );
+        Self {
             pool: None,
             sqlite_admin: None,
             stub_mode: true,
@@ -190,8 +194,11 @@ impl DatabaseAdmin {
 
     /// Create SQLite-compatible admin interface
     pub async fn new_sqlite(database_path: &str) -> Result<Self> {
-        info!("Creating SQLite-compatible DatabaseAdmin for: {}", database_path);
-        
+        info!(
+            "Creating SQLite-compatible DatabaseAdmin for: {}",
+            database_path
+        );
+
         // Create real SQLite admin interface
         match SqliteAdmin::new(database_path).await {
             Ok(sqlite_admin) => {
@@ -213,12 +220,12 @@ impl DatabaseAdmin {
     /// Create a new user account (equivalent to 'create user' in OpenSim Robust)
     pub async fn create_user(&self, request: CreateUserRequest) -> Result<AdminOperationResult> {
         info!("Creating user: {} {}", request.firstname, request.lastname);
-        
+
         // Delegate to SQLite admin if available
         if let Some(ref sqlite_admin) = self.sqlite_admin {
             return sqlite_admin.create_user(request).await;
         }
-        
+
         // Get pool or return error for stub mode
         let pool = match self.get_pool() {
             Ok(pool) => pool,
@@ -231,18 +238,20 @@ impl DatabaseAdmin {
                 });
             }
         };
-        
+
         // Generate new user ID
         let user_id = Uuid::new_v4();
         let created = Utc::now();
         let user_level = request.user_level.unwrap_or(0);
-        
+
         // Generate timestamp for OpenSim compatibility
         let created_timestamp = created.timestamp() as i32;
 
         // Generate password hash and salt for auth table
         // OpenSim uses MD5(MD5(password) + ":" + salt)
-        let salt: String = (0..32).map(|_| format!("{:x}", rand::random::<u8>() % 16)).collect();
+        let salt: String = (0..32)
+            .map(|_| format!("{:x}", rand::random::<u8>() % 16))
+            .collect();
         let password_md5 = format!("{:x}", md5::compute(request.password.as_bytes()));
         let salted = format!("{}:{}", password_md5, salt);
         let password_hash = format!("{:x}", md5::compute(salted.as_bytes()));
@@ -283,7 +292,10 @@ impl DatabaseAdmin {
                             .await
                         {
                             Ok(_) => {
-                                info!("User created with auth, now creating inventory for: {} {}", request.firstname, request.lastname);
+                                info!(
+                                    "User created with auth, now creating inventory for: {} {}",
+                                    request.firstname, request.lastname
+                                );
 
                                 match crate::database::default_inventory::create_default_user_inventory(pool, user_id).await {
                                     Ok(_) => {
@@ -323,10 +335,12 @@ impl DatabaseAdmin {
                             Err(e) => {
                                 error!("Failed to create auth record: {}", e);
                                 // Try to rollback user account
-                                let _ = sqlx::query("DELETE FROM UserAccounts WHERE PrincipalID = $1::uuid")
-                                    .bind(user_id.to_string())
-                                    .execute(&mut *conn)
-                                    .await;
+                                let _ = sqlx::query(
+                                    "DELETE FROM UserAccounts WHERE PrincipalID = $1::uuid",
+                                )
+                                .bind(user_id.to_string())
+                                .execute(&mut *conn)
+                                .await;
                                 AdminOperationResult {
                                     success: false,
                                     message: format!("Failed to create auth record: {}", e),
@@ -357,14 +371,19 @@ impl DatabaseAdmin {
                 }
             }
         };
-        
+
         Ok(result)
     }
 
     /// Reset user password (equivalent to 'reset user password' in OpenSim Robust)
-    pub async fn reset_user_password(&self, firstname: &str, lastname: &str, new_password: &str) -> Result<AdminOperationResult> {
+    pub async fn reset_user_password(
+        &self,
+        firstname: &str,
+        lastname: &str,
+        new_password: &str,
+    ) -> Result<AdminOperationResult> {
         info!("Resetting password for user: {} {}", firstname, lastname);
-        
+
         // Get pool or return error for stub mode
         let pool = match self.get_pool() {
             Ok(pool) => pool,
@@ -377,10 +396,10 @@ impl DatabaseAdmin {
                 });
             }
         };
-        
+
         // Hash password (in production, use proper password hashing)
         let password_hash = format!("$1${}$", new_password); // Simplified for demo
-        
+
         let result = match pool.acquire().await {
             Ok(mut conn) => {
                 let query = r#"
@@ -398,10 +417,16 @@ impl DatabaseAdmin {
                 {
                     Ok(result) => {
                         if result.rows_affected() > 0 {
-                            info!("Password reset successfully for: {} {}", firstname, lastname);
+                            info!(
+                                "Password reset successfully for: {} {}",
+                                firstname, lastname
+                            );
                             AdminOperationResult {
                                 success: true,
-                                message: format!("Password reset successfully for user '{}' '{}'", firstname, lastname),
+                                message: format!(
+                                    "Password reset successfully for user '{}' '{}'",
+                                    firstname, lastname
+                                ),
                                 affected_rows: Some(result.rows_affected() as i64),
                                 data: None,
                             }
@@ -436,14 +461,22 @@ impl DatabaseAdmin {
                 }
             }
         };
-        
+
         Ok(result)
     }
 
     /// Reset user email (equivalent to 'reset user email' in OpenSim Robust)
-    pub async fn reset_user_email(&self, firstname: &str, lastname: &str, new_email: &str) -> Result<AdminOperationResult> {
-        info!("Resetting email for user: {} {} to {}", firstname, lastname, new_email);
-        
+    pub async fn reset_user_email(
+        &self,
+        firstname: &str,
+        lastname: &str,
+        new_email: &str,
+    ) -> Result<AdminOperationResult> {
+        info!(
+            "Resetting email for user: {} {} to {}",
+            firstname, lastname, new_email
+        );
+
         // Get pool or return error for stub mode
         let pool = match self.get_pool() {
             Ok(pool) => pool,
@@ -451,7 +484,7 @@ impl DatabaseAdmin {
                 return Ok(self.stub_response("Database operation"));
             }
         };
-        
+
         let result = match pool.acquire().await {
             Ok(mut conn) => {
                 let query = r#"
@@ -472,8 +505,10 @@ impl DatabaseAdmin {
                             info!("Email updated successfully for: {} {}", firstname, lastname);
                             AdminOperationResult {
                                 success: true,
-                                message: format!("Email updated successfully for user '{}' '{}' to '{}'", 
-                                    firstname, lastname, new_email),
+                                message: format!(
+                                    "Email updated successfully for user '{}' '{}' to '{}'",
+                                    firstname, lastname, new_email
+                                ),
                                 affected_rows: Some(result.rows_affected() as i64),
                                 data: None,
                             }
@@ -508,15 +543,23 @@ impl DatabaseAdmin {
                 }
             }
         };
-        
+
         Ok(result)
     }
 
     /// Set user level (equivalent to 'set user level' in OpenSim Robust)
     /// Level 200+ = god mode if enabled in OpenSim
-    pub async fn set_user_level(&self, firstname: &str, lastname: &str, level: i32) -> Result<AdminOperationResult> {
-        info!("Setting user level for: {} {} to {}", firstname, lastname, level);
-        
+    pub async fn set_user_level(
+        &self,
+        firstname: &str,
+        lastname: &str,
+        level: i32,
+    ) -> Result<AdminOperationResult> {
+        info!(
+            "Setting user level for: {} {} to {}",
+            firstname, lastname, level
+        );
+
         // Get pool or return error for stub mode
         let pool = match self.get_pool() {
             Ok(pool) => pool,
@@ -524,7 +567,7 @@ impl DatabaseAdmin {
                 return Ok(self.stub_response("Database operation"));
             }
         };
-        
+
         let result = match pool.acquire().await {
             Ok(mut conn) => {
                 let query = r#"
@@ -543,11 +586,16 @@ impl DatabaseAdmin {
                     Ok(result) => {
                         if result.rows_affected() > 0 {
                             let privilege = if level >= 200 { " (God Level)" } else { "" };
-                            info!("User level updated successfully for: {} {}", firstname, lastname);
+                            info!(
+                                "User level updated successfully for: {} {}",
+                                firstname, lastname
+                            );
                             AdminOperationResult {
                                 success: true,
-                                message: format!("User level updated for '{}' '{}' to {}{}", 
-                                    firstname, lastname, level, privilege),
+                                message: format!(
+                                    "User level updated for '{}' '{}' to {}{}",
+                                    firstname, lastname, level, privilege
+                                ),
                                 affected_rows: Some(result.rows_affected() as i64),
                                 data: Some(serde_json::json!({
                                     "firstname": firstname,
@@ -587,14 +635,18 @@ impl DatabaseAdmin {
                 }
             }
         };
-        
+
         Ok(result)
     }
 
     /// Show user account details (equivalent to 'show account' in OpenSim Robust)
-    pub async fn show_user_account(&self, firstname: &str, lastname: &str) -> Result<AdminOperationResult> {
+    pub async fn show_user_account(
+        &self,
+        firstname: &str,
+        lastname: &str,
+    ) -> Result<AdminOperationResult> {
         debug!("Retrieving account details for: {} {}", firstname, lastname);
-        
+
         // Get pool or return error for stub mode
         let pool = match self.get_pool() {
             Ok(pool) => pool,
@@ -602,7 +654,7 @@ impl DatabaseAdmin {
                 return Ok(self.stub_response("Database operation"));
             }
         };
-        
+
         let result = match pool.acquire().await {
             Ok(mut conn) => {
                 let query = r#"
@@ -625,7 +677,7 @@ impl DatabaseAdmin {
                         let user_title: String = row.try_get("UserTitle").unwrap_or_default();
                         let created: i64 = row.try_get("Created").unwrap_or(0);
                         let active: bool = row.try_get("Active").unwrap_or(false);
-                        
+
                         AdminOperationResult {
                             success: true,
                             message: format!("Account details for '{}' '{}'", firstname, lastname),
@@ -644,14 +696,12 @@ impl DatabaseAdmin {
                             })),
                         }
                     }
-                    Ok(None) => {
-                        AdminOperationResult {
-                            success: false,
-                            message: format!("User '{}' '{}' not found", firstname, lastname),
-                            affected_rows: Some(0),
-                            data: None,
-                        }
-                    }
+                    Ok(None) => AdminOperationResult {
+                        success: false,
+                        message: format!("User '{}' '{}' not found", firstname, lastname),
+                        affected_rows: Some(0),
+                        data: None,
+                    },
                     Err(e) => {
                         error!("Failed to retrieve user account: {}", e);
                         AdminOperationResult {
@@ -673,19 +723,19 @@ impl DatabaseAdmin {
                 }
             }
         };
-        
+
         Ok(result)
     }
 
     /// List all users with optional limit (equivalent to 'show users' in OpenSim Robust)
     pub async fn list_users(&self, limit: Option<i32>) -> Result<AdminOperationResult> {
         debug!("Listing users with limit: {:?}", limit);
-        
+
         // Delegate to SQLite admin if available
         if let Some(ref sqlite_admin) = self.sqlite_admin {
             return sqlite_admin.list_users(limit).await;
         }
-        
+
         // Get pool or return error for stub mode
         let pool = match self.get_pool() {
             Ok(pool) => pool,
@@ -693,31 +743,33 @@ impl DatabaseAdmin {
                 return Ok(self.stub_response("Database operation"));
             }
         };
-        
+
         let result = match pool.acquire().await {
             Ok(mut conn) => {
                 let query = match limit {
-                    Some(l) => format!(r#"
+                    Some(l) => format!(
+                        r#"
                         SELECT principalid, firstname, lastname, email, userlevel, created, active
                         FROM useraccounts
                         ORDER BY created DESC
                         LIMIT {}
-                    "#, l),
+                    "#,
+                        l
+                    ),
                     None => r#"
                         SELECT principalid, firstname, lastname, email, userlevel, created, active
                         FROM useraccounts
                         ORDER BY created DESC
-                    "#.to_string(),
+                    "#
+                    .to_string(),
                 };
 
-                match sqlx::query(&query)
-                    .fetch_all(&mut *conn)
-                    .await
-                {
+                match sqlx::query(&query).fetch_all(&mut *conn).await {
                     Ok(rows) => {
                         let mut users = Vec::new();
                         for row in rows {
-                            let user_id: String = row.try_get::<uuid::Uuid, _>("principalid")
+                            let user_id: String = row
+                                .try_get::<uuid::Uuid, _>("principalid")
                                 .map(|u| u.to_string())
                                 .unwrap_or_default();
                             let firstname: String = row.try_get("firstname").unwrap_or_default();
@@ -726,7 +778,7 @@ impl DatabaseAdmin {
                             let user_level: i64 = row.try_get("userlevel").unwrap_or(0);
                             let created: i64 = row.try_get("created").unwrap_or(0);
                             let active: i64 = row.try_get("active").unwrap_or(0);
-                            
+
                             users.push(serde_json::json!({
                                 "user_id": user_id,
                                 "firstname": firstname,
@@ -738,7 +790,7 @@ impl DatabaseAdmin {
                                 "is_god": user_level >= 200
                             }));
                         }
-                        
+
                         AdminOperationResult {
                             success: true,
                             message: format!("Retrieved {} users", users.len()),
@@ -771,14 +823,21 @@ impl DatabaseAdmin {
                 }
             }
         };
-        
+
         Ok(result)
     }
 
     /// Delete user account (careful - destructive operation!)
-    pub async fn delete_user(&self, firstname: &str, lastname: &str) -> Result<AdminOperationResult> {
-        warn!("DESTRUCTIVE OPERATION: Deleting user: {} {}", firstname, lastname);
-        
+    pub async fn delete_user(
+        &self,
+        firstname: &str,
+        lastname: &str,
+    ) -> Result<AdminOperationResult> {
+        warn!(
+            "DESTRUCTIVE OPERATION: Deleting user: {} {}",
+            firstname, lastname
+        );
+
         // Get pool or return error for stub mode
         let pool = match self.get_pool() {
             Ok(pool) => pool,
@@ -786,7 +845,7 @@ impl DatabaseAdmin {
                 return Ok(self.stub_response("Database operation"));
             }
         };
-        
+
         let result = match pool.acquire().await {
             Ok(mut conn) => {
                 let query = r#"
@@ -805,7 +864,10 @@ impl DatabaseAdmin {
                             warn!("User deleted: {} {}", firstname, lastname);
                             AdminOperationResult {
                                 success: true,
-                                message: format!("User '{}' '{}' deleted successfully", firstname, lastname),
+                                message: format!(
+                                    "User '{}' '{}' deleted successfully",
+                                    firstname, lastname
+                                ),
                                 affected_rows: Some(result.rows_affected() as i64),
                                 data: None,
                             }
@@ -839,19 +901,19 @@ impl DatabaseAdmin {
                 }
             }
         };
-        
+
         Ok(result)
     }
 
     /// Get database statistics
     pub async fn get_database_stats(&self) -> Result<AdminOperationResult> {
         debug!("Retrieving database statistics");
-        
+
         // Delegate to SQLite admin if available
         if let Some(ref sqlite_admin) = self.sqlite_admin {
             return sqlite_admin.get_database_stats().await;
         }
-        
+
         // Get pool or return error for stub mode
         let pool = match self.get_pool() {
             Ok(pool) => pool,
@@ -859,13 +921,14 @@ impl DatabaseAdmin {
                 return Ok(self.stub_response("Database operation"));
             }
         };
-        
+
         let result = match pool.acquire().await {
             Ok(mut conn) => {
                 // Get user statistics
                 let total_users_query = "SELECT COUNT(*) as count FROM UserAccounts";
-                let active_users_query = "SELECT COUNT(*) as count FROM UserAccounts WHERE Active = 1";
-                
+                let active_users_query =
+                    "SELECT COUNT(*) as count FROM UserAccounts WHERE Active = 1";
+
                 let total_users = sqlx::query(total_users_query)
                     .fetch_one(&mut *conn)
                     .await
@@ -885,7 +948,8 @@ impl DatabaseAdmin {
                     .map(|row| row.try_get::<i64, _>("count").unwrap_or(0))
                     .unwrap_or(0);
 
-                let online_regions_query = "SELECT COUNT(*) as count FROM regions WHERE flags & 1 = 0";
+                let online_regions_query =
+                    "SELECT COUNT(*) as count FROM regions WHERE flags & 1 = 0";
                 let online_regions = sqlx::query(online_regions_query)
                     .fetch_one(&mut *conn)
                     .await
@@ -916,7 +980,7 @@ impl DatabaseAdmin {
                 }
             }
         };
-        
+
         Ok(result)
     }
 
@@ -925,9 +989,15 @@ impl DatabaseAdmin {
     // ====================================================================
 
     /// Create a new region (equivalent to 'create region' in OpenSim Robust)
-    pub async fn create_region(&self, request: CreateRegionRequest) -> Result<AdminOperationResult> {
-        info!("Creating region: {} at location ({}, {})", request.region_name, request.location_x, request.location_y);
-        
+    pub async fn create_region(
+        &self,
+        request: CreateRegionRequest,
+    ) -> Result<AdminOperationResult> {
+        info!(
+            "Creating region: {} at location ({}, {})",
+            request.region_name, request.location_x, request.location_y
+        );
+
         // Get pool or return error for stub mode
         let pool = match self.get_pool() {
             Ok(pool) => pool,
@@ -935,7 +1005,7 @@ impl DatabaseAdmin {
                 return Ok(self.stub_response("Database operation"));
             }
         };
-        
+
         let result = match pool.acquire().await {
             Ok(mut conn) => {
                 // Check if region already exists at this location
@@ -948,10 +1018,16 @@ impl DatabaseAdmin {
 
                 match existing {
                     Ok(Some(_)) => {
-                        warn!("Region already exists at location ({}, {})", request.location_x, request.location_y);
+                        warn!(
+                            "Region already exists at location ({}, {})",
+                            request.location_x, request.location_y
+                        );
                         AdminOperationResult {
                             success: false,
-                            message: format!("Region already exists at location ({}, {})", request.location_x, request.location_y),
+                            message: format!(
+                                "Region already exists at location ({}, {})",
+                                request.location_x, request.location_y
+                            ),
                             affected_rows: Some(0),
                             data: None,
                         }
@@ -959,12 +1035,12 @@ impl DatabaseAdmin {
                     Ok(None) => {
                         // Generate new region UUID
                         let region_uuid = uuid::Uuid::new_v4().to_string();
-                        
+
                         let insert_query = r#"
                             INSERT INTO regions (uuid, regionName, locX, locY, sizeX, sizeY, serverIP, serverPort, serverURI, owner_uuid, flags)
                             VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11)
                         "#;
-                        
+
                         match sqlx::query(insert_query)
                             .bind(&region_uuid)
                             .bind(&request.region_name)
@@ -974,17 +1050,27 @@ impl DatabaseAdmin {
                             .bind(request.size_y.unwrap_or(256))
                             .bind(&request.server_ip.unwrap_or_else(|| "127.0.0.1".to_string()))
                             .bind(request.server_port.unwrap_or(9000))
-                            .bind(&request.server_uri.unwrap_or_else(|| format!("http://127.0.0.1:{}/", request.server_port.unwrap_or(9000))))
-                            .bind(&request.owner_uuid.unwrap_or_else(|| "00000000-0000-0000-0000-000000000000".to_string()))
+                            .bind(&request.server_uri.unwrap_or_else(|| {
+                                format!("http://127.0.0.1:{}/", request.server_port.unwrap_or(9000))
+                            }))
+                            .bind(&request.owner_uuid.unwrap_or_else(|| {
+                                "00000000-0000-0000-0000-000000000000".to_string()
+                            }))
                             .bind(0) // Default flags
                             .execute(&mut *conn)
                             .await
                         {
                             Ok(result) => {
-                                info!("Region created successfully: {} ({})", request.region_name, region_uuid);
+                                info!(
+                                    "Region created successfully: {} ({})",
+                                    request.region_name, region_uuid
+                                );
                                 AdminOperationResult {
                                     success: true,
-                                    message: format!("Region '{}' created successfully", request.region_name),
+                                    message: format!(
+                                        "Region '{}' created successfully",
+                                        request.region_name
+                                    ),
                                     affected_rows: Some(result.rows_affected() as i64),
                                     data: Some(serde_json::json!({
                                         "region_uuid": region_uuid,
@@ -1028,14 +1114,14 @@ impl DatabaseAdmin {
                 }
             }
         };
-        
+
         Ok(result)
     }
 
     /// Delete a region (equivalent to 'delete region' in OpenSim Robust)
     pub async fn delete_region(&self, region_name: &str) -> Result<AdminOperationResult> {
         info!("Deleting region: {}", region_name);
-        
+
         // Get pool or return error for stub mode
         let pool = match self.get_pool() {
             Ok(pool) => pool,
@@ -1043,7 +1129,7 @@ impl DatabaseAdmin {
                 return Ok(self.stub_response("Database operation"));
             }
         };
-        
+
         let result = match pool.acquire().await {
             Ok(mut conn) => {
                 let delete_query = "DELETE FROM regions WHERE regionName = $1";
@@ -1093,14 +1179,14 @@ impl DatabaseAdmin {
                 }
             }
         };
-        
+
         Ok(result)
     }
 
     /// Show region details (equivalent to 'show region' in OpenSim Robust)
     pub async fn show_region(&self, region_name: &str) -> Result<AdminOperationResult> {
         debug!("Retrieving region details for: {}", region_name);
-        
+
         // Get pool or return error for stub mode
         let pool = match self.get_pool() {
             Ok(pool) => pool,
@@ -1108,7 +1194,7 @@ impl DatabaseAdmin {
                 return Ok(self.stub_response("Database operation"));
             }
         };
-        
+
         let result = match pool.acquire().await {
             Ok(mut conn) => {
                 let query = r#"
@@ -1175,16 +1261,16 @@ impl DatabaseAdmin {
                 }
             }
         };
-        
+
         Ok(result)
     }
 
     /// List all regions (equivalent to 'show regions' in OpenSim Robust)
     pub async fn list_regions(&self, limit: Option<i32>) -> Result<AdminOperationResult> {
         debug!("Retrieving region list with limit: {:?}", limit);
-        
+
         let limit = limit.unwrap_or(50).min(1000); // Cap at 1000 regions
-        
+
         // Get pool or return error for stub mode
         let pool = match self.get_pool() {
             Ok(pool) => pool,
@@ -1192,7 +1278,7 @@ impl DatabaseAdmin {
                 return Ok(self.stub_response("Database operation"));
             }
         };
-        
+
         let result = match pool.acquire().await {
             Ok(mut conn) => {
                 let query = r#"
@@ -1254,14 +1340,18 @@ impl DatabaseAdmin {
                 }
             }
         };
-        
+
         Ok(result)
     }
 
     /// Update region properties (equivalent to 'set region' in OpenSim Robust)
-    pub async fn update_region(&self, region_name: &str, updates: UpdateRegionRequest) -> Result<AdminOperationResult> {
+    pub async fn update_region(
+        &self,
+        region_name: &str,
+        updates: UpdateRegionRequest,
+    ) -> Result<AdminOperationResult> {
         info!("Updating region: {}", region_name);
-        
+
         // Get pool or return error for stub mode
         let pool = match self.get_pool() {
             Ok(pool) => pool,
@@ -1269,13 +1359,14 @@ impl DatabaseAdmin {
                 return Ok(self.stub_response("Database operation"));
             }
         };
-        
+
         let result = match pool.acquire().await {
             Ok(mut conn) => {
                 // Build dynamic update query based on provided fields
                 let mut update_fields = Vec::new();
-                let mut values: Vec<Box<dyn sqlx::Encode<'_, sqlx::Any> + Send + 'static>> = Vec::new();
-                
+                let mut values: Vec<Box<dyn sqlx::Encode<'_, sqlx::Any> + Send + 'static>> =
+                    Vec::new();
+
                 if let Some(new_name) = &updates.new_name {
                     update_fields.push("regionName = ?");
                     values.push(Box::new(new_name.clone()));
@@ -1296,7 +1387,7 @@ impl DatabaseAdmin {
                     update_fields.push("sizeY = ?");
                     values.push(Box::new(size_y));
                 }
-                
+
                 if update_fields.is_empty() {
                     return Ok(AdminOperationResult {
                         success: false,
@@ -1305,12 +1396,12 @@ impl DatabaseAdmin {
                         data: None,
                     });
                 }
-                
+
                 // Use simplified individual field updates approach for better type safety
-                
+
                 // Simplified update approach - update each field individually if provided
                 let mut total_updated = 0u64;
-                
+
                 if let Some(new_name) = &updates.new_name {
                     match sqlx::query("UPDATE regions SET regionName = $1 WHERE regionName = $2")
                         .bind(new_name)
@@ -1330,7 +1421,7 @@ impl DatabaseAdmin {
                         }
                     }
                 }
-                
+
                 if let Some(location_x) = updates.location_x {
                     match sqlx::query("UPDATE regions SET locX = $1 WHERE regionName = $2")
                         .bind(location_x)
@@ -1338,7 +1429,7 @@ impl DatabaseAdmin {
                         .execute(&mut *conn)
                         .await
                     {
-                        Ok(_) => {},
+                        Ok(_) => {}
                         Err(e) => {
                             error!("Failed to update region location X: {}", e);
                             return Ok(AdminOperationResult {
@@ -1350,7 +1441,7 @@ impl DatabaseAdmin {
                         }
                     }
                 }
-                
+
                 if let Some(location_y) = updates.location_y {
                     match sqlx::query("UPDATE regions SET locY = $1 WHERE regionName = $2")
                         .bind(location_y)
@@ -1358,7 +1449,7 @@ impl DatabaseAdmin {
                         .execute(&mut *conn)
                         .await
                     {
-                        Ok(_) => {},
+                        Ok(_) => {}
                         Err(e) => {
                             error!("Failed to update region location Y: {}", e);
                             return Ok(AdminOperationResult {
@@ -1391,14 +1482,14 @@ impl DatabaseAdmin {
                 }
             }
         };
-        
+
         Ok(result)
     }
 
     /// Get region statistics (equivalent to 'region stats' in OpenSim Robust)
     pub async fn get_region_stats(&self) -> Result<AdminOperationResult> {
         debug!("Retrieving region statistics");
-        
+
         // Get pool or return error for stub mode
         let pool = match self.get_pool() {
             Ok(pool) => pool,
@@ -1406,7 +1497,7 @@ impl DatabaseAdmin {
                 return Ok(self.stub_response("Database operation"));
             }
         };
-        
+
         let result = match pool.acquire().await {
             Ok(mut conn) => {
                 // Get basic region counts
@@ -1417,17 +1508,21 @@ impl DatabaseAdmin {
                     .unwrap_or(0);
 
                 // Get regions by size
-                let standard_regions = sqlx::query("SELECT COUNT(*) as count FROM regions WHERE sizeX = 256 AND sizeY = 256")
-                    .fetch_one(&mut *conn)
-                    .await
-                    .map(|row| row.get::<i64, _>("count"))
-                    .unwrap_or(0);
+                let standard_regions = sqlx::query(
+                    "SELECT COUNT(*) as count FROM regions WHERE sizeX = 256 AND sizeY = 256",
+                )
+                .fetch_one(&mut *conn)
+                .await
+                .map(|row| row.get::<i64, _>("count"))
+                .unwrap_or(0);
 
-                let large_regions = sqlx::query("SELECT COUNT(*) as count FROM regions WHERE sizeX > 256 OR sizeY > 256")
-                    .fetch_one(&mut *conn)
-                    .await
-                    .map(|row| row.get::<i64, _>("count"))
-                    .unwrap_or(0);
+                let large_regions = sqlx::query(
+                    "SELECT COUNT(*) as count FROM regions WHERE sizeX > 256 OR sizeY > 256",
+                )
+                .fetch_one(&mut *conn)
+                .await
+                .map(|row| row.get::<i64, _>("count"))
+                .unwrap_or(0);
 
                 AdminOperationResult {
                     success: true,
@@ -1455,21 +1550,24 @@ impl DatabaseAdmin {
                 }
             }
         };
-        
+
         Ok(result)
     }
 
     // ==================== DATABASE ADMINISTRATION METHODS ====================
 
     /// Create database backup (equivalent to 'backup database' in OpenSim Robust)
-    pub async fn create_backup(&self, request: DatabaseBackupRequest) -> Result<AdminOperationResult> {
+    pub async fn create_backup(
+        &self,
+        request: DatabaseBackupRequest,
+    ) -> Result<AdminOperationResult> {
         info!("Creating database backup: {}", request.backup_name);
-        
+
         let backup_id = Uuid::new_v4();
         let backup_path = request.backup_path.clone().unwrap_or_else(|| {
             format!("./backups/backup_{}_{}.sql", request.backup_name, backup_id)
         });
-        
+
         // Create backup directory if it doesn't exist
         if let Some(parent) = std::path::Path::new(&backup_path).parent() {
             if let Err(e) = std::fs::create_dir_all(parent) {
@@ -1482,7 +1580,7 @@ impl DatabaseAdmin {
                 });
             }
         }
-        
+
         // Get pool or return error for stub mode
         let pool = match self.get_pool() {
             Ok(pool) => pool,
@@ -1490,13 +1588,13 @@ impl DatabaseAdmin {
                 return Ok(self.stub_response("Database operation"));
             }
         };
-        
+
         let result = match pool.acquire().await {
             Ok(mut conn) => {
                 let mut backup_commands = Vec::new();
                 let mut backup_size = 0u64;
                 let start_time = chrono::Utc::now();
-                
+
                 // Backup user accounts
                 if request.include_user_data {
                     info!("Backing up user accounts...");
@@ -1532,7 +1630,7 @@ impl DatabaseAdmin {
                         }
                     }
                 }
-                
+
                 // Backup regions
                 if request.include_region_data {
                     info!("Backing up regions...");
@@ -1572,13 +1670,13 @@ impl DatabaseAdmin {
                         }
                     }
                 }
-                
+
                 // Write backup file
                 let backup_content = backup_commands.join("\n");
                 match std::fs::write(&backup_path, &backup_content) {
                     Ok(_) => {
                         let backup_size_mb = backup_size as f64 / 1024.0 / 1024.0;
-                        
+
                         // Record backup metadata
                         let backup_info = DatabaseBackupInfo {
                             backup_id,
@@ -1593,11 +1691,17 @@ impl DatabaseAdmin {
                             compression_ratio: if request.compression { 0.5 } else { 1.0 },
                             status: "completed".to_string(),
                         };
-                        
-                        info!("Database backup completed: {} ({:.2} MB)", backup_path, backup_size_mb);
+
+                        info!(
+                            "Database backup completed: {} ({:.2} MB)",
+                            backup_path, backup_size_mb
+                        );
                         AdminOperationResult {
                             success: true,
-                            message: format!("Database backup '{}' created successfully", request.backup_name),
+                            message: format!(
+                                "Database backup '{}' created successfully",
+                                request.backup_name
+                            ),
                             affected_rows: Some(backup_commands.len() as i64),
                             data: Some(serde_json::to_value(&backup_info).unwrap()),
                         }
@@ -1623,14 +1727,17 @@ impl DatabaseAdmin {
                 }
             }
         };
-        
+
         Ok(result)
     }
 
     /// Restore database from backup (equivalent to 'restore database' in OpenSim Robust)
-    pub async fn restore_backup(&self, request: DatabaseRestoreRequest) -> Result<AdminOperationResult> {
+    pub async fn restore_backup(
+        &self,
+        request: DatabaseRestoreRequest,
+    ) -> Result<AdminOperationResult> {
         info!("Restoring database from backup: {}", request.backup_file);
-        
+
         // Read backup file
         let backup_content = match std::fs::read_to_string(&request.backup_file) {
             Ok(content) => content,
@@ -1644,7 +1751,7 @@ impl DatabaseAdmin {
                 });
             }
         };
-        
+
         // Get pool or return error for stub mode
         let pool = match self.get_pool() {
             Ok(pool) => pool,
@@ -1652,22 +1759,19 @@ impl DatabaseAdmin {
                 return Ok(self.stub_response("Database operation"));
             }
         };
-        
+
         let result = match pool.acquire().await {
             Ok(mut conn) => {
                 let mut restored_rows = 0i64;
-                
+
                 // Execute backup commands
                 let commands: Vec<&str> = backup_content
                     .lines()
                     .filter(|line| !line.starts_with("--") && !line.trim().is_empty())
                     .collect();
-                
+
                 for command in commands {
-                    match sqlx::query(command)
-                        .execute(&mut *conn)
-                        .await
-                    {
+                    match sqlx::query(command).execute(&mut *conn).await {
                         Ok(result) => {
                             restored_rows += result.rows_affected() as i64;
                         }
@@ -1686,11 +1790,17 @@ impl DatabaseAdmin {
                         }
                     }
                 }
-                
-                info!("Database restore completed: {} rows restored", restored_rows);
+
+                info!(
+                    "Database restore completed: {} rows restored",
+                    restored_rows
+                );
                 AdminOperationResult {
                     success: true,
-                    message: format!("Database restored successfully from '{}'", request.backup_file),
+                    message: format!(
+                        "Database restored successfully from '{}'",
+                        request.backup_file
+                    ),
                     affected_rows: Some(restored_rows),
                     data: Some(serde_json::json!({
                         "backup_file": request.backup_file,
@@ -1711,14 +1821,17 @@ impl DatabaseAdmin {
                 }
             }
         };
-        
+
         Ok(result)
     }
 
     /// Perform database maintenance (equivalent to 'maintenance database' in OpenSim Robust)
-    pub async fn perform_maintenance(&self, request: DatabaseMaintenanceRequest) -> Result<AdminOperationResult> {
+    pub async fn perform_maintenance(
+        &self,
+        request: DatabaseMaintenanceRequest,
+    ) -> Result<AdminOperationResult> {
         info!("Performing database maintenance");
-        
+
         // Get pool or return error for stub mode
         let pool = match self.get_pool() {
             Ok(pool) => pool,
@@ -1726,19 +1839,16 @@ impl DatabaseAdmin {
                 return Ok(self.stub_response("Database operation"));
             }
         };
-        
+
         let result = match pool.acquire().await {
             Ok(mut conn) => {
                 let mut maintenance_results = Vec::new();
                 let start_time = chrono::Utc::now();
-                
+
                 // Vacuum tables
                 if request.vacuum_tables {
                     info!("Vacuuming database tables...");
-                    match sqlx::query("VACUUM")
-                        .execute(&mut *conn)
-                        .await
-                    {
+                    match sqlx::query("VACUUM").execute(&mut *conn).await {
                         Ok(_) => {
                             maintenance_results.push("VACUUM completed successfully".to_string());
                         }
@@ -1749,11 +1859,16 @@ impl DatabaseAdmin {
                         }
                     }
                 }
-                
+
                 // Reindex tables
                 if request.reindex_tables {
                     info!("Reindexing database tables...");
-                    let tables = vec!["UserAccounts", "regions", "inventoryfolders", "inventoryitems"];
+                    let tables = vec![
+                        "UserAccounts",
+                        "regions",
+                        "inventoryfolders",
+                        "inventoryitems",
+                    ];
                     for table in &tables {
                         match sqlx::query(&format!("REINDEX {}", table))
                             .execute(&mut *conn)
@@ -1770,14 +1885,11 @@ impl DatabaseAdmin {
                         }
                     }
                 }
-                
+
                 // Analyze tables
                 if request.analyze_tables {
                     info!("Analyzing database tables...");
-                    match sqlx::query("ANALYZE")
-                        .execute(&mut *conn)
-                        .await
-                    {
+                    match sqlx::query("ANALYZE").execute(&mut *conn).await {
                         Ok(_) => {
                             maintenance_results.push("ANALYZE completed successfully".to_string());
                         }
@@ -1788,11 +1900,11 @@ impl DatabaseAdmin {
                         }
                     }
                 }
-                
+
                 // Clean up orphaned records
                 if request.cleanup_orphaned {
                     info!("Cleaning up orphaned records...");
-                    
+
                     // Clean up orphaned inventory items
                     match sqlx::query("DELETE FROM inventoryitems WHERE folderID NOT IN (SELECT folderID FROM inventoryfolders)")
                         .execute(&mut *conn)
@@ -1808,9 +1920,9 @@ impl DatabaseAdmin {
                         }
                     }
                 }
-                
+
                 let duration = chrono::Utc::now().signed_duration_since(start_time);
-                
+
                 AdminOperationResult {
                     success: true,
                     message: "Database maintenance completed".to_string(),
@@ -1836,18 +1948,24 @@ impl DatabaseAdmin {
                 }
             }
         };
-        
+
         Ok(result)
     }
 
     /// Run database migration (equivalent to 'migrate database' in OpenSim Robust)
-    pub async fn run_migration(&self, request: DatabaseMigrationRequest) -> Result<AdminOperationResult> {
-        info!("Running database migration to version: {}", request.target_version);
-        
+    pub async fn run_migration(
+        &self,
+        request: DatabaseMigrationRequest,
+    ) -> Result<AdminOperationResult> {
+        info!(
+            "Running database migration to version: {}",
+            request.target_version
+        );
+
         if request.dry_run {
             info!("Performing dry run migration");
         }
-        
+
         // Create backup before migration if requested
         if request.backup_before && !request.dry_run {
             let backup_request = DatabaseBackupRequest {
@@ -1859,13 +1977,16 @@ impl DatabaseAdmin {
                 compression: true,
                 backup_path: None,
             };
-            
+
             match self.create_backup(backup_request).await {
                 Ok(backup_result) => {
                     if !backup_result.success {
                         return Ok(AdminOperationResult {
                             success: false,
-                            message: format!("Pre-migration backup failed: {}", backup_result.message),
+                            message: format!(
+                                "Pre-migration backup failed: {}",
+                                backup_result.message
+                            ),
                             affected_rows: None,
                             data: None,
                         });
@@ -1883,7 +2004,7 @@ impl DatabaseAdmin {
                 }
             }
         }
-        
+
         // Get pool or return error for stub mode
         let pool = match self.get_pool() {
             Ok(pool) => pool,
@@ -1891,27 +2012,31 @@ impl DatabaseAdmin {
                 return Ok(self.stub_response("Database operation"));
             }
         };
-        
+
         let result = match pool.acquire().await {
             Ok(mut conn) => {
                 let mut migration_results = Vec::new();
-                
+
                 // Check current schema version
-                let current_version = match sqlx::query("SELECT version FROM migrations ORDER BY version DESC LIMIT 1")
-                    .fetch_optional(&mut *conn)
-                    .await
+                let current_version = match sqlx::query(
+                    "SELECT version FROM migrations ORDER BY version DESC LIMIT 1",
+                )
+                .fetch_optional(&mut *conn)
+                .await
                 {
                     Ok(Some(row)) => row.get::<String, _>("version"),
                     Ok(None) => "0.0.0".to_string(),
                     Err(_) => {
                         // Create migrations table if it doesn't exist
-                        match sqlx::query(r#"
+                        match sqlx::query(
+                            r#"
                             CREATE TABLE IF NOT EXISTS migrations (
                                 version VARCHAR(20) PRIMARY KEY,
                                 applied_at DATETIME DEFAULT CURRENT_TIMESTAMP,
                                 description TEXT
                             )
-                        "#)
+                        "#,
+                        )
                         .execute(&mut *conn)
                         .await
                         {
@@ -1928,17 +2053,20 @@ impl DatabaseAdmin {
                         }
                     }
                 };
-                
+
                 migration_results.push(format!("Current schema version: {}", current_version));
-                migration_results.push(format!("Target schema version: {}", request.target_version));
-                
+                migration_results
+                    .push(format!("Target schema version: {}", request.target_version));
+
                 if !request.dry_run {
                     // Record migration
-                    match sqlx::query("INSERT INTO migrations (version, description) VALUES ($1, $2)")
-                        .bind(&request.target_version)
-                        .bind("Schema migration via admin API")
-                        .execute(&mut *conn)
-                        .await
+                    match sqlx::query(
+                        "INSERT INTO migrations (version, description) VALUES ($1, $2)",
+                    )
+                    .bind(&request.target_version)
+                    .bind("Schema migration via admin API")
+                    .execute(&mut *conn)
+                    .await
                     {
                         Ok(_) => {
                             migration_results.push("Migration recorded successfully".to_string());
@@ -1952,10 +2080,13 @@ impl DatabaseAdmin {
                 } else {
                     migration_results.push("Dry run - no changes applied".to_string());
                 }
-                
+
                 AdminOperationResult {
                     success: true,
-                    message: format!("Database migration to version '{}' completed", request.target_version),
+                    message: format!(
+                        "Database migration to version '{}' completed",
+                        request.target_version
+                    ),
                     affected_rows: None,
                     data: Some(serde_json::json!({
                         "current_version": current_version,
@@ -1977,19 +2108,19 @@ impl DatabaseAdmin {
                 }
             }
         };
-        
+
         Ok(result)
     }
 
     /// Get database health information (equivalent to 'database health' in OpenSim Robust)
     pub async fn get_database_health(&self) -> Result<AdminOperationResult> {
         debug!("Checking database health");
-        
+
         // Delegate to SQLite admin if available
         if let Some(ref sqlite_admin) = self.sqlite_admin {
             return sqlite_admin.get_database_health().await;
         }
-        
+
         // Get pool or return error for stub mode
         let pool = match self.get_pool() {
             Ok(pool) => pool,
@@ -1997,39 +2128,41 @@ impl DatabaseAdmin {
                 return Ok(self.stub_response("Database operation"));
             }
         };
-        
+
         let result = match pool.acquire().await {
             Ok(mut conn) => {
                 let start_time = std::time::Instant::now();
-                
+
                 // Test basic connectivity
                 let connectivity_test = sqlx::query("SELECT 1 as test")
                     .fetch_one(&mut *conn)
                     .await
                     .is_ok();
-                
+
                 let connection_time_ms = start_time.elapsed().as_millis();
-                
+
                 // Get table sizes
                 let user_count = sqlx::query("SELECT COUNT(*) as count FROM UserAccounts")
                     .fetch_one(&mut *conn)
                     .await
                     .map(|row| row.get::<i64, _>("count"))
                     .unwrap_or(0);
-                
+
                 let region_count = sqlx::query("SELECT COUNT(*) as count FROM regions")
                     .fetch_one(&mut *conn)
                     .await
                     .map(|row| row.get::<i64, _>("count"))
                     .unwrap_or(0);
-                
+
                 // Check for recent activity
-                let recent_logins = sqlx::query("SELECT COUNT(*) as count FROM UserAccounts WHERE ServiceURLs LIKE '%login%'")
-                    .fetch_one(&mut *conn)
-                    .await
-                    .map(|row| row.get::<i64, _>("count"))
-                    .unwrap_or(0);
-                
+                let recent_logins = sqlx::query(
+                    "SELECT COUNT(*) as count FROM UserAccounts WHERE ServiceURLs LIKE '%login%'",
+                )
+                .fetch_one(&mut *conn)
+                .await
+                .map(|row| row.get::<i64, _>("count"))
+                .unwrap_or(0);
+
                 let health_status = if connectivity_test && connection_time_ms < 1000 {
                     "healthy"
                 } else if connectivity_test {
@@ -2037,7 +2170,7 @@ impl DatabaseAdmin {
                 } else {
                     "unhealthy"
                 };
-                
+
                 AdminOperationResult {
                     success: true,
                     message: format!("Database health status: {}", health_status),
@@ -2071,19 +2204,22 @@ impl DatabaseAdmin {
                 }
             }
         };
-        
+
         Ok(result)
     }
 
     /// List available backups (equivalent to 'list backups' in OpenSim Robust)
-    pub async fn list_backups(&self, backup_directory: Option<String>) -> Result<AdminOperationResult> {
+    pub async fn list_backups(
+        &self,
+        backup_directory: Option<String>,
+    ) -> Result<AdminOperationResult> {
         let backup_dir = backup_directory.unwrap_or_else(|| "./backups".to_string());
         debug!("Listing backups in directory: {}", backup_dir);
-        
+
         match std::fs::read_dir(&backup_dir) {
             Ok(entries) => {
                 let mut backups = Vec::new();
-                
+
                 for entry in entries {
                     if let Ok(entry) = entry {
                         if let Some(file_name) = entry.file_name().to_str() {
@@ -2096,12 +2232,13 @@ impl DatabaseAdmin {
                                     })
                                 });
                                 let size_mb = metadata.len() as f64 / 1024.0 / 1024.0;
-                                let modified = metadata.modified()
+                                let modified = metadata
+                                    .modified()
                                     .unwrap_or(std::time::SystemTime::UNIX_EPOCH)
                                     .duration_since(std::time::SystemTime::UNIX_EPOCH)
                                     .unwrap_or_default()
                                     .as_secs();
-                                
+
                                 backups.push(serde_json::json!({
                                     "file_name": file_name,
                                     "file_path": entry.path().to_string_lossy(),
@@ -2116,14 +2253,14 @@ impl DatabaseAdmin {
                         }
                     }
                 }
-                
+
                 // Sort by modification time (newest first)
                 backups.sort_by(|a, b| {
                     let a_time = a["modified_timestamp"].as_u64().unwrap_or(0);
                     let b_time = b["modified_timestamp"].as_u64().unwrap_or(0);
                     b_time.cmp(&a_time)
                 });
-                
+
                 Ok(AdminOperationResult {
                     success: true,
                     message: format!("Found {} backup files", backups.len()),
@@ -2147,4 +2284,3 @@ impl DatabaseAdmin {
         }
     }
 }
-

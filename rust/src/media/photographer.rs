@@ -1,11 +1,14 @@
-use std::path::PathBuf;
 use anyhow::Result;
-use uuid::Uuid;
+use std::path::PathBuf;
 use tracing::info;
+use uuid::Uuid;
 
-use super::{MediaDirector, MediaRecipe, RecipeCamera, RecipeLight, RenderJob, RenderSettings, OutputMode, SceneExportObject};
-use crate::ai::npc_avatar::CinemaLight;
+use super::{
+    MediaDirector, MediaRecipe, OutputMode, RecipeCamera, RecipeLight, RenderJob, RenderSettings,
+    SceneExportObject,
+};
 use crate::ai::cinematography;
+use crate::ai::npc_avatar::CinemaLight;
 
 #[derive(Debug, Clone)]
 pub struct PhotoComposition {
@@ -39,7 +42,10 @@ impl MediaDirector {
         );
         let f_stop = depth_of_field_to_fstop(comp.depth_of_field);
 
-        let job_dir = self.output_base.join("temp").join(Uuid::new_v4().to_string());
+        let job_dir = self
+            .output_base
+            .join("temp")
+            .join(Uuid::new_v4().to_string());
         std::fs::create_dir_all(&job_dir)?;
         let meshes_dir = job_dir.join("meshes");
         std::fs::create_dir_all(&meshes_dir)?;
@@ -58,7 +64,9 @@ impl MediaDirector {
         super::scene_exporter::export_scene(&render_job, &meshes_dir)?;
 
         let timestamp = chrono::Local::now().format("%Y%m%d_%H%M%S");
-        let output_path = self.output_base.join("images")
+        let output_path = self
+            .output_base
+            .join("images")
             .join(format!("{}_still_0_{}.png", comp.name, timestamp));
 
         let script = super::render_script::generate_photo_script(
@@ -86,13 +94,16 @@ impl MediaDirector {
                 fov: 60.0,
                 f_stop,
             },
-            lighting: lights.iter().map(|l| RecipeLight {
-                light_type: l.name.clone(),
-                position: l.position,
-                color: l.color,
-                intensity: l.intensity,
-                radius: l.radius,
-            }).collect(),
+            lighting: lights
+                .iter()
+                .map(|l| RecipeLight {
+                    light_type: l.name.clone(),
+                    position: l.position,
+                    color: l.color,
+                    intensity: l.intensity,
+                    radius: l.radius,
+                })
+                .collect(),
             composition: comp.composition_rule.clone(),
             region_id: comp.region_id.to_string(),
             post_process: None,
@@ -129,11 +140,7 @@ fn compute_camera_position(subject: [f32; 3], angle: &str, composition: &str) ->
             subject[1] + offset,
             subject[2] + 8.0,
         ],
-        "bird_eye" => [
-            subject[0] + offset,
-            subject[1] + offset,
-            subject[2] + 20.0,
-        ],
+        "bird_eye" => [subject[0] + offset, subject[1] + offset, subject[2] + 20.0],
         "dutch_tilt" => [
             subject[0] - distance * 0.7 + offset,
             subject[1] + distance * 0.7,

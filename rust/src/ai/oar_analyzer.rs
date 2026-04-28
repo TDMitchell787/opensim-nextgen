@@ -10,9 +10,8 @@ use uuid::Uuid;
 use zip::ZipArchive;
 
 use crate::ai::content_creation::{
-    ContentPattern, RecognitionData, GeometricAnalysis, MaterialAnalysis,
-    SpatialAnalysis, ScriptingPattern, PrimitiveType, ContentCategory,
-    CreatorAttribution, UsageStatistics,
+    ContentCategory, ContentPattern, CreatorAttribution, GeometricAnalysis, MaterialAnalysis,
+    PrimitiveType, RecognitionData, ScriptingPattern, SpatialAnalysis, UsageStatistics,
 };
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
@@ -75,7 +74,7 @@ pub struct AnalyzedObject {
     pub primitive_type: PrimitiveType,
     pub material_data: MaterialData,
     pub physics_data: PhysicsData,
-    pub scripts: Vec<String>, // Script UUIDs
+    pub scripts: Vec<String>,          // Script UUIDs
     pub children: Vec<AnalyzedObject>, // Linked prims
     pub metadata: ObjectMetadata,
 }
@@ -216,85 +215,401 @@ pub struct OSSLFunctionInfo {
 }
 
 pub const OSSL_FUNCTIONS: &[OSSLFunctionInfo] = &[
-    OSSLFunctionInfo { name: "osGetAgentIP", threat_level: OSSLThreatLevel::Severe, description: "Get agent IP address" },
-    OSSLFunctionInfo { name: "osGetSimulatorVersion", threat_level: OSSLThreatLevel::VeryLow, description: "Get simulator version" },
-    OSSLFunctionInfo { name: "osGetGridName", threat_level: OSSLThreatLevel::VeryLow, description: "Get grid name" },
-    OSSLFunctionInfo { name: "osGetGridNick", threat_level: OSSLThreatLevel::VeryLow, description: "Get grid nickname" },
-    OSSLFunctionInfo { name: "osGetRegionSize", threat_level: OSSLThreatLevel::VeryLow, description: "Get region dimensions" },
-    OSSLFunctionInfo { name: "osGetNotecard", threat_level: OSSLThreatLevel::VeryLow, description: "Get notecard contents" },
-    OSSLFunctionInfo { name: "osGetNotecardLine", threat_level: OSSLThreatLevel::VeryLow, description: "Get notecard line" },
-    OSSLFunctionInfo { name: "osGetNumberOfNotecardLines", threat_level: OSSLThreatLevel::VeryLow, description: "Get notecard line count" },
-    OSSLFunctionInfo { name: "osMakeNotecard", threat_level: OSSLThreatLevel::Low, description: "Create notecard" },
-    OSSLFunctionInfo { name: "osKey2Name", threat_level: OSSLThreatLevel::Low, description: "Get avatar name from key" },
-    OSSLFunctionInfo { name: "osOwnerSaveAppearance", threat_level: OSSLThreatLevel::High, description: "Save owner appearance" },
-    OSSLFunctionInfo { name: "osAgentSaveAppearance", threat_level: OSSLThreatLevel::VeryHigh, description: "Save any agent appearance" },
-    OSSLFunctionInfo { name: "osAvatarPlayAnimation", threat_level: OSSLThreatLevel::VeryHigh, description: "Play animation on avatar" },
-    OSSLFunctionInfo { name: "osAvatarStopAnimation", threat_level: OSSLThreatLevel::VeryHigh, description: "Stop animation on avatar" },
-    OSSLFunctionInfo { name: "osTeleportAgent", threat_level: OSSLThreatLevel::High, description: "Teleport an agent" },
-    OSSLFunctionInfo { name: "osTeleportOwner", threat_level: OSSLThreatLevel::Low, description: "Teleport owner" },
-    OSSLFunctionInfo { name: "osSetDynamicTextureURL", threat_level: OSSLThreatLevel::Moderate, description: "Set texture from URL" },
-    OSSLFunctionInfo { name: "osSetDynamicTextureURLBlend", threat_level: OSSLThreatLevel::Moderate, description: "Set blended texture from URL" },
-    OSSLFunctionInfo { name: "osSetDynamicTextureData", threat_level: OSSLThreatLevel::Low, description: "Set dynamic texture data" },
-    OSSLFunctionInfo { name: "osGetDrawStringSize", threat_level: OSSLThreatLevel::VeryLow, description: "Get draw string size" },
-    OSSLFunctionInfo { name: "osDrawText", threat_level: OSSLThreatLevel::Low, description: "Draw text on texture" },
-    OSSLFunctionInfo { name: "osMovePen", threat_level: OSSLThreatLevel::VeryLow, description: "Move draw pen" },
-    OSSLFunctionInfo { name: "osDrawLine", threat_level: OSSLThreatLevel::VeryLow, description: "Draw line" },
-    OSSLFunctionInfo { name: "osDrawFilledRectangle", threat_level: OSSLThreatLevel::VeryLow, description: "Draw filled rectangle" },
-    OSSLFunctionInfo { name: "osDrawRectangle", threat_level: OSSLThreatLevel::VeryLow, description: "Draw rectangle" },
-    OSSLFunctionInfo { name: "osDrawEllipse", threat_level: OSSLThreatLevel::VeryLow, description: "Draw ellipse" },
-    OSSLFunctionInfo { name: "osSetFontSize", threat_level: OSSLThreatLevel::VeryLow, description: "Set font size" },
-    OSSLFunctionInfo { name: "osSetFontName", threat_level: OSSLThreatLevel::VeryLow, description: "Set font name" },
-    OSSLFunctionInfo { name: "osSetPenSize", threat_level: OSSLThreatLevel::VeryLow, description: "Set pen size" },
-    OSSLFunctionInfo { name: "osSetPenColor", threat_level: OSSLThreatLevel::VeryLow, description: "Set pen color" },
-    OSSLFunctionInfo { name: "osSetPenCap", threat_level: OSSLThreatLevel::VeryLow, description: "Set pen cap style" },
-    OSSLFunctionInfo { name: "osSetSpeed", threat_level: OSSLThreatLevel::Moderate, description: "Set agent movement speed" },
-    OSSLFunctionInfo { name: "osKickAvatar", threat_level: OSSLThreatLevel::Severe, description: "Kick avatar from region" },
-    OSSLFunctionInfo { name: "osSetParcelDetails", threat_level: OSSLThreatLevel::High, description: "Set parcel properties" },
-    OSSLFunctionInfo { name: "osGetParcelDetails", threat_level: OSSLThreatLevel::Low, description: "Get parcel properties" },
-    OSSLFunctionInfo { name: "osSetTerrainHeight", threat_level: OSSLThreatLevel::High, description: "Modify terrain" },
-    OSSLFunctionInfo { name: "osGetTerrainHeight", threat_level: OSSLThreatLevel::VeryLow, description: "Get terrain height" },
-    OSSLFunctionInfo { name: "osSetRegionWaterHeight", threat_level: OSSLThreatLevel::High, description: "Set water level" },
-    OSSLFunctionInfo { name: "osSetRegionSunSettings", threat_level: OSSLThreatLevel::Moderate, description: "Set sun settings" },
-    OSSLFunctionInfo { name: "osConsoleCommand", threat_level: OSSLThreatLevel::Severe, description: "Execute console command" },
-    OSSLFunctionInfo { name: "osRegionRestart", threat_level: OSSLThreatLevel::Severe, description: "Restart region" },
-    OSSLFunctionInfo { name: "osSetParcelMediaURL", threat_level: OSSLThreatLevel::Moderate, description: "Set parcel media URL" },
-    OSSLFunctionInfo { name: "osSetPrimMediaURL", threat_level: OSSLThreatLevel::Moderate, description: "Set prim media URL" },
-    OSSLFunctionInfo { name: "osGetPhysicsEngineType", threat_level: OSSLThreatLevel::VeryLow, description: "Get physics engine type" },
-    OSSLFunctionInfo { name: "osGetPhysicsEngineName", threat_level: OSSLThreatLevel::VeryLow, description: "Get physics engine name" },
-    OSSLFunctionInfo { name: "osNpcCreate", threat_level: OSSLThreatLevel::High, description: "Create NPC" },
-    OSSLFunctionInfo { name: "osNpcRemove", threat_level: OSSLThreatLevel::High, description: "Remove NPC" },
-    OSSLFunctionInfo { name: "osNpcMoveTo", threat_level: OSSLThreatLevel::High, description: "Move NPC" },
-    OSSLFunctionInfo { name: "osNpcSay", threat_level: OSSLThreatLevel::Low, description: "NPC say message" },
-    OSSLFunctionInfo { name: "osNpcShout", threat_level: OSSLThreatLevel::Low, description: "NPC shout message" },
-    OSSLFunctionInfo { name: "osNpcWhisper", threat_level: OSSLThreatLevel::Low, description: "NPC whisper message" },
-    OSSLFunctionInfo { name: "osNpcPlayAnimation", threat_level: OSSLThreatLevel::Moderate, description: "NPC play animation" },
-    OSSLFunctionInfo { name: "osNpcStopAnimation", threat_level: OSSLThreatLevel::Moderate, description: "NPC stop animation" },
-    OSSLFunctionInfo { name: "osNpcGetOwner", threat_level: OSSLThreatLevel::VeryLow, description: "Get NPC owner" },
-    OSSLFunctionInfo { name: "osNpcSetProfileImage", threat_level: OSSLThreatLevel::Moderate, description: "Set NPC profile image" },
-    OSSLFunctionInfo { name: "osNpcSetProfileAbout", threat_level: OSSLThreatLevel::Low, description: "Set NPC profile about" },
-    OSSLFunctionInfo { name: "osMessageObject", threat_level: OSSLThreatLevel::Low, description: "Send message to object" },
-    OSSLFunctionInfo { name: "osSetObjectDescription", threat_level: OSSLThreatLevel::VeryLow, description: "Set object description" },
-    OSSLFunctionInfo { name: "osSetObjectName", threat_level: OSSLThreatLevel::VeryLow, description: "Set object name" },
-    OSSLFunctionInfo { name: "osGetAvatarList", threat_level: OSSLThreatLevel::Low, description: "Get list of avatars" },
-    OSSLFunctionInfo { name: "osGetAgents", threat_level: OSSLThreatLevel::Low, description: "Get list of agents" },
-    OSSLFunctionInfo { name: "osGetAvatarHomeURI", threat_level: OSSLThreatLevel::Moderate, description: "Get avatar home grid URI" },
-    OSSLFunctionInfo { name: "osFormatString", threat_level: OSSLThreatLevel::VeryLow, description: "Format string" },
-    OSSLFunctionInfo { name: "osMatchString", threat_level: OSSLThreatLevel::VeryLow, description: "Match string pattern" },
-    OSSLFunctionInfo { name: "osReplaceString", threat_level: OSSLThreatLevel::VeryLow, description: "Replace in string" },
-    OSSLFunctionInfo { name: "osLoadedCreationDate", threat_level: OSSLThreatLevel::VeryLow, description: "Get creation date" },
-    OSSLFunctionInfo { name: "osLoadedCreationID", threat_level: OSSLThreatLevel::VeryLow, description: "Get creation ID" },
-    OSSLFunctionInfo { name: "osLoadedCreationTime", threat_level: OSSLThreatLevel::VeryLow, description: "Get creation time" },
-    OSSLFunctionInfo { name: "osGetLinkPrimitiveParams", threat_level: OSSLThreatLevel::VeryLow, description: "Get link prim params" },
-    OSSLFunctionInfo { name: "osGetPrimitiveParams", threat_level: OSSLThreatLevel::VeryLow, description: "Get prim params" },
-    OSSLFunctionInfo { name: "osSetPrimitiveParams", threat_level: OSSLThreatLevel::VeryLow, description: "Set prim params" },
-    OSSLFunctionInfo { name: "osGetWindParam", threat_level: OSSLThreatLevel::VeryLow, description: "Get wind parameter" },
-    OSSLFunctionInfo { name: "osSetWindParam", threat_level: OSSLThreatLevel::Moderate, description: "Set wind parameter" },
-    OSSLFunctionInfo { name: "osParcelJoin", threat_level: OSSLThreatLevel::High, description: "Join parcels" },
-    OSSLFunctionInfo { name: "osParcelSubdivide", threat_level: OSSLThreatLevel::High, description: "Subdivide parcel" },
-    OSSLFunctionInfo { name: "osSetParcelMusicURL", threat_level: OSSLThreatLevel::Moderate, description: "Set parcel music URL" },
-    OSSLFunctionInfo { name: "osVolumeDetect", threat_level: OSSLThreatLevel::VeryLow, description: "Set volume detect" },
-    OSSLFunctionInfo { name: "osRequestURL", threat_level: OSSLThreatLevel::Moderate, description: "Request external URL" },
-    OSSLFunctionInfo { name: "osRequestSecureURL", threat_level: OSSLThreatLevel::Moderate, description: "Request secure external URL" },
+    OSSLFunctionInfo {
+        name: "osGetAgentIP",
+        threat_level: OSSLThreatLevel::Severe,
+        description: "Get agent IP address",
+    },
+    OSSLFunctionInfo {
+        name: "osGetSimulatorVersion",
+        threat_level: OSSLThreatLevel::VeryLow,
+        description: "Get simulator version",
+    },
+    OSSLFunctionInfo {
+        name: "osGetGridName",
+        threat_level: OSSLThreatLevel::VeryLow,
+        description: "Get grid name",
+    },
+    OSSLFunctionInfo {
+        name: "osGetGridNick",
+        threat_level: OSSLThreatLevel::VeryLow,
+        description: "Get grid nickname",
+    },
+    OSSLFunctionInfo {
+        name: "osGetRegionSize",
+        threat_level: OSSLThreatLevel::VeryLow,
+        description: "Get region dimensions",
+    },
+    OSSLFunctionInfo {
+        name: "osGetNotecard",
+        threat_level: OSSLThreatLevel::VeryLow,
+        description: "Get notecard contents",
+    },
+    OSSLFunctionInfo {
+        name: "osGetNotecardLine",
+        threat_level: OSSLThreatLevel::VeryLow,
+        description: "Get notecard line",
+    },
+    OSSLFunctionInfo {
+        name: "osGetNumberOfNotecardLines",
+        threat_level: OSSLThreatLevel::VeryLow,
+        description: "Get notecard line count",
+    },
+    OSSLFunctionInfo {
+        name: "osMakeNotecard",
+        threat_level: OSSLThreatLevel::Low,
+        description: "Create notecard",
+    },
+    OSSLFunctionInfo {
+        name: "osKey2Name",
+        threat_level: OSSLThreatLevel::Low,
+        description: "Get avatar name from key",
+    },
+    OSSLFunctionInfo {
+        name: "osOwnerSaveAppearance",
+        threat_level: OSSLThreatLevel::High,
+        description: "Save owner appearance",
+    },
+    OSSLFunctionInfo {
+        name: "osAgentSaveAppearance",
+        threat_level: OSSLThreatLevel::VeryHigh,
+        description: "Save any agent appearance",
+    },
+    OSSLFunctionInfo {
+        name: "osAvatarPlayAnimation",
+        threat_level: OSSLThreatLevel::VeryHigh,
+        description: "Play animation on avatar",
+    },
+    OSSLFunctionInfo {
+        name: "osAvatarStopAnimation",
+        threat_level: OSSLThreatLevel::VeryHigh,
+        description: "Stop animation on avatar",
+    },
+    OSSLFunctionInfo {
+        name: "osTeleportAgent",
+        threat_level: OSSLThreatLevel::High,
+        description: "Teleport an agent",
+    },
+    OSSLFunctionInfo {
+        name: "osTeleportOwner",
+        threat_level: OSSLThreatLevel::Low,
+        description: "Teleport owner",
+    },
+    OSSLFunctionInfo {
+        name: "osSetDynamicTextureURL",
+        threat_level: OSSLThreatLevel::Moderate,
+        description: "Set texture from URL",
+    },
+    OSSLFunctionInfo {
+        name: "osSetDynamicTextureURLBlend",
+        threat_level: OSSLThreatLevel::Moderate,
+        description: "Set blended texture from URL",
+    },
+    OSSLFunctionInfo {
+        name: "osSetDynamicTextureData",
+        threat_level: OSSLThreatLevel::Low,
+        description: "Set dynamic texture data",
+    },
+    OSSLFunctionInfo {
+        name: "osGetDrawStringSize",
+        threat_level: OSSLThreatLevel::VeryLow,
+        description: "Get draw string size",
+    },
+    OSSLFunctionInfo {
+        name: "osDrawText",
+        threat_level: OSSLThreatLevel::Low,
+        description: "Draw text on texture",
+    },
+    OSSLFunctionInfo {
+        name: "osMovePen",
+        threat_level: OSSLThreatLevel::VeryLow,
+        description: "Move draw pen",
+    },
+    OSSLFunctionInfo {
+        name: "osDrawLine",
+        threat_level: OSSLThreatLevel::VeryLow,
+        description: "Draw line",
+    },
+    OSSLFunctionInfo {
+        name: "osDrawFilledRectangle",
+        threat_level: OSSLThreatLevel::VeryLow,
+        description: "Draw filled rectangle",
+    },
+    OSSLFunctionInfo {
+        name: "osDrawRectangle",
+        threat_level: OSSLThreatLevel::VeryLow,
+        description: "Draw rectangle",
+    },
+    OSSLFunctionInfo {
+        name: "osDrawEllipse",
+        threat_level: OSSLThreatLevel::VeryLow,
+        description: "Draw ellipse",
+    },
+    OSSLFunctionInfo {
+        name: "osSetFontSize",
+        threat_level: OSSLThreatLevel::VeryLow,
+        description: "Set font size",
+    },
+    OSSLFunctionInfo {
+        name: "osSetFontName",
+        threat_level: OSSLThreatLevel::VeryLow,
+        description: "Set font name",
+    },
+    OSSLFunctionInfo {
+        name: "osSetPenSize",
+        threat_level: OSSLThreatLevel::VeryLow,
+        description: "Set pen size",
+    },
+    OSSLFunctionInfo {
+        name: "osSetPenColor",
+        threat_level: OSSLThreatLevel::VeryLow,
+        description: "Set pen color",
+    },
+    OSSLFunctionInfo {
+        name: "osSetPenCap",
+        threat_level: OSSLThreatLevel::VeryLow,
+        description: "Set pen cap style",
+    },
+    OSSLFunctionInfo {
+        name: "osSetSpeed",
+        threat_level: OSSLThreatLevel::Moderate,
+        description: "Set agent movement speed",
+    },
+    OSSLFunctionInfo {
+        name: "osKickAvatar",
+        threat_level: OSSLThreatLevel::Severe,
+        description: "Kick avatar from region",
+    },
+    OSSLFunctionInfo {
+        name: "osSetParcelDetails",
+        threat_level: OSSLThreatLevel::High,
+        description: "Set parcel properties",
+    },
+    OSSLFunctionInfo {
+        name: "osGetParcelDetails",
+        threat_level: OSSLThreatLevel::Low,
+        description: "Get parcel properties",
+    },
+    OSSLFunctionInfo {
+        name: "osSetTerrainHeight",
+        threat_level: OSSLThreatLevel::High,
+        description: "Modify terrain",
+    },
+    OSSLFunctionInfo {
+        name: "osGetTerrainHeight",
+        threat_level: OSSLThreatLevel::VeryLow,
+        description: "Get terrain height",
+    },
+    OSSLFunctionInfo {
+        name: "osSetRegionWaterHeight",
+        threat_level: OSSLThreatLevel::High,
+        description: "Set water level",
+    },
+    OSSLFunctionInfo {
+        name: "osSetRegionSunSettings",
+        threat_level: OSSLThreatLevel::Moderate,
+        description: "Set sun settings",
+    },
+    OSSLFunctionInfo {
+        name: "osConsoleCommand",
+        threat_level: OSSLThreatLevel::Severe,
+        description: "Execute console command",
+    },
+    OSSLFunctionInfo {
+        name: "osRegionRestart",
+        threat_level: OSSLThreatLevel::Severe,
+        description: "Restart region",
+    },
+    OSSLFunctionInfo {
+        name: "osSetParcelMediaURL",
+        threat_level: OSSLThreatLevel::Moderate,
+        description: "Set parcel media URL",
+    },
+    OSSLFunctionInfo {
+        name: "osSetPrimMediaURL",
+        threat_level: OSSLThreatLevel::Moderate,
+        description: "Set prim media URL",
+    },
+    OSSLFunctionInfo {
+        name: "osGetPhysicsEngineType",
+        threat_level: OSSLThreatLevel::VeryLow,
+        description: "Get physics engine type",
+    },
+    OSSLFunctionInfo {
+        name: "osGetPhysicsEngineName",
+        threat_level: OSSLThreatLevel::VeryLow,
+        description: "Get physics engine name",
+    },
+    OSSLFunctionInfo {
+        name: "osNpcCreate",
+        threat_level: OSSLThreatLevel::High,
+        description: "Create NPC",
+    },
+    OSSLFunctionInfo {
+        name: "osNpcRemove",
+        threat_level: OSSLThreatLevel::High,
+        description: "Remove NPC",
+    },
+    OSSLFunctionInfo {
+        name: "osNpcMoveTo",
+        threat_level: OSSLThreatLevel::High,
+        description: "Move NPC",
+    },
+    OSSLFunctionInfo {
+        name: "osNpcSay",
+        threat_level: OSSLThreatLevel::Low,
+        description: "NPC say message",
+    },
+    OSSLFunctionInfo {
+        name: "osNpcShout",
+        threat_level: OSSLThreatLevel::Low,
+        description: "NPC shout message",
+    },
+    OSSLFunctionInfo {
+        name: "osNpcWhisper",
+        threat_level: OSSLThreatLevel::Low,
+        description: "NPC whisper message",
+    },
+    OSSLFunctionInfo {
+        name: "osNpcPlayAnimation",
+        threat_level: OSSLThreatLevel::Moderate,
+        description: "NPC play animation",
+    },
+    OSSLFunctionInfo {
+        name: "osNpcStopAnimation",
+        threat_level: OSSLThreatLevel::Moderate,
+        description: "NPC stop animation",
+    },
+    OSSLFunctionInfo {
+        name: "osNpcGetOwner",
+        threat_level: OSSLThreatLevel::VeryLow,
+        description: "Get NPC owner",
+    },
+    OSSLFunctionInfo {
+        name: "osNpcSetProfileImage",
+        threat_level: OSSLThreatLevel::Moderate,
+        description: "Set NPC profile image",
+    },
+    OSSLFunctionInfo {
+        name: "osNpcSetProfileAbout",
+        threat_level: OSSLThreatLevel::Low,
+        description: "Set NPC profile about",
+    },
+    OSSLFunctionInfo {
+        name: "osMessageObject",
+        threat_level: OSSLThreatLevel::Low,
+        description: "Send message to object",
+    },
+    OSSLFunctionInfo {
+        name: "osSetObjectDescription",
+        threat_level: OSSLThreatLevel::VeryLow,
+        description: "Set object description",
+    },
+    OSSLFunctionInfo {
+        name: "osSetObjectName",
+        threat_level: OSSLThreatLevel::VeryLow,
+        description: "Set object name",
+    },
+    OSSLFunctionInfo {
+        name: "osGetAvatarList",
+        threat_level: OSSLThreatLevel::Low,
+        description: "Get list of avatars",
+    },
+    OSSLFunctionInfo {
+        name: "osGetAgents",
+        threat_level: OSSLThreatLevel::Low,
+        description: "Get list of agents",
+    },
+    OSSLFunctionInfo {
+        name: "osGetAvatarHomeURI",
+        threat_level: OSSLThreatLevel::Moderate,
+        description: "Get avatar home grid URI",
+    },
+    OSSLFunctionInfo {
+        name: "osFormatString",
+        threat_level: OSSLThreatLevel::VeryLow,
+        description: "Format string",
+    },
+    OSSLFunctionInfo {
+        name: "osMatchString",
+        threat_level: OSSLThreatLevel::VeryLow,
+        description: "Match string pattern",
+    },
+    OSSLFunctionInfo {
+        name: "osReplaceString",
+        threat_level: OSSLThreatLevel::VeryLow,
+        description: "Replace in string",
+    },
+    OSSLFunctionInfo {
+        name: "osLoadedCreationDate",
+        threat_level: OSSLThreatLevel::VeryLow,
+        description: "Get creation date",
+    },
+    OSSLFunctionInfo {
+        name: "osLoadedCreationID",
+        threat_level: OSSLThreatLevel::VeryLow,
+        description: "Get creation ID",
+    },
+    OSSLFunctionInfo {
+        name: "osLoadedCreationTime",
+        threat_level: OSSLThreatLevel::VeryLow,
+        description: "Get creation time",
+    },
+    OSSLFunctionInfo {
+        name: "osGetLinkPrimitiveParams",
+        threat_level: OSSLThreatLevel::VeryLow,
+        description: "Get link prim params",
+    },
+    OSSLFunctionInfo {
+        name: "osGetPrimitiveParams",
+        threat_level: OSSLThreatLevel::VeryLow,
+        description: "Get prim params",
+    },
+    OSSLFunctionInfo {
+        name: "osSetPrimitiveParams",
+        threat_level: OSSLThreatLevel::VeryLow,
+        description: "Set prim params",
+    },
+    OSSLFunctionInfo {
+        name: "osGetWindParam",
+        threat_level: OSSLThreatLevel::VeryLow,
+        description: "Get wind parameter",
+    },
+    OSSLFunctionInfo {
+        name: "osSetWindParam",
+        threat_level: OSSLThreatLevel::Moderate,
+        description: "Set wind parameter",
+    },
+    OSSLFunctionInfo {
+        name: "osParcelJoin",
+        threat_level: OSSLThreatLevel::High,
+        description: "Join parcels",
+    },
+    OSSLFunctionInfo {
+        name: "osParcelSubdivide",
+        threat_level: OSSLThreatLevel::High,
+        description: "Subdivide parcel",
+    },
+    OSSLFunctionInfo {
+        name: "osSetParcelMusicURL",
+        threat_level: OSSLThreatLevel::Moderate,
+        description: "Set parcel music URL",
+    },
+    OSSLFunctionInfo {
+        name: "osVolumeDetect",
+        threat_level: OSSLThreatLevel::VeryLow,
+        description: "Set volume detect",
+    },
+    OSSLFunctionInfo {
+        name: "osRequestURL",
+        threat_level: OSSLThreatLevel::Moderate,
+        description: "Request external URL",
+    },
+    OSSLFunctionInfo {
+        name: "osRequestSecureURL",
+        threat_level: OSSLThreatLevel::Moderate,
+        description: "Request secure external URL",
+    },
 ];
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
@@ -386,31 +701,30 @@ impl OARAnalyzer {
         // Open and read the OAR archive
         let file = File::open(oar_path)
             .with_context(|| format!("Failed to open OAR file: {}", oar_path.display()))?;
-        let mut archive = ZipArchive::new(file)
-            .with_context(|| "Failed to read OAR archive")?;
+        let mut archive = ZipArchive::new(file).with_context(|| "Failed to read OAR archive")?;
 
         // Extract metadata
         let metadata = self.extract_metadata(&mut archive).await?;
-        
+
         // Extract region information
         let region_info = self.extract_region_info(&mut archive).await?;
-        
+
         // Analyze objects and primitives
         let objects = self.analyze_objects(&mut archive).await?;
-        
+
         // Extract terrain data
         let terrain = self.extract_terrain_data(&mut archive).await?;
-        
+
         // Analyze assets
         let assets = self.analyze_assets(&mut archive).await?;
-        
+
         // Analyze scripts
         let scripts = if self.config.script_analysis {
             self.analyze_scripts(&mut archive).await?
         } else {
             Vec::new()
         };
-        
+
         // Extract parcel information
         let parcels = self.extract_parcel_data(&mut archive).await?;
 
@@ -463,7 +777,10 @@ impl OARAnalyzer {
             patterns.extend(landscape_patterns);
         }
 
-        tracing::info!("Extracted {} content patterns from OAR data", patterns.len());
+        tracing::info!(
+            "Extracted {} content patterns from OAR data",
+            patterns.len()
+        );
         Ok(patterns)
     }
 
@@ -473,29 +790,30 @@ impl OARAnalyzer {
 
         // Assess object quality
         assessment.object_quality = self.assess_object_quality(&oar_data.objects)?;
-        
+
         // Assess script quality
         assessment.script_quality = self.assess_script_quality(&oar_data.scripts)?;
-        
+
         // Assess material usage
         assessment.material_quality = self.assess_material_quality(&oar_data.objects)?;
-        
+
         // Assess spatial organization
         assessment.spatial_quality = self.assess_spatial_quality(&oar_data.objects)?;
-        
+
         // Calculate overall quality score
-        assessment.overall_score = (
-            assessment.object_quality * 0.3 +
-            assessment.script_quality * 0.25 +
-            assessment.material_quality * 0.25 +
-            assessment.spatial_quality * 0.2
-        );
+        assessment.overall_score = (assessment.object_quality * 0.3
+            + assessment.script_quality * 0.25
+            + assessment.material_quality * 0.25
+            + assessment.spatial_quality * 0.2);
 
         Ok(assessment)
     }
 
     // Private implementation methods
-    async fn extract_metadata<R: Read + Seek>(&self, archive: &mut ZipArchive<R>) -> Result<OARMetadata> {
+    async fn extract_metadata<R: Read + Seek>(
+        &self,
+        archive: &mut ZipArchive<R>,
+    ) -> Result<OARMetadata> {
         // Look for archive.xml or similar metadata files
         for i in 0..archive.len() {
             let mut file = archive.by_index(i)?;
@@ -518,7 +836,10 @@ impl OARAnalyzer {
         })
     }
 
-    async fn extract_region_info<R: Read + Seek>(&self, archive: &mut ZipArchive<R>) -> Result<RegionInfo> {
+    async fn extract_region_info<R: Read + Seek>(
+        &self,
+        archive: &mut ZipArchive<R>,
+    ) -> Result<RegionInfo> {
         // Look for region settings files
         for i in 0..archive.len() {
             let mut file = archive.by_index(i)?;
@@ -540,7 +861,10 @@ impl OARAnalyzer {
         })
     }
 
-    async fn analyze_objects<R: Read + Seek>(&self, archive: &mut ZipArchive<R>) -> Result<Vec<AnalyzedObject>> {
+    async fn analyze_objects<R: Read + Seek>(
+        &self,
+        archive: &mut ZipArchive<R>,
+    ) -> Result<Vec<AnalyzedObject>> {
         let mut objects = Vec::new();
 
         // Look for object files
@@ -549,7 +873,7 @@ impl OARAnalyzer {
             if file.name().contains("objects/") && file.name().ends_with(".xml") {
                 let mut contents = String::new();
                 file.read_to_string(&mut contents)?;
-                
+
                 if let Ok(object) = self.parse_object_xml(&contents) {
                     objects.push(object);
                 }
@@ -560,7 +884,10 @@ impl OARAnalyzer {
         Ok(objects)
     }
 
-    async fn extract_terrain_data<R: Read + Seek>(&self, archive: &mut ZipArchive<R>) -> Result<Option<TerrainData>> {
+    async fn extract_terrain_data<R: Read + Seek>(
+        &self,
+        archive: &mut ZipArchive<R>,
+    ) -> Result<Option<TerrainData>> {
         // Look for terrain files
         for i in 0..archive.len() {
             let mut file = archive.by_index(i)?;
@@ -573,7 +900,10 @@ impl OARAnalyzer {
         Ok(None)
     }
 
-    async fn analyze_assets<R: Read + Seek>(&self, archive: &mut ZipArchive<R>) -> Result<Vec<AssetData>> {
+    async fn analyze_assets<R: Read + Seek>(
+        &self,
+        archive: &mut ZipArchive<R>,
+    ) -> Result<Vec<AssetData>> {
         let mut assets = Vec::new();
 
         // Look for asset files
@@ -596,7 +926,10 @@ impl OARAnalyzer {
         Ok(assets)
     }
 
-    async fn analyze_scripts<R: Read + Seek>(&self, archive: &mut ZipArchive<R>) -> Result<Vec<ScriptData>> {
+    async fn analyze_scripts<R: Read + Seek>(
+        &self,
+        archive: &mut ZipArchive<R>,
+    ) -> Result<Vec<ScriptData>> {
         let mut scripts = Vec::new();
 
         // Look for script files
@@ -605,7 +938,7 @@ impl OARAnalyzer {
             if file.name().contains("scripts/") && file.name().ends_with(".lsl") {
                 let mut contents = String::new();
                 file.read_to_string(&mut contents)?;
-                
+
                 let script = self.analyze_script_content(&contents, file.name())?;
                 scripts.push(script);
             }
@@ -615,7 +948,10 @@ impl OARAnalyzer {
         Ok(scripts)
     }
 
-    async fn extract_parcel_data<R: Read + Seek>(&self, archive: &mut ZipArchive<R>) -> Result<Vec<ParcelData>> {
+    async fn extract_parcel_data<R: Read + Seek>(
+        &self,
+        archive: &mut ZipArchive<R>,
+    ) -> Result<Vec<ParcelData>> {
         let mut parcels = Vec::new();
 
         // Look for parcel/land files
@@ -624,7 +960,7 @@ impl OARAnalyzer {
             if file.name().contains("parcels") || file.name().contains("land") {
                 let mut contents = String::new();
                 file.read_to_string(&mut contents)?;
-                
+
                 if let Ok(parcel_list) = self.parse_parcel_data(&contents) {
                     parcels.extend(parcel_list);
                 }
@@ -636,16 +972,16 @@ impl OARAnalyzer {
 
     async fn learn_patterns_from_data(&mut self, oar_data: &OARData) -> Result<()> {
         // EADS-style pattern learning implementation
-        
+
         // Learn architectural patterns
         self.learn_architectural_patterns(&oar_data.objects).await?;
-        
+
         // Learn material usage patterns
         self.learn_material_patterns(&oar_data.objects).await?;
-        
+
         // Learn spatial organization patterns
         self.learn_spatial_patterns(&oar_data.objects).await?;
-        
+
         // Learn scripting patterns
         self.learn_scripting_patterns(&oar_data.scripts).await?;
 
@@ -657,12 +993,16 @@ impl OARAnalyzer {
     // Helper methods for parsing and analysis
     fn parse_metadata_xml(&self, xml_content: &str) -> Result<OARMetadata> {
         let version = Self::extract_xml_value(xml_content, "version").unwrap_or("1.0".to_string());
-        let region_name = Self::extract_xml_value(xml_content, "region_name").unwrap_or("Unknown".to_string());
-        let region_uuid = Self::extract_xml_value(xml_content, "region_uuid").unwrap_or(Uuid::new_v4().to_string());
+        let region_name =
+            Self::extract_xml_value(xml_content, "region_name").unwrap_or("Unknown".to_string());
+        let region_uuid = Self::extract_xml_value(xml_content, "region_uuid")
+            .unwrap_or(Uuid::new_v4().to_string());
         let total_objects = Self::extract_xml_value(xml_content, "object_count")
-            .and_then(|s| s.parse().ok()).unwrap_or(0);
+            .and_then(|s| s.parse().ok())
+            .unwrap_or(0);
         let total_prims = Self::extract_xml_value(xml_content, "prim_count")
-            .and_then(|s| s.parse().ok()).unwrap_or(0);
+            .and_then(|s| s.parse().ok())
+            .unwrap_or(0);
 
         Ok(OARMetadata {
             version,
@@ -676,10 +1016,13 @@ impl OARAnalyzer {
     }
 
     fn parse_region_settings(&self, settings_content: &str) -> Result<RegionInfo> {
-        let name = Self::extract_xml_value(settings_content, "RegionName").unwrap_or("Unknown".to_string());
-        let uuid = Self::extract_xml_value(settings_content, "RegionUUID").unwrap_or(Uuid::new_v4().to_string());
+        let name = Self::extract_xml_value(settings_content, "RegionName")
+            .unwrap_or("Unknown".to_string());
+        let uuid = Self::extract_xml_value(settings_content, "RegionUUID")
+            .unwrap_or(Uuid::new_v4().to_string());
         let water_height = Self::extract_xml_value(settings_content, "WaterHeight")
-            .and_then(|s| s.parse().ok()).unwrap_or(20.0);
+            .and_then(|s| s.parse().ok())
+            .unwrap_or(20.0);
 
         Ok(RegionInfo {
             name,
@@ -692,7 +1035,8 @@ impl OARAnalyzer {
     }
 
     fn parse_object_xml(&self, xml_content: &str) -> Result<AnalyzedObject> {
-        let uuid = Self::extract_xml_value(xml_content, "UUID").unwrap_or(Uuid::new_v4().to_string());
+        let uuid =
+            Self::extract_xml_value(xml_content, "UUID").unwrap_or(Uuid::new_v4().to_string());
         let name = Self::extract_xml_value(xml_content, "Name").unwrap_or("Object".to_string());
         let description = Self::extract_xml_value(xml_content, "Description").unwrap_or_default();
 
@@ -775,17 +1119,20 @@ impl OARAnalyzer {
         let ossl_raw = self.extract_ossl_functions(script_content);
         let ossl_threat_score = self.calculate_ossl_threat_score(&ossl_raw);
 
-        let ossl_functions: Vec<OSSLFunctionUsage> = ossl_raw.iter()
+        let ossl_functions: Vec<OSSLFunctionUsage> = ossl_raw
+            .iter()
             .filter_map(|(name, level)| {
-                self.get_ossl_function_info(name).map(|info| OSSLFunctionUsage {
-                    name: name.clone(),
-                    threat_level: *level,
-                    description: info.description.to_string(),
-                })
+                self.get_ossl_function_info(name)
+                    .map(|info| OSSLFunctionUsage {
+                        name: name.clone(),
+                        threat_level: *level,
+                        description: info.description.to_string(),
+                    })
             })
             .collect();
 
-        let complexity_score = self.calculate_script_complexity_with_ossl(script_content, ossl_threat_score);
+        let complexity_score =
+            self.calculate_script_complexity_with_ossl(script_content, ossl_threat_score);
 
         Ok(ScriptData {
             uuid: Uuid::new_v4().to_string(),
@@ -803,8 +1150,10 @@ impl OARAnalyzer {
 
     fn parse_parcel_data(&self, parcel_content: &str) -> Result<Vec<ParcelData>> {
         let mut parcels = Vec::new();
-        let parcel_name = Self::extract_xml_value(parcel_content, "Name").unwrap_or("Default Parcel".to_string());
-        let parcel_desc = Self::extract_xml_value(parcel_content, "Description").unwrap_or_default();
+        let parcel_name =
+            Self::extract_xml_value(parcel_content, "Name").unwrap_or("Default Parcel".to_string());
+        let parcel_desc =
+            Self::extract_xml_value(parcel_content, "Description").unwrap_or_default();
 
         parcels.push(ParcelData {
             uuid: Uuid::new_v4().to_string(),
@@ -819,7 +1168,10 @@ impl OARAnalyzer {
     }
 
     // Pattern analysis methods
-    fn analyze_architectural_patterns(&self, objects: &[AnalyzedObject]) -> Result<Vec<ContentPattern>> {
+    fn analyze_architectural_patterns(
+        &self,
+        objects: &[AnalyzedObject],
+    ) -> Result<Vec<ContentPattern>> {
         let mut patterns = Vec::new();
         if objects.is_empty() {
             return Ok(patterns);
@@ -879,7 +1231,10 @@ impl OARAnalyzer {
 
     fn analyze_material_patterns(&self, objects: &[AnalyzedObject]) -> Result<Vec<ContentPattern>> {
         let mut patterns = Vec::new();
-        let textured_count = objects.iter().filter(|o| o.material_data.texture_id.is_some()).count();
+        let textured_count = objects
+            .iter()
+            .filter(|o| o.material_data.texture_id.is_some())
+            .count();
 
         if textured_count > 0 {
             let pattern = ContentPattern {
@@ -921,7 +1276,8 @@ impl OARAnalyzer {
                     primitive_types: Vec::new(),
                     scale_analysis: crate::ai::content_creation::ScaleAnalysis,
                     symmetry_patterns: Vec::new(),
-                    complexity_score: scripts.iter().map(|s| s.complexity_score).sum::<f64>() / scripts.len() as f64,
+                    complexity_score: scripts.iter().map(|s| s.complexity_score).sum::<f64>()
+                        / scripts.len() as f64,
                 },
                 materials: MaterialAnalysis,
                 spatial_relations: SpatialAnalysis,
@@ -980,9 +1336,14 @@ impl OARAnalyzer {
         if scripts.is_empty() {
             return Ok(5.0);
         }
-        let avg_complexity: f64 = scripts.iter().map(|s| s.complexity_score).sum::<f64>() / scripts.len() as f64;
+        let avg_complexity: f64 =
+            scripts.iter().map(|s| s.complexity_score).sum::<f64>() / scripts.len() as f64;
         let base_score = 5.0 + avg_complexity.min(3.0);
-        let function_bonus = scripts.iter().filter(|s| !s.functions_used.is_empty()).count() as f64 * 0.5;
+        let function_bonus = scripts
+            .iter()
+            .filter(|s| !s.functions_used.is_empty())
+            .count() as f64
+            * 0.5;
         Ok((base_score + function_bonus).min(10.0))
     }
 
@@ -990,7 +1351,11 @@ impl OARAnalyzer {
         if objects.is_empty() {
             return Ok(5.0);
         }
-        let textured_ratio = objects.iter().filter(|o| o.material_data.texture_id.is_some()).count() as f64 / objects.len() as f64;
+        let textured_ratio = objects
+            .iter()
+            .filter(|o| o.material_data.texture_id.is_some())
+            .count() as f64
+            / objects.len() as f64;
         let has_glow = objects.iter().any(|o| o.material_data.glow > 0.0);
         let base_score = 5.0 + textured_ratio * 3.0;
         let glow_bonus = if has_glow { 1.0 } else { 0.0 };
@@ -1002,7 +1367,11 @@ impl OARAnalyzer {
             return Ok(5.0);
         }
         let has_hierarchy = objects.iter().any(|o| !o.children.is_empty());
-        let variety = objects.iter().map(|o| std::mem::discriminant(&o.primitive_type)).collect::<std::collections::HashSet<_>>().len() as f64;
+        let variety = objects
+            .iter()
+            .map(|o| std::mem::discriminant(&o.primitive_type))
+            .collect::<std::collections::HashSet<_>>()
+            .len() as f64;
         let base_score = 5.0 + variety.min(3.0);
         let hierarchy_bonus = if has_hierarchy { 2.0 } else { 0.0 };
         Ok((base_score + hierarchy_bonus).min(10.0))
@@ -1030,7 +1399,9 @@ impl OARAnalyzer {
     }
 
     fn detect_script_language(&self, script_content: &str) -> ScriptEngineType {
-        let has_ossl = OSSL_FUNCTIONS.iter().any(|f| script_content.contains(f.name));
+        let has_ossl = OSSL_FUNCTIONS
+            .iter()
+            .any(|f| script_content.contains(f.name));
         let has_lsl = self.has_lsl_functions(script_content);
 
         match (has_lsl, has_ossl) {
@@ -1043,9 +1414,18 @@ impl OARAnalyzer {
 
     fn has_lsl_functions(&self, script_content: &str) -> bool {
         let lsl_indicators = [
-            "llSay", "llWhisper", "llShout", "llListen", "llSetText",
-            "llGetKey", "llGetOwner", "llRequestPermissions", "llDialog",
-            "llSetTimerEvent", "llSensor", "llRezObject",
+            "llSay",
+            "llWhisper",
+            "llShout",
+            "llListen",
+            "llSetText",
+            "llGetKey",
+            "llGetOwner",
+            "llRequestPermissions",
+            "llDialog",
+            "llSetTimerEvent",
+            "llSensor",
+            "llRezObject",
         ];
         lsl_indicators.iter().any(|f| script_content.contains(f))
     }
@@ -1065,11 +1445,10 @@ impl OARAnalyzer {
             return 0.0;
         }
 
-        let total_weight: f64 = ossl_functions.iter()
-            .map(|(_, level)| level.weight())
-            .sum();
+        let total_weight: f64 = ossl_functions.iter().map(|(_, level)| level.weight()).sum();
 
-        let max_threat = ossl_functions.iter()
+        let max_threat = ossl_functions
+            .iter()
             .map(|(_, level)| level.weight())
             .fold(0.0f64, |a, b| a.max(b));
 
@@ -1083,21 +1462,65 @@ impl OARAnalyzer {
     fn extract_functions_from_script(&self, script_content: &str) -> Vec<String> {
         let mut functions = Vec::new();
         let common_lsl_functions = [
-            "llSay", "llWhisper", "llShout", "llRegionSay", "llOwnerSay",
-            "llSetText", "llSetAlpha", "llSetColor", "llSetTexture", "llSetScale",
-            "llSetPos", "llSetRot", "llSetPrimitiveParams", "llGetPos", "llGetRot",
-            "llGetKey", "llGetOwner", "llGetLinkKey", "llGetObjectName",
-            "llListen", "llListenRemove", "llDialog", "llTextBox",
-            "llGiveInventory", "llRezObject", "llDie", "llDetach",
-            "llRequestPermissions", "llTakeControls", "llReleaseControls",
-            "llSensor", "llSensorRepeat", "llSensorRemove",
-            "llSetTimerEvent", "llSleep", "llResetScript",
-            "llApplyImpulse", "llApplyRotationalImpulse", "llMoveToTarget",
-            "llStartAnimation", "llStopAnimation", "llGetAnimation",
-            "llPlaySound", "llLoopSound", "llStopSound", "llTriggerSound",
-            "llHTTPRequest", "llEmail", "llGetNotecardLine", "llGetNumberOfNotecardLines",
-            "llStringLength", "llSubStringIndex", "llDeleteSubString", "llGetSubString",
-            "llList2String", "llList2Integer", "llList2Float", "llListFindList", "llGetListLength",
+            "llSay",
+            "llWhisper",
+            "llShout",
+            "llRegionSay",
+            "llOwnerSay",
+            "llSetText",
+            "llSetAlpha",
+            "llSetColor",
+            "llSetTexture",
+            "llSetScale",
+            "llSetPos",
+            "llSetRot",
+            "llSetPrimitiveParams",
+            "llGetPos",
+            "llGetRot",
+            "llGetKey",
+            "llGetOwner",
+            "llGetLinkKey",
+            "llGetObjectName",
+            "llListen",
+            "llListenRemove",
+            "llDialog",
+            "llTextBox",
+            "llGiveInventory",
+            "llRezObject",
+            "llDie",
+            "llDetach",
+            "llRequestPermissions",
+            "llTakeControls",
+            "llReleaseControls",
+            "llSensor",
+            "llSensorRepeat",
+            "llSensorRemove",
+            "llSetTimerEvent",
+            "llSleep",
+            "llResetScript",
+            "llApplyImpulse",
+            "llApplyRotationalImpulse",
+            "llMoveToTarget",
+            "llStartAnimation",
+            "llStopAnimation",
+            "llGetAnimation",
+            "llPlaySound",
+            "llLoopSound",
+            "llStopSound",
+            "llTriggerSound",
+            "llHTTPRequest",
+            "llEmail",
+            "llGetNotecardLine",
+            "llGetNumberOfNotecardLines",
+            "llStringLength",
+            "llSubStringIndex",
+            "llDeleteSubString",
+            "llGetSubString",
+            "llList2String",
+            "llList2Integer",
+            "llList2Float",
+            "llListFindList",
+            "llGetListLength",
         ];
 
         for func in &common_lsl_functions {
@@ -1111,14 +1534,38 @@ impl OARAnalyzer {
     fn extract_events_from_script(&self, script_content: &str) -> Vec<String> {
         let mut events = Vec::new();
         let lsl_events = [
-            "state_entry", "state_exit", "touch_start", "touch", "touch_end",
-            "collision_start", "collision", "collision_end",
-            "sensor", "no_sensor", "timer", "listen", "at_target", "not_at_target",
-            "control", "money", "email", "run_time_permissions",
-            "changed", "on_rez", "object_rez", "attach", "dataserver",
-            "moving_start", "moving_end", "link_message", "http_response",
-            "land_collision_start", "land_collision", "land_collision_end",
-            "experience_permissions", "experience_permissions_denied",
+            "state_entry",
+            "state_exit",
+            "touch_start",
+            "touch",
+            "touch_end",
+            "collision_start",
+            "collision",
+            "collision_end",
+            "sensor",
+            "no_sensor",
+            "timer",
+            "listen",
+            "at_target",
+            "not_at_target",
+            "control",
+            "money",
+            "email",
+            "run_time_permissions",
+            "changed",
+            "on_rez",
+            "object_rez",
+            "attach",
+            "dataserver",
+            "moving_start",
+            "moving_end",
+            "link_message",
+            "http_response",
+            "land_collision_start",
+            "land_collision",
+            "land_collision_end",
+            "experience_permissions",
+            "experience_permissions_denied",
         ];
 
         for event in &lsl_events {
@@ -1136,9 +1583,9 @@ impl OARAnalyzer {
         let event_count = self.extract_events_from_script(script_content).len();
 
         let nesting_depth = script_content.matches('{').count().min(20) as f64;
-        let conditional_count = script_content.matches("if").count() +
-                               script_content.matches("while").count() +
-                               script_content.matches("for").count();
+        let conditional_count = script_content.matches("if").count()
+            + script_content.matches("while").count()
+            + script_content.matches("for").count();
 
         let line_factor = (line_count as f64 * 0.02).min(2.0);
         let function_factor = (function_count as f64 * 0.1).min(3.0);
@@ -1146,10 +1593,15 @@ impl OARAnalyzer {
         let nesting_factor = (nesting_depth * 0.05).min(1.0);
         let conditional_factor = (conditional_count as f64 * 0.05).min(2.0);
 
-        (line_factor + function_factor + event_factor + nesting_factor + conditional_factor).min(10.0)
+        (line_factor + function_factor + event_factor + nesting_factor + conditional_factor)
+            .min(10.0)
     }
 
-    fn calculate_script_complexity_with_ossl(&self, script_content: &str, ossl_threat_score: f64) -> f64 {
+    fn calculate_script_complexity_with_ossl(
+        &self,
+        script_content: &str,
+        ossl_threat_score: f64,
+    ) -> f64 {
         let base_complexity = self.calculate_script_complexity(script_content);
         let ossl_factor = ossl_threat_score * 0.2;
         (base_complexity + ossl_factor).min(10.0)

@@ -1,5 +1,5 @@
 //! Entity management for scenes
-//! 
+//!
 //! This module provides entity-related functionality for scene management.
 
 use crate::ffi::Vec3;
@@ -44,10 +44,10 @@ impl Entity {
 pub enum EntityError {
     #[error("Entity not found: {0:?}")]
     EntityNotFound(EntityId),
-    
+
     #[error("Invalid entity data: {0}")]
     InvalidData(String),
-    
+
     #[error("Internal error: {0}")]
     Internal(String),
-} 
+}

@@ -3,15 +3,15 @@
 // Building on existing web infrastructure for universal browser access
 
 // WebSocket integration handled through network layer
-use crate::monitoring::metrics::MetricsCollector;
 use crate::database::DatabaseManager;
+use crate::monitoring::metrics::MetricsCollector;
+use anyhow::{Error as AnyhowError, Result};
+use chrono::{DateTime, Utc};
+use serde::{Deserialize, Serialize};
+use std::collections::HashMap;
 use std::sync::Arc;
 use tokio::sync::RwLock;
-use serde::{Deserialize, Serialize};
 use uuid::Uuid;
-use anyhow::{Result, Error as AnyhowError};
-use std::collections::HashMap;
-use chrono::{DateTime, Utc};
 
 #[derive(Debug, Clone)]
 pub struct PWAServiceManager {
@@ -159,8 +159,8 @@ pub struct NotificationPreferences {
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct QuietHours {
-    pub start_time: String,  // "22:00"
-    pub end_time: String,    // "08:00"
+    pub start_time: String, // "22:00"
+    pub end_time: String,   // "08:00"
     pub timezone: String,
 }
 
@@ -416,7 +416,7 @@ impl Default for PWAConfig {
             push_notifications: PushNotificationConfig {
                 push_enabled: true,
                 vapid_keys: VAPIDKeys {
-                    public_key: "".to_string(), // Generated at runtime
+                    public_key: "".to_string(),  // Generated at runtime
                     private_key: "".to_string(), // Generated at runtime
                     subject: "mailto:admin@opensim.org".to_string(),
                 },
@@ -478,14 +478,12 @@ impl Default for PWAConfig {
                     "entertainment".to_string(),
                     "productivity".to_string(),
                 ],
-                screenshots: vec![
-                    ScreenshotDefinition {
-                        src: "/screenshots/desktop-wide.png".to_string(),
-                        sizes: "1280x720".to_string(),
-                        screenshot_type: "image/png".to_string(),
-                        platform: Some("wide".to_string()),
-                    },
-                ],
+                screenshots: vec![ScreenshotDefinition {
+                    src: "/screenshots/desktop-wide.png".to_string(),
+                    sizes: "1280x720".to_string(),
+                    screenshot_type: "image/png".to_string(),
+                    platform: Some("wide".to_string()),
+                }],
             },
             performance_settings: PWAPerformanceSettings {
                 lazy_loading: true,
@@ -510,7 +508,11 @@ impl Default for PWAConfig {
                     default_src: vec!["'self'".to_string()],
                     script_src: vec!["'self'".to_string(), "'unsafe-eval'".to_string()], // For WebAssembly
                     style_src: vec!["'self'".to_string(), "'unsafe-inline'".to_string()],
-                    img_src: vec!["'self'".to_string(), "data:".to_string(), "blob:".to_string()],
+                    img_src: vec![
+                        "'self'".to_string(),
+                        "data:".to_string(),
+                        "blob:".to_string(),
+                    ],
                     connect_src: vec!["'self'".to_string(), "wss:".to_string(), "ws:".to_string()],
                     frame_src: vec!["'none'".to_string()],
                 },
@@ -540,12 +542,22 @@ impl PWAServiceManager {
     ) -> Result<Arc<Self>> {
         let manager = Arc::new(Self {
             config: config.clone(),
-            service_worker: Arc::new(ServiceWorkerManager::new(config.service_worker_config.clone()).await?),
+            service_worker: Arc::new(
+                ServiceWorkerManager::new(config.service_worker_config.clone()).await?,
+            ),
             webxr_manager: Arc::new(WebXRManager::new(config.webxr_settings.clone()).await?),
-            push_notification: Arc::new(PushNotificationManager::new(config.push_notifications.clone()).await?),
-            offline_storage: Arc::new(OfflineStorageManager::new(config.offline_capabilities.clone()).await?),
-            manifest_generator: Arc::new(ManifestGenerator::new(config.manifest_settings.clone()).await?),
-            performance_monitor: Arc::new(PWAPerformanceMonitor::new(config.performance_settings.clone()).await?),
+            push_notification: Arc::new(
+                PushNotificationManager::new(config.push_notifications.clone()).await?,
+            ),
+            offline_storage: Arc::new(
+                OfflineStorageManager::new(config.offline_capabilities.clone()).await?,
+            ),
+            manifest_generator: Arc::new(
+                ManifestGenerator::new(config.manifest_settings.clone()).await?,
+            ),
+            performance_monitor: Arc::new(
+                PWAPerformanceMonitor::new(config.performance_settings.clone()).await?,
+            ),
             metrics: metrics.clone(),
             db,
             active_pwa_sessions: Arc::new(RwLock::new(HashMap::new())),
@@ -559,7 +571,13 @@ impl PWAServiceManager {
 
     async fn initialize_services(&self) -> Result<()> {
         // Generate VAPID keys if not provided
-        if self.config.push_notifications.vapid_keys.public_key.is_empty() {
+        if self
+            .config
+            .push_notifications
+            .vapid_keys
+            .public_key
+            .is_empty()
+        {
             self.generate_vapid_keys().await?;
         }
 
@@ -600,7 +618,7 @@ impl PWAServiceManager {
         platform_info: PlatformInfo,
     ) -> Result<Uuid> {
         let session_id = Uuid::new_v4();
-        
+
         let session = PWASession {
             session_id,
             user_id,
@@ -623,10 +641,15 @@ impl PWAServiceManager {
             last_activity: Utc::now(),
         };
 
-        self.active_pwa_sessions.write().await.insert(session_id, session);
-        
+        self.active_pwa_sessions
+            .write()
+            .await
+            .insert(session_id, session);
+
         // Record PWA session metrics
-        self.metrics.record_pwa_session_created(user_id, &platform_info.browser).await;
+        self.metrics
+            .record_pwa_session_created(user_id, &platform_info.browser)
+            .await;
 
         Ok(session_id)
     }
@@ -636,8 +659,12 @@ impl PWAServiceManager {
         if let Some(session) = sessions.get_mut(&session_id) {
             if session.platform_info.supports_webxr {
                 session.webxr_active = true;
-                self.webxr_manager.initialize_webxr_session(session_id).await?;
-                self.metrics.record_webxr_session_started(session.user_id).await;
+                self.webxr_manager
+                    .initialize_webxr_session(session_id)
+                    .await?;
+                self.metrics
+                    .record_webxr_session_started(session.user_id)
+                    .await;
             } else {
                 return Err(AnyhowError::msg("WebXR not supported on this platform"));
             }
@@ -654,12 +681,17 @@ impl PWAServiceManager {
         Ok(())
     }
 
-    pub async fn request_notification_permission(&self, session_id: Uuid) -> Result<NotificationPermission> {
+    pub async fn request_notification_permission(
+        &self,
+        session_id: Uuid,
+    ) -> Result<NotificationPermission> {
         let mut sessions = self.active_pwa_sessions.write().await;
         if let Some(session) = sessions.get_mut(&session_id) {
             // In a real implementation, this would trigger browser permission request
             session.notification_permission = NotificationPermission::Granted;
-            self.metrics.record_notification_permission_granted(session.user_id).await;
+            self.metrics
+                .record_notification_permission_granted(session.user_id)
+                .await;
             return Ok(NotificationPermission::Granted);
         }
         Ok(NotificationPermission::Denied)
@@ -671,7 +703,9 @@ impl PWAServiceManager {
         notification_type: NotificationType,
         payload: PushPayload,
     ) -> Result<()> {
-        self.push_notification.send_notification(user_id, notification_type, payload).await
+        self.push_notification
+            .send_notification(user_id, notification_type, payload)
+            .await
     }
 
     pub async fn get_web_app_manifest(&self) -> Result<String> {
@@ -690,7 +724,9 @@ impl PWAServiceManager {
         let mut sessions = self.active_pwa_sessions.write().await;
         if let Some(session) = sessions.get_mut(&session_id) {
             session.performance_metrics = metrics.clone();
-            self.metrics.record_pwa_performance(session_id, &metrics).await;
+            self.metrics
+                .record_pwa_performance(session_id, &metrics)
+                .await;
         }
         Ok(())
     }
@@ -708,7 +744,9 @@ impl ServiceWorkerManager {
     }
 
     pub async fn perform_background_sync(&self, metrics: &MetricsCollector) -> Result<()> {
-        metrics.record_custom_metric("service_worker_background_sync", 1.0, HashMap::new()).await?;
+        metrics
+            .record_custom_metric("service_worker_background_sync", 1.0, HashMap::new())
+            .await?;
         Ok(())
     }
 
@@ -831,38 +869,64 @@ impl MetricsCollector {
         let mut tags = HashMap::new();
         tags.insert("user_id".to_string(), user_id.to_string());
         tags.insert("browser".to_string(), browser.to_string());
-        
-        let _ = self.record_custom_metric("pwa_sessions_created_total", 1.0, tags).await;
+
+        let _ = self
+            .record_custom_metric("pwa_sessions_created_total", 1.0, tags)
+            .await;
     }
 
     pub async fn record_webxr_session_started(&self, user_id: Uuid) {
         let mut tags = HashMap::new();
         tags.insert("user_id".to_string(), user_id.to_string());
-        
-        let _ = self.record_custom_metric("webxr_sessions_started_total", 1.0, tags).await;
+
+        let _ = self
+            .record_custom_metric("webxr_sessions_started_total", 1.0, tags)
+            .await;
     }
 
     pub async fn record_pwa_installed(&self, user_id: Uuid) {
         let mut tags = HashMap::new();
         tags.insert("user_id".to_string(), user_id.to_string());
-        
-        let _ = self.record_custom_metric("pwa_installs_total", 1.0, tags).await;
+
+        let _ = self
+            .record_custom_metric("pwa_installs_total", 1.0, tags)
+            .await;
     }
 
     pub async fn record_notification_permission_granted(&self, user_id: Uuid) {
         let mut tags = HashMap::new();
         tags.insert("user_id".to_string(), user_id.to_string());
-        
-        let _ = self.record_custom_metric("notification_permissions_granted_total", 1.0, tags).await;
+
+        let _ = self
+            .record_custom_metric("notification_permissions_granted_total", 1.0, tags)
+            .await;
     }
 
     pub async fn record_pwa_performance(&self, session_id: Uuid, metrics: &PWAPerformanceMetrics) {
         let mut tags = HashMap::new();
         tags.insert("session_id".to_string(), session_id.to_string());
-        
-        let _ = self.record_custom_metric("pwa_page_load_time_ms", metrics.page_load_time_ms as f64, tags.clone()).await;
-        let _ = self.record_custom_metric("pwa_time_to_interactive_ms", metrics.time_to_interactive_ms as f64, tags.clone()).await;
-        let _ = self.record_custom_metric("pwa_cache_hit_rate", metrics.service_worker_cache_hit_rate as f64, tags).await;
+
+        let _ = self
+            .record_custom_metric(
+                "pwa_page_load_time_ms",
+                metrics.page_load_time_ms as f64,
+                tags.clone(),
+            )
+            .await;
+        let _ = self
+            .record_custom_metric(
+                "pwa_time_to_interactive_ms",
+                metrics.time_to_interactive_ms as f64,
+                tags.clone(),
+            )
+            .await;
+        let _ = self
+            .record_custom_metric(
+                "pwa_cache_hit_rate",
+                metrics.service_worker_cache_hit_rate as f64,
+                tags,
+            )
+            .await;
     }
 }
 

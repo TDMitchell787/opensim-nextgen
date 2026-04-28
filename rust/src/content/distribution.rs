@@ -3,21 +3,21 @@
 //! Provides intelligent content distribution with versioning, cross-region
 //! synchronization, and adaptive delivery strategies.
 
+use super::{
+    ContentDistributionStatus, ContentError, ContentMetadata, ContentResult, ContentType,
+    DistributionStrategy,
+};
+use chrono::{DateTime, Utc};
+use serde::{Deserialize, Serialize};
 use std::collections::{HashMap, HashSet};
 use std::sync::Arc;
 use tokio::sync::RwLock;
 use uuid::Uuid;
-use serde::{Deserialize, Serialize};
-use chrono::{DateTime, Utc};
-use super::{
-    ContentMetadata, ContentResult, ContentError, DistributionStrategy,
-    ContentDistributionStatus, ContentType,
-};
 
 /// EADS fix: Custom serde serialization for semver::Version
 mod version_serde {
-    use serde::{Deserialize, Deserializer, Serialize, Serializer};
     use semver::Version;
+    use serde::{Deserialize, Deserializer, Serialize, Serializer};
 
     pub fn serialize<S>(version: &Version, serializer: S) -> Result<S::Ok, S::Error>
     where
@@ -188,12 +188,15 @@ impl ContentDistributionManager {
             active_workers: Arc::new(RwLock::new(0)),
         }
     }
-    
+
     /// Register a distribution node (region)
     pub async fn register_node(&mut self, node: DistributionNode) -> ContentResult<()> {
         let region_id = node.region_id;
-        self.distribution_nodes.write().await.insert(region_id, node);
-        
+        self.distribution_nodes
+            .write()
+            .await
+            .insert(region_id, node);
+
         // Initialize bandwidth allocation
         let allocation = BandwidthAllocation {
             region_id,
@@ -203,22 +206,25 @@ impl ContentDistributionManager {
             time_slice_start: Utc::now(),
             time_slice_duration: 60, // 1 minute slices
         };
-        
-        self.bandwidth_allocations.write().await.insert(region_id, allocation);
-        
+
+        self.bandwidth_allocations
+            .write()
+            .await
+            .insert(region_id, allocation);
+
         tracing::info!("Distribution node registered: {}", region_id);
         Ok(())
     }
-    
+
     /// Unregister a distribution node
     pub async fn unregister_node(&mut self, region_id: Uuid) -> ContentResult<()> {
         self.distribution_nodes.write().await.remove(&region_id);
         self.bandwidth_allocations.write().await.remove(&region_id);
-        
+
         tracing::info!("Distribution node unregistered: {}", region_id);
         Ok(())
     }
-    
+
     /// Start content distribution
     pub async fn distribute_content(
         &mut self,
@@ -227,21 +233,24 @@ impl ContentDistributionManager {
         strategy: Option<DistributionStrategy>,
     ) -> ContentResult<Uuid> {
         let job_id = Uuid::new_v4();
-        
+
         // Determine target regions
         let targets = if let Some(regions) = target_regions {
             regions
         } else {
             // Use all active regions by default
-            self.distribution_nodes.read().await
+            self.distribution_nodes
+                .read()
+                .await
                 .values()
                 .filter(|node| node.is_active)
                 .map(|node| node.region_id)
                 .collect()
         };
-        
-        let distribution_strategy = strategy.unwrap_or(content_metadata.distribution_strategy.clone());
-        
+
+        let distribution_strategy =
+            strategy.unwrap_or(content_metadata.distribution_strategy.clone());
+
         let job = DistributionJob {
             job_id,
             content_id: content_metadata.content_id,
@@ -258,44 +267,47 @@ impl ContentDistributionManager {
             total_bytes_transferred: 0,
             estimated_completion: None,
         };
-        
+
         // Store job
         self.distribution_jobs.write().await.insert(job_id, job);
-        
+
         // Add to queue based on strategy
         self.enqueue_distribution_job(job_id).await?;
-        
+
         // Update analytics
         {
             let mut analytics = self.analytics.write().await;
             analytics.total_distributions += 1;
         }
-        
+
         tracing::info!("Content distribution job created: {}", job_id);
         Ok(job_id)
     }
-    
+
     /// Get distribution job status
     pub async fn get_distribution_status(&self, job_id: Uuid) -> ContentResult<DistributionJob> {
-        self.distribution_jobs.read().await
+        self.distribution_jobs
+            .read()
+            .await
             .get(&job_id)
             .cloned()
             .ok_or(ContentError::ContentNotFound { id: job_id })
     }
-    
+
     /// Cancel distribution job
     pub async fn cancel_distribution(&mut self, job_id: Uuid) -> ContentResult<()> {
         let mut jobs = self.distribution_jobs.write().await;
         if let Some(job) = jobs.get_mut(&job_id) {
-            if job.status == DistributionJobStatus::Queued || 
-               job.status == DistributionJobStatus::Distributing {
+            if job.status == DistributionJobStatus::Queued
+                || job.status == DistributionJobStatus::Distributing
+            {
                 job.status = DistributionJobStatus::Cancelled;
                 tracing::info!("Distribution job cancelled: {}", job_id);
             }
         }
         Ok(())
     }
-    
+
     /// Synchronize content across regions
     pub async fn synchronize_content(
         &mut self,
@@ -304,25 +316,26 @@ impl ContentDistributionManager {
     ) -> ContentResult<Vec<ContentSyncRecord>> {
         let mut sync_results = Vec::new();
         let nodes = self.distribution_nodes.read().await.clone();
-        
+
         for (region_id, node) in nodes {
             if !node.is_active {
                 continue;
             }
-            
-            let sync_record = self.synchronize_content_to_region(
-                content_id,
-                region_id,
-                force_sync,
-            ).await?;
-            
+
+            let sync_record = self
+                .synchronize_content_to_region(content_id, region_id, force_sync)
+                .await?;
+
             sync_results.push(sync_record);
         }
-        
-        tracing::info!("Content synchronization completed for content: {}", content_id);
+
+        tracing::info!(
+            "Content synchronization completed for content: {}",
+            content_id
+        );
         Ok(sync_results)
     }
-    
+
     /// Check content version across regions
     pub async fn check_content_versions(
         &self,
@@ -330,21 +343,21 @@ impl ContentDistributionManager {
     ) -> ContentResult<HashMap<Uuid, ContentSyncRecord>> {
         let sync_records = self.sync_records.read().await;
         let mut versions = HashMap::new();
-        
+
         for ((cid, region_id), record) in sync_records.iter() {
             if *cid == content_id {
                 versions.insert(*region_id, record.clone());
             }
         }
-        
+
         Ok(versions)
     }
-    
+
     /// Get distribution analytics
     pub async fn get_analytics(&self) -> ContentResult<DistributionAnalytics> {
         Ok(self.analytics.read().await.clone())
     }
-    
+
     /// Update bandwidth allocation
     pub async fn update_bandwidth_allocation(
         &mut self,
@@ -358,23 +371,27 @@ impl ContentDistributionManager {
             allocation.priority_level = priority;
             allocation.time_slice_start = Utc::now();
         }
-        
-        tracing::info!("Bandwidth allocation updated for region {}: {} bytes/sec, priority {}",
-                      region_id, new_allocation, priority);
+
+        tracing::info!(
+            "Bandwidth allocation updated for region {}: {} bytes/sec, priority {}",
+            region_id,
+            new_allocation,
+            priority
+        );
         Ok(())
     }
-    
+
     /// Optimize distribution routes
     pub async fn optimize_distribution_routes(&mut self) -> ContentResult<()> {
         let nodes = self.distribution_nodes.read().await.clone();
         let mut performance_scores = HashMap::new();
-        
+
         // Calculate performance scores for each node
         for (region_id, node) in &nodes {
             let score = self.calculate_node_performance_score(node).await?;
             performance_scores.insert(*region_id, score);
         }
-        
+
         // Update distribution priorities based on performance
         for (region_id, score) in performance_scores {
             let priority = ((score * 10.0) as u8).min(10).max(1);
@@ -382,28 +399,31 @@ impl ContentDistributionManager {
                 allocation.priority_level = priority;
             }
         }
-        
+
         tracing::info!("Distribution routes optimized for {} nodes", nodes.len());
         Ok(())
     }
-    
+
     // Private helper methods
-    
+
     async fn enqueue_distribution_job(&mut self, job_id: Uuid) -> ContentResult<()> {
-        let job = self.distribution_jobs.read().await
+        let job = self
+            .distribution_jobs
+            .read()
+            .await
             .get(&job_id)
             .cloned()
             .ok_or(ContentError::ContentNotFound { id: job_id })?;
-        
+
         match job.strategy {
             DistributionStrategy::Immediate => {
                 // Add to front of queue for immediate processing
                 self.job_queue.write().await.insert(0, job_id);
-            },
+            }
             DistributionStrategy::OnDemand => {
                 // Add to end of queue for normal processing
                 self.job_queue.write().await.push(job_id);
-            },
+            }
             DistributionStrategy::Scheduled { start_time, .. } => {
                 // Schedule for later (simplified implementation)
                 if start_time <= Utc::now() {
@@ -412,19 +432,19 @@ impl ContentDistributionManager {
                     // Would implement proper scheduling in production
                     self.job_queue.write().await.push(job_id);
                 }
-            },
+            }
             DistributionStrategy::Progressive { .. } => {
                 // Add to queue with progressive logic
                 self.job_queue.write().await.push(job_id);
-            },
+            }
         }
-        
+
         // Try to start a worker
         self.try_start_distribution_worker().await?;
-        
+
         Ok(())
     }
-    
+
     async fn try_start_distribution_worker(&self) -> ContentResult<()> {
         let active_workers = *self.active_workers.read().await;
         if active_workers < self.config.max_concurrent_distributions {
@@ -432,13 +452,16 @@ impl ContentDistributionManager {
             if queue_len > 0 {
                 // Start worker (stub implementation)
                 *self.active_workers.write().await += 1;
-                tracing::info!("Started distribution worker ({}/{})",
-                              active_workers + 1, self.config.max_concurrent_distributions);
+                tracing::info!(
+                    "Started distribution worker ({}/{})",
+                    active_workers + 1,
+                    self.config.max_concurrent_distributions
+                );
             }
         }
         Ok(())
     }
-    
+
     async fn synchronize_content_to_region(
         &mut self,
         content_id: Uuid,
@@ -448,21 +471,27 @@ impl ContentDistributionManager {
         let sync_key = (content_id, region_id);
 
         let existing_record = self.sync_records.read().await.get(&sync_key).cloned();
-        let existing_version = existing_record.as_ref()
+        let existing_version = existing_record
+            .as_ref()
             .map(|r| r.version.clone())
             .unwrap_or_else(|| semver::Version::new(0, 0, 0));
 
         let needs_sync = match &existing_record {
             Some(record) if !force_sync => {
-                record.sync_status == SyncStatus::OutOfDate ||
-                record.sync_status == SyncStatus::Failed ||
-                record.sync_status == SyncStatus::NotCached
-            },
+                record.sync_status == SyncStatus::OutOfDate
+                    || record.sync_status == SyncStatus::Failed
+                    || record.sync_status == SyncStatus::NotCached
+            }
             None => true,
             _ => force_sync,
         };
 
-        let node = self.distribution_nodes.read().await.get(&region_id).cloned();
+        let node = self
+            .distribution_nodes
+            .read()
+            .await
+            .get(&region_id)
+            .cloned();
         let node_available = node.map(|n| n.is_active).unwrap_or(false);
 
         if !node_available {
@@ -476,7 +505,10 @@ impl ContentDistributionManager {
                 file_size: 0,
                 cache_priority: 1,
             };
-            self.sync_records.write().await.insert(sync_key, sync_record.clone());
+            self.sync_records
+                .write()
+                .await
+                .insert(sync_key, sync_record.clone());
             return Ok(sync_record);
         }
 
@@ -499,21 +531,26 @@ impl ContentDistributionManager {
             version: new_version,
             checksum: checksum.clone(),
             last_sync: Utc::now(),
-            sync_status: if needs_sync { SyncStatus::Synchronizing } else { SyncStatus::Synchronized },
+            sync_status: if needs_sync {
+                SyncStatus::Synchronizing
+            } else {
+                SyncStatus::Synchronized
+            },
             file_size,
             cache_priority,
         };
 
         if needs_sync {
-            tracing::info!("Synchronizing content {} to region {} (size: {} bytes)",
-                          content_id, region_id, file_size);
-
-            let sync_result = self.perform_content_transfer(
+            tracing::info!(
+                "Synchronizing content {} to region {} (size: {} bytes)",
                 content_id,
                 region_id,
-                file_size,
-                &checksum,
-            ).await;
+                file_size
+            );
+
+            let sync_result = self
+                .perform_content_transfer(content_id, region_id, file_size, &checksum)
+                .await;
 
             match sync_result {
                 Ok(bytes_transferred) => {
@@ -528,20 +565,27 @@ impl ContentDistributionManager {
                         metrics.success_rate = (metrics.success_rate * 0.9) + 10.0;
                         metrics.last_updated = Utc::now();
                     } else {
-                        analytics.region_performance.insert(region_id, RegionPerformanceMetrics {
+                        analytics.region_performance.insert(
                             region_id,
-                            avg_download_speed: bytes_transferred as f32 / 1.0,
-                            avg_response_time: 100.0,
-                            success_rate: 100.0,
-                            cache_hit_ratio: 0.0,
-                            uptime_percentage: 100.0,
-                            last_updated: Utc::now(),
-                        });
+                            RegionPerformanceMetrics {
+                                region_id,
+                                avg_download_speed: bytes_transferred as f32 / 1.0,
+                                avg_response_time: 100.0,
+                                success_rate: 100.0,
+                                cache_hit_ratio: 0.0,
+                                uptime_percentage: 100.0,
+                                last_updated: Utc::now(),
+                            },
+                        );
                     }
 
-                    tracing::info!("Content {} successfully synced to region {} ({} bytes)",
-                                  content_id, region_id, bytes_transferred);
-                },
+                    tracing::info!(
+                        "Content {} successfully synced to region {} ({} bytes)",
+                        content_id,
+                        region_id,
+                        bytes_transferred
+                    );
+                }
                 Err(e) => {
                     sync_record.sync_status = SyncStatus::Failed;
 
@@ -553,19 +597,26 @@ impl ContentDistributionManager {
                         metrics.last_updated = Utc::now();
                     }
 
-                    tracing::warn!("Content {} sync to region {} failed: {:?}",
-                                  content_id, region_id, e);
-                },
+                    tracing::warn!(
+                        "Content {} sync to region {} failed: {:?}",
+                        content_id,
+                        region_id,
+                        e
+                    );
+                }
             }
         }
 
-        self.sync_records.write().await.insert(sync_key, sync_record.clone());
+        self.sync_records
+            .write()
+            .await
+            .insert(sync_key, sync_record.clone());
 
         Ok(sync_record)
     }
 
     fn calculate_content_checksum(&self, content_id: Uuid) -> String {
-        use sha2::{Sha256, Digest};
+        use sha2::{Digest, Sha256};
         let mut hasher = Sha256::new();
         hasher.update(content_id.as_bytes());
         hasher.update(Utc::now().timestamp().to_le_bytes());
@@ -581,11 +632,15 @@ impl ContentDistributionManager {
 
     async fn calculate_cache_priority(&self, content_id: Uuid, region_id: Uuid) -> u8 {
         let sync_records = self.sync_records.read().await;
-        let access_count = sync_records.iter()
+        let access_count = sync_records
+            .iter()
             .filter(|((cid, _), _)| *cid == content_id)
             .count();
 
-        let region_priority = self.bandwidth_allocations.read().await
+        let region_priority = self
+            .bandwidth_allocations
+            .read()
+            .await
             .get(&region_id)
             .map(|a| a.priority_level)
             .unwrap_or(5);
@@ -607,7 +662,12 @@ impl ContentDistributionManager {
         file_size: u64,
         expected_checksum: &str,
     ) -> ContentResult<u64> {
-        let node = self.distribution_nodes.read().await.get(&region_id).cloned();
+        let node = self
+            .distribution_nodes
+            .read()
+            .await
+            .get(&region_id)
+            .cloned();
 
         let node = node.ok_or(ContentError::ContentNotFound { id: region_id })?;
 
@@ -637,42 +697,51 @@ impl ContentDistributionManager {
             transferred += chunk_bytes;
 
             if chunk_idx % 10 == 0 {
-                tracing::trace!("Content {} transfer progress: {}/{} bytes ({:.1}%)",
-                              content_id, transferred, file_size,
-                              (transferred as f64 / file_size as f64) * 100.0);
+                tracing::trace!(
+                    "Content {} transfer progress: {}/{} bytes ({:.1}%)",
+                    content_id,
+                    transferred,
+                    file_size,
+                    (transferred as f64 / file_size as f64) * 100.0
+                );
             }
         }
 
         let verification_checksum = self.calculate_content_checksum(content_id);
         if verification_checksum.len() != expected_checksum.len() {
-            tracing::warn!("Checksum length mismatch for content {} (transfer assumed successful)",
-                          content_id);
+            tracing::warn!(
+                "Checksum length mismatch for content {} (transfer assumed successful)",
+                content_id
+            );
         }
 
         Ok(transferred)
     }
-    
-    async fn calculate_node_performance_score(&self, node: &DistributionNode) -> ContentResult<f32> {
+
+    async fn calculate_node_performance_score(
+        &self,
+        node: &DistributionNode,
+    ) -> ContentResult<f32> {
         // Calculate performance score based on various metrics
         let mut score = 1.0;
-        
+
         // Response time factor (lower is better)
         if node.avg_response_time > 0.0 {
             score *= 1.0 / (1.0 + node.avg_response_time / 1000.0); // Normalize to seconds
         }
-        
+
         // Bandwidth utilization factor
         if node.bandwidth_limit > 0 {
             let utilization = node.current_bandwidth_usage as f32 / node.bandwidth_limit as f32;
             score *= 1.0 - utilization.min(1.0);
         }
-        
+
         // Cache utilization factor
         if node.cache_size > 0 {
             let cache_utilization = node.cache_usage as f32 / node.cache_size as f32;
             score *= 1.0 - (cache_utilization * 0.5); // Cache usage is less critical
         }
-        
+
         // Ensure score is between 0 and 1
         Ok(score.max(0.0).min(1.0))
     }
@@ -709,11 +778,7 @@ impl Default for DistributionAnalytics {
 
 impl DistributionNode {
     /// Create a new distribution node
-    pub fn new(
-        region_id: Uuid,
-        region_name: String,
-        endpoint_url: String,
-    ) -> Self {
+    pub fn new(region_id: Uuid, region_name: String, endpoint_url: String) -> Self {
         Self {
             region_id,
             region_name,
@@ -728,12 +793,12 @@ impl DistributionNode {
             distribution_priority: 5, // Medium priority
         }
     }
-    
+
     /// Update node health metrics
     pub fn update_health(&mut self, response_time: f32, is_responsive: bool) {
         self.last_ping = Some(Utc::now());
         self.is_active = is_responsive;
-        
+
         // Update rolling average response time
         if self.avg_response_time == 0.0 {
             self.avg_response_time = response_time;
@@ -741,12 +806,12 @@ impl DistributionNode {
             self.avg_response_time = (self.avg_response_time * 0.8) + (response_time * 0.2);
         }
     }
-    
+
     /// Check if node has available bandwidth
     pub fn has_available_bandwidth(&self, required_bandwidth: u64) -> bool {
         self.current_bandwidth_usage + required_bandwidth <= self.bandwidth_limit
     }
-    
+
     /// Check if node has available cache space
     pub fn has_available_cache(&self, required_space: u64) -> bool {
         self.cache_usage + required_space <= self.cache_size

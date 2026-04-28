@@ -46,7 +46,9 @@ impl XferModule {
     }
 
     pub fn start_xfer(&self, data: Vec<u8>, dest: SocketAddr) -> u64 {
-        let xfer_id = self.next_xfer_id.fetch_add(1, std::sync::atomic::Ordering::SeqCst);
+        let xfer_id = self
+            .next_xfer_id
+            .fetch_add(1, std::sync::atomic::Ordering::SeqCst);
         let state = XferState {
             xfer_id,
             data,
@@ -139,8 +141,12 @@ impl IXferModule for XferModule {
 
 #[async_trait]
 impl RegionModule for XferModule {
-    fn name(&self) -> &'static str { "XferModule" }
-    fn replaceable_interface(&self) -> Option<&'static str> { Some("IXferModule") }
+    fn name(&self) -> &'static str {
+        "XferModule"
+    }
+    fn replaceable_interface(&self) -> Option<&'static str> {
+        Some("IXferModule")
+    }
 
     async fn initialize(&mut self, _config: &ModuleConfig) -> Result<()> {
         info!("[XFER MODULE] Initialized");
@@ -151,21 +157,26 @@ impl RegionModule for XferModule {
         self.socket = Some(scene.socket.clone());
         self.service_registry = Some(scene.service_registry.clone());
 
-        scene.service_registry.write().register::<XferModule>(
-            Arc::new(XferModule {
+        scene
+            .service_registry
+            .write()
+            .register::<XferModule>(Arc::new(XferModule {
                 transfers: self.transfers.clone(),
                 next_xfer_id: self.next_xfer_id.clone(),
                 socket: self.socket.clone(),
                 service_registry: self.service_registry.clone(),
-            }),
-        );
+            }));
 
         info!("[XFER MODULE] Added to region {:?}", scene.region_name);
         Ok(())
     }
 
-    fn as_any(&self) -> &dyn Any { self }
-    fn as_any_mut(&mut self) -> &mut dyn Any { self }
+    fn as_any(&self) -> &dyn Any {
+        self
+    }
+    fn as_any_mut(&mut self) -> &mut dyn Any {
+        self
+    }
 }
 
 #[async_trait]

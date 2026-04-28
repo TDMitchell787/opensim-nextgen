@@ -1,24 +1,39 @@
 use crate::ai::skill_engine::*;
 
 static P_LOCAL_ID: ParamDef = ParamDef {
-    name: "local_id", param_type: ParamType::U32, required: true,
-    default_value: None, description: "Target prim local ID",
+    name: "local_id",
+    param_type: ParamType::U32,
+    required: true,
+    default_value: None,
+    description: "Target prim local ID",
 };
 static P_SCRIPT_NAME: ParamDef = ParamDef {
-    name: "script_name", param_type: ParamType::String, required: true,
-    default_value: None, description: "Name for the script",
+    name: "script_name",
+    param_type: ParamType::String,
+    required: true,
+    default_value: None,
+    description: "Name for the script",
 };
 static P_SCRIPT_SOURCE: ParamDef = ParamDef {
-    name: "script_source", param_type: ParamType::String, required: true,
-    default_value: None, description: "LSL script source code",
+    name: "script_source",
+    param_type: ParamType::String,
+    required: true,
+    default_value: None,
+    description: "LSL script source code",
 };
 static P_TEMPLATE_NAME: ParamDef = ParamDef {
-    name: "template_name", param_type: ParamType::String, required: true,
-    default_value: None, description: "Script template identifier",
+    name: "template_name",
+    param_type: ParamType::String,
+    required: true,
+    default_value: None,
+    description: "Script template identifier",
 };
 static P_TEMPLATE_PARAMS: ParamDef = ParamDef {
-    name: "params", param_type: ParamType::StringMap, required: false,
-    default_value: None, description: "Template parameter substitutions",
+    name: "params",
+    param_type: ParamType::StringMap,
+    required: false,
+    default_value: None,
+    description: "Template parameter substitutions",
 };
 
 pub static INSERT_SCRIPT: SkillDef = SkillDef {
@@ -28,7 +43,9 @@ pub static INSERT_SCRIPT: SkillDef = SkillDef {
     description: "Insert raw LSL source into a prim",
     params: &[P_LOCAL_ID, P_SCRIPT_NAME, P_SCRIPT_SOURCE],
     returns: ReturnType::Success,
-    requires_region: true, requires_agent: true, requires_admin: false,
+    requires_region: true,
+    requires_agent: true,
+    requires_admin: false,
     maturity: SkillMaturity::L7Production,
     phase: "Phase 154",
     tags: &["script", "lsl", "insert"],
@@ -42,7 +59,9 @@ pub static INSERT_TEMPLATE_SCRIPT: SkillDef = SkillDef {
     description: "Insert a pre-built script template with parameter substitution",
     params: &[P_LOCAL_ID, P_TEMPLATE_NAME, P_TEMPLATE_PARAMS],
     returns: ReturnType::Success,
-    requires_region: true, requires_agent: true, requires_admin: false,
+    requires_region: true,
+    requires_agent: true,
+    requires_admin: false,
     maturity: SkillMaturity::L7Production,
     phase: "Phase 154",
     tags: &["script", "lsl", "template"],
@@ -56,7 +75,9 @@ pub static UPDATE_SCRIPT: SkillDef = SkillDef {
     description: "Replace an existing script's source code",
     params: &[P_LOCAL_ID, P_SCRIPT_NAME, P_SCRIPT_SOURCE],
     returns: ReturnType::Success,
-    requires_region: true, requires_agent: true, requires_admin: false,
+    requires_region: true,
+    requires_agent: true,
+    requires_admin: false,
     maturity: SkillMaturity::L7Production,
     phase: "Phase 154",
     tags: &["script", "lsl", "update"],
@@ -70,7 +91,9 @@ pub static GIVE_TO_REQUESTER: SkillDef = SkillDef {
     description: "Transfer a built object to the requesting agent",
     params: &[P_LOCAL_ID],
     returns: ReturnType::Success,
-    requires_region: true, requires_agent: true, requires_admin: false,
+    requires_region: true,
+    requires_agent: true,
+    requires_admin: false,
     maturity: SkillMaturity::L7Production,
     phase: "Phase 154",
     tags: &["give", "transfer", "delivery"],

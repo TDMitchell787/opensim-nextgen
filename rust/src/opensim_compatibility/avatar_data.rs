@@ -3,14 +3,14 @@
 //! Loads avatar_lad.xml, avatar_skeleton.xml, and TGA textures from
 //! the bin/openmetaverse_data/ directory.
 
+use anyhow::{anyhow, Result};
+use serde::{Deserialize, Serialize};
 use std::collections::HashMap;
 use std::path::{Path, PathBuf};
+use std::sync::Arc;
 use std::sync::OnceLock;
 use tokio::sync::RwLock;
-use std::sync::Arc;
-use serde::{Deserialize, Serialize};
-use tracing::{debug, info, warn, error};
-use anyhow::{Result, anyhow};
+use tracing::{debug, error, info, warn};
 use uuid::Uuid;
 
 /// Global avatar data manager instance
@@ -146,7 +146,10 @@ impl AvatarDataManager {
         let openmetaverse_data_path = bin_directory.join("openmetaverse_data");
 
         if !openmetaverse_data_path.exists() {
-            warn!("openmetaverse_data directory not found at {}", openmetaverse_data_path.display());
+            warn!(
+                "openmetaverse_data directory not found at {}",
+                openmetaverse_data_path.display()
+            );
         }
 
         Ok(Self {
@@ -163,7 +166,10 @@ impl AvatarDataManager {
 
     /// Initialize the avatar data system by loading all files
     pub async fn initialize(&mut self) -> Result<()> {
-        info!("Initializing avatar data manager from {}", self.openmetaverse_data_path.display());
+        info!(
+            "Initializing avatar data manager from {}",
+            self.openmetaverse_data_path.display()
+        );
 
         // Load avatar_lad.xml
         self.load_avatar_lad().await?;
@@ -179,10 +185,12 @@ impl AvatarDataManager {
         body_parts.load().await?;
         self.body_parts_loader = Some(body_parts);
 
-        info!("Avatar data manager initialized: {} attachment points, {} visual params, {} textures",
-              self.attachment_points_by_id.len(),
-              self.visual_params_by_id.len(),
-              self.textures.len());
+        info!(
+            "Avatar data manager initialized: {} attachment points, {} visual params, {} textures",
+            self.attachment_points_by_id.len(),
+            self.visual_params_by_id.len(),
+            self.textures.len()
+        );
 
         Ok(())
     }
@@ -196,7 +204,8 @@ impl AvatarDataManager {
             return Ok(());
         }
 
-        let content = tokio::fs::read_to_string(&lad_path).await
+        let content = tokio::fs::read_to_string(&lad_path)
+            .await
             .map_err(|e| anyhow!("Failed to read avatar_lad.xml: {}", e))?;
 
         // Parse the XML manually since it has a complex structure
@@ -206,14 +215,22 @@ impl AvatarDataManager {
         let mut wearable_version = 22u32;
 
         // Extract version info
-        if let Some(cap) = regex::Regex::new(r#"version="([^"]+)""#).ok()
-            .and_then(|re| re.captures(&content)) {
-            version = cap.get(1).map(|m| m.as_str().to_string()).unwrap_or(version);
+        if let Some(cap) = regex::Regex::new(r#"version="([^"]+)""#)
+            .ok()
+            .and_then(|re| re.captures(&content))
+        {
+            version = cap
+                .get(1)
+                .map(|m| m.as_str().to_string())
+                .unwrap_or(version);
         }
 
-        if let Some(cap) = regex::Regex::new(r#"wearable_definition_version="(\d+)""#).ok()
-            .and_then(|re| re.captures(&content)) {
-            wearable_version = cap.get(1)
+        if let Some(cap) = regex::Regex::new(r#"wearable_definition_version="(\d+)""#)
+            .ok()
+            .and_then(|re| re.captures(&content))
+        {
+            wearable_version = cap
+                .get(1)
                 .and_then(|m| m.as_str().parse().ok())
                 .unwrap_or(wearable_version);
         }
@@ -228,11 +245,23 @@ impl AvatarDataManager {
             let rotation = Self::parse_vector3(cap.get(7).map(|m| m.as_str()).unwrap_or("0 0 0"));
 
             let ap = AttachmentPoint {
-                id: cap.get(1).and_then(|m| m.as_str().parse().ok()).unwrap_or(0),
-                group: cap.get(2).and_then(|m| m.as_str().parse().ok()).unwrap_or(0),
+                id: cap
+                    .get(1)
+                    .and_then(|m| m.as_str().parse().ok())
+                    .unwrap_or(0),
+                group: cap
+                    .get(2)
+                    .and_then(|m| m.as_str().parse().ok())
+                    .unwrap_or(0),
                 pie_slice: cap.get(3).and_then(|m| m.as_str().parse().ok()),
-                name: cap.get(4).map(|m| m.as_str().to_string()).unwrap_or_default(),
-                joint: cap.get(5).map(|m| m.as_str().to_string()).unwrap_or_default(),
+                name: cap
+                    .get(4)
+                    .map(|m| m.as_str().to_string())
+                    .unwrap_or_default(),
+                joint: cap
+                    .get(5)
+                    .map(|m| m.as_str().to_string())
+                    .unwrap_or_default(),
                 position,
                 rotation,
                 visible_in_first_person: cap.get(8).map(|m| m.as_str() == "true").unwrap_or(true),
@@ -250,17 +279,35 @@ impl AvatarDataManager {
 
         for cap in param_re.captures_iter(&content) {
             let vp = VisualParam {
-                id: cap.get(1).and_then(|m| m.as_str().parse().ok()).unwrap_or(0),
-                group: cap.get(2).and_then(|m| m.as_str().parse().ok()).unwrap_or(0),
+                id: cap
+                    .get(1)
+                    .and_then(|m| m.as_str().parse().ok())
+                    .unwrap_or(0),
+                group: cap
+                    .get(2)
+                    .and_then(|m| m.as_str().parse().ok())
+                    .unwrap_or(0),
                 wearable: cap.get(3).map(|m| m.as_str().to_string()),
                 edit_group: cap.get(4).map(|m| m.as_str().to_string()),
-                name: cap.get(5).map(|m| m.as_str().to_string()).unwrap_or_default(),
+                name: cap
+                    .get(5)
+                    .map(|m| m.as_str().to_string())
+                    .unwrap_or_default(),
                 label: None,
                 label_min: None,
                 label_max: None,
-                value_min: cap.get(6).and_then(|m| m.as_str().parse().ok()).unwrap_or(0.0),
-                value_max: cap.get(7).and_then(|m| m.as_str().parse().ok()).unwrap_or(1.0),
-                value_default: cap.get(8).and_then(|m| m.as_str().parse().ok()).unwrap_or(0.0),
+                value_min: cap
+                    .get(6)
+                    .and_then(|m| m.as_str().parse().ok())
+                    .unwrap_or(0.0),
+                value_max: cap
+                    .get(7)
+                    .and_then(|m| m.as_str().parse().ok())
+                    .unwrap_or(1.0),
+                value_default: cap
+                    .get(8)
+                    .and_then(|m| m.as_str().parse().ok())
+                    .unwrap_or(0.0),
                 sex: None,
             };
 
@@ -277,9 +324,11 @@ impl AvatarDataManager {
             visual_params,
         });
 
-        info!("Loaded avatar_lad.xml: {} attachment points, {} visual params",
-              self.attachment_points_by_id.len(),
-              self.visual_params_by_id.len());
+        info!(
+            "Loaded avatar_lad.xml: {} attachment points, {} visual params",
+            self.attachment_points_by_id.len(),
+            self.visual_params_by_id.len()
+        );
 
         Ok(())
     }
@@ -289,11 +338,15 @@ impl AvatarDataManager {
         let skeleton_path = self.openmetaverse_data_path.join("avatar_skeleton.xml");
 
         if !skeleton_path.exists() {
-            warn!("avatar_skeleton.xml not found at {}", skeleton_path.display());
+            warn!(
+                "avatar_skeleton.xml not found at {}",
+                skeleton_path.display()
+            );
             return Ok(());
         }
 
-        let content = tokio::fs::read_to_string(&skeleton_path).await
+        let content = tokio::fs::read_to_string(&skeleton_path)
+            .await
             .map_err(|e| anyhow!("Failed to read avatar_skeleton.xml: {}", e))?;
 
         // Parse skeleton header
@@ -301,19 +354,34 @@ impl AvatarDataManager {
         let mut num_bones = 0u32;
         let mut num_collision_volumes = 0u32;
 
-        if let Some(cap) = regex::Regex::new(r#"version="([^"]+)""#).ok()
-            .and_then(|re| re.captures(&content)) {
-            version = cap.get(1).map(|m| m.as_str().to_string()).unwrap_or(version);
+        if let Some(cap) = regex::Regex::new(r#"version="([^"]+)""#)
+            .ok()
+            .and_then(|re| re.captures(&content))
+        {
+            version = cap
+                .get(1)
+                .map(|m| m.as_str().to_string())
+                .unwrap_or(version);
         }
 
-        if let Some(cap) = regex::Regex::new(r#"num_bones="(\d+)""#).ok()
-            .and_then(|re| re.captures(&content)) {
-            num_bones = cap.get(1).and_then(|m| m.as_str().parse().ok()).unwrap_or(0);
+        if let Some(cap) = regex::Regex::new(r#"num_bones="(\d+)""#)
+            .ok()
+            .and_then(|re| re.captures(&content))
+        {
+            num_bones = cap
+                .get(1)
+                .and_then(|m| m.as_str().parse().ok())
+                .unwrap_or(0);
         }
 
-        if let Some(cap) = regex::Regex::new(r#"num_collision_volumes="(\d+)""#).ok()
-            .and_then(|re| re.captures(&content)) {
-            num_collision_volumes = cap.get(1).and_then(|m| m.as_str().parse().ok()).unwrap_or(0);
+        if let Some(cap) = regex::Regex::new(r#"num_collision_volumes="(\d+)""#)
+            .ok()
+            .and_then(|re| re.captures(&content))
+        {
+            num_collision_volumes = cap
+                .get(1)
+                .and_then(|m| m.as_str().parse().ok())
+                .unwrap_or(0);
         }
 
         // Parse root bone (mPelvis)
@@ -326,8 +394,10 @@ impl AvatarDataManager {
             root_bone,
         });
 
-        info!("Loaded avatar_skeleton.xml: {} bones, {} collision volumes",
-              num_bones, num_collision_volumes);
+        info!(
+            "Loaded avatar_skeleton.xml: {} bones, {} collision volumes",
+            num_bones, num_collision_volumes
+        );
 
         Ok(())
     }
@@ -358,10 +428,19 @@ impl AvatarDataManager {
         if let Ok(cv_re) = regex::Regex::new(&cv_pattern) {
             for cv_cap in cv_re.captures_iter(content) {
                 collision_volumes.push(CollisionVolume {
-                    name: cv_cap.get(1).map(|m| m.as_str().to_string()).unwrap_or_default(),
-                    position: Self::parse_vector3(cv_cap.get(2).map(|m| m.as_str()).unwrap_or("0 0 0")),
-                    rotation: Self::parse_vector3(cv_cap.get(3).map(|m| m.as_str()).unwrap_or("0 0 0")),
-                    scale: Self::parse_vector3(cv_cap.get(4).map(|m| m.as_str()).unwrap_or("1 1 1")),
+                    name: cv_cap
+                        .get(1)
+                        .map(|m| m.as_str().to_string())
+                        .unwrap_or_default(),
+                    position: Self::parse_vector3(
+                        cv_cap.get(2).map(|m| m.as_str()).unwrap_or("0 0 0"),
+                    ),
+                    rotation: Self::parse_vector3(
+                        cv_cap.get(3).map(|m| m.as_str()).unwrap_or("0 0 0"),
+                    ),
+                    scale: Self::parse_vector3(
+                        cv_cap.get(4).map(|m| m.as_str()).unwrap_or("1 1 1"),
+                    ),
                 });
             }
         }
@@ -407,13 +486,17 @@ impl AvatarDataManager {
             }
         }
 
-        info!("Loaded {} TGA textures from openmetaverse_data", loaded_count);
+        info!(
+            "Loaded {} TGA textures from openmetaverse_data",
+            loaded_count
+        );
         Ok(())
     }
 
     /// Load a single TGA texture file
     async fn load_tga_texture(&self, path: &Path) -> Result<AvatarTexture> {
-        let data = tokio::fs::read(path).await
+        let data = tokio::fs::read(path)
+            .await
             .map_err(|e| anyhow!("Failed to read TGA file: {}", e))?;
 
         // Parse TGA header (18 bytes minimum)
@@ -433,17 +516,20 @@ impl AvatarDataManager {
             return Err(anyhow!("Unsupported TGA image type: {}", image_type));
         }
 
-        let header_size = 18 + id_length + if color_map_type == 1 {
-            // Color map size calculation would go here
-            0
-        } else {
-            0
-        };
+        let header_size = 18
+            + id_length
+            + if color_map_type == 1 {
+                // Color map size calculation would go here
+                0
+            } else {
+                0
+            };
 
         let pixel_data = data[header_size..].to_vec();
 
         Ok(AvatarTexture {
-            name: path.file_stem()
+            name: path
+                .file_stem()
                 .and_then(|n| n.to_str())
                 .unwrap_or("unknown")
                 .to_string(),
@@ -455,7 +541,8 @@ impl AvatarDataManager {
 
     /// Parse a space-separated vector3 string
     fn parse_vector3(s: &str) -> [f32; 3] {
-        let parts: Vec<f32> = s.split_whitespace()
+        let parts: Vec<f32> = s
+            .split_whitespace()
             .filter_map(|p| p.parse().ok())
             .collect();
 
@@ -526,22 +613,30 @@ impl AvatarDataManager {
 
     /// Get default shape wearable
     pub fn get_default_shape(&self) -> Option<&LLWearable> {
-        self.body_parts_loader.as_ref().and_then(|l| l.get_default_shape())
+        self.body_parts_loader
+            .as_ref()
+            .and_then(|l| l.get_default_shape())
     }
 
     /// Get default skin wearable
     pub fn get_default_skin(&self) -> Option<&LLWearable> {
-        self.body_parts_loader.as_ref().and_then(|l| l.get_default_skin())
+        self.body_parts_loader
+            .as_ref()
+            .and_then(|l| l.get_default_skin())
     }
 
     /// Get default hair wearable
     pub fn get_default_hair(&self) -> Option<&LLWearable> {
-        self.body_parts_loader.as_ref().and_then(|l| l.get_default_hair())
+        self.body_parts_loader
+            .as_ref()
+            .and_then(|l| l.get_default_hair())
     }
 
     /// Get default eyes wearable
     pub fn get_default_eyes(&self) -> Option<&LLWearable> {
-        self.body_parts_loader.as_ref().and_then(|l| l.get_default_eyes())
+        self.body_parts_loader
+            .as_ref()
+            .and_then(|l| l.get_default_eyes())
     }
 
     /// Get all default body part parameters combined
@@ -553,15 +648,22 @@ impl AvatarDataManager {
     }
 
     pub fn get_wearable_by_uuid(&self, uuid: &Uuid) -> Option<&LLWearable> {
-        self.body_parts_loader.as_ref().and_then(|l| l.get_wearable_by_uuid(uuid))
+        self.body_parts_loader
+            .as_ref()
+            .and_then(|l| l.get_wearable_by_uuid(uuid))
     }
 
     pub fn get_wearable_data_by_uuid(&self, uuid: &Uuid) -> Option<Vec<u8>> {
-        self.body_parts_loader.as_ref().and_then(|l| l.get_wearable_data_by_uuid(uuid))
+        self.body_parts_loader
+            .as_ref()
+            .and_then(|l| l.get_wearable_data_by_uuid(uuid))
     }
 
     pub fn is_body_part_uuid(&self, uuid: &Uuid) -> bool {
-        self.body_parts_loader.as_ref().map(|l| l.is_body_part_uuid(uuid)).unwrap_or(false)
+        self.body_parts_loader
+            .as_ref()
+            .map(|l| l.is_body_part_uuid(uuid))
+            .unwrap_or(false)
     }
 }
 
@@ -616,16 +718,28 @@ impl From<u8> for WearableType {
 
 impl WearableType {
     pub fn is_body_part(&self) -> bool {
-        matches!(self, WearableType::Shape | WearableType::Skin | WearableType::Hair | WearableType::Eyes)
+        matches!(
+            self,
+            WearableType::Shape | WearableType::Skin | WearableType::Hair | WearableType::Eyes
+        )
     }
 
     pub fn is_clothing(&self) -> bool {
-        matches!(self,
-            WearableType::Shirt | WearableType::Pants | WearableType::Shoes |
-            WearableType::Socks | WearableType::Jacket | WearableType::Gloves |
-            WearableType::Undershirt | WearableType::Underpants | WearableType::Skirt |
-            WearableType::Alpha | WearableType::Tattoo | WearableType::Physics |
-            WearableType::Universal
+        matches!(
+            self,
+            WearableType::Shirt
+                | WearableType::Pants
+                | WearableType::Shoes
+                | WearableType::Socks
+                | WearableType::Jacket
+                | WearableType::Gloves
+                | WearableType::Undershirt
+                | WearableType::Underpants
+                | WearableType::Skirt
+                | WearableType::Alpha
+                | WearableType::Tattoo
+                | WearableType::Physics
+                | WearableType::Universal
         )
     }
 }
@@ -690,7 +804,8 @@ impl LLWearable {
         let version = Self::parse_version(lines[0])?;
 
         // Line 1 is the name
-        let name = lines.get(1)
+        let name = lines
+            .get(1)
             .map(|s| s.trim().to_string())
             .unwrap_or_else(|| "Unknown".to_string());
 
@@ -780,7 +895,8 @@ impl LLWearable {
         for line in lines {
             let line = line.trim();
             if line.starts_with("type ") {
-                let type_num: u8 = line.strip_prefix("type ")
+                let type_num: u8 = line
+                    .strip_prefix("type ")
                     .and_then(|s| s.trim().parse().ok())
                     .unwrap_or(255);
                 return Ok(WearableType::from(type_num));
@@ -799,7 +915,8 @@ impl LLWearable {
             let line = line.trim();
 
             if line.starts_with("parameters ") {
-                param_count = line.strip_prefix("parameters ")
+                param_count = line
+                    .strip_prefix("parameters ")
                     .and_then(|s| s.trim().parse::<usize>().ok())
                     .unwrap_or(0);
                 in_params = true;
@@ -809,10 +926,9 @@ impl LLWearable {
             if in_params && params_parsed < param_count {
                 let parts: Vec<&str> = line.split_whitespace().collect();
                 if parts.len() >= 2 {
-                    if let (Some(id), Some(value)) = (
-                        parts[0].parse::<u32>().ok(),
-                        parts[1].parse::<f32>().ok()
-                    ) {
+                    if let (Some(id), Some(value)) =
+                        (parts[0].parse::<u32>().ok(), parts[1].parse::<f32>().ok())
+                    {
                         params.push(WearableParameter { id, value });
                         params_parsed += 1;
                     }
@@ -837,7 +953,8 @@ impl LLWearable {
             let line = line.trim();
 
             if line.starts_with("textures ") {
-                tex_count = line.strip_prefix("textures ")
+                tex_count = line
+                    .strip_prefix("textures ")
                     .and_then(|s| s.trim().parse::<usize>().ok())
                     .unwrap_or(0);
                 in_textures = true;
@@ -880,14 +997,35 @@ impl LLWearable {
         output.push_str(&format!("{}\n\n", self.name));
 
         output.push_str("\tpermissions 0\n\t{\n");
-        output.push_str(&format!("\t\tbase_mask\t{:08x}\n", self.permissions.base_mask));
-        output.push_str(&format!("\t\towner_mask\t{:08x}\n", self.permissions.owner_mask));
-        output.push_str(&format!("\t\tgroup_mask\t{:08x}\n", self.permissions.group_mask));
-        output.push_str(&format!("\t\teveryone_mask\t{:08x}\n", self.permissions.everyone_mask));
-        output.push_str(&format!("\t\tnext_owner_mask\t{:08x}\n", self.permissions.next_owner_mask));
-        output.push_str(&format!("\t\tcreator_id\t{}\n", self.permissions.creator_id));
+        output.push_str(&format!(
+            "\t\tbase_mask\t{:08x}\n",
+            self.permissions.base_mask
+        ));
+        output.push_str(&format!(
+            "\t\towner_mask\t{:08x}\n",
+            self.permissions.owner_mask
+        ));
+        output.push_str(&format!(
+            "\t\tgroup_mask\t{:08x}\n",
+            self.permissions.group_mask
+        ));
+        output.push_str(&format!(
+            "\t\teveryone_mask\t{:08x}\n",
+            self.permissions.everyone_mask
+        ));
+        output.push_str(&format!(
+            "\t\tnext_owner_mask\t{:08x}\n",
+            self.permissions.next_owner_mask
+        ));
+        output.push_str(&format!(
+            "\t\tcreator_id\t{}\n",
+            self.permissions.creator_id
+        ));
         output.push_str(&format!("\t\towner_id\t{}\n", self.permissions.owner_id));
-        output.push_str(&format!("\t\tlast_owner_id\t{}\n", self.permissions.last_owner_id));
+        output.push_str(&format!(
+            "\t\tlast_owner_id\t{}\n",
+            self.permissions.last_owner_id
+        ));
         output.push_str(&format!("\t\tgroup_id\t{}\n", self.permissions.group_id));
         output.push_str("\t}\n");
 
@@ -912,14 +1050,13 @@ impl LLWearable {
 
     /// Get parameter value by ID
     pub fn get_parameter(&self, id: u32) -> Option<f32> {
-        self.parameters.iter()
-            .find(|p| p.id == id)
-            .map(|p| p.value)
+        self.parameters.iter().find(|p| p.id == id).map(|p| p.value)
     }
 
     /// Get texture UUID by slot
     pub fn get_texture(&self, slot: u8) -> Option<&str> {
-        self.textures.iter()
+        self.textures
+            .iter()
             .find(|t| t.slot == slot)
             .map(|t| t.uuid.as_str())
     }
@@ -955,11 +1092,14 @@ impl BodyPartsLoader {
             match tokio::fs::read_to_string(&shape_path).await {
                 Ok(content) => match LLWearable::parse(&content) {
                     Ok(wearable) => {
-                        info!("Loaded base_shape.dat: {} parameters", wearable.parameters.len());
+                        info!(
+                            "Loaded base_shape.dat: {} parameters",
+                            wearable.parameters.len()
+                        );
                         self.default_shape = Some(wearable);
                     }
                     Err(e) => warn!("Failed to parse base_shape.dat: {}", e),
-                }
+                },
                 Err(e) => warn!("Failed to read base_shape.dat: {}", e),
             }
         }
@@ -970,12 +1110,15 @@ impl BodyPartsLoader {
             match tokio::fs::read_to_string(&skin_path).await {
                 Ok(content) => match LLWearable::parse(&content) {
                     Ok(wearable) => {
-                        info!("Loaded base_skin.dat: {} parameters, {} textures",
-                              wearable.parameters.len(), wearable.textures.len());
+                        info!(
+                            "Loaded base_skin.dat: {} parameters, {} textures",
+                            wearable.parameters.len(),
+                            wearable.textures.len()
+                        );
                         self.default_skin = Some(wearable);
                     }
                     Err(e) => warn!("Failed to parse base_skin.dat: {}", e),
-                }
+                },
                 Err(e) => warn!("Failed to read base_skin.dat: {}", e),
             }
         }
@@ -986,12 +1129,15 @@ impl BodyPartsLoader {
             match tokio::fs::read_to_string(&hair_path).await {
                 Ok(content) => match LLWearable::parse(&content) {
                     Ok(wearable) => {
-                        info!("Loaded base_hair.dat: {} parameters, {} textures",
-                              wearable.parameters.len(), wearable.textures.len());
+                        info!(
+                            "Loaded base_hair.dat: {} parameters, {} textures",
+                            wearable.parameters.len(),
+                            wearable.textures.len()
+                        );
                         self.default_hair = Some(wearable);
                     }
                     Err(e) => warn!("Failed to parse base_hair.dat: {}", e),
-                }
+                },
                 Err(e) => warn!("Failed to read base_hair.dat: {}", e),
             }
         }
@@ -1002,12 +1148,15 @@ impl BodyPartsLoader {
             match tokio::fs::read_to_string(&eyes_path).await {
                 Ok(content) => match LLWearable::parse(&content) {
                     Ok(wearable) => {
-                        info!("Loaded base_eyes.dat: {} parameters, {} textures",
-                              wearable.parameters.len(), wearable.textures.len());
+                        info!(
+                            "Loaded base_eyes.dat: {} parameters, {} textures",
+                            wearable.parameters.len(),
+                            wearable.textures.len()
+                        );
                         self.default_eyes = Some(wearable);
                     }
                     Err(e) => warn!("Failed to parse base_eyes.dat: {}", e),
-                }
+                },
                 Err(e) => warn!("Failed to read base_eyes.dat: {}", e),
             }
         }
@@ -1017,9 +1166,15 @@ impl BodyPartsLoader {
             self.default_skin.is_some(),
             self.default_hair.is_some(),
             self.default_eyes.is_some(),
-        ].iter().filter(|&&x| x).count();
+        ]
+        .iter()
+        .filter(|&&x| x)
+        .count();
 
-        info!("Body parts loader initialized: {}/4 body parts loaded", loaded);
+        info!(
+            "Body parts loader initialized: {}/4 body parts loaded",
+            loaded
+        );
         Ok(())
     }
 
@@ -1084,11 +1239,12 @@ impl BodyPartsLoader {
 
     pub fn is_body_part_uuid(&self, uuid: &Uuid) -> bool {
         let uuid_str = uuid.to_string().to_lowercase();
-        matches!(uuid_str.as_str(),
-            "66c41e39-38f9-f75a-024e-585989bfab73" |
-            "77c41e39-38f9-f75a-024e-585989bbabbb" |
-            "d342e6c0-b9d2-11dc-95ff-0800200c9a66" |
-            "4bb6fa4d-1cd2-498a-a84c-95c1a0e745a7"
+        matches!(
+            uuid_str.as_str(),
+            "66c41e39-38f9-f75a-024e-585989bfab73"
+                | "77c41e39-38f9-f75a-024e-585989bbabbb"
+                | "d342e6c0-b9d2-11dc-95ff-0800200c9a66"
+                | "4bb6fa4d-1cd2-498a-a84c-95c1a0e745a7"
         )
     }
 }
@@ -1099,9 +1255,15 @@ mod tests {
 
     #[test]
     fn test_parse_vector3() {
-        assert_eq!(AvatarDataManager::parse_vector3("1.0 2.0 3.0"), [1.0, 2.0, 3.0]);
+        assert_eq!(
+            AvatarDataManager::parse_vector3("1.0 2.0 3.0"),
+            [1.0, 2.0, 3.0]
+        );
         assert_eq!(AvatarDataManager::parse_vector3("0 0 0"), [0.0, 0.0, 0.0]);
-        assert_eq!(AvatarDataManager::parse_vector3("-1.5 0.5 2"), [-1.5, 0.5, 2.0]);
+        assert_eq!(
+            AvatarDataManager::parse_vector3("-1.5 0.5 2"),
+            [-1.5, 0.5, 2.0]
+        );
     }
 
     #[test]
@@ -1191,7 +1353,10 @@ textures 2
         assert_eq!(wearable.parameters.len(), 2);
         assert_eq!(wearable.textures.len(), 2);
         assert_eq!(wearable.textures[0].slot, 0);
-        assert_eq!(wearable.textures[0].uuid, "00000000-0000-1111-9999-000000000012");
+        assert_eq!(
+            wearable.textures[0].uuid,
+            "00000000-0000-1111-9999-000000000012"
+        );
         assert_eq!(wearable.textures[1].slot, 5);
     }
 
@@ -1256,7 +1421,10 @@ textures 0"#;
             version: 22,
             name: "Test Shape".to_string(),
             permissions: WearablePermissions::default(),
-            sale_info: WearableSaleInfo { sale_type: "not".to_string(), sale_price: 0 },
+            sale_info: WearableSaleInfo {
+                sale_type: "not".to_string(),
+                sale_price: 0,
+            },
             wearable_type: WearableType::Shape,
             parameters: vec![],
             textures: vec![],

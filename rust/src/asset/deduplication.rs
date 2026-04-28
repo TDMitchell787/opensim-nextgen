@@ -1,12 +1,12 @@
 //! Asset Deduplication Module
-//! 
+//!
 //! Provides asset deduplication capabilities to reduce storage usage
 //! by detecting and eliminating duplicate assets across the system.
 
-use std::collections::HashMap;
-use std::sync::Arc;
 use anyhow::Result;
 use serde::{Deserialize, Serialize};
+use std::collections::HashMap;
+use std::sync::Arc;
 use tokio::sync::RwLock;
 use tracing::{debug, info};
 use uuid::Uuid;
@@ -37,7 +37,7 @@ impl Default for DeduplicationConfig {
         Self {
             enabled: true,
             hash_algorithm: HashAlgorithm::Blake3,
-            min_asset_size: 1024, // 1KB
+            min_asset_size: 1024,              // 1KB
             max_asset_size: 100 * 1024 * 1024, // 100MB
             enable_content_dedup: true,
             enable_perceptual_hash: false,
@@ -108,44 +108,59 @@ impl AssetDeduplicationManager {
             dedup_stats: Arc::new(RwLock::new(DeduplicationStats::default())),
         }
     }
-    
+
     /// Process an asset for deduplication
-    pub async fn process_asset(&self, asset_id: Uuid, asset_type: AssetType, data: &AssetData) -> Result<DeduplicationResult> {
+    pub async fn process_asset(
+        &self,
+        asset_id: Uuid,
+        asset_type: AssetType,
+        data: &AssetData,
+    ) -> Result<DeduplicationResult> {
         if !self.config.enabled {
             return Ok(DeduplicationResult::NotProcessed);
         }
-        
+
         // Check size constraints
         if data.len() < self.config.min_asset_size || data.len() > self.config.max_asset_size {
             return Ok(DeduplicationResult::SkippedSize);
         }
-        
+
         let start_time = std::time::Instant::now();
-        
+
         // Calculate hash
         let hash = self.calculate_hash(data)?;
-        
+
         // Check for existing asset with same hash
         let mut asset_hashes = self.asset_hashes.write().await;
-        
+
         if let Some(existing_hash) = asset_hashes.get(&hash) {
             // Found duplicate
             let duplicate_id = existing_hash.asset_id;
-            
+
             // Update reference count
             let mut existing_hash = existing_hash.clone();
             existing_hash.reference_count += 1;
             asset_hashes.insert(hash.clone(), existing_hash);
-            
+
             // Update duplicate groups
-            self.add_to_duplicate_group(hash.clone(), asset_id, duplicate_id, data.len(), asset_type).await;
-            
+            self.add_to_duplicate_group(
+                hash.clone(),
+                asset_id,
+                duplicate_id,
+                data.len(),
+                asset_type,
+            )
+            .await;
+
             // Update statistics
             self.update_stats_duplicate_found(data.len()).await;
-            
-            info!("Duplicate asset detected: {} is duplicate of {}", asset_id, duplicate_id);
-            
-            Ok(DeduplicationResult::Duplicate { 
+
+            info!(
+                "Duplicate asset detected: {} is duplicate of {}",
+                asset_id, duplicate_id
+            );
+
+            Ok(DeduplicationResult::Duplicate {
                 canonical_id: duplicate_id,
                 savings_bytes: data.len(),
             })
@@ -160,36 +175,36 @@ impl AssetDeduplicationManager {
                 created_at: std::time::SystemTime::now(),
                 reference_count: 1,
             };
-            
+
             asset_hashes.insert(hash, asset_hash);
-            
+
             // Update statistics
             self.update_stats_processed().await;
-            
+
             debug!("New unique asset processed: {}", asset_id);
-            
+
             Ok(DeduplicationResult::Unique)
         }
     }
-    
+
     /// Remove an asset from deduplication tracking
     pub async fn remove_asset(&self, asset_id: &Uuid) -> Result<()> {
         let mut asset_hashes = self.asset_hashes.write().await;
-        
+
         // Find and remove the asset hash
         let hash_to_remove = asset_hashes
             .iter()
             .find(|(_, hash_info)| hash_info.asset_id == *asset_id)
             .map(|(hash, _)| hash.clone());
-        
+
         if let Some(hash) = hash_to_remove {
             if let Some(mut asset_hash) = asset_hashes.get(&hash).cloned() {
                 asset_hash.reference_count = asset_hash.reference_count.saturating_sub(1);
-                
+
                 if asset_hash.reference_count == 0 {
                     // Remove completely if no references
                     asset_hashes.remove(&hash);
-                    
+
                     // Remove from duplicate groups
                     let mut duplicate_groups = self.duplicate_groups.write().await;
                     duplicate_groups.remove(&hash);
@@ -199,43 +214,49 @@ impl AssetDeduplicationManager {
                 }
             }
         }
-        
+
         // Remove references
         let mut references = self.asset_references.write().await;
         references.remove(asset_id);
-        
+
         Ok(())
     }
-    
+
     /// Get duplicate groups for cleanup
     pub async fn get_duplicate_groups(&self) -> Vec<DuplicateGroup> {
         let duplicate_groups = self.duplicate_groups.read().await;
         duplicate_groups.values().cloned().collect()
     }
-    
+
     /// Get potential storage savings
     pub async fn get_potential_savings(&self) -> u64 {
         let duplicate_groups = self.duplicate_groups.read().await;
-        duplicate_groups.values().map(|group| group.savings_bytes as u64).sum()
+        duplicate_groups
+            .values()
+            .map(|group| group.savings_bytes as u64)
+            .sum()
     }
-    
+
     /// Perform full deduplication scan
-    pub async fn perform_deduplication_scan<F, Fut>(&self, asset_provider: F) -> Result<DeduplicationScanResult>
+    pub async fn perform_deduplication_scan<F, Fut>(
+        &self,
+        asset_provider: F,
+    ) -> Result<DeduplicationScanResult>
     where
         F: Fn() -> Fut,
         Fut: std::future::Future<Output = Result<Vec<(Uuid, AssetType, AssetData)>>>,
     {
         let start_time = std::time::Instant::now();
         info!("Starting full deduplication scan");
-        
+
         // Get all assets
         let assets = asset_provider().await?;
         let total_assets = assets.len();
-        
+
         let mut processed = 0;
         let mut duplicates_found = 0;
         let mut total_savings = 0;
-        
+
         for (asset_id, asset_type, data) in assets {
             match self.process_asset(asset_id, asset_type, &data).await? {
                 DeduplicationResult::Duplicate { savings_bytes, .. } => {
@@ -245,24 +266,29 @@ impl AssetDeduplicationManager {
                 _ => {}
             }
             processed += 1;
-            
+
             if processed % 1000 == 0 {
-                info!("Deduplication scan progress: {}/{} assets processed", processed, total_assets);
+                info!(
+                    "Deduplication scan progress: {}/{} assets processed",
+                    processed, total_assets
+                );
             }
         }
-        
+
         let duration = start_time.elapsed();
-        
+
         // Update final statistics
         {
             let mut stats = self.dedup_stats.write().await;
             stats.last_dedup_run = Some(std::time::SystemTime::now());
             stats.processing_time_ms = duration.as_millis() as u64;
         }
-        
-        info!("Deduplication scan completed: {} duplicates found, {} bytes saved in {:?}", 
-              duplicates_found, total_savings, duration);
-        
+
+        info!(
+            "Deduplication scan completed: {} duplicates found, {} bytes saved in {:?}",
+            duplicates_found, total_savings, duration
+        );
+
         Ok(DeduplicationScanResult {
             total_assets_scanned: total_assets,
             duplicates_found,
@@ -270,7 +296,7 @@ impl AssetDeduplicationManager {
             scan_duration: duration,
         })
     }
-    
+
     /// Calculate hash for asset data
     fn calculate_hash(&self, data: &AssetData) -> Result<String> {
         match self.config.hash_algorithm {
@@ -296,11 +322,18 @@ impl AssetDeduplicationManager {
             }
         }
     }
-    
+
     /// Add asset to duplicate group
-    async fn add_to_duplicate_group(&self, hash: String, new_asset_id: Uuid, canonical_id: Uuid, size: usize, asset_type: AssetType) {
+    async fn add_to_duplicate_group(
+        &self,
+        hash: String,
+        new_asset_id: Uuid,
+        canonical_id: Uuid,
+        size: usize,
+        asset_type: AssetType,
+    ) {
         let mut duplicate_groups = self.duplicate_groups.write().await;
-        
+
         if let Some(group) = duplicate_groups.get_mut(&hash) {
             group.duplicate_ids.push(new_asset_id);
             group.savings_bytes += size;
@@ -316,42 +349,43 @@ impl AssetDeduplicationManager {
             duplicate_groups.insert(group.hash.clone(), group);
         }
     }
-    
+
     /// Update statistics for processed asset
     async fn update_stats_processed(&self) {
         let mut stats = self.dedup_stats.write().await;
         stats.total_assets_processed += 1;
     }
-    
+
     /// Update statistics for duplicate found
     async fn update_stats_duplicate_found(&self, savings_bytes: usize) {
         let mut stats = self.dedup_stats.write().await;
         stats.total_assets_processed += 1;
         stats.duplicate_assets_found += 1;
         stats.storage_saved_bytes += savings_bytes as u64;
-        
+
         // Calculate deduplication ratio
         if stats.total_assets_processed > 0 {
-            stats.deduplication_ratio = stats.duplicate_assets_found as f32 / stats.total_assets_processed as f32;
+            stats.deduplication_ratio =
+                stats.duplicate_assets_found as f32 / stats.total_assets_processed as f32;
         }
     }
-    
+
     /// Get deduplication statistics
     pub async fn get_stats(&self) -> DeduplicationStats {
         let stats = self.dedup_stats.read().await;
         stats.clone()
     }
-    
+
     /// Clear all deduplication data
     pub async fn clear(&self) {
         let mut asset_hashes = self.asset_hashes.write().await;
         let mut duplicate_groups = self.duplicate_groups.write().await;
         let mut references = self.asset_references.write().await;
-        
+
         asset_hashes.clear();
         duplicate_groups.clear();
         references.clear();
-        
+
         info!("Deduplication data cleared");
     }
 }
@@ -384,19 +418,19 @@ pub struct DeduplicationScanResult {
 /// Utility functions for asset deduplication
 pub mod utils {
     use super::*;
-    
+
     /// Calculate potential savings for a list of assets
     pub fn calculate_potential_savings(assets: &[(Uuid, AssetType, AssetData)]) -> usize {
         let mut hash_map: HashMap<String, usize> = HashMap::new();
         let mut total_savings = 0;
-        
+
         for (_, _, data) in assets {
             // Simple hash calculation for estimation
             use sha2::{Digest, Sha256};
             let mut hasher = Sha256::new();
             hasher.update(data);
             let hash = format!("{:x}", hasher.finalize());
-            
+
             if let Some(existing_size) = hash_map.get(&hash) {
                 // This is a duplicate, add to savings
                 total_savings += data.len();
@@ -404,30 +438,30 @@ pub mod utils {
                 hash_map.insert(hash, data.len());
             }
         }
-        
+
         total_savings
     }
-    
+
     /// Estimate deduplication ratio for asset collection
     pub fn estimate_deduplication_ratio(assets: &[(Uuid, AssetType, AssetData)]) -> f32 {
         if assets.is_empty() {
             return 0.0;
         }
-        
+
         let mut hash_set = std::collections::HashSet::new();
         let mut duplicates = 0;
-        
+
         for (_, _, data) in assets {
             use sha2::{Digest, Sha256};
             let mut hasher = Sha256::new();
             hasher.update(data);
             let hash = format!("{:x}", hasher.finalize());
-            
+
             if !hash_set.insert(hash) {
                 duplicates += 1;
             }
         }
-        
+
         duplicates as f32 / assets.len() as f32
     }
 }
@@ -435,83 +469,104 @@ pub mod utils {
 #[cfg(test)]
 mod tests {
     use super::*;
-    
+
     #[tokio::test]
     async fn test_deduplication_unique_asset() {
         let config = DeduplicationConfig::default();
         let manager = AssetDeduplicationManager::new(config);
-        
+
         let asset_id = Uuid::new_v4();
         let asset_data = b"unique asset data".to_vec();
-        
-        let result = manager.process_asset(asset_id, AssetType::Texture, &asset_data).await.unwrap();
-        
+
+        let result = manager
+            .process_asset(asset_id, AssetType::Texture, &asset_data)
+            .await
+            .unwrap();
+
         match result {
-            DeduplicationResult::Unique => {},
+            DeduplicationResult::Unique => {}
             _ => panic!("Expected unique result"),
         }
-        
+
         let stats = manager.get_stats().await;
         assert_eq!(stats.total_assets_processed, 1);
         assert_eq!(stats.duplicate_assets_found, 0);
     }
-    
+
     #[tokio::test]
     async fn test_deduplication_duplicate_asset() {
         let config = DeduplicationConfig::default();
         let manager = AssetDeduplicationManager::new(config);
-        
+
         let asset_id1 = Uuid::new_v4();
         let asset_id2 = Uuid::new_v4();
         let asset_data = b"duplicate asset data".to_vec();
-        
+
         // Process first asset (should be unique)
-        let result1 = manager.process_asset(asset_id1, AssetType::Texture, &asset_data).await.unwrap();
+        let result1 = manager
+            .process_asset(asset_id1, AssetType::Texture, &asset_data)
+            .await
+            .unwrap();
         assert!(matches!(result1, DeduplicationResult::Unique));
-        
+
         // Process second asset with same data (should be duplicate)
-        let result2 = manager.process_asset(asset_id2, AssetType::Texture, &asset_data).await.unwrap();
-        
+        let result2 = manager
+            .process_asset(asset_id2, AssetType::Texture, &asset_data)
+            .await
+            .unwrap();
+
         match result2 {
-            DeduplicationResult::Duplicate { canonical_id, savings_bytes } => {
+            DeduplicationResult::Duplicate {
+                canonical_id,
+                savings_bytes,
+            } => {
                 assert_eq!(canonical_id, asset_id1);
                 assert_eq!(savings_bytes, asset_data.len());
-            },
+            }
             _ => panic!("Expected duplicate result"),
         }
-        
+
         let stats = manager.get_stats().await;
         assert_eq!(stats.total_assets_processed, 2);
         assert_eq!(stats.duplicate_assets_found, 1);
         assert_eq!(stats.storage_saved_bytes, asset_data.len() as u64);
     }
-    
+
     #[tokio::test]
     async fn test_deduplication_size_limits() {
         let mut config = DeduplicationConfig::default();
         config.min_asset_size = 10;
         config.max_asset_size = 20;
-        
+
         let manager = AssetDeduplicationManager::new(config);
-        
+
         let asset_id = Uuid::new_v4();
-        
+
         // Too small
         let small_data = b"small".to_vec(); // 5 bytes
-        let result = manager.process_asset(asset_id, AssetType::Texture, &small_data).await.unwrap();
+        let result = manager
+            .process_asset(asset_id, AssetType::Texture, &small_data)
+            .await
+            .unwrap();
         assert!(matches!(result, DeduplicationResult::SkippedSize));
-        
+
         // Too large
         let large_data = vec![0u8; 25]; // 25 bytes
-        let result = manager.process_asset(asset_id, AssetType::Texture, &large_data).await.unwrap();
+        let result = manager
+            .process_asset(asset_id, AssetType::Texture, &large_data)
+            .await
+            .unwrap();
         assert!(matches!(result, DeduplicationResult::SkippedSize));
-        
+
         // Just right
         let right_data = vec![0u8; 15]; // 15 bytes
-        let result = manager.process_asset(asset_id, AssetType::Texture, &right_data).await.unwrap();
+        let result = manager
+            .process_asset(asset_id, AssetType::Texture, &right_data)
+            .await
+            .unwrap();
         assert!(matches!(result, DeduplicationResult::Unique));
     }
-    
+
     #[test]
     fn test_potential_savings_calculation() {
         let assets = vec![
@@ -521,10 +576,10 @@ mod tests {
             (Uuid::new_v4(), AssetType::Texture, b"data3".to_vec()),
             (Uuid::new_v4(), AssetType::Texture, b"data2".to_vec()), // duplicate
         ];
-        
+
         let savings = utils::calculate_potential_savings(&assets);
         assert_eq!(savings, 10); // 5 bytes for each duplicate
-        
+
         let ratio = utils::estimate_deduplication_ratio(&assets);
         assert_eq!(ratio, 0.4); // 2 duplicates out of 5 assets
     }

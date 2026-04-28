@@ -47,7 +47,10 @@ impl ModuleConfig {
     }
 
     pub fn get_or(&self, key: &str, default: &str) -> String {
-        self.params.get(key).cloned().unwrap_or_else(|| default.to_string())
+        self.params
+            .get(key)
+            .cloned()
+            .unwrap_or_else(|| default.to_string())
     }
 
     pub fn get_f32(&self, key: &str, default: f32) -> f32 {

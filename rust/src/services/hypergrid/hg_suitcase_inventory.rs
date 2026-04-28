@@ -1,15 +1,15 @@
+use anyhow::{anyhow, Result};
+use async_trait::async_trait;
+use std::collections::HashMap;
 use std::collections::HashSet;
 use std::sync::Arc;
-use anyhow::{Result, anyhow};
-use async_trait::async_trait;
-use uuid::Uuid;
-use tracing::{info, warn, debug};
-use tokio::sync::RwLock;
-use std::collections::HashMap;
 use std::time::Instant;
+use tokio::sync::RwLock;
+use tracing::{debug, info, warn};
+use uuid::Uuid;
 
 use crate::services::traits::{
-    InventoryServiceTrait, InventoryFolder, InventoryItem, InventoryCollection,
+    InventoryCollection, InventoryFolder, InventoryItem, InventoryServiceTrait,
 };
 
 const SUITCASE_FOLDER_TYPE: i32 = 100;
@@ -53,18 +53,30 @@ impl HGSuitcaseInventoryService {
 
     async fn get_suitcase_folder(&self, principal_id: Uuid) -> Result<InventoryFolder> {
         let skeleton = self.inner.get_inventory_skeleton(principal_id).await?;
-        if let Some(suitcase) = skeleton.iter().find(|f| f.folder_type == SUITCASE_FOLDER_TYPE) {
+        if let Some(suitcase) = skeleton
+            .iter()
+            .find(|f| f.folder_type == SUITCASE_FOLDER_TYPE)
+        {
             return Ok(suitcase.clone());
         }
 
-        let root = self.inner.get_root_folder(principal_id).await?
+        let root = self
+            .inner
+            .get_root_folder(principal_id)
+            .await?
             .ok_or_else(|| anyhow!("No root folder for user {}", principal_id))?;
 
-        if let Some(suitcase) = skeleton.iter().find(|f| f.name == "My Suitcase" && f.parent_id == root.folder_id) {
+        if let Some(suitcase) = skeleton
+            .iter()
+            .find(|f| f.name == "My Suitcase" && f.parent_id == root.folder_id)
+        {
             return Ok(suitcase.clone());
         }
 
-        info!("[HG-SUITCASE] Creating suitcase for foreign user {}", principal_id);
+        info!(
+            "[HG-SUITCASE] Creating suitcase for foreign user {}",
+            principal_id
+        );
         let suitcase_id = Uuid::new_v4();
         let suitcase = InventoryFolder {
             folder_id: suitcase_id,
@@ -86,11 +98,18 @@ impl HGSuitcaseInventoryService {
                 version: 1,
             };
             if let Err(e) = self.inner.create_folder(&sub).await {
-                warn!("[HG-SUITCASE] Failed to create subfolder '{}' for {}: {}", fname, principal_id, e);
+                warn!(
+                    "[HG-SUITCASE] Failed to create subfolder '{}' for {}: {}",
+                    fname, principal_id, e
+                );
             }
         }
 
-        info!("[HG-SUITCASE] Created suitcase with {} subfolders for {}", SUITCASE_SYSTEM_FOLDERS.len(), principal_id);
+        info!(
+            "[HG-SUITCASE] Created suitcase with {} subfolders for {}",
+            SUITCASE_SYSTEM_FOLDERS.len(),
+            principal_id
+        );
         Ok(suitcase)
     }
 
@@ -127,13 +146,20 @@ impl HGSuitcaseInventoryService {
 
         {
             let mut cache = self.tree_cache.write().await;
-            cache.insert(principal_id, CachedTree {
-                folder_ids: tree.clone(),
-                created_at: Instant::now(),
-            });
+            cache.insert(
+                principal_id,
+                CachedTree {
+                    folder_ids: tree.clone(),
+                    created_at: Instant::now(),
+                },
+            );
         }
 
-        debug!("[HG-SUITCASE] Built suitcase tree for {}: {} folders", principal_id, tree.len());
+        debug!(
+            "[HG-SUITCASE] Built suitcase tree for {}: {} folders",
+            principal_id,
+            tree.len()
+        );
         Ok(tree)
     }
 
@@ -150,40 +176,88 @@ impl HGSuitcaseInventoryService {
         });
     }
 
-    async fn redirect_to_suitcase_folder(&self, principal_id: Uuid, original_folder_id: Uuid, asset_type: i32) -> Result<Option<Uuid>> {
-        let target_folder_type = if asset_type == 6 { 6 }   // Object
-            else if asset_type == 0 { 0 }                     // Texture
-            else if asset_type == 1 { 1 }                     // Sound
-            else if asset_type == 3 { 3 }                     // Landmark
-            else if asset_type == 5 { 5 }                     // Clothing
-            else if asset_type == 7 { 7 }                     // Notecard
-            else if asset_type == 10 { 10 }                   // Script
-            else if asset_type == 13 { 13 }                   // Body Part
-            else if asset_type == 20 { 20 }                   // Animation
-            else if asset_type == 21 { 21 }                   // Gesture
-            else if asset_type == 56 { 56 }                   // Settings
-            else {
-                let folder = self.inner.get_folder(original_folder_id).await?;
-                match folder {
-                    Some(f) if f.folder_type >= 0 => f.folder_type,
-                    _ => 6,
-                }
-            };
+    async fn redirect_to_suitcase_folder(
+        &self,
+        principal_id: Uuid,
+        original_folder_id: Uuid,
+        asset_type: i32,
+    ) -> Result<Option<Uuid>> {
+        let target_folder_type = if asset_type == 6 {
+            6
+        }
+        // Object
+        else if asset_type == 0 {
+            0
+        }
+        // Texture
+        else if asset_type == 1 {
+            1
+        }
+        // Sound
+        else if asset_type == 3 {
+            3
+        }
+        // Landmark
+        else if asset_type == 5 {
+            5
+        }
+        // Clothing
+        else if asset_type == 7 {
+            7
+        }
+        // Notecard
+        else if asset_type == 10 {
+            10
+        }
+        // Script
+        else if asset_type == 13 {
+            13
+        }
+        // Body Part
+        else if asset_type == 20 {
+            20
+        }
+        // Animation
+        else if asset_type == 21 {
+            21
+        }
+        // Gesture
+        else if asset_type == 56 {
+            56
+        }
+        // Settings
+        else {
+            let folder = self.inner.get_folder(original_folder_id).await?;
+            match folder {
+                Some(f) if f.folder_type >= 0 => f.folder_type,
+                _ => 6,
+            }
+        };
 
         let suitcase = self.get_suitcase_folder(principal_id).await?;
         let skeleton = self.inner.get_inventory_skeleton(principal_id).await?;
 
-        if let Some(matching) = skeleton.iter().find(|f| f.parent_id == suitcase.folder_id && f.folder_type == target_folder_type) {
-            info!("[HG-SUITCASE] Redirected item from folder {} to suitcase subfolder {} (type={})", original_folder_id, matching.folder_id, target_folder_type);
+        if let Some(matching) = skeleton
+            .iter()
+            .find(|f| f.parent_id == suitcase.folder_id && f.folder_type == target_folder_type)
+        {
+            info!(
+                "[HG-SUITCASE] Redirected item from folder {} to suitcase subfolder {} (type={})",
+                original_folder_id, matching.folder_id, target_folder_type
+            );
             return Ok(Some(matching.folder_id));
         }
 
-        if let Some(objects) = skeleton.iter().find(|f| f.parent_id == suitcase.folder_id && f.folder_type == 6) {
+        if let Some(objects) = skeleton
+            .iter()
+            .find(|f| f.parent_id == suitcase.folder_id && f.folder_type == 6)
+        {
             info!("[HG-SUITCASE] Redirected item from folder {} to suitcase Objects folder {} (fallback)", original_folder_id, objects.folder_id);
             return Ok(Some(objects.folder_id));
         }
 
-        let folder_name = SUITCASE_SYSTEM_FOLDERS.iter()
+        let folder_name = SUITCASE_SYSTEM_FOLDERS
+            .iter()
             .find(|(t, _)| *t == target_folder_type)
             .map(|(_, name)| *name)
             .unwrap_or("Objects");
@@ -197,7 +271,10 @@ impl HGSuitcaseInventoryService {
             folder_type: target_folder_type,
             version: 1,
         };
-        info!("[HG-SUITCASE] Auto-creating suitcase subfolder '{}' (type={}) for user {}", folder_name, target_folder_type, principal_id);
+        info!(
+            "[HG-SUITCASE] Auto-creating suitcase subfolder '{}' (type={}) for user {}",
+            folder_name, target_folder_type, principal_id
+        );
         if let Ok(true) = self.inner.create_folder(&new_folder).await {
             self.invalidate_cache(principal_id);
             return Ok(Some(new_folder_id));
@@ -218,23 +295,39 @@ impl InventoryServiceTrait for HGSuitcaseInventoryService {
         match self.get_suitcase_folder(principal_id).await {
             Ok(suitcase) => Ok(Some(suitcase)),
             Err(e) => {
-                warn!("[HG-SUITCASE] Failed to get suitcase for {}: {}, falling back to real root", principal_id, e);
+                warn!(
+                    "[HG-SUITCASE] Failed to get suitcase for {}: {}, falling back to real root",
+                    principal_id, e
+                );
                 self.inner.get_root_folder(principal_id).await
             }
         }
     }
 
-    async fn get_folder_content(&self, principal_id: Uuid, folder_id: Uuid) -> Result<InventoryCollection> {
+    async fn get_folder_content(
+        &self,
+        principal_id: Uuid,
+        folder_id: Uuid,
+    ) -> Result<InventoryCollection> {
         if !self.is_within_suitcase(principal_id, folder_id).await? {
-            warn!("[HG-SUITCASE] Blocked get_folder_content for {} — folder {} outside suitcase", principal_id, folder_id);
+            warn!(
+                "[HG-SUITCASE] Blocked get_folder_content for {} — folder {} outside suitcase",
+                principal_id, folder_id
+            );
             return Ok(InventoryCollection::default());
         }
         self.inner.get_folder_content(principal_id, folder_id).await
     }
 
     async fn create_folder(&self, folder: &InventoryFolder) -> Result<bool> {
-        if !self.is_within_suitcase(folder.owner_id, folder.parent_id).await? {
-            warn!("[HG-SUITCASE] Blocked create_folder for {} — parent {} outside suitcase", folder.owner_id, folder.parent_id);
+        if !self
+            .is_within_suitcase(folder.owner_id, folder.parent_id)
+            .await?
+        {
+            warn!(
+                "[HG-SUITCASE] Blocked create_folder for {} — parent {} outside suitcase",
+                folder.owner_id, folder.parent_id
+            );
             return Ok(false);
         }
         let result = self.inner.create_folder(folder).await?;
@@ -243,8 +336,14 @@ impl InventoryServiceTrait for HGSuitcaseInventoryService {
     }
 
     async fn update_folder(&self, folder: &InventoryFolder) -> Result<bool> {
-        if !self.is_within_suitcase(folder.owner_id, folder.folder_id).await? {
-            warn!("[HG-SUITCASE] Blocked update_folder for {} — folder {} outside suitcase", folder.owner_id, folder.folder_id);
+        if !self
+            .is_within_suitcase(folder.owner_id, folder.folder_id)
+            .await?
+        {
+            warn!(
+                "[HG-SUITCASE] Blocked update_folder for {} — folder {} outside suitcase",
+                folder.owner_id, folder.folder_id
+            );
             return Ok(false);
         }
         self.inner.update_folder(folder).await
@@ -260,8 +359,14 @@ impl InventoryServiceTrait for HGSuitcaseInventoryService {
     }
 
     async fn add_item(&self, item: &InventoryItem) -> Result<bool> {
-        if !self.is_within_suitcase(item.owner_id, item.folder_id).await? {
-            if let Ok(Some(redirect_folder)) = self.redirect_to_suitcase_folder(item.owner_id, item.folder_id, item.asset_type).await {
+        if !self
+            .is_within_suitcase(item.owner_id, item.folder_id)
+            .await?
+        {
+            if let Ok(Some(redirect_folder)) = self
+                .redirect_to_suitcase_folder(item.owner_id, item.folder_id, item.asset_type)
+                .await
+            {
                 let mut redirected = item.clone();
                 redirected.folder_id = redirect_folder;
                 return self.inner.add_item(&redirected).await;
@@ -273,8 +378,14 @@ impl InventoryServiceTrait for HGSuitcaseInventoryService {
     }
 
     async fn update_item(&self, item: &InventoryItem) -> Result<bool> {
-        if !self.is_within_suitcase(item.owner_id, item.folder_id).await? {
-            warn!("[HG-SUITCASE] Blocked update_item for {} — folder {} outside suitcase", item.owner_id, item.folder_id);
+        if !self
+            .is_within_suitcase(item.owner_id, item.folder_id)
+            .await?
+        {
+            warn!(
+                "[HG-SUITCASE] Blocked update_item for {} — folder {} outside suitcase",
+                item.owner_id, item.folder_id
+            );
             return Ok(false);
         }
         self.inner.update_item(item).await
@@ -288,10 +399,15 @@ impl InventoryServiceTrait for HGSuitcaseInventoryService {
     async fn get_inventory_skeleton(&self, principal_id: Uuid) -> Result<Vec<InventoryFolder>> {
         let tree = self.get_suitcase_tree(principal_id).await?;
         let all_folders = self.inner.get_inventory_skeleton(principal_id).await?;
-        let filtered: Vec<InventoryFolder> = all_folders.into_iter()
+        let filtered: Vec<InventoryFolder> = all_folders
+            .into_iter()
             .filter(|f| tree.contains(&f.folder_id))
             .collect();
-        debug!("[HG-SUITCASE] Skeleton for {}: {} folders (filtered from full inventory)", principal_id, filtered.len());
+        debug!(
+            "[HG-SUITCASE] Skeleton for {}: {} folders (filtered from full inventory)",
+            principal_id,
+            filtered.len()
+        );
         Ok(filtered)
     }
 
@@ -308,8 +424,14 @@ impl InventoryServiceTrait for HGSuitcaseInventoryService {
             let actual_dest = if tree.contains(&dest_folder_id) {
                 dest_folder_id
             } else {
-                if let Ok(Some(redirect)) = self.redirect_to_suitcase_folder(principal_id, dest_folder_id, 6).await {
-                    info!("[HG-SUITCASE] Redirected item {} move to suitcase folder {}", item_id, redirect);
+                if let Ok(Some(redirect)) = self
+                    .redirect_to_suitcase_folder(principal_id, dest_folder_id, 6)
+                    .await
+                {
+                    info!(
+                        "[HG-SUITCASE] Redirected item {} move to suitcase folder {}",
+                        item_id, redirect
+                    );
                     redirect
                 } else {
                     warn!("[HG-SUITCASE] Blocked move_items: item {} dest folder {} outside suitcase, no redirect", item_id, dest_folder_id);
@@ -324,7 +446,12 @@ impl InventoryServiceTrait for HGSuitcaseInventoryService {
         self.inner.move_items(principal_id, &filtered_moves).await
     }
 
-    async fn move_folder(&self, _principal_id: Uuid, _folder_id: Uuid, _new_parent_id: Uuid) -> Result<bool> {
+    async fn move_folder(
+        &self,
+        _principal_id: Uuid,
+        _folder_id: Uuid,
+        _new_parent_id: Uuid,
+    ) -> Result<bool> {
         warn!("[HG-SUITCASE] Blocked move_folder for foreign user");
         Ok(false)
     }
@@ -338,21 +465,33 @@ impl InventoryServiceTrait for HGSuitcaseInventoryService {
         self.inner.get_active_gestures(principal_id).await
     }
 
-    async fn get_multiple_folders_content(&self, principal_id: Uuid, folder_ids: &[Uuid]) -> Result<Vec<InventoryCollection>> {
+    async fn get_multiple_folders_content(
+        &self,
+        principal_id: Uuid,
+        folder_ids: &[Uuid],
+    ) -> Result<Vec<InventoryCollection>> {
         let tree = self.get_suitcase_tree(principal_id).await?;
-        let filtered_ids: Vec<Uuid> = folder_ids.iter()
+        let filtered_ids: Vec<Uuid> = folder_ids
+            .iter()
             .filter(|id| tree.contains(id))
             .copied()
             .collect();
         if filtered_ids.len() < folder_ids.len() {
-            warn!("[HG-SUITCASE] Filtered {} of {} folder requests (outside suitcase)",
-                folder_ids.len() - filtered_ids.len(), folder_ids.len());
+            warn!(
+                "[HG-SUITCASE] Filtered {} of {} folder requests (outside suitcase)",
+                folder_ids.len() - filtered_ids.len(),
+                folder_ids.len()
+            );
         }
-        self.inner.get_multiple_folders_content(principal_id, &filtered_ids).await
+        self.inner
+            .get_multiple_folders_content(principal_id, &filtered_ids)
+            .await
     }
 
     async fn get_asset_permissions(&self, principal_id: Uuid, asset_id: Uuid) -> Result<i32> {
-        self.inner.get_asset_permissions(principal_id, asset_id).await
+        self.inner
+            .get_asset_permissions(principal_id, asset_id)
+            .await
     }
 }
 

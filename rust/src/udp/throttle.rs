@@ -1,7 +1,7 @@
-use std::sync::atomic::{AtomicU64, Ordering};
-use std::time::{SystemTime, Duration};
 use dashmap::DashMap;
-use tracing::{warn, debug};
+use std::sync::atomic::{AtomicU64, Ordering};
+use std::time::{Duration, SystemTime};
+use tracing::{debug, warn};
 
 #[derive(Debug, Clone, Copy)]
 pub enum ThrottleCategory {
@@ -77,7 +77,9 @@ impl ThrottleManager {
     }
 
     pub fn register_agent(&self, circuit_code: u32) {
-        self.agents.entry(circuit_code).or_insert_with(AgentTrafficStats::new);
+        self.agents
+            .entry(circuit_code)
+            .or_insert_with(AgentTrafficStats::new);
     }
 
     pub fn remove_agent(&self, circuit_code: u32) {
@@ -86,7 +88,10 @@ impl ThrottleManager {
 
     pub fn set_throttles(&self, circuit_code: u32, throttle_data: &[u8]) {
         if throttle_data.len() < 28 {
-            debug!("[THROTTLE] Throttle data too short: {} bytes (need 28)", throttle_data.len());
+            debug!(
+                "[THROTTLE] Throttle data too short: {} bytes (need 28)",
+                throttle_data.len()
+            );
             return;
         }
 
@@ -133,7 +138,10 @@ impl ThrottleManager {
             stats.reset_window(now_secs);
         }
 
-        let received = stats.bytes_received.fetch_add(packet_size as u64, Ordering::Relaxed) + packet_size as u64;
+        let received = stats
+            .bytes_received
+            .fetch_add(packet_size as u64, Ordering::Relaxed)
+            + packet_size as u64;
         stats.packets_received.fetch_add(1, Ordering::Relaxed);
 
         let elapsed = (now_secs - window_start).max(1) as f32;
@@ -141,14 +149,18 @@ impl ThrottleManager {
         let limit_bps = stats.total_declared_bps * self.overdraft_multiplier;
 
         if current_bps > limit_bps * 2.0 {
-            warn!("[THROTTLE] Circuit {} EXTREME overdraft: {:.0} bps vs {:.0} limit — DISCONNECT",
-                  circuit_code, current_bps, limit_bps);
+            warn!(
+                "[THROTTLE] Circuit {} EXTREME overdraft: {:.0} bps vs {:.0} limit — DISCONNECT",
+                circuit_code, current_bps, limit_bps
+            );
             return ThrottleDecision::Disconnect;
         }
 
         if current_bps > limit_bps {
-            debug!("[THROTTLE] Circuit {} overdraft: {:.0} bps vs {:.0} limit — DROP",
-                   circuit_code, current_bps, limit_bps);
+            debug!(
+                "[THROTTLE] Circuit {} overdraft: {:.0} bps vs {:.0} limit — DROP",
+                circuit_code, current_bps, limit_bps
+            );
             return ThrottleDecision::Drop;
         }
 
@@ -170,14 +182,15 @@ impl ThrottleManager {
     }
 
     pub fn get_all_stats(&self) -> Vec<AgentTrafficSummary> {
-        self.agents.iter().map(|entry| {
-            AgentTrafficSummary {
+        self.agents
+            .iter()
+            .map(|entry| AgentTrafficSummary {
                 circuit_code: *entry.key(),
                 declared_bps: entry.value().total_declared_bps,
                 bytes_received: entry.value().bytes_received.load(Ordering::Relaxed),
                 packets_received: entry.value().packets_received.load(Ordering::Relaxed),
-            }
-        }).collect()
+            })
+            .collect()
     }
 }
 

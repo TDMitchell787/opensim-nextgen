@@ -1,31 +1,31 @@
 //! Predictive Analytics & Forecasting Engine
-//! 
+//!
 //! AI-powered predictive analytics, forecasting, and trend analysis
 //! for enterprise virtual world business intelligence.
 
 use super::*;
-use tokio::sync::RwLock;
-use tracing::{info, warn, error, debug};
 use std::collections::{HashMap, VecDeque};
 use std::time::Duration;
+use tokio::sync::RwLock;
+use tracing::{debug, error, info, warn};
 
 /// Predictive Analytics Engine
 pub struct PredictiveAnalyticsEngine {
     database: Arc<DatabaseManager>,
     config: AnalyticsConfig,
-    
+
     // Forecasting models
     forecasting_models: Arc<RwLock<HashMap<String, ForecastingModel>>>,
     active_forecasts: Arc<RwLock<HashMap<Uuid, PredictiveForecast>>>,
-    
+
     // Machine learning components
     ml_pipeline: MLPipeline,
     feature_store: FeatureStore,
     model_registry: ModelRegistry,
-    
+
     // Prediction cache
     prediction_cache: Arc<RwLock<HashMap<String, CachedPrediction>>>,
-    
+
     // Training data management
     training_data_manager: TrainingDataManager,
 }
@@ -381,7 +381,12 @@ pub trait ModelTrainer: Send + Sync {
 
 /// Model evaluator trait
 pub trait ModelEvaluator: Send + Sync {
-    fn evaluate(&self, model: &TrainedModel, test_data: &[Feature], test_targets: &[f64]) -> ModelPerformanceMetrics;
+    fn evaluate(
+        &self,
+        model: &TrainedModel,
+        test_data: &[Feature],
+        test_targets: &[f64],
+    ) -> ModelPerformanceMetrics;
 }
 
 /// Feature definition
@@ -528,10 +533,7 @@ pub struct CachedPrediction {
 
 impl PredictiveAnalyticsEngine {
     /// Create new predictive analytics engine
-    pub fn new(
-        database: Arc<DatabaseManager>,
-        config: AnalyticsConfig,
-    ) -> AnalyticsResult<Self> {
+    pub fn new(database: Arc<DatabaseManager>, config: AnalyticsConfig) -> AnalyticsResult<Self> {
         Ok(Self {
             database,
             config,
@@ -544,27 +546,27 @@ impl PredictiveAnalyticsEngine {
             training_data_manager: TrainingDataManager::new(),
         })
     }
-    
+
     /// Initialize predictive analytics engine
     pub async fn initialize(&self) -> AnalyticsResult<()> {
         info!("Initializing predictive analytics engine");
-        
+
         // Load existing models
         self.load_forecasting_models().await?;
-        
+
         // Initialize feature store
         self.feature_store.initialize().await?;
-        
+
         // Start model training scheduler
         self.start_model_training_scheduler().await?;
-        
+
         // Start forecast generation scheduler
         self.start_forecast_scheduler().await?;
-        
+
         info!("Predictive analytics engine initialized");
         Ok(())
     }
-    
+
     /// Generate forecast
     pub async fn generate_forecast(
         &self,
@@ -572,29 +574,35 @@ impl PredictiveAnalyticsEngine {
         forecast_period: TimePeriod,
     ) -> AnalyticsResult<PredictiveForecast> {
         info!("Generating forecast for metric: {}", metric_name);
-        
+
         // Check cache first
         if let Some(cached) = self.get_cached_prediction(&metric_name).await {
             if cached.expires_at > Utc::now() {
-                return Ok(self.build_forecast_from_cache(cached, forecast_period).await?);
+                return Ok(self
+                    .build_forecast_from_cache(cached, forecast_period)
+                    .await?);
             }
         }
-        
+
         // Get appropriate model
         let model = self.get_or_create_model(&metric_name).await?;
-        
+
         // Prepare features
         let features = self.prepare_features_for_prediction(&metric_name).await?;
-        
+
         // Generate predictions
-        let predictions = self.generate_predictions(&model, &features, &forecast_period).await?;
-        
+        let predictions = self
+            .generate_predictions(&model, &features, &forecast_period)
+            .await?;
+
         // Calculate uncertainty bounds
         let uncertainty_bounds = self.calculate_uncertainty_bounds(&predictions).await?;
-        
+
         // Assess business impact
-        let business_impact = self.assess_business_impact(&metric_name, &predictions).await?;
-        
+        let business_impact = self
+            .assess_business_impact(&metric_name, &predictions)
+            .await?;
+
         // Create forecast
         let forecast = PredictiveForecast {
             forecast_id: Uuid::new_v4(),
@@ -610,18 +618,21 @@ impl PredictiveAnalyticsEngine {
             business_impact,
             model_performance: model.performance_metrics.clone(),
         };
-        
+
         // Cache forecast
         let mut forecasts = self.active_forecasts.write().await;
         forecasts.insert(forecast.forecast_id, forecast.clone());
-        
+
         // Cache prediction
         self.cache_prediction(&metric_name, &forecast).await?;
-        
-        info!("Forecast generated successfully for metric: {}", metric_name);
+
+        info!(
+            "Forecast generated successfully for metric: {}",
+            metric_name
+        );
         Ok(forecast)
     }
-    
+
     /// Train new forecasting model
     pub async fn train_model(
         &self,
@@ -629,16 +640,19 @@ impl PredictiveAnalyticsEngine {
         methodology: ForecastingMethodology,
     ) -> AnalyticsResult<String> {
         info!("Training new model for metric: {}", metric_name);
-        
+
         // Prepare training data
         let training_data = self.prepare_training_data(&metric_name).await?;
-        
+
         // Train model using ML pipeline
-        let trained_model = self.ml_pipeline.train_model(&methodology, &training_data).await?;
-        
+        let trained_model = self
+            .ml_pipeline
+            .train_model(&methodology, &training_data)
+            .await?;
+
         // Evaluate model performance
         let performance = self.evaluate_model(&trained_model, &training_data).await?;
-        
+
         // Create model record
         let model = ForecastingModel {
             model_id: Uuid::new_v4().to_string(),
@@ -654,53 +668,57 @@ impl PredictiveAnalyticsEngine {
             model_status: ModelStatus::Active,
             version: "1.0.0".to_string(),
         };
-        
+
         // Register model
         let mut models = self.forecasting_models.write().await;
         models.insert(metric_name, model.clone());
-        
+
         info!("Model trained successfully: {}", model.model_id);
         Ok(model.model_id)
     }
-    
+
     /// Get forecast by ID
     pub async fn get_forecast(&self, forecast_id: Uuid) -> AnalyticsResult<PredictiveForecast> {
         let forecasts = self.active_forecasts.read().await;
-        forecasts.get(&forecast_id)
+        forecasts
+            .get(&forecast_id)
             .cloned()
             .ok_or_else(|| AnalyticsError::ProcessingFailed {
-                reason: format!("Forecast {} not found", forecast_id)
+                reason: format!("Forecast {} not found", forecast_id),
             })
     }
-    
+
     /// List active forecasts
     pub async fn list_forecasts(&self) -> Vec<PredictiveForecast> {
         let forecasts = self.active_forecasts.read().await;
         forecasts.values().cloned().collect()
     }
-    
+
     /// Get model performance
-    pub async fn get_model_performance(&self, model_id: &str) -> AnalyticsResult<ModelPerformanceMetrics> {
+    pub async fn get_model_performance(
+        &self,
+        model_id: &str,
+    ) -> AnalyticsResult<ModelPerformanceMetrics> {
         let models = self.forecasting_models.read().await;
         for model in models.values() {
             if model.model_id == model_id {
                 return Ok(model.performance_metrics.clone());
             }
         }
-        
+
         Err(AnalyticsError::ProcessingFailed {
-            reason: format!("Model {} not found", model_id)
+            reason: format!("Model {} not found", model_id),
         })
     }
-    
+
     // Private helper methods
-    
+
     async fn load_forecasting_models(&self) -> AnalyticsResult<()> {
         // Load models from database or create defaults
         debug!("Loading forecasting models from database");
         Ok(())
     }
-    
+
     async fn start_model_training_scheduler(&self) -> AnalyticsResult<()> {
         tokio::spawn(async move {
             let mut interval = tokio::time::interval(Duration::from_secs(86400)); // Daily
@@ -711,7 +729,7 @@ impl PredictiveAnalyticsEngine {
         });
         Ok(())
     }
-    
+
     async fn start_forecast_scheduler(&self) -> AnalyticsResult<()> {
         tokio::spawn(async move {
             let mut interval = tokio::time::interval(Duration::from_secs(3600)); // Hourly
@@ -722,12 +740,12 @@ impl PredictiveAnalyticsEngine {
         });
         Ok(())
     }
-    
+
     async fn get_cached_prediction(&self, metric_name: &str) -> Option<CachedPrediction> {
         let cache = self.prediction_cache.read().await;
         cache.get(metric_name).cloned()
     }
-    
+
     async fn build_forecast_from_cache(
         &self,
         cached: CachedPrediction,
@@ -742,21 +760,19 @@ impl PredictiveAnalyticsEngine {
             generated_at: cached.generated_at,
             confidence_level: cached.confidence_score,
             methodology: ForecastingMethodology::Statistical(StatisticalMethod::LinearTrend),
-            forecasted_values: vec![
-                ForecastedValue {
-                    timestamp: Utc::now(),
-                    predicted_value: cached.predicted_value,
-                    confidence_interval: ConfidenceInterval {
-                        lower_bound: cached.predicted_value * 0.9,
-                        upper_bound: cached.predicted_value * 1.1,
-                        confidence_level: cached.confidence_score,
-                    },
-                    trend_component: None,
-                    seasonal_component: None,
-                    noise_component: None,
-                    feature_contributions: HashMap::new(),
-                }
-            ],
+            forecasted_values: vec![ForecastedValue {
+                timestamp: Utc::now(),
+                predicted_value: cached.predicted_value,
+                confidence_interval: ConfidenceInterval {
+                    lower_bound: cached.predicted_value * 0.9,
+                    upper_bound: cached.predicted_value * 1.1,
+                    confidence_level: cached.confidence_score,
+                },
+                trend_component: None,
+                seasonal_component: None,
+                noise_component: None,
+                feature_contributions: HashMap::new(),
+            }],
             uncertainty_bounds: UncertaintyBounds {
                 prediction_intervals: Vec::new(),
                 scenario_analysis: ScenarioAnalysis {
@@ -776,7 +792,7 @@ impl PredictiveAnalyticsEngine {
             model_performance: ModelPerformanceMetrics::default(),
         })
     }
-    
+
     async fn get_or_create_model(&self, metric_name: &str) -> AnalyticsResult<ForecastingModel> {
         let models = self.forecasting_models.read().await;
         if let Some(model) = models.get(metric_name) {
@@ -786,23 +802,28 @@ impl PredictiveAnalyticsEngine {
             // Create default model
             self.train_model(
                 metric_name.to_string(),
-                ForecastingMethodology::TimeSeries(TimeSeriesMethod::ARIMA)
-            ).await?;
-            
+                ForecastingMethodology::TimeSeries(TimeSeriesMethod::ARIMA),
+            )
+            .await?;
+
             let models = self.forecasting_models.read().await;
-            models.get(metric_name)
+            models
+                .get(metric_name)
                 .cloned()
                 .ok_or_else(|| AnalyticsError::ProcessingFailed {
-                    reason: "Failed to create model".to_string()
+                    reason: "Failed to create model".to_string(),
                 })
         }
     }
-    
-    async fn prepare_features_for_prediction(&self, _metric_name: &str) -> AnalyticsResult<Vec<Feature>> {
+
+    async fn prepare_features_for_prediction(
+        &self,
+        _metric_name: &str,
+    ) -> AnalyticsResult<Vec<Feature>> {
         // Prepare features for prediction
         Ok(Vec::new())
     }
-    
+
     async fn generate_predictions(
         &self,
         _model: &ForecastingModel,
@@ -810,24 +831,25 @@ impl PredictiveAnalyticsEngine {
         _forecast_period: &TimePeriod,
     ) -> AnalyticsResult<Vec<ForecastedValue>> {
         // Generate predictions using model
-        Ok(vec![
-            ForecastedValue {
-                timestamp: Utc::now() + chrono::Duration::days(1),
-                predicted_value: 1000.0,
-                confidence_interval: ConfidenceInterval {
-                    lower_bound: 900.0,
-                    upper_bound: 1100.0,
-                    confidence_level: 0.85,
-                },
-                trend_component: Some(50.0),
-                seasonal_component: Some(-20.0),
-                noise_component: Some(10.0),
-                feature_contributions: HashMap::new(),
-            }
-        ])
+        Ok(vec![ForecastedValue {
+            timestamp: Utc::now() + chrono::Duration::days(1),
+            predicted_value: 1000.0,
+            confidence_interval: ConfidenceInterval {
+                lower_bound: 900.0,
+                upper_bound: 1100.0,
+                confidence_level: 0.85,
+            },
+            trend_component: Some(50.0),
+            seasonal_component: Some(-20.0),
+            noise_component: Some(10.0),
+            feature_contributions: HashMap::new(),
+        }])
     }
-    
-    async fn calculate_uncertainty_bounds(&self, _predictions: &[ForecastedValue]) -> AnalyticsResult<UncertaintyBounds> {
+
+    async fn calculate_uncertainty_bounds(
+        &self,
+        _predictions: &[ForecastedValue],
+    ) -> AnalyticsResult<UncertaintyBounds> {
         // Calculate uncertainty bounds
         Ok(UncertaintyBounds {
             prediction_intervals: Vec::new(),
@@ -844,23 +866,29 @@ impl PredictiveAnalyticsEngine {
             },
         })
     }
-    
-    async fn assess_business_impact(&self, _metric_name: &str, _predictions: &[ForecastedValue]) -> AnalyticsResult<BusinessImpactAssessment> {
+
+    async fn assess_business_impact(
+        &self,
+        _metric_name: &str,
+        _predictions: &[ForecastedValue],
+    ) -> AnalyticsResult<BusinessImpactAssessment> {
         // Assess business impact
         Ok(BusinessImpactAssessment::default())
     }
-    
+
     fn determine_forecast_type(&self, metric_name: &str) -> ForecastType {
         match metric_name {
             name if name.contains("user") => ForecastType::UserGrowth,
             name if name.contains("revenue") => ForecastType::Revenue,
-            name if name.contains("cpu") || name.contains("memory") => ForecastType::ResourceUtilization,
+            name if name.contains("cpu") || name.contains("memory") => {
+                ForecastType::ResourceUtilization
+            }
             name if name.contains("performance") => ForecastType::SystemPerformance,
             name if name.contains("security") => ForecastType::SecurityThreats,
             _ => ForecastType::Custom(metric_name.to_string()),
         }
     }
-    
+
     async fn get_model_assumptions(&self, _model: &ForecastingModel) -> Vec<String> {
         vec![
             "Historical patterns will continue".to_string(),
@@ -868,8 +896,12 @@ impl PredictiveAnalyticsEngine {
             "Data quality remains consistent".to_string(),
         ]
     }
-    
-    async fn cache_prediction(&self, metric_name: &str, forecast: &PredictiveForecast) -> AnalyticsResult<()> {
+
+    async fn cache_prediction(
+        &self,
+        metric_name: &str,
+        forecast: &PredictiveForecast,
+    ) -> AnalyticsResult<()> {
         if let Some(first_prediction) = forecast.forecasted_values.first() {
             let cached = CachedPrediction {
                 prediction_id: forecast.forecast_id,
@@ -880,14 +912,14 @@ impl PredictiveAnalyticsEngine {
                 expires_at: Utc::now() + chrono::Duration::hours(6),
                 model_version: "1.0.0".to_string(),
             };
-            
+
             let mut cache = self.prediction_cache.write().await;
             cache.insert(metric_name.to_string(), cached);
         }
-        
+
         Ok(())
     }
-    
+
     async fn prepare_training_data(&self, metric_name: &str) -> AnalyticsResult<TrainingDataset> {
         // Prepare training data
         Ok(TrainingDataset {
@@ -905,8 +937,12 @@ impl PredictiveAnalyticsEngine {
             last_updated: Utc::now(),
         })
     }
-    
-    async fn evaluate_model(&self, _model: &TrainedModel, _training_data: &TrainingDataset) -> AnalyticsResult<ModelPerformanceMetrics> {
+
+    async fn evaluate_model(
+        &self,
+        _model: &TrainedModel,
+        _training_data: &TrainingDataset,
+    ) -> AnalyticsResult<ModelPerformanceMetrics> {
         // Evaluate model performance
         Ok(ModelPerformanceMetrics::default())
     }
@@ -921,8 +957,12 @@ impl MLPipeline {
             model_evaluators: Vec::new(),
         }
     }
-    
-    async fn train_model(&self, _methodology: &ForecastingMethodology, _training_data: &TrainingDataset) -> AnalyticsResult<TrainedModel> {
+
+    async fn train_model(
+        &self,
+        _methodology: &ForecastingMethodology,
+        _training_data: &TrainingDataset,
+    ) -> AnalyticsResult<TrainedModel> {
         // Train model using specified methodology
         Ok(TrainedModel {
             model_data: vec![0u8; 1024],
@@ -938,7 +978,7 @@ impl FeatureStore {
             feature_schemas: Arc::new(RwLock::new(HashMap::new())),
         }
     }
-    
+
     async fn initialize(&self) -> AnalyticsResult<()> {
         debug!("Initializing feature store");
         Ok(())

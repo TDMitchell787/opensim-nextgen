@@ -1,9 +1,9 @@
 // Phase 26.2.1: Region Data Model
 // Comprehensive region data structures for OpenSim compatibility
 
+use chrono::{DateTime, Utc};
 use serde::{Deserialize, Serialize};
 use uuid::Uuid;
-use chrono::{DateTime, Utc};
 
 /// Core region information structure
 #[derive(Debug, Clone, Serialize, Deserialize)]
@@ -38,7 +38,7 @@ impl RegionInfo {
     pub fn new(name: String, location_x: u32, location_y: u32) -> Self {
         let now = Utc::now();
         let region_id = Uuid::new_v4();
-        
+
         Self {
             region_id,
             region_name: name,
@@ -65,7 +65,7 @@ impl RegionInfo {
             updated_at: now,
         }
     }
-    
+
     /// Calculate region handle from grid coordinates (converts grid → world meters)
     /// Grid coord 1000 → 256000 meters (1000 * 256)
     pub fn calculate_handle(grid_x: u32, grid_y: u32) -> u64 {
@@ -203,13 +203,21 @@ impl Vector3 {
     pub fn new(x: f32, y: f32, z: f32) -> Self {
         Self { x, y, z }
     }
-    
+
     pub fn zero() -> Self {
-        Self { x: 0.0, y: 0.0, z: 0.0 }
+        Self {
+            x: 0.0,
+            y: 0.0,
+            z: 0.0,
+        }
     }
-    
+
     pub fn one() -> Self {
-        Self { x: 1.0, y: 1.0, z: 1.0 }
+        Self {
+            x: 1.0,
+            y: 1.0,
+            z: 1.0,
+        }
     }
 }
 
@@ -232,9 +240,14 @@ impl Quaternion {
     pub fn new(x: f32, y: f32, z: f32, w: f32) -> Self {
         Self { x, y, z, w }
     }
-    
+
     pub fn identity() -> Self {
-        Self { x: 0.0, y: 0.0, z: 0.0, w: 1.0 }
+        Self {
+            x: 0.0,
+            y: 0.0,
+            z: 0.0,
+            w: 1.0,
+        }
     }
 }
 
@@ -605,7 +618,7 @@ mod tests {
         let v1 = Vector3::new(1.0, 2.0, 3.0);
         let v2 = Vector3::zero();
         let v3 = Vector3::one();
-        
+
         assert_eq!(v2.x, 0.0);
         assert_eq!(v3.x, 1.0);
         assert_eq!(v1.y, 2.0);
@@ -623,7 +636,7 @@ mod tests {
         let creator_id = Uuid::new_v4();
         let owner_id = Uuid::new_v4();
         let position = Vector3::new(128.0, 128.0, 25.0);
-        
+
         let part = SceneObjectPart::new("Test Object".to_string(), position, creator_id, owner_id);
         assert_eq!(part.name, "Test Object");
         assert_eq!(part.creator_id, creator_id);
@@ -635,7 +648,7 @@ mod tests {
     fn test_terrain_data_creation() {
         let region_id = Uuid::new_v4();
         let terrain = TerrainData::new(region_id);
-        
+
         assert_eq!(terrain.region_id, region_id);
         assert_eq!(terrain.terrain_revision, 1);
         assert_eq!(terrain.water_height, 20.0);
@@ -647,7 +660,7 @@ mod tests {
         let region_id = Uuid::new_v4();
         let owner_id = Uuid::new_v4();
         let land = LandData::new(region_id, 1, owner_id);
-        
+
         assert_eq!(land.region_id, region_id);
         assert_eq!(land.local_land_id, 1);
         assert_eq!(land.owner_id, owner_id);

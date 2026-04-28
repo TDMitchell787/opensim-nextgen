@@ -2,13 +2,13 @@
 //!
 //! Provides DRM protection, content validation, and anti-piracy measures.
 
-use uuid::Uuid;
+use super::{ContentError, ContentResult};
 use serde::{Deserialize, Serialize};
 use std::collections::HashMap;
 use std::sync::Arc;
 use tokio::sync::RwLock;
 use tracing::{debug, info, warn};
-use super::{ContentResult, ContentError};
+use uuid::Uuid;
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub enum DrmProtectionLevel {
@@ -63,7 +63,8 @@ impl ContentSecurityManager {
         content_id: Uuid,
         level: DrmProtectionLevel,
     ) -> ContentResult<()> {
-        self.apply_drm_protection_with_owner(content_id, level, Uuid::nil()).await
+        self.apply_drm_protection_with_owner(content_id, level, Uuid::nil())
+            .await
     }
 
     pub async fn apply_drm_protection_with_owner(
@@ -81,7 +82,7 @@ impl ContentSecurityManager {
             DrmProtectionLevel::None => None,
             DrmProtectionLevel::Basic => Some(format!("basic_{}", content_id)),
             DrmProtectionLevel::Enhanced => {
-                use sha2::{Sha256, Digest};
+                use sha2::{Digest, Sha256};
                 let mut hasher = Sha256::new();
                 hasher.update(content_id.as_bytes());
                 hasher.update(owner_id.as_bytes());
@@ -89,7 +90,7 @@ impl ContentSecurityManager {
                 Some(hex::encode(hasher.finalize()))
             }
             DrmProtectionLevel::Enterprise => {
-                use sha2::{Sha256, Digest};
+                use sha2::{Digest, Sha256};
                 let mut hasher = Sha256::new();
                 hasher.update(b"enterprise_");
                 hasher.update(content_id.as_bytes());
@@ -113,9 +114,15 @@ impl ContentSecurityManager {
             encryption_key_hash,
         };
 
-        self.protections.write().await.insert(content_id, protection);
+        self.protections
+            .write()
+            .await
+            .insert(content_id, protection);
 
-        info!("Applied {:?} DRM protection to content {}", level, content_id);
+        info!(
+            "Applied {:?} DRM protection to content {}",
+            level, content_id
+        );
         Ok(())
     }
 
@@ -124,7 +131,8 @@ impl ContentSecurityManager {
         content_id: Uuid,
         user_id: Uuid,
     ) -> ContentResult<bool> {
-        self.validate_access_with_action(content_id, user_id, "view").await
+        self.validate_access_with_action(content_id, user_id, "view")
+            .await
     }
 
     pub async fn validate_access_with_action(
@@ -143,21 +151,42 @@ impl ContentSecurityManager {
                 } else if protection.allowed_users.contains(&user_id) {
                     match action {
                         "view" | "access" => (true, Some("Allowed user".to_string())),
-                        "copy" => (protection.copy_allowed,
-                            if protection.copy_allowed { Some("Copy allowed".to_string()) }
-                            else { Some("Copy not allowed".to_string()) }),
-                        "modify" | "edit" => (protection.modify_allowed,
-                            if protection.modify_allowed { Some("Modify allowed".to_string()) }
-                            else { Some("Modify not allowed".to_string()) }),
-                        "transfer" => (protection.transfer_allowed,
-                            if protection.transfer_allowed { Some("Transfer allowed".to_string()) }
-                            else { Some("Transfer not allowed".to_string()) }),
-                        _ => (true, Some(format!("Action {} allowed for permitted user", action))),
+                        "copy" => (
+                            protection.copy_allowed,
+                            if protection.copy_allowed {
+                                Some("Copy allowed".to_string())
+                            } else {
+                                Some("Copy not allowed".to_string())
+                            },
+                        ),
+                        "modify" | "edit" => (
+                            protection.modify_allowed,
+                            if protection.modify_allowed {
+                                Some("Modify allowed".to_string())
+                            } else {
+                                Some("Modify not allowed".to_string())
+                            },
+                        ),
+                        "transfer" => (
+                            protection.transfer_allowed,
+                            if protection.transfer_allowed {
+                                Some("Transfer allowed".to_string())
+                            } else {
+                                Some("Transfer not allowed".to_string())
+                            },
+                        ),
+                        _ => (
+                            true,
+                            Some(format!("Action {} allowed for permitted user", action)),
+                        ),
                     }
                 } else {
                     match protection.protection_level {
                         DrmProtectionLevel::None => (true, Some("No DRM restrictions".to_string())),
-                        _ => (false, Some("Access denied - not in allowed list".to_string())),
+                        _ => (
+                            false,
+                            Some("Access denied - not in allowed list".to_string()),
+                        ),
                     }
                 }
             }
@@ -165,9 +194,22 @@ impl ContentSecurityManager {
 
         drop(protections);
 
-        self.log_access(content_id, user_id, action.to_string(), granted, reason.clone()).await;
+        self.log_access(
+            content_id,
+            user_id,
+            action.to_string(),
+            granted,
+            reason.clone(),
+        )
+        .await;
 
-        debug!("Access check for {} by {}: {} ({})", content_id, user_id, granted, reason.unwrap_or_default());
+        debug!(
+            "Access check for {} by {}: {} ({})",
+            content_id,
+            user_id,
+            granted,
+            reason.unwrap_or_default()
+        );
         Ok(granted)
     }
 
@@ -177,7 +219,10 @@ impl ContentSecurityManager {
         if let Some(protection) = protections.get_mut(&content_id) {
             if !protection.allowed_users.contains(&user_id) {
                 protection.allowed_users.push(user_id);
-                info!("Granted access to content {} for user {}", content_id, user_id);
+                info!(
+                    "Granted access to content {} for user {}",
+                    content_id, user_id
+                );
             }
             Ok(())
         } else {
@@ -191,18 +236,24 @@ impl ContentSecurityManager {
         if let Some(protection) = protections.get_mut(&content_id) {
             if protection.owner_id == user_id {
                 return Err(ContentError::ValidationError {
-                    reason: "Cannot revoke owner access".to_string()
+                    reason: "Cannot revoke owner access".to_string(),
                 });
             }
             protection.allowed_users.retain(|&id| id != user_id);
-            info!("Revoked access to content {} for user {}", content_id, user_id);
+            info!(
+                "Revoked access to content {} for user {}",
+                content_id, user_id
+            );
             Ok(())
         } else {
             Err(ContentError::NotFound { id: content_id })
         }
     }
 
-    pub async fn get_protection(&self, content_id: Uuid) -> ContentResult<Option<ContentProtection>> {
+    pub async fn get_protection(
+        &self,
+        content_id: Uuid,
+    ) -> ContentResult<Option<ContentProtection>> {
         Ok(self.protections.read().await.get(&content_id).cloned())
     }
 
@@ -213,7 +264,9 @@ impl ContentSecurityManager {
     }
 
     pub async fn get_access_logs(&self, content_id: Uuid, limit: usize) -> Vec<AccessLog> {
-        self.access_logs.read().await
+        self.access_logs
+            .read()
+            .await
             .iter()
             .filter(|log| log.content_id == content_id)
             .take(limit)
@@ -221,7 +274,14 @@ impl ContentSecurityManager {
             .collect()
     }
 
-    async fn log_access(&self, content_id: Uuid, user_id: Uuid, action: String, granted: bool, reason: Option<String>) {
+    async fn log_access(
+        &self,
+        content_id: Uuid,
+        user_id: Uuid,
+        action: String,
+        granted: bool,
+        reason: Option<String>,
+    ) {
         let now = std::time::SystemTime::now()
             .duration_since(std::time::UNIX_EPOCH)
             .unwrap()

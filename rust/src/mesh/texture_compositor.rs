@@ -80,11 +80,7 @@ impl Default for TShirtTextureConfig {
 
 pub fn compose_tshirt_texture(config: &TShirtTextureConfig) -> Result<DynamicImage> {
     let sz = config.texture_size;
-    let mut canvas = RgbaImage::from_pixel(
-        sz,
-        sz,
-        Rgba(config.base_color),
-    );
+    let mut canvas = RgbaImage::from_pixel(sz, sz, Rgba(config.base_color));
 
     if config.logo_path.is_empty() {
         return Ok(DynamicImage::ImageRgba8(canvas));
@@ -132,16 +128,37 @@ fn place_logo_sl_uv(
     let sz = texture_size as f32;
     let (logo_w, logo_h) = logo.dimensions();
 
-    let (quad_u_min, quad_u_max, collar_v, hem_v, height_inches) = match (placement.body_region, placement.side) {
-        (BodyRegion::Upper, PlacementSide::Front) =>
-            (SL_FRONT_U_MIN, SL_FRONT_U_MAX, SL_FRONT_COLLAR_V, SL_FRONT_HEM_V, SHIRT_HEIGHT_INCHES),
-        (BodyRegion::Upper, PlacementSide::Back) =>
-            (SL_BACK_U_MIN, SL_BACK_U_MAX, SL_BACK_V_MIN + 0.02, SL_BACK_V_MAX - 0.04, SHIRT_HEIGHT_INCHES),
-        (BodyRegion::Lower, PlacementSide::Front) =>
-            (SL_LOWER_FRONT_U_MIN, SL_LOWER_FRONT_U_MAX, SL_LOWER_WAIST_V, SL_LOWER_ANKLE_V, PANTS_HEIGHT_INCHES),
-        (BodyRegion::Lower, PlacementSide::Back) =>
-            (SL_LOWER_BACK_U_MIN, SL_LOWER_BACK_U_MAX, SL_LOWER_WAIST_V + 0.02, SL_LOWER_ANKLE_V - 0.04, PANTS_HEIGHT_INCHES),
-    };
+    let (quad_u_min, quad_u_max, collar_v, hem_v, height_inches) =
+        match (placement.body_region, placement.side) {
+            (BodyRegion::Upper, PlacementSide::Front) => (
+                SL_FRONT_U_MIN,
+                SL_FRONT_U_MAX,
+                SL_FRONT_COLLAR_V,
+                SL_FRONT_HEM_V,
+                SHIRT_HEIGHT_INCHES,
+            ),
+            (BodyRegion::Upper, PlacementSide::Back) => (
+                SL_BACK_U_MIN,
+                SL_BACK_U_MAX,
+                SL_BACK_V_MIN + 0.02,
+                SL_BACK_V_MAX - 0.04,
+                SHIRT_HEIGHT_INCHES,
+            ),
+            (BodyRegion::Lower, PlacementSide::Front) => (
+                SL_LOWER_FRONT_U_MIN,
+                SL_LOWER_FRONT_U_MAX,
+                SL_LOWER_WAIST_V,
+                SL_LOWER_ANKLE_V,
+                PANTS_HEIGHT_INCHES,
+            ),
+            (BodyRegion::Lower, PlacementSide::Back) => (
+                SL_LOWER_BACK_U_MIN,
+                SL_LOWER_BACK_U_MAX,
+                SL_LOWER_WAIST_V + 0.02,
+                SL_LOWER_ANKLE_V - 0.04,
+                PANTS_HEIGHT_INCHES,
+            ),
+        };
 
     let quad_center_u = (quad_u_min + quad_u_max) / 2.0;
     let collar_to_hem_v = hem_v - collar_v;
@@ -159,8 +176,11 @@ fn place_logo_sl_uv(
             let target_x = pixel_x_start + dx as i64;
             let target_y = pixel_top_y + dy as i64;
 
-            if target_x < 0 || target_x >= texture_size as i64 ||
-               target_y < 0 || target_y >= texture_size as i64 {
+            if target_x < 0
+                || target_x >= texture_size as i64
+                || target_y < 0
+                || target_y >= texture_size as i64
+            {
                 continue;
             }
 
@@ -221,8 +241,13 @@ pub fn compose_garment_texture_with_uv(
         let (logo_w, logo_h) = logo_img.dimensions();
         if logo_w > 0 && logo_h > 0 {
             let (u_min, u_max, v_min, v_max) = match placement.side {
-                PlacementSide::Front => (SL_FRONT_U_MIN, SL_FRONT_U_MAX, SL_FRONT_V_MIN, SL_FRONT_V_MAX),
-                PlacementSide::Back  => (SL_BACK_U_MIN,  SL_BACK_U_MAX,  SL_BACK_V_MIN,  SL_BACK_V_MAX),
+                PlacementSide::Front => (
+                    SL_FRONT_U_MIN,
+                    SL_FRONT_U_MAX,
+                    SL_FRONT_V_MIN,
+                    SL_FRONT_V_MAX,
+                ),
+                PlacementSide::Back => (SL_BACK_U_MIN, SL_BACK_U_MAX, SL_BACK_V_MIN, SL_BACK_V_MAX),
             };
             let island_w = ((u_max - u_min) * 1024.0) as u32;
             let island_h = ((v_max - v_min) * 1024.0) as u32;
@@ -234,7 +259,8 @@ pub fn compose_garment_texture_with_uv(
             } else {
                 ((max_logo_h as f32 * aspect) as u32, max_logo_h)
             };
-            let scaled = logo_img.resize_exact(scaled_w, scaled_h, image::imageops::FilterType::Lanczos3);
+            let scaled =
+                logo_img.resize_exact(scaled_w, scaled_h, image::imageops::FilterType::Lanczos3);
             place_logo_sl_uv(&mut canvas, &scaled, placement, 1024)?;
         }
     }
@@ -307,7 +333,9 @@ mod tests {
 
     #[test]
     fn test_load_ruth2_uv_upper() {
-        if crate::mesh::blender_worker::ruth2_base_dir().is_none() { return; }
+        if crate::mesh::blender_worker::ruth2_base_dir().is_none() {
+            return;
+        }
         let img = load_ruth2_uv_map("upper").expect("Upper UV map load failed");
         assert_eq!(img.width(), 1024);
         assert_eq!(img.height(), 1024);
@@ -315,7 +343,9 @@ mod tests {
 
     #[test]
     fn test_load_ruth2_uv_lower() {
-        if crate::mesh::blender_worker::ruth2_base_dir().is_none() { return; }
+        if crate::mesh::blender_worker::ruth2_base_dir().is_none() {
+            return;
+        }
         let img = load_ruth2_uv_map("lower").expect("Lower UV map load failed");
         assert_eq!(img.width(), 1024);
         assert_eq!(img.height(), 1024);
@@ -323,7 +353,9 @@ mod tests {
 
     #[test]
     fn test_load_sl_avatar_texture() {
-        if crate::mesh::blender_worker::ruth2_base_dir().is_none() { return; }
+        if crate::mesh::blender_worker::ruth2_base_dir().is_none() {
+            return;
+        }
         let img = load_sl_avatar_texture("upper").expect("SL Upper texture load failed");
         assert_eq!(img.width(), 1024);
         assert_eq!(img.height(), 1024);
@@ -341,13 +373,11 @@ mod tests {
 
     #[test]
     fn test_compose_garment_with_uv() {
-        if crate::mesh::blender_worker::ruth2_base_dir().is_none() { return; }
-        let img = compose_garment_texture_with_uv(
-            "shirt",
-            [100, 150, 200, 255],
-            None,
-            None,
-        ).expect("Garment texture composition failed");
+        if crate::mesh::blender_worker::ruth2_base_dir().is_none() {
+            return;
+        }
+        let img = compose_garment_texture_with_uv("shirt", [100, 150, 200, 255], None, None)
+            .expect("Garment texture composition failed");
         assert_eq!(img.width(), 1024);
         assert_eq!(img.height(), 1024);
         let front_pixel = img.get_pixel(256, 256);
@@ -358,16 +388,16 @@ mod tests {
 
     #[test]
     fn test_uv_mask_clears_outside_islands() {
-        if crate::mesh::blender_worker::ruth2_base_dir().is_none() { return; }
-        let img = compose_garment_texture_with_uv(
-            "shirt",
-            [100, 150, 200, 255],
-            None,
-            None,
-        ).expect("Garment texture composition failed");
+        if crate::mesh::blender_worker::ruth2_base_dir().is_none() {
+            return;
+        }
+        let img = compose_garment_texture_with_uv("shirt", [100, 150, 200, 255], None, None)
+            .expect("Garment texture composition failed");
         let corner = img.get_pixel(512, 512);
-        assert!(corner[3] == 0 || (corner[0] == 100 && corner[1] == 150),
-            "Center pixel should be inside UV island (colored) or outside (alpha=0)");
+        assert!(
+            corner[3] == 0 || (corner[0] == 100 && corner[1] == 150),
+            "Center pixel should be inside UV island (colored) or outside (alpha=0)"
+        );
     }
 
     #[test]
@@ -378,8 +408,14 @@ mod tests {
         let island_h = (front_h * 1024.0) as u32;
         let max_logo_w = (island_w as f32 * 0.75) as u32;
         let max_logo_h = (island_h as f32 * 0.60) as u32;
-        assert!(max_logo_w > 300, "Front island should allow logos wider than 300px");
-        assert!(max_logo_h > 200, "Front island should allow logos taller than 200px");
+        assert!(
+            max_logo_w > 300,
+            "Front island should allow logos wider than 300px"
+        );
+        assert!(
+            max_logo_h > 200,
+            "Front island should allow logos taller than 200px"
+        );
         assert!(max_logo_w < 500, "Logo should not exceed island width");
     }
 
@@ -412,13 +448,11 @@ mod tests {
 
     #[test]
     fn test_compose_garment_pants_with_uv() {
-        if crate::mesh::blender_worker::ruth2_base_dir().is_none() { return; }
-        let img = compose_garment_texture_with_uv(
-            "pants",
-            [50, 50, 128, 255],
-            None,
-            None,
-        ).expect("Pants texture composition failed");
+        if crate::mesh::blender_worker::ruth2_base_dir().is_none() {
+            return;
+        }
+        let img = compose_garment_texture_with_uv("pants", [50, 50, 128, 255], None, None)
+            .expect("Pants texture composition failed");
         assert_eq!(img.width(), 1024);
         assert_eq!(img.height(), 1024);
     }

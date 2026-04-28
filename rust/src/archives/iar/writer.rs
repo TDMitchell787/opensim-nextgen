@@ -9,7 +9,9 @@ use std::path::Path;
 use tracing::{debug, info, warn};
 use uuid::Uuid;
 
-use super::xml_schemas::{create_archive_xml, create_folder_xml, create_item_xml, IarInventoryItemXml};
+use super::xml_schemas::{
+    create_archive_xml, create_folder_xml, create_item_xml, IarInventoryItemXml,
+};
 use crate::archives::common::{paths, AssetType, SaveStatistics};
 use crate::archives::tar_handler::TarGzWriter;
 
@@ -51,10 +53,14 @@ impl IarWriter {
         let mut warnings = Vec::new();
         let mut collected_assets: HashSet<Uuid> = HashSet::new();
 
-        info!("Saving IAR to {:?} for user {}", path.as_ref(), options.user_id);
+        info!(
+            "Saving IAR to {:?} for user {}",
+            path.as_ref(),
+            options.user_id
+        );
 
-        let mut archive = TarGzWriter::create(path.as_ref())
-            .with_context(|| "Failed to create IAR archive")?;
+        let mut archive =
+            TarGzWriter::create(path.as_ref()).with_context(|| "Failed to create IAR archive")?;
 
         // Write archive.xml
         let archive_xml = create_archive_xml(1, 0);
@@ -67,16 +73,23 @@ impl IarWriter {
         };
 
         // Get folder structure recursively
-        let folders = self.get_folder_tree(&options.user_id, &start_folder_id).await?;
+        let folders = self
+            .get_folder_tree(&options.user_id, &start_folder_id)
+            .await?;
 
         // Build path mapping for folders
-        let mut folder_paths: std::collections::HashMap<Uuid, String> = std::collections::HashMap::new();
-        let root_name = self.get_folder_name(&start_folder_id).await?.unwrap_or_else(|| "My Inventory".to_string());
+        let mut folder_paths: std::collections::HashMap<Uuid, String> =
+            std::collections::HashMap::new();
+        let root_name = self
+            .get_folder_name(&start_folder_id)
+            .await?
+            .unwrap_or_else(|| "My Inventory".to_string());
         folder_paths.insert(start_folder_id, root_name.clone());
 
         // Write folders and build paths
         for folder in &folders {
-            let parent_path = folder_paths.get(&folder.parent_id)
+            let parent_path = folder_paths
+                .get(&folder.parent_id)
                 .cloned()
                 .unwrap_or_default();
 
@@ -130,9 +143,7 @@ impl IarWriter {
 
         for folder_id in &all_folder_ids {
             let items = self.get_folder_items(folder_id).await?;
-            let folder_path = folder_paths.get(folder_id)
-                .cloned()
-                .unwrap_or_default();
+            let folder_path = folder_paths.get(folder_id).cloned().unwrap_or_default();
 
             for item in items {
                 // Collect asset ID for later
@@ -141,11 +152,7 @@ impl IarWriter {
                 }
 
                 // Write item XML
-                let item_filename = format!(
-                    "{}__{}",
-                    sanitize_filename(&item.name),
-                    item.id
-                );
+                let item_filename = format!("{}__{}", sanitize_filename(&item.name), item.id);
                 let item_path = format!(
                     "{}{}/{}.xml",
                     paths::INVENTORY_PATH,
@@ -207,7 +214,7 @@ impl IarWriter {
 
     async fn get_user_root_folder(&self, user_id: &Uuid) -> Result<Uuid> {
         let row: Option<(Uuid,)> = sqlx::query_as(
-            "SELECT folderid FROM inventoryfolders WHERE agentid = $1 AND type = 8::bigint LIMIT 1"
+            "SELECT folderid FROM inventoryfolders WHERE agentid = $1 AND type = 8::bigint LIMIT 1",
         )
         .bind(user_id)
         .fetch_optional(&self.db_pool)
@@ -218,23 +225,21 @@ impl IarWriter {
     }
 
     async fn get_folder_name(&self, folder_id: &Uuid) -> Result<Option<String>> {
-        let row: Option<(String,)> = sqlx::query_as(
-            "SELECT foldername FROM inventoryfolders WHERE folderid = $1"
-        )
-        .bind(folder_id)
-        .fetch_optional(&self.db_pool)
-        .await?;
+        let row: Option<(String,)> =
+            sqlx::query_as("SELECT foldername FROM inventoryfolders WHERE folderid = $1")
+                .bind(folder_id)
+                .fetch_optional(&self.db_pool)
+                .await?;
 
         Ok(row.map(|(name,)| name))
     }
 
     async fn get_folder_type(&self, folder_id: &Uuid) -> Result<Option<i32>> {
-        let row: Option<(i64,)> = sqlx::query_as(
-            "SELECT type FROM inventoryfolders WHERE folderid = $1"
-        )
-        .bind(folder_id)
-        .fetch_optional(&self.db_pool)
-        .await?;
+        let row: Option<(i64,)> =
+            sqlx::query_as("SELECT type FROM inventoryfolders WHERE folderid = $1")
+                .bind(folder_id)
+                .fetch_optional(&self.db_pool)
+                .await?;
 
         Ok(row.map(|(t,)| t as i32))
     }
@@ -253,16 +258,22 @@ impl IarWriter {
                 JOIN folder_tree ft ON f.parentfolderid = ft.folderid
                 WHERE f.agentid = $2
             )
-            SELECT folderid, parentfolderid, foldername, type FROM folder_tree"#
+            SELECT folderid, parentfolderid, foldername, type FROM folder_tree"#,
         )
         .bind(root_id)
         .bind(user_id)
         .fetch_all(&self.db_pool)
         .await?;
 
-        Ok(rows.into_iter().map(|(id, parent_id, name, folder_type)| {
-            FolderInfo { id, parent_id, name, folder_type: folder_type as i32 }
-        }).collect())
+        Ok(rows
+            .into_iter()
+            .map(|(id, parent_id, name, folder_type)| FolderInfo {
+                id,
+                parent_id,
+                name,
+                folder_type: folder_type as i32,
+            })
+            .collect())
     }
 
     async fn get_folder_items(&self, folder_id: &Uuid) -> Result<Vec<IarInventoryItemXml>> {
@@ -277,7 +288,7 @@ impl IarWriter {
                 inventorygrouppermissions, groupid, groupowned,
                 saleprice, saletype, flags, creationdate
             FROM inventoryitems
-            WHERE parentfolderid = $1"#
+            WHERE parentfolderid = $1"#,
         )
         .bind(folder_id)
         .fetch_all(&self.db_pool)
@@ -332,12 +343,11 @@ impl IarWriter {
     }
 
     async fn get_asset_data(&self, asset_id: &Uuid) -> Result<Option<(i32, Vec<u8>)>> {
-        let row: Option<(i64, Vec<u8>)> = sqlx::query_as(
-            "SELECT assettype, data FROM assets WHERE id = $1"
-        )
-        .bind(asset_id)
-        .fetch_optional(&self.db_pool)
-        .await?;
+        let row: Option<(i64, Vec<u8>)> =
+            sqlx::query_as("SELECT assettype, data FROM assets WHERE id = $1")
+                .bind(asset_id)
+                .fetch_optional(&self.db_pool)
+                .await?;
 
         Ok(row.map(|(t, d)| (t as i32, d)))
     }

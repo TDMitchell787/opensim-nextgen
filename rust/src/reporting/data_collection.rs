@@ -3,19 +3,19 @@
 //! Provides comprehensive data collection capabilities for virtual world analytics
 //! with multi-category support, real-time processing, and efficient storage.
 
-use std::collections::HashMap;
-use std::sync::Arc;
-use tokio::sync::{RwLock, mpsc};
-use uuid::Uuid;
-use chrono::{DateTime, Utc, Duration};
-use serde::{Deserialize, Serialize};
-use sqlx::Row;  // EADS fix for PgRow.get() method
+use super::{
+    AnalyticsCategory, AnalyticsDataPoint, AnalyticsValue, ReportingError, ReportingResult,
+    TimeWindow,
+};
 use crate::database::DatabaseManager;
 use crate::monitoring::MetricsCollector;
-use super::{
-    AnalyticsDataPoint, AnalyticsCategory, AnalyticsValue, TimeWindow,
-    ReportingError, ReportingResult
-};
+use chrono::{DateTime, Duration, Utc};
+use serde::{Deserialize, Serialize};
+use sqlx::Row; // EADS fix for PgRow.get() method
+use std::collections::HashMap;
+use std::sync::Arc;
+use tokio::sync::{mpsc, RwLock};
+use uuid::Uuid;
 
 /// Real-time analytics data collector
 pub struct DataCollector {
@@ -214,7 +214,7 @@ impl DataCollector {
         config: DataCollectionConfig,
     ) -> ReportingResult<Self> {
         let (event_sender, event_receiver) = mpsc::unbounded_channel();
-        
+
         let collector = Self {
             database,
             metrics_collector,
@@ -224,23 +224,24 @@ impl DataCollector {
             event_sender,
             _event_receiver: Arc::new(RwLock::new(event_receiver)),
         };
-        
+
         // Initialize database tables
         collector.initialize_tables().await?;
-        
+
         // Start background tasks
         collector.start_background_tasks().await?;
-        
+
         Ok(collector)
     }
-    
+
     /// Initialize database tables for analytics data
     async fn initialize_tables(&self) -> ReportingResult<()> {
         let pool_ref = self.database.get_pool()?;
         let pool = pool_ref.as_postgres_pool()?;
-        
+
         // Analytics data points table
-        sqlx::query(r#"
+        sqlx::query(
+            r#"
             CREATE TABLE IF NOT EXISTS analytics_data_points (
                 id UUID PRIMARY KEY,
                 timestamp TIMESTAMP WITH TIME ZONE NOT NULL,
@@ -254,8 +255,11 @@ impl DataCollector {
                 session_id UUID,
                 created_at TIMESTAMP WITH TIME ZONE DEFAULT NOW()
             )
-        "#).execute(pool).await?;
-        
+        "#,
+        )
+        .execute(pool)
+        .await?;
+
         // Create indexes for efficient querying
         sqlx::query(r#"
             CREATE INDEX IF NOT EXISTS idx_analytics_timestamp ON analytics_data_points(timestamp);
@@ -265,9 +269,10 @@ impl DataCollector {
             CREATE INDEX IF NOT EXISTS idx_analytics_region ON analytics_data_points(region_id);
             CREATE INDEX IF NOT EXISTS idx_analytics_composite ON analytics_data_points(category, metric_name, timestamp);
         "#).execute(pool).await?;
-        
+
         // Aggregated metrics table
-        sqlx::query(r#"
+        sqlx::query(
+            r#"
             CREATE TABLE IF NOT EXISTS analytics_aggregated_metrics (
                 metric_key TEXT PRIMARY KEY,
                 category TEXT NOT NULL,
@@ -281,10 +286,14 @@ impl DataCollector {
                 percentiles JSONB NOT NULL,
                 last_updated TIMESTAMP WITH TIME ZONE NOT NULL
             )
-        "#).execute(pool).await?;
-        
+        "#,
+        )
+        .execute(pool)
+        .await?;
+
         // Real-time events table
-        sqlx::query(r#"
+        sqlx::query(
+            r#"
             CREATE TABLE IF NOT EXISTS analytics_realtime_events (
                 event_id UUID PRIMARY KEY,
                 timestamp TIMESTAMP WITH TIME ZONE NOT NULL,
@@ -294,10 +303,14 @@ impl DataCollector {
                 context JSONB NOT NULL,
                 processed_at TIMESTAMP WITH TIME ZONE DEFAULT NOW()
             )
-        "#).execute(pool).await?;
-        
+        "#,
+        )
+        .execute(pool)
+        .await?;
+
         // Quality issues table
-        sqlx::query(r#"
+        sqlx::query(
+            r#"
             CREATE TABLE IF NOT EXISTS analytics_quality_issues (
                 issue_id UUID PRIMARY KEY,
                 issue_type TEXT NOT NULL,
@@ -310,25 +323,28 @@ impl DataCollector {
                 resolved BOOLEAN DEFAULT FALSE,
                 resolved_at TIMESTAMP WITH TIME ZONE
             )
-        "#).execute(pool).await?;
-        
+        "#,
+        )
+        .execute(pool)
+        .await?;
+
         Ok(())
     }
-    
+
     /// Start background processing tasks
     async fn start_background_tasks(&self) -> ReportingResult<()> {
         // Start data flushing task
         self.start_flush_task().await;
-        
+
         // Start aggregation task
         self.start_aggregation_task().await;
-        
+
         // Start retention cleanup task
         self.start_retention_cleanup_task().await;
-        
+
         Ok(())
     }
-    
+
     /// Collect analytics data point
     pub async fn collect_data_point(&self, data_point: AnalyticsDataPoint) -> ReportingResult<()> {
         // Validate data quality
@@ -337,70 +353,77 @@ impl DataCollector {
                 self.handle_quality_issue(issue).await?;
             }
         }
-        
+
         // Apply collection filters
         if !self.should_collect_data_point(&data_point).await? {
             return Ok(());
         }
-        
+
         // Add to buffer
         {
             let mut buffer = self.data_buffer.write().await;
             buffer.push(data_point.clone());
-            
+
             // Check if buffer is full
             if buffer.len() >= self.collection_config.buffer_size {
-                self.event_sender.send(CollectionEvent::FlushRequired)
-                    .map_err(|e| ReportingError::GenerationFailed { 
-                        reason: format!("Failed to send flush event: {}", e) 
+                self.event_sender
+                    .send(CollectionEvent::FlushRequired)
+                    .map_err(|e| ReportingError::GenerationFailed {
+                        reason: format!("Failed to send flush event: {}", e),
                     })?;
             }
         }
-        
+
         // Process for real-time analytics
         if self.collection_config.real_time_processing {
             self.process_real_time_data_point(&data_point).await?;
         }
-        
+
         // Update metrics before sending event
         let mut tags = HashMap::new();
         tags.insert("category".to_string(), data_point.category.to_string());
-        self.metrics_collector.increment_counter("analytics_data_points_collected", tags).await?;
-        
+        self.metrics_collector
+            .increment_counter("analytics_data_points_collected", tags)
+            .await?;
+
         // Send collection event
-        self.event_sender.send(CollectionEvent::DataPointReceived(data_point))
-            .map_err(|e| ReportingError::GenerationFailed { 
-                reason: format!("Failed to send data point event: {}", e) 
+        self.event_sender
+            .send(CollectionEvent::DataPointReceived(data_point))
+            .map_err(|e| ReportingError::GenerationFailed {
+                reason: format!("Failed to send data point event: {}", e),
             })?;
-        
+
         Ok(())
     }
-    
+
     /// Process real-time analytics event
     pub async fn process_real_time_event(&self, event: RealTimeEvent) -> ReportingResult<()> {
         // Store event in database
         let pool_ref = self.database.get_pool()?;
         let pool = pool_ref.as_postgres_pool()?;
-        
-        sqlx::query(r#"
+
+        sqlx::query(
+            r#"
             INSERT INTO analytics_realtime_events 
             (event_id, timestamp, event_type, category, data, context)
             VALUES ($1, $2, $3, $4, $5, $6)
-        "#)
+        "#,
+        )
         .bind(&event.event_id)
         .bind(&event.timestamp)
         .bind(&format!("{:?}", event.event_type))
         .bind(&format!("{:?}", event.category))
         .bind(serde_json::to_value(&event.data)?)
         .bind(serde_json::to_value(&event.context)?)
-        .execute(pool).await?;
-        
+        .execute(pool)
+        .await?;
+
         // Update real-time metrics
         self.update_real_time_metrics(&event).await?;
-        
+
         Ok(())
     }
-    
+
     /// Get analytics data for time period
     pub async fn get_analytics_data(
         &self,
@@ -413,63 +436,63 @@ impl DataCollector {
         let pool = pool_ref.as_postgres_pool()?;
         let start_time = time_window.start_time();
         let end_time = time_window.end_time();
-        
-        let mut query = String::from(r#"
+
+        let mut query = String::from(
+            r#"
             SELECT id, timestamp, category, metric_name, value_type, value_data, 
                    dimensions, region_id, user_id, session_id
             FROM analytics_data_points 
             WHERE timestamp >= $1 AND timestamp <= $2
-        "#);
-        
+        "#,
+        );
+
         let mut bind_count = 2;
         if category.is_some() {
             bind_count += 1;
             query.push_str(&format!(" AND category = ${}", bind_count));
         }
-        
+
         if metric_name.is_some() {
             bind_count += 1;
             query.push_str(&format!(" AND metric_name = ${}", bind_count));
         }
-        
+
         query.push_str(" ORDER BY timestamp DESC");
-        
+
         if let Some(limit) = limit {
             bind_count += 1;
             query.push_str(&format!(" LIMIT ${}", bind_count));
         }
-        
-        let mut query_builder = sqlx::query(&query)
-            .bind(&start_time)
-            .bind(&end_time);
-        
+
+        let mut query_builder = sqlx::query(&query).bind(&start_time).bind(&end_time);
+
         if let Some(cat) = category {
             let cat_str = format!("{:?}", cat);
             query_builder = query_builder.bind(cat_str);
         }
-        
+
         if let Some(metric) = &metric_name {
             query_builder = query_builder.bind(metric);
         }
-        
+
         if let Some(limit) = limit {
             query_builder = query_builder.bind(limit as i64);
         }
-        
+
         let rows = query_builder.fetch_all(pool).await?;
-        
+
         let mut data_points = Vec::new();
         for row in rows {
             let value_data: serde_json::Value = row.get("value_data");
             let value: AnalyticsValue = serde_json::from_value(value_data)?;
-            
+
             let dimensions: Option<serde_json::Value> = row.get("dimensions");
             let dimensions = if let Some(d) = dimensions {
                 serde_json::from_value(d)?
             } else {
                 HashMap::new()
             };
-            
+
             data_points.push(AnalyticsDataPoint {
                 id: row.get("id"),
                 timestamp: row.get("timestamp"),
@@ -482,10 +505,10 @@ impl DataCollector {
                 session_id: row.get("session_id"),
             });
         }
-        
+
         Ok(data_points)
     }
-    
+
     /// Get aggregated metrics
     pub async fn get_aggregated_metrics(
         &self,
@@ -494,57 +517,64 @@ impl DataCollector {
     ) -> ReportingResult<Vec<AggregatedMetric>> {
         let cache = self.aggregation_cache.read().await;
         let time_window_str = format!("{:?}", time_window);
-        
-        let metrics: Vec<AggregatedMetric> = cache.values()
+
+        let metrics: Vec<AggregatedMetric> = cache
+            .values()
             .filter(|metric| {
-                let category_match = category.as_ref()
+                let category_match = category
+                    .as_ref()
                     .map(|cat| metric.category == *cat)
                     .unwrap_or(true);
-                
+
                 let time_match = format!("{:?}", metric.time_window) == time_window_str;
-                
+
                 category_match && time_match
             })
             .cloned()
             .collect();
-        
+
         Ok(metrics)
     }
-    
+
     /// Get collection statistics
     pub async fn get_collection_statistics(&self) -> ReportingResult<CollectionStatistics> {
         let buffer = self.data_buffer.read().await;
         let cache = self.aggregation_cache.read().await;
-        
+
         // Calculate statistics from buffer and cache
         let total_data_points = buffer.len() as u64;
         let buffer_utilization = buffer.len() as f32 / self.collection_config.buffer_size as f32;
-        
+
         // Get data points per category from buffer
         let mut data_points_per_category = HashMap::new();
         for point in buffer.iter() {
-            *data_points_per_category.entry(point.category.clone()).or_insert(0) += 1;
+            *data_points_per_category
+                .entry(point.category.clone())
+                .or_insert(0) += 1;
         }
-        
+
         // Calculate collection rate (simplified - would need more sophisticated tracking)
         let collection_rate = total_data_points as f64 / 3600.0; // rough approximation
-        
+
         Ok(CollectionStatistics {
             total_data_points,
             data_points_per_category,
             data_points_per_hour: total_data_points, // simplified
             buffer_utilization,
             aggregation_cache_size: cache.len(),
-            quality_issues_count: 0, // would query database
+            quality_issues_count: 0,     // would query database
             last_flush_time: Utc::now(), // would track actual flush time
             collection_rate,
             processing_latency_ms: 5.0, // would measure actual latency
-            storage_size_mb: 0.0, // would calculate actual storage
+            storage_size_mb: 0.0,       // would calculate actual storage
         })
     }
-    
+
     /// Validate data quality
-    async fn validate_data_quality(&self, data_point: &AnalyticsDataPoint) -> ReportingResult<Option<QualityIssue>> {
+    async fn validate_data_quality(
+        &self,
+        data_point: &AnalyticsDataPoint,
+    ) -> ReportingResult<Option<QualityIssue>> {
         // Check for out-of-range values
         if let Some(numeric_value) = data_point.value.as_f64() {
             if numeric_value.is_infinite() || numeric_value.is_nan() {
@@ -560,7 +590,7 @@ impl DataCollector {
                 }));
             }
         }
-        
+
         // Check for missing required dimensions
         let required_dimensions = vec!["source", "version"]; // example
         for required_dim in required_dimensions {
@@ -577,31 +607,34 @@ impl DataCollector {
                 }));
             }
         }
-        
+
         Ok(None)
     }
-    
+
     /// Check if data point should be collected based on filters
-    async fn should_collect_data_point(&self, data_point: &AnalyticsDataPoint) -> ReportingResult<bool> {
+    async fn should_collect_data_point(
+        &self,
+        data_point: &AnalyticsDataPoint,
+    ) -> ReportingResult<bool> {
         for filter in &self.collection_config.collection_filters {
             if !filter.is_active {
                 continue;
             }
-            
+
             // Check category filter
             if let Some(filter_category) = &filter.category {
                 if data_point.category != *filter_category {
                     continue;
                 }
             }
-            
+
             // Check metric pattern
             if let Some(pattern) = &filter.metric_pattern {
                 if !data_point.metric_name.contains(pattern) {
                     continue;
                 }
             }
-            
+
             // Apply sampling rate
             if filter.sampling_rate < 1.0 {
                 let random_value: f32 = rand::random();
@@ -610,22 +643,27 @@ impl DataCollector {
                 }
             }
         }
-        
+
         Ok(true)
     }
-    
+
     /// Process data point for real-time analytics
-    async fn process_real_time_data_point(&self, data_point: &AnalyticsDataPoint) -> ReportingResult<()> {
+    async fn process_real_time_data_point(
+        &self,
+        data_point: &AnalyticsDataPoint,
+    ) -> ReportingResult<()> {
         // Update real-time aggregations
-        let metric_key = format!("{}_{}_{:?}", 
-            data_point.category.to_string(), 
+        let metric_key = format!(
+            "{}_{}_{:?}",
+            data_point.category.to_string(),
             data_point.metric_name,
             TimeWindow::LastHour
         );
-        
+
         let mut cache = self.aggregation_cache.write().await;
-        let entry = cache.entry(metric_key.clone()).or_insert_with(|| {
-            AggregatedMetric {
+        let entry = cache
+            .entry(metric_key.clone())
+            .or_insert_with(|| AggregatedMetric {
                 metric_key: metric_key.clone(),
                 category: data_point.category.clone(),
                 time_window: TimeWindow::LastHour,
@@ -637,9 +675,8 @@ impl DataCollector {
                 variance: 0.0,
                 percentiles: HashMap::new(),
                 last_updated: Utc::now(),
-            }
-        });
-        
+            });
+
         // Update aggregation with new data point
         if let Some(value) = data_point.value.as_f64() {
             entry.count += 1;
@@ -649,49 +686,59 @@ impl DataCollector {
             entry.max = entry.max.max(value);
             entry.last_updated = Utc::now();
         }
-        
+
         Ok(())
     }
-    
+
     /// Update real-time metrics based on event
     async fn update_real_time_metrics(&self, event: &RealTimeEvent) -> ReportingResult<()> {
         // Update metrics collector with real-time event data
         let mut tags = HashMap::new();
         tags.insert("event_type".to_string(), format!("{:?}", event.event_type));
         tags.insert("category".to_string(), format!("{:?}", event.category));
-        self.metrics_collector.increment_counter("analytics_realtime_events", tags).await?;
-        
+        self.metrics_collector
+            .increment_counter("analytics_realtime_events", tags)
+            .await?;
+
         // Update specific metrics based on event type
         match event.event_type {
             RealTimeEventType::UserLogin => {
-                self.metrics_collector.increment_counter("user_logins_total", HashMap::new()).await?;
-            },
+                self.metrics_collector
+                    .increment_counter("user_logins_total", HashMap::new())
+                    .await?;
+            }
             RealTimeEventType::TransactionCompleted => {
                 if let Some(AnalyticsValue::Float(amount)) = event.data.get("amount") {
-                    self.metrics_collector.record_histogram("transaction_amounts", *amount, HashMap::new()).await?;
+                    self.metrics_collector
+                        .record_histogram("transaction_amounts", *amount, HashMap::new())
+                        .await?;
                 }
-            },
+            }
             RealTimeEventType::PerformanceAlert => {
-                self.metrics_collector.increment_counter("performance_alerts_total", HashMap::new()).await?;
-            },
+                self.metrics_collector
+                    .increment_counter("performance_alerts_total", HashMap::new())
+                    .await?;
+            }
             _ => {}
         }
-        
+
         Ok(())
     }
-    
+
     /// Handle quality issue
     async fn handle_quality_issue(&self, issue: QualityIssue) -> ReportingResult<()> {
         // Store quality issue in database
         let pool_ref = self.database.get_pool()?;
         let pool = pool_ref.as_postgres_pool()?;
-        
-        sqlx::query(r#"
+
+        sqlx::query(
+            r#"
             INSERT INTO analytics_quality_issues 
             (issue_id, issue_type, data_point_id, metric_name, description, 
              severity, detected_at, suggested_action)
             VALUES ($1, $2, $3, $4, $5, $6, $7, $8)
-        "#)
+        "#,
+        )
         .bind(&issue.issue_id)
         .bind(&format!("{:?}", issue.issue_type))
         .bind(&issue.data_point_id)
@@ -700,60 +747,66 @@ impl DataCollector {
         .bind(&format!("{:?}", issue.severity))
         .bind(&issue.detected_at)
         .bind(&issue.suggested_action)
-        .execute(pool).await?;
-        
+        .execute(pool)
+        .await?;
+
         // Send quality issue event
-        self.event_sender.send(CollectionEvent::QualityIssueDetected(issue))
-            .map_err(|e| ReportingError::GenerationFailed { 
-                reason: format!("Failed to send quality issue event: {}", e) 
+        self.event_sender
+            .send(CollectionEvent::QualityIssueDetected(issue))
+            .map_err(|e| ReportingError::GenerationFailed {
+                reason: format!("Failed to send quality issue event: {}", e),
             })?;
-        
+
         Ok(())
     }
-    
+
     /// Start data flushing background task
     async fn start_flush_task(&self) {
         let buffer = self.data_buffer.clone();
         let database = self.database.clone();
-        let flush_interval = Duration::seconds(self.collection_config.flush_interval_seconds as i64);
-        
+        let flush_interval =
+            Duration::seconds(self.collection_config.flush_interval_seconds as i64);
+
         tokio::spawn(async move {
-            let mut interval = tokio::time::interval(
-                std::time::Duration::from_secs(flush_interval.num_seconds() as u64)
-            );
-            
+            let mut interval = tokio::time::interval(std::time::Duration::from_secs(
+                flush_interval.num_seconds() as u64,
+            ));
+
             loop {
                 interval.tick().await;
-                
+
                 // Flush buffer to database
                 let mut buffer_guard = buffer.write().await;
                 if !buffer_guard.is_empty() {
                     let data_points = buffer_guard.drain(..).collect::<Vec<_>>();
                     drop(buffer_guard);
-                    
+
                     // Batch insert data points
-                    if let Err(e) = Self::flush_data_points_to_database(&database, data_points).await {
+                    if let Err(e) =
+                        Self::flush_data_points_to_database(&database, data_points).await
+                    {
                         tracing::error!("Failed to flush data points: {}", e);
                     }
                 }
             }
         });
     }
-    
+
     /// Start aggregation background task
     async fn start_aggregation_task(&self) {
         let cache = self.aggregation_cache.clone();
         let database = self.database.clone();
-        let aggregation_interval = Duration::seconds(self.collection_config.aggregation_window_seconds as i64);
-        
+        let aggregation_interval =
+            Duration::seconds(self.collection_config.aggregation_window_seconds as i64);
+
         tokio::spawn(async move {
-            let mut interval = tokio::time::interval(
-                std::time::Duration::from_secs(aggregation_interval.num_seconds() as u64)
-            );
-            
+            let mut interval = tokio::time::interval(std::time::Duration::from_secs(
+                aggregation_interval.num_seconds() as u64,
+            ));
+
             loop {
                 interval.tick().await;
-                
+
                 // Update aggregations
                 if let Err(e) = Self::update_aggregations(&database, &cache).await {
                     tracing::error!("Failed to update aggregations: {}", e);
@@ -761,18 +814,18 @@ impl DataCollector {
             }
         });
     }
-    
+
     /// Start retention cleanup background task
     async fn start_retention_cleanup_task(&self) {
         let database = self.database.clone();
         let retention_policy = self.collection_config.retention_policy.clone();
-        
+
         tokio::spawn(async move {
             let mut interval = tokio::time::interval(std::time::Duration::from_secs(86400)); // Daily
-            
+
             loop {
                 interval.tick().await;
-                
+
                 // Clean up old data based on retention policy
                 if let Err(e) = Self::cleanup_old_data(&database, &retention_policy).await {
                     tracing::error!("Failed to cleanup old data: {}", e);
@@ -780,7 +833,7 @@ impl DataCollector {
             }
         });
     }
-    
+
     /// Flush data points to database
     async fn flush_data_points_to_database(
         database: &DatabaseManager,
@@ -788,14 +841,16 @@ impl DataCollector {
     ) -> ReportingResult<()> {
         let pool_ref = database.get_pool()?;
         let pool = pool_ref.as_postgres_pool()?;
-        
+
         for data_point in data_points {
-            sqlx::query(r#"
+            sqlx::query(
+                r#"
                 INSERT INTO analytics_data_points 
                 (id, timestamp, category, metric_name, value_type, value_data, 
                  dimensions, region_id, user_id, session_id)
                 VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10)
-            "#)
+            "#,
+            )
             .bind(&data_point.id)
             .bind(&data_point.timestamp)
             .bind(&format!("{:?}", data_point.category))
@@ -806,12 +861,13 @@ impl DataCollector {
             .bind(&data_point.region_id)
             .bind(&data_point.user_id)
             .bind(&data_point.session_id)
-            .execute(pool).await?;
+            .execute(pool)
+            .await?;
         }
-        
+
         Ok(())
     }
-    
+
     /// Update aggregations in cache and database
     async fn update_aggregations(
         database: &DatabaseManager,
@@ -820,9 +876,10 @@ impl DataCollector {
         let cache_guard = cache.read().await;
         let pool_ref = database.get_pool()?;
         let pool = pool_ref.as_postgres_pool()?;
-        
+
         for (_, metric) in cache_guard.iter() {
-            sqlx::query(r#"
+            sqlx::query(
+                r#"
                 INSERT INTO analytics_aggregated_metrics 
                 (metric_key, category, time_window, count, sum_value, avg_value, 
                  min_value, max_value, variance, percentiles, last_updated)
@@ -836,7 +893,8 @@ impl DataCollector {
                 variance = EXCLUDED.variance,
                 percentiles = EXCLUDED.percentiles,
                 last_updated = EXCLUDED.last_updated
-            "#)
+            "#,
+            )
             .bind(&metric.metric_key)
             .bind(&format!("{:?}", metric.category))
             .bind(&format!("{:?}", metric.time_window))
@@ -848,12 +906,13 @@ impl DataCollector {
             .bind(metric.variance)
             .bind(serde_json::to_value(&metric.percentiles)?)
             .bind(&metric.last_updated)
-            .execute(pool).await?;
+            .execute(pool)
+            .await?;
         }
-        
+
         Ok(())
     }
-    
+
     /// Clean up old data based on retention policy
     async fn cleanup_old_data(
         database: &DatabaseManager,
@@ -862,24 +921,30 @@ impl DataCollector {
         let pool_ref = database.get_pool()?;
         let pool = pool_ref.as_postgres_pool()?;
         let cutoff_date = Utc::now() - Duration::days(retention_policy.raw_data_days as i64);
-        
+
         // Delete old raw data points
-        sqlx::query(r#"
+        sqlx::query(
+            r#"
             DELETE FROM analytics_data_points 
             WHERE timestamp < $1
-        "#)
+        "#,
+        )
         .bind(&cutoff_date)
-        .execute(pool).await?;
-        
+        .execute(pool)
+        .await?;
+
         // Delete old quality issues
         let quality_cutoff = Utc::now() - Duration::days(30); // Keep quality issues for 30 days
-        sqlx::query(r#"
+        sqlx::query(
+            r#"
             DELETE FROM analytics_quality_issues 
             WHERE detected_at < $1 AND resolved = true
-        "#)
+        "#,
+        )
         .bind(&quality_cutoff)
-        .execute(pool).await?;
-        
+        .execute(pool)
+        .await?;
+
         Ok(())
     }
 }

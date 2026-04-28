@@ -53,16 +53,22 @@ impl NPCMemoryStore {
                 fact TEXT NOT NULL, \
                 category TEXT NOT NULL DEFAULT 'general', \
                 created_at INTEGER NOT NULL, \
-                priority INTEGER NOT NULL DEFAULT 0)"
-        ).execute(pool).await;
+                priority INTEGER NOT NULL DEFAULT 0)",
+        )
+        .execute(pool)
+        .await;
 
         let _ = sqlx::query(
-            "CREATE INDEX IF NOT EXISTS idx_npc_memories_lookup ON npc_memories(npc_id, user_id)"
-        ).execute(pool).await;
+            "CREATE INDEX IF NOT EXISTS idx_npc_memories_lookup ON npc_memories(npc_id, user_id)",
+        )
+        .execute(pool)
+        .await;
 
         let _ = sqlx::query(
-            "ALTER TABLE npc_memories ADD COLUMN IF NOT EXISTS priority INTEGER NOT NULL DEFAULT 0"
-        ).execute(pool).await;
+            "ALTER TABLE npc_memories ADD COLUMN IF NOT EXISTS priority INTEGER NOT NULL DEFAULT 0",
+        )
+        .execute(pool)
+        .await;
     }
 
     pub async fn load_all(&self) {
@@ -85,7 +91,13 @@ impl NPCMemoryStore {
         for (id, npc_id, user_id, fact, category, created_at, priority) in rows {
             let key = (npc_id, user_id);
             let entry = memories.entry(key).or_insert_with(Vec::new);
-            entry.push(MemoryFact { id, fact, category, created_at, priority: priority as u8 });
+            entry.push(MemoryFact {
+                id,
+                fact,
+                category,
+                created_at,
+                priority: priority as u8,
+            });
             loaded += 1;
         }
         if loaded > 0 {
@@ -120,7 +132,8 @@ impl NPCMemoryStore {
                 return;
             }
             if entry.len() >= self.max_memories {
-                if let Some(evict_idx) = entry.iter()
+                if let Some(evict_idx) = entry
+                    .iter()
                     .enumerate()
                     .min_by_key(|(_, m)| (m.priority, m.created_at))
                     .map(|(i, _)| i)
@@ -168,14 +181,19 @@ impl NPCMemoryStore {
         }
 
         let header = "\n\nYOUR MEMORIES (things you've learned from this user):\n";
-        let footer = "Apply these memories to your behavior. They override any default assumptions.\n";
+        let footer =
+            "Apply these memories to your behavior. They override any default assumptions.\n";
         let max_content = 2000usize.saturating_sub(header.len() + footer.len());
 
         let mut ctx = String::from(header);
         let mut used = 0;
         let sorted: Vec<_> = {
             let mut v: Vec<_> = facts.iter().collect();
-            v.sort_by(|a, b| b.priority.cmp(&a.priority).then(b.created_at.cmp(&a.created_at)));
+            v.sort_by(|a, b| {
+                b.priority
+                    .cmp(&a.priority)
+                    .then(b.created_at.cmp(&a.created_at))
+            });
             v
         };
         for fact in sorted {
@@ -195,7 +213,9 @@ impl NPCMemoryStore {
         let removed_ids: Vec<Uuid>;
         {
             let mut memories = self.memories.write().await;
-            let Some(facts) = memories.get_mut(&key) else { return };
+            let Some(facts) = memories.get_mut(&key) else {
+                return;
+            };
             match pattern {
                 None => {
                     removed_ids = facts.iter().map(|m| m.id).collect();
@@ -203,7 +223,8 @@ impl NPCMemoryStore {
                 }
                 Some(pat) => {
                     let lower_pat = pat.to_lowercase();
-                    removed_ids = facts.iter()
+                    removed_ids = facts
+                        .iter()
                         .filter(|m| m.fact.to_lowercase().contains(&lower_pat))
                         .map(|m| m.id)
                         .collect();
@@ -222,24 +243,28 @@ impl NPCMemoryStore {
                 });
             }
         }
-        tracing::info!("[NPC_MEMORY] Forgot memories for {} (pattern: {:?})", user_id, pattern);
+        tracing::info!(
+            "[NPC_MEMORY] Forgot memories for {} (pattern: {:?})",
+            user_id,
+            pattern
+        );
     }
 }
 
 pub fn should_store_memory(message: &str) -> bool {
     let lower = message.to_lowercase();
-    lower.contains("remember") ||
-    lower.contains("you can ") ||
-    lower.contains("you are able") ||
-    lower.contains("never say you can't") ||
-    lower.contains("never say you cannot") ||
-    lower.contains("never refuse") ||
-    lower.contains("you do have") ||
-    lower.contains("you have the ability") ||
-    lower.contains("don't forget") ||
-    lower.contains("keep in mind") ||
-    lower.contains("from now on") ||
-    lower.contains("always ")
+    lower.contains("remember")
+        || lower.contains("you can ")
+        || lower.contains("you are able")
+        || lower.contains("never say you can't")
+        || lower.contains("never say you cannot")
+        || lower.contains("never refuse")
+        || lower.contains("you do have")
+        || lower.contains("you have the ability")
+        || lower.contains("don't forget")
+        || lower.contains("keep in mind")
+        || lower.contains("from now on")
+        || lower.contains("always ")
 }
 
 pub fn extract_memory_fact(message: &str) -> (String, String) {
@@ -263,8 +288,11 @@ pub fn extract_memory_fact(message: &str) -> (String, String) {
 
 pub fn wants_oar_export(message: &str) -> bool {
     let lower = message.to_lowercase();
-    (lower.contains("export") || lower.contains("save") || lower.contains("backup") || lower.contains("archive"))
-    && (lower.contains("oar") || lower.contains(".oar"))
+    (lower.contains("export")
+        || lower.contains("save")
+        || lower.contains("backup")
+        || lower.contains("archive"))
+        && (lower.contains("oar") || lower.contains(".oar"))
 }
 
 pub fn extract_oar_filename(message: &str) -> String {
@@ -289,11 +317,19 @@ pub fn extract_oar_filename(message: &str) -> String {
 }
 
 fn extract_build_name(message: &str) -> Option<String> {
-    let patterns = ["export the ", "export my ", "save the ", "save my ", "export as ", "save as "];
+    let patterns = [
+        "export the ",
+        "export my ",
+        "save the ",
+        "save my ",
+        "export as ",
+        "save as ",
+    ];
     for pat in &patterns {
         if let Some(idx) = message.find(pat) {
             let rest = &message[idx + pat.len()..];
-            let name: String = rest.chars()
+            let name: String = rest
+                .chars()
                 .take_while(|c| c.is_alphanumeric() || *c == ' ' || *c == '-' || *c == '_')
                 .collect();
             let mut trimmed = name.trim().to_string();
@@ -303,7 +339,10 @@ fn extract_build_name(message: &str) -> Option<String> {
                     trimmed = trimmed[..trimmed.len() - suffix.len()].trim().to_string();
                 }
             }
-            if !trimmed.is_empty() && !trimmed.eq_ignore_ascii_case("oar") && !trimmed.eq_ignore_ascii_case("an oar") {
+            if !trimmed.is_empty()
+                && !trimmed.eq_ignore_ascii_case("oar")
+                && !trimmed.eq_ignore_ascii_case("an oar")
+            {
                 return Some(trimmed.to_string());
             }
         }
@@ -327,10 +366,22 @@ mod tests {
 
     #[test]
     fn test_extract_oar_filename() {
-        assert_eq!(extract_oar_filename("export as table.oar"), "/tmp/table.oar");
-        assert_eq!(extract_oar_filename("save to /tmp/myhouse.oar"), "/tmp/myhouse.oar");
-        assert_eq!(extract_oar_filename("export the table as oar"), "/tmp/table.oar");
-        assert_eq!(extract_oar_filename("export as oar"), "/tmp/aria_export.oar");
+        assert_eq!(
+            extract_oar_filename("export as table.oar"),
+            "/tmp/table.oar"
+        );
+        assert_eq!(
+            extract_oar_filename("save to /tmp/myhouse.oar"),
+            "/tmp/myhouse.oar"
+        );
+        assert_eq!(
+            extract_oar_filename("export the table as oar"),
+            "/tmp/table.oar"
+        );
+        assert_eq!(
+            extract_oar_filename("export as oar"),
+            "/tmp/aria_export.oar"
+        );
     }
 
     #[test]

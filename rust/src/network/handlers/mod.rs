@@ -4,4 +4,4 @@ pub mod asset;
 pub mod avatar;
 pub mod inventory;
 pub mod login;
-pub mod object; 
+pub mod object;

@@ -1,5 +1,5 @@
 //! Virtual Economy Manager for OpenSim Next
-//! 
+//!
 //! Orchestrates all economy components including currency, transactions,
 //! marketplace, and analytics systems.
 
@@ -7,7 +7,7 @@ use super::*;
 use crate::database::DatabaseManager;
 use anyhow::Result;
 use std::sync::Arc;
-use tracing::{info, warn, error};
+use tracing::{error, info, warn};
 use uuid::Uuid;
 
 /// Virtual economy management system
@@ -101,14 +101,20 @@ impl VirtualEconomyManager {
     }
 
     /// Create user account with initial balance
-    pub async fn create_user_account(&self, user_id: Uuid, initial_balance: Option<i64>) -> EconomyResult<()> {
+    pub async fn create_user_account(
+        &self,
+        user_id: Uuid,
+        initial_balance: Option<i64>,
+    ) -> EconomyResult<()> {
         info!("Creating economy account for user {}", user_id);
 
         let default_currency = &self.config.default_currency;
         let initial_amount = initial_balance.unwrap_or(1000); // Default starter amount
 
         // Create balance for default currency
-        self.currency_system.create_balance(user_id, default_currency, initial_amount).await?;
+        self.currency_system
+            .create_balance(user_id, default_currency, initial_amount)
+            .await?;
 
         // Record account creation transaction
         let transaction_request = super::transactions::TransactionRequest {
@@ -123,9 +129,14 @@ impl VirtualEconomyManager {
             idempotency_key: Some(format!("account-creation-{}", user_id)),
         };
 
-        self.transaction_processor.process_transaction(transaction_request).await?;
+        self.transaction_processor
+            .process_transaction(transaction_request)
+            .await?;
 
-        info!("Economy account created for user {} with {} {}", user_id, initial_amount, default_currency);
+        info!(
+            "Economy account created for user {} with {} {}",
+            user_id, initial_amount, default_currency
+        );
         Ok(())
     }
 
@@ -138,7 +149,10 @@ impl VirtualEconomyManager {
         currency_code: String,
         description: String,
     ) -> EconomyResult<super::transactions::TransactionResult> {
-        info!("Transferring {} {} from {} to {}", amount, currency_code, from_user_id, to_user_id);
+        info!(
+            "Transferring {} {} from {} to {}",
+            amount, currency_code, from_user_id, to_user_id
+        );
 
         let transaction_request = super::transactions::TransactionRequest {
             transaction_type: TransactionType::Transfer,
@@ -152,8 +166,11 @@ impl VirtualEconomyManager {
             idempotency_key: None,
         };
 
-        let result = self.transaction_processor.process_transaction(transaction_request).await?;
-        
+        let result = self
+            .transaction_processor
+            .process_transaction(transaction_request)
+            .await?;
+
         info!("Transfer completed successfully");
         Ok(result)
     }
@@ -166,36 +183,46 @@ impl VirtualEconomyManager {
         quantity: u32,
         payment_method: PaymentMethod,
     ) -> EconomyResult<PurchaseOrder> {
-        info!("Processing marketplace purchase: buyer {} listing {} quantity {}", buyer_id, listing_id, quantity);
+        info!(
+            "Processing marketplace purchase: buyer {} listing {} quantity {}",
+            buyer_id, listing_id, quantity
+        );
 
-        let order = self.marketplace_manager.purchase_item(
-            buyer_id,
-            listing_id,
-            quantity,
-            payment_method,
-        ).await?;
+        let order = self
+            .marketplace_manager
+            .purchase_item(buyer_id, listing_id, quantity, payment_method)
+            .await?;
 
         info!("Marketplace purchase completed: order {}", order.order_id);
         Ok(order)
     }
 
     /// Get user's economy summary
-    pub async fn get_user_economy_summary(&self, user_id: Uuid) -> EconomyResult<UserEconomySummary> {
+    pub async fn get_user_economy_summary(
+        &self,
+        user_id: Uuid,
+    ) -> EconomyResult<UserEconomySummary> {
         info!("Generating economy summary for user {}", user_id);
 
         // Get all balances
         let balances = self.currency_system.get_all_balances(user_id).await?;
 
         // Get recent transactions (last 10)
-        let recent_transactions = self.transaction_processor.get_transaction_history(
-            user_id,
-            None, // All currencies
-            Some(10),
-            None,
-        ).await?;
+        let recent_transactions = self
+            .transaction_processor
+            .get_transaction_history(
+                user_id,
+                None, // All currencies
+                Some(10),
+                None,
+            )
+            .await?;
 
         // Get marketplace statistics
-        let seller_listings = self.marketplace_manager.get_seller_listings(user_id).await?;
+        let seller_listings = self
+            .marketplace_manager
+            .get_seller_listings(user_id)
+            .await?;
 
         // Calculate totals
         let total_balance_default_currency = balances
@@ -217,7 +244,10 @@ impl VirtualEconomyManager {
             total_reserved_default_currency,
             recent_transactions,
             marketplace_listings_count: seller_listings.len() as u32,
-            marketplace_active_listings: seller_listings.iter().filter(|l| matches!(l.listing_status, ListingStatus::Active)).count() as u32,
+            marketplace_active_listings: seller_listings
+                .iter()
+                .filter(|l| matches!(l.listing_status, ListingStatus::Active))
+                .count() as u32,
             generated_at: chrono::Utc::now(),
         };
 
@@ -243,7 +273,10 @@ impl VirtualEconomyManager {
         amount: i64,
         reason: String,
     ) -> EconomyResult<CurrencyBalance> {
-        info!("Admin adding {} {} to user {}: {}", amount, currency_code, user_id, reason);
+        info!(
+            "Admin adding {} {} to user {}: {}",
+            amount, currency_code, user_id, reason
+        );
 
         // Create admin transaction
         let transaction_request = super::transactions::TransactionRequest {
@@ -263,7 +296,10 @@ impl VirtualEconomyManager {
             idempotency_key: None,
         };
 
-        let result = self.transaction_processor.process_transaction(transaction_request).await?;
+        let result = self
+            .transaction_processor
+            .process_transaction(transaction_request)
+            .await?;
 
         info!("Admin currency addition completed");
         Ok(result.to_balance.unwrap())
@@ -277,7 +313,10 @@ impl VirtualEconomyManager {
         amount: i64,
         reason: String,
     ) -> EconomyResult<CurrencyBalance> {
-        info!("Admin removing {} {} from user {}: {}", amount, currency_code, user_id, reason);
+        info!(
+            "Admin removing {} {} from user {}: {}",
+            amount, currency_code, user_id, reason
+        );
 
         // Create admin transaction
         let transaction_request = super::transactions::TransactionRequest {
@@ -297,7 +336,10 @@ impl VirtualEconomyManager {
             idempotency_key: None,
         };
 
-        let result = self.transaction_processor.process_transaction(transaction_request).await?;
+        let result = self
+            .transaction_processor
+            .process_transaction(transaction_request)
+            .await?;
 
         info!("Admin currency removal completed");
         Ok(result.from_balance.unwrap())
@@ -326,7 +368,10 @@ impl VirtualEconomyManager {
 
     /// Get system health status
     pub async fn get_system_health(&self) -> EconomySystemHealth {
-        let currency_stats = self.currency_system.get_currency_statistics(&self.config.default_currency).await
+        let currency_stats = self
+            .currency_system
+            .get_currency_statistics(&self.config.default_currency)
+            .await
             .unwrap_or_else(|_| super::currency::CurrencyStatistics {
                 currency_code: self.config.default_currency.clone(),
                 total_supply: 0,
@@ -338,7 +383,10 @@ impl VirtualEconomyManager {
                 generated_at: chrono::Utc::now(),
             });
 
-        let marketplace_stats = self.marketplace_manager.get_marketplace_statistics().await
+        let marketplace_stats = self
+            .marketplace_manager
+            .get_marketplace_statistics()
+            .await
             .unwrap_or_else(|_| super::marketplace::MarketplaceStatistics {
                 total_listings: 0,
                 active_listings: 0,

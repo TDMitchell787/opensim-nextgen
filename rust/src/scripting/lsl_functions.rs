@@ -1,15 +1,13 @@
 //! LSL built-in functions implementation
 
-use std::{collections::HashMap, sync::Arc};
 use anyhow::{anyhow, Result};
-use tracing::{info, warn, debug};
+use std::{collections::HashMap, sync::Arc};
+use tracing::{debug, info, warn};
 use uuid::Uuid;
 
-use super::{LSLValue, LSLVector, LSLRotation, ScriptContext};
+use super::{LSLRotation, LSLValue, LSLVector, ScriptContext};
 use crate::{
-    region::RegionManager,
-    asset::AssetManager,
-    network::grid_events::GridEventManager,
+    asset::AssetManager, network::grid_events::GridEventManager, region::RegionManager,
     scripting::executor::ScriptAction,
 };
 
@@ -45,7 +43,11 @@ impl LSLFunctions {
         args: &[LSLValue],
         context: &mut ScriptContext,
     ) -> Result<LSLValue> {
-        debug!("Executing LSL function: {} with {} args", function_name, args.len());
+        debug!(
+            "Executing LSL function: {} with {} args",
+            function_name,
+            args.len()
+        );
 
         match function_name {
             // Chat and communication
@@ -242,7 +244,9 @@ impl LSLFunctions {
             "llSetPrimitiveParams" => self.ll_set_primitive_params(args, context).await,
             "llGetPrimitiveParams" => self.ll_get_primitive_params(args, context).await,
             "llSetLinkPrimitiveParams" => self.ll_set_link_primitive_params(args, context).await,
-            "llSetLinkPrimitiveParamsFast" => self.ll_set_link_primitive_params_fast(args, context).await,
+            "llSetLinkPrimitiveParamsFast" => {
+                self.ll_set_link_primitive_params_fast(args, context).await
+            }
             "llGetLinkPrimitiveParams" => self.ll_get_link_primitive_params(args, context).await,
             "llGetNumberOfSides" => self.ll_get_number_of_sides(args, context).await,
             "llGetLinkNumberOfSides" => self.ll_get_link_number_of_sides(args, context).await,
@@ -282,7 +286,9 @@ impl LSLFunctions {
             "llGetEnergy" => self.ll_get_energy(args, context).await,
             "llTeleportAgent" => self.ll_teleport_agent(args, context).await,
             "llTeleportAgentHome" => self.ll_teleport_agent_home(args, context).await,
-            "llTeleportAgentGlobalCoords" => self.ll_teleport_agent_global_coords(args, context).await,
+            "llTeleportAgentGlobalCoords" => {
+                self.ll_teleport_agent_global_coords(args, context).await
+            }
             "llEjectFromLand" => self.ll_eject_from_land(args, context).await,
             "llInstantMessage" => self.ll_instant_message(args, context).await,
             "llGiveMoney" => self.ll_give_money(args, context).await,
@@ -476,11 +482,17 @@ impl LSLFunctions {
 
             // Linkset Data functions
             "llLinksetDataWrite" => self.ll_linkset_data_write(args, context).await,
-            "llLinksetDataWriteProtected" => self.ll_linkset_data_write_protected(args, context).await,
+            "llLinksetDataWriteProtected" => {
+                self.ll_linkset_data_write_protected(args, context).await
+            }
             "llLinksetDataRead" => self.ll_linkset_data_read(args, context).await,
-            "llLinksetDataReadProtected" => self.ll_linkset_data_read_protected(args, context).await,
+            "llLinksetDataReadProtected" => {
+                self.ll_linkset_data_read_protected(args, context).await
+            }
             "llLinksetDataDelete" => self.ll_linkset_data_delete(args, context).await,
-            "llLinksetDataDeleteProtected" => self.ll_linkset_data_delete_protected(args, context).await,
+            "llLinksetDataDeleteProtected" => {
+                self.ll_linkset_data_delete_protected(args, context).await
+            }
             "llLinksetDataDeleteFound" => self.ll_linkset_data_delete_found(args, context).await,
             "llLinksetDataCountKeys" => self.ll_linkset_data_count_keys(args, context).await,
             "llLinksetDataCountFound" => self.ll_linkset_data_count_found(args, context).await,
@@ -557,7 +569,9 @@ impl LSLFunctions {
             // Notecard functions
             "llGetNotecardLine" => self.ll_get_notecard_line(args, context).await,
             "llGetNotecardLineSync" => self.ll_get_notecard_line_sync(args, context).await,
-            "llGetNumberOfNotecardLines" => self.ll_get_number_of_notecard_lines(args, context).await,
+            "llGetNumberOfNotecardLines" => {
+                self.ll_get_number_of_notecard_lines(args, context).await
+            }
 
             // Media functions
             "llSetPrimMediaParams" => self.ll_set_prim_media_params(args, context).await,
@@ -594,7 +608,9 @@ impl LSLFunctions {
             "llResetOtherScript" => self.ll_reset_other_script(args, context).await,
             "llRemoteLoadScript" => self.ll_remote_load_script(args, context).await,
             "llRemoteLoadScriptPin" => self.ll_remote_load_script_pin(args, context).await,
-            "llSetRemoteScriptAccessPin" => self.ll_set_remote_script_access_pin(args, context).await,
+            "llSetRemoteScriptAccessPin" => {
+                self.ll_set_remote_script_access_pin(args, context).await
+            }
             "llGetStartParameter" => self.ll_get_start_parameter(args, context).await,
             "llMinEventDelay" => self.ll_min_event_delay(args, context).await,
             "llScriptDanger" => self.ll_script_danger(args, context).await,
@@ -647,17 +663,22 @@ impl LSLFunctions {
         let channel = args[0].to_integer();
         let message = args[1].to_string();
 
-        info!("Object {} says on channel {}: {}", context.object_id, channel, message);
+        info!(
+            "Object {} says on channel {}: {}",
+            context.object_id, channel, message
+        );
 
         // Send chat message via grid event manager if available
         if let Some(grid_events) = &self.grid_event_manager {
-            grid_events.publish_chat_message(
-                context.owner_id,
-                &message,
-                channel,
-                context.region_id,
-                Some(context.position),
-            ).await?;
+            grid_events
+                .publish_chat_message(
+                    context.owner_id,
+                    &message,
+                    channel,
+                    context.region_id,
+                    Some(context.position),
+                )
+                .await?;
         }
 
         Ok(LSLValue::Integer(0))
@@ -669,12 +690,25 @@ impl LSLFunctions {
         }
         let channel = args[0].to_integer();
         let message = args[1].to_string();
-        let msg = if message.len() > 1024 { &message[..1024] } else { &message };
-        debug!("Object {} shouts on channel {}: {}", context.object_id, channel, msg);
+        let msg = if message.len() > 1024 {
+            &message[..1024]
+        } else {
+            &message
+        };
+        debug!(
+            "Object {} shouts on channel {}: {}",
+            context.object_id, channel, msg
+        );
         if let Some(grid_events) = &self.grid_event_manager {
-            grid_events.publish_chat_message(
-                context.owner_id, msg, channel, context.region_id, Some(context.position),
-            ).await?;
+            grid_events
+                .publish_chat_message(
+                    context.owner_id,
+                    msg,
+                    channel,
+                    context.region_id,
+                    Some(context.position),
+                )
+                .await?;
         }
         Ok(LSLValue::Integer(0))
     }
@@ -685,12 +719,25 @@ impl LSLFunctions {
         }
         let channel = args[0].to_integer();
         let message = args[1].to_string();
-        let msg = if message.len() > 1024 { &message[..1024] } else { &message };
-        debug!("Object {} whispers on channel {}: {}", context.object_id, channel, msg);
+        let msg = if message.len() > 1024 {
+            &message[..1024]
+        } else {
+            &message
+        };
+        debug!(
+            "Object {} whispers on channel {}: {}",
+            context.object_id, channel, msg
+        );
         if let Some(grid_events) = &self.grid_event_manager {
-            grid_events.publish_chat_message(
-                context.owner_id, msg, channel, context.region_id, Some(context.position),
-            ).await?;
+            grid_events
+                .publish_chat_message(
+                    context.owner_id,
+                    msg,
+                    channel,
+                    context.region_id,
+                    Some(context.position),
+                )
+                .await?;
         }
         Ok(LSLValue::Integer(0))
     }
@@ -700,12 +747,25 @@ impl LSLFunctions {
             return Err(anyhow!("llOwnerSay expects 1 argument"));
         }
         let message = args[0].to_string();
-        let msg = if message.len() > 1024 { &message[..1024] } else { &message };
-        debug!("Object {} says to owner {}: {}", context.object_id, context.owner_id, msg);
+        let msg = if message.len() > 1024 {
+            &message[..1024]
+        } else {
+            &message
+        };
+        debug!(
+            "Object {} says to owner {}: {}",
+            context.object_id, context.owner_id, msg
+        );
         if let Some(grid_events) = &self.grid_event_manager {
-            grid_events.publish_chat_message(
-                context.owner_id, msg, -1, context.region_id, Some(context.position),
-            ).await?;
+            grid_events
+                .publish_chat_message(
+                    context.owner_id,
+                    msg,
+                    -1,
+                    context.region_id,
+                    Some(context.position),
+                )
+                .await?;
         }
         Ok(LSLValue::Integer(0))
     }
@@ -719,12 +779,25 @@ impl LSLFunctions {
             return Ok(LSLValue::Integer(0));
         }
         let message = args[1].to_string();
-        let msg = if message.len() > 1024 { &message[..1024] } else { &message };
-        debug!("Object {} region says on channel {}: {}", context.object_id, channel, msg);
+        let msg = if message.len() > 1024 {
+            &message[..1024]
+        } else {
+            &message
+        };
+        debug!(
+            "Object {} region says on channel {}: {}",
+            context.object_id, channel, msg
+        );
         if let Some(grid_events) = &self.grid_event_manager {
-            grid_events.publish_chat_message(
-                context.owner_id, msg, channel, context.region_id, Some(context.position),
-            ).await?;
+            grid_events
+                .publish_chat_message(
+                    context.owner_id,
+                    msg,
+                    channel,
+                    context.region_id,
+                    Some(context.position),
+                )
+                .await?;
         }
         Ok(LSLValue::Integer(0))
     }
@@ -740,13 +813,17 @@ impl LSLFunctions {
         let message = args[3].to_string();
 
         let handle = rand::random::<i32>().abs();
-        
+
         let listener = super::LSLListener {
             handle,
             channel,
             name,
             id: if id == Uuid::nil() { None } else { Some(id) },
-            message: if message.is_empty() { None } else { Some(message) },
+            message: if message.is_empty() {
+                None
+            } else {
+                Some(message)
+            },
             active: true,
         };
 
@@ -756,7 +833,11 @@ impl LSLFunctions {
         Ok(LSLValue::Integer(handle))
     }
 
-    async fn ll_listen_control(&self, args: &[LSLValue], context: &mut ScriptContext) -> Result<LSLValue> {
+    async fn ll_listen_control(
+        &self,
+        args: &[LSLValue],
+        context: &mut ScriptContext,
+    ) -> Result<LSLValue> {
         if args.len() != 2 {
             return Err(anyhow!("llListenControl expects 2 arguments"));
         }
@@ -772,7 +853,11 @@ impl LSLFunctions {
         Ok(LSLValue::Integer(0))
     }
 
-    async fn ll_listen_remove(&self, args: &[LSLValue], context: &mut ScriptContext) -> Result<LSLValue> {
+    async fn ll_listen_remove(
+        &self,
+        args: &[LSLValue],
+        context: &mut ScriptContext,
+    ) -> Result<LSLValue> {
         if args.len() != 1 {
             return Err(anyhow!("llListenRemove expects 1 argument"));
         }
@@ -850,15 +935,24 @@ impl LSLFunctions {
         )))
     }
 
-    async fn ll_set_velocity(&self, args: &[LSLValue], context: &mut ScriptContext) -> Result<LSLValue> {
-        if args.len() != 2 { return Err(anyhow!("llSetVelocity expects 2 arguments")); }
+    async fn ll_set_velocity(
+        &self,
+        args: &[LSLValue],
+        context: &mut ScriptContext,
+    ) -> Result<LSLValue> {
+        if args.len() != 2 {
+            return Err(anyhow!("llSetVelocity expects 2 arguments"));
+        }
         let vel = args[0].to_vector();
         let local = args[1].is_true();
-        self.action_queue.lock().push((context.script_id, ScriptAction::SetVelocity {
-            object_id: context.object_id,
-            velocity: [vel.x as f32, vel.y as f32, vel.z as f32],
-            local,
-        }));
+        self.action_queue.lock().push((
+            context.script_id,
+            ScriptAction::SetVelocity {
+                object_id: context.object_id,
+                velocity: [vel.x as f32, vel.y as f32, vel.z as f32],
+                local,
+            },
+        ));
         Ok(LSLValue::Integer(0))
     }
 
@@ -930,7 +1024,9 @@ impl LSLFunctions {
         if args.len() != 2 {
             return Err(anyhow!("llAtan2 expects 2 arguments"));
         }
-        Ok(LSLValue::Float(args[0].to_float().atan2(args[1].to_float())))
+        Ok(LSLValue::Float(
+            args[0].to_float().atan2(args[1].to_float()),
+        ))
     }
 
     async fn ll_floor(&self, args: &[LSLValue], _context: &ScriptContext) -> Result<LSLValue> {
@@ -1027,14 +1123,22 @@ impl LSLFunctions {
     }
 
     // String functions
-    async fn ll_string_length(&self, args: &[LSLValue], _context: &ScriptContext) -> Result<LSLValue> {
+    async fn ll_string_length(
+        &self,
+        args: &[LSLValue],
+        _context: &ScriptContext,
+    ) -> Result<LSLValue> {
         if args.len() != 1 {
             return Err(anyhow!("llStringLength expects 1 argument"));
         }
         Ok(LSLValue::Integer(args[0].to_string().len() as i32))
     }
 
-    async fn ll_get_sub_string(&self, args: &[LSLValue], _context: &ScriptContext) -> Result<LSLValue> {
+    async fn ll_get_sub_string(
+        &self,
+        args: &[LSLValue],
+        _context: &ScriptContext,
+    ) -> Result<LSLValue> {
         if args.len() != 3 {
             return Err(anyhow!("llGetSubString expects 3 arguments"));
         }
@@ -1048,8 +1152,16 @@ impl LSLFunctions {
             return Ok(LSLValue::String(String::new()));
         }
 
-        let si = if start < 0 { (len + start).max(0) } else { start.min(len - 1) } as usize;
-        let ei = if end < 0 { (len + end).max(0) } else { end.min(len - 1) } as usize;
+        let si = if start < 0 {
+            (len + start).max(0)
+        } else {
+            start.min(len - 1)
+        } as usize;
+        let ei = if end < 0 {
+            (len + end).max(0)
+        } else {
+            end.min(len - 1)
+        } as usize;
 
         let substring: String = if si <= ei {
             chars[si..=ei].iter().collect()
@@ -1077,7 +1189,11 @@ impl LSLFunctions {
     }
 
     // List functions
-    async fn ll_list_length(&self, args: &[LSLValue], _context: &ScriptContext) -> Result<LSLValue> {
+    async fn ll_list_length(
+        &self,
+        args: &[LSLValue],
+        _context: &ScriptContext,
+    ) -> Result<LSLValue> {
         if args.len() != 1 {
             return Err(anyhow!("llListLength expects 1 argument"));
         }
@@ -1085,13 +1201,17 @@ impl LSLFunctions {
         Ok(LSLValue::Integer(list.len() as i32))
     }
 
-    async fn ll_list2string(&self, args: &[LSLValue], _context: &ScriptContext) -> Result<LSLValue> {
+    async fn ll_list2string(
+        &self,
+        args: &[LSLValue],
+        _context: &ScriptContext,
+    ) -> Result<LSLValue> {
         if args.len() != 2 {
             return Err(anyhow!("llList2String expects 2 arguments"));
         }
         let list = args[0].to_list();
         let index = args[1].to_integer() as usize;
-        
+
         if index < list.len() {
             Ok(LSLValue::String(list[index].to_string()))
         } else {
@@ -1099,13 +1219,17 @@ impl LSLFunctions {
         }
     }
 
-    async fn ll_list2integer(&self, args: &[LSLValue], _context: &ScriptContext) -> Result<LSLValue> {
+    async fn ll_list2integer(
+        &self,
+        args: &[LSLValue],
+        _context: &ScriptContext,
+    ) -> Result<LSLValue> {
         if args.len() != 2 {
             return Err(anyhow!("llList2Integer expects 2 arguments"));
         }
         let list = args[0].to_list();
         let index = args[1].to_integer() as usize;
-        
+
         if index < list.len() {
             Ok(LSLValue::Integer(list[index].to_integer()))
         } else {
@@ -1119,7 +1243,7 @@ impl LSLFunctions {
         }
         let list = args[0].to_list();
         let index = args[1].to_integer() as usize;
-        
+
         if index < list.len() {
             Ok(LSLValue::Float(list[index].to_float()))
         } else {
@@ -1128,12 +1252,22 @@ impl LSLFunctions {
     }
 
     // Time functions
-    async fn ll_get_timestamp(&self, _args: &[LSLValue], _context: &ScriptContext) -> Result<LSLValue> {
-        let timestamp = chrono::Utc::now().format("%Y-%m-%dT%H:%M:%S.%fZ").to_string();
+    async fn ll_get_timestamp(
+        &self,
+        _args: &[LSLValue],
+        _context: &ScriptContext,
+    ) -> Result<LSLValue> {
+        let timestamp = chrono::Utc::now()
+            .format("%Y-%m-%dT%H:%M:%S.%fZ")
+            .to_string();
         Ok(LSLValue::String(timestamp))
     }
 
-    async fn ll_get_unix_time(&self, _args: &[LSLValue], _context: &ScriptContext) -> Result<LSLValue> {
+    async fn ll_get_unix_time(
+        &self,
+        _args: &[LSLValue],
+        _context: &ScriptContext,
+    ) -> Result<LSLValue> {
         let unix_time = std::time::SystemTime::now()
             .duration_since(std::time::UNIX_EPOCH)
             .unwrap()
@@ -1141,7 +1275,11 @@ impl LSLFunctions {
         Ok(LSLValue::Integer(unix_time))
     }
 
-    async fn ll_set_timer_event(&self, args: &[LSLValue], context: &mut ScriptContext) -> Result<LSLValue> {
+    async fn ll_set_timer_event(
+        &self,
+        args: &[LSLValue],
+        context: &mut ScriptContext,
+    ) -> Result<LSLValue> {
         if args.len() != 1 {
             return Err(anyhow!("llSetTimerEvent expects 1 argument"));
         }
@@ -1151,8 +1289,9 @@ impl LSLFunctions {
             let expiry = std::time::SystemTime::now()
                 .duration_since(std::time::UNIX_EPOCH)
                 .unwrap()
-                .as_secs() + interval as u64;
-            
+                .as_secs()
+                + interval as u64;
+
             context.timers.insert("default".to_string(), expiry);
             debug!("Set timer for {} seconds", interval);
         } else {
@@ -1163,7 +1302,7 @@ impl LSLFunctions {
         Ok(LSLValue::Integer(0))
     }
 
-    // Utility functions  
+    // Utility functions
     async fn ll_sleep(&self, args: &[LSLValue], _context: &ScriptContext) -> Result<LSLValue> {
         if args.len() != 1 {
             return Err(anyhow!("llSleep expects 1 argument"));
@@ -1177,7 +1316,11 @@ impl LSLFunctions {
         Ok(LSLValue::Integer(0))
     }
 
-    async fn ll_set_text(&self, args: &[LSLValue], context: &mut ScriptContext) -> Result<LSLValue> {
+    async fn ll_set_text(
+        &self,
+        args: &[LSLValue],
+        context: &mut ScriptContext,
+    ) -> Result<LSLValue> {
         if args.len() != 3 {
             return Err(anyhow!("llSetText expects 3 arguments"));
         }
@@ -1206,27 +1349,59 @@ impl LSLFunctions {
         Ok(LSLValue::Integer(0))
     }
 
-    async fn ll_set_object_name(&self, args: &[LSLValue], context: &mut ScriptContext) -> Result<LSLValue> {
-        if args.len() != 1 { return Err(anyhow!("llSetObjectName expects 1 argument")); }
+    async fn ll_set_object_name(
+        &self,
+        args: &[LSLValue],
+        context: &mut ScriptContext,
+    ) -> Result<LSLValue> {
+        if args.len() != 1 {
+            return Err(anyhow!("llSetObjectName expects 1 argument"));
+        }
         let name = args[0].to_string();
         context.object_name = name.clone();
-        self.action_queue.lock().push((context.script_id, ScriptAction::SetObjectName { object_id: context.object_id, name }));
+        self.action_queue.lock().push((
+            context.script_id,
+            ScriptAction::SetObjectName {
+                object_id: context.object_id,
+                name,
+            },
+        ));
         Ok(LSLValue::Integer(0))
     }
 
-    async fn ll_set_object_desc(&self, args: &[LSLValue], context: &mut ScriptContext) -> Result<LSLValue> {
-        if args.len() != 1 { return Err(anyhow!("llSetObjectDesc expects 1 argument")); }
+    async fn ll_set_object_desc(
+        &self,
+        args: &[LSLValue],
+        context: &mut ScriptContext,
+    ) -> Result<LSLValue> {
+        if args.len() != 1 {
+            return Err(anyhow!("llSetObjectDesc expects 1 argument"));
+        }
         let desc = args[0].to_string();
         context.object_description = desc.clone();
-        self.action_queue.lock().push((context.script_id, ScriptAction::SetObjectDesc { object_id: context.object_id, desc }));
+        self.action_queue.lock().push((
+            context.script_id,
+            ScriptAction::SetObjectDesc {
+                object_id: context.object_id,
+                desc,
+            },
+        ));
         Ok(LSLValue::Integer(0))
     }
 
-    async fn ll_get_object_name(&self, _args: &[LSLValue], context: &ScriptContext) -> Result<LSLValue> {
+    async fn ll_get_object_name(
+        &self,
+        _args: &[LSLValue],
+        context: &ScriptContext,
+    ) -> Result<LSLValue> {
         Ok(LSLValue::String(context.object_name.clone()))
     }
 
-    async fn ll_get_object_desc(&self, _args: &[LSLValue], context: &ScriptContext) -> Result<LSLValue> {
+    async fn ll_get_object_desc(
+        &self,
+        _args: &[LSLValue],
+        context: &ScriptContext,
+    ) -> Result<LSLValue> {
         Ok(LSLValue::String(context.object_description.clone()))
     }
 
@@ -1238,17 +1413,29 @@ impl LSLFunctions {
         Ok(LSLValue::Key(context.owner_id))
     }
 
-    async fn ll_get_region_corner(&self, _args: &[LSLValue], context: &ScriptContext) -> Result<LSLValue> {
+    async fn ll_get_region_corner(
+        &self,
+        _args: &[LSLValue],
+        context: &ScriptContext,
+    ) -> Result<LSLValue> {
         let region_x = (context.region_handle >> 32) as f32;
         let region_y = (context.region_handle & 0xFFFFFFFF) as f32;
         Ok(LSLValue::Vector(LSLVector::new(region_x, region_y, 0.0)))
     }
 
-    async fn ll_get_region_name(&self, _args: &[LSLValue], context: &ScriptContext) -> Result<LSLValue> {
+    async fn ll_get_region_name(
+        &self,
+        _args: &[LSLValue],
+        context: &ScriptContext,
+    ) -> Result<LSLValue> {
         Ok(LSLValue::String(context.region_name.clone()))
     }
 
-    async fn ll_angle_between(&self, args: &[LSLValue], _context: &ScriptContext) -> Result<LSLValue> {
+    async fn ll_angle_between(
+        &self,
+        args: &[LSLValue],
+        _context: &ScriptContext,
+    ) -> Result<LSLValue> {
         if args.len() != 2 {
             return Err(anyhow!("llAngleBetween expects 2 arguments"));
         }
@@ -1340,7 +1527,11 @@ impl LSLFunctions {
         Ok(LSLValue::Float(angle))
     }
 
-    async fn ll_sub_string_index(&self, args: &[LSLValue], _context: &ScriptContext) -> Result<LSLValue> {
+    async fn ll_sub_string_index(
+        &self,
+        args: &[LSLValue],
+        _context: &ScriptContext,
+    ) -> Result<LSLValue> {
         if args.len() != 2 {
             return Err(anyhow!("llSubStringIndex expects 2 arguments"));
         }
@@ -1352,7 +1543,11 @@ impl LSLFunctions {
         Ok(LSLValue::Integer(index))
     }
 
-    async fn ll_insert_string(&self, args: &[LSLValue], _context: &ScriptContext) -> Result<LSLValue> {
+    async fn ll_insert_string(
+        &self,
+        args: &[LSLValue],
+        _context: &ScriptContext,
+    ) -> Result<LSLValue> {
         if args.len() != 3 {
             return Err(anyhow!("llInsertString expects 3 arguments"));
         }
@@ -1370,7 +1565,11 @@ impl LSLFunctions {
         Ok(LSLValue::String(destination))
     }
 
-    async fn ll_delete_sub_string(&self, args: &[LSLValue], _context: &ScriptContext) -> Result<LSLValue> {
+    async fn ll_delete_sub_string(
+        &self,
+        args: &[LSLValue],
+        _context: &ScriptContext,
+    ) -> Result<LSLValue> {
         if args.len() != 3 {
             return Err(anyhow!("llDeleteSubString expects 3 arguments"));
         }
@@ -1382,8 +1581,16 @@ impl LSLFunctions {
         let chars: Vec<char> = source.chars().collect();
         let len = chars.len() as i32;
 
-        let start_idx = if start < 0 { (len + start).max(0) } else { start.min(len) } as usize;
-        let end_idx = if end < 0 { (len + end).max(0) } else { end.min(len - 1) } as usize;
+        let start_idx = if start < 0 {
+            (len + start).max(0)
+        } else {
+            start.min(len)
+        } as usize;
+        let end_idx = if end < 0 {
+            (len + end).max(0)
+        } else {
+            end.min(len - 1)
+        } as usize;
 
         if start_idx > end_idx || start_idx >= chars.len() {
             return Ok(LSLValue::String(source));
@@ -1419,7 +1626,11 @@ impl LSLFunctions {
         }
     }
 
-    async fn ll_list2vector(&self, args: &[LSLValue], _context: &ScriptContext) -> Result<LSLValue> {
+    async fn ll_list2vector(
+        &self,
+        args: &[LSLValue],
+        _context: &ScriptContext,
+    ) -> Result<LSLValue> {
         if args.len() != 2 {
             return Err(anyhow!("llList2Vector expects 2 arguments"));
         }
@@ -1459,7 +1670,11 @@ impl LSLFunctions {
         }
     }
 
-    async fn ll_list_insert_list(&self, args: &[LSLValue], _context: &ScriptContext) -> Result<LSLValue> {
+    async fn ll_list_insert_list(
+        &self,
+        args: &[LSLValue],
+        _context: &ScriptContext,
+    ) -> Result<LSLValue> {
         if args.len() != 3 {
             return Err(anyhow!("llListInsertList expects 3 arguments"));
         }
@@ -1481,7 +1696,11 @@ impl LSLFunctions {
         Ok(LSLValue::List(dest))
     }
 
-    async fn ll_delete_sub_list(&self, args: &[LSLValue], _context: &ScriptContext) -> Result<LSLValue> {
+    async fn ll_delete_sub_list(
+        &self,
+        args: &[LSLValue],
+        _context: &ScriptContext,
+    ) -> Result<LSLValue> {
         if args.len() != 3 {
             return Err(anyhow!("llDeleteSubList expects 3 arguments"));
         }
@@ -1491,8 +1710,16 @@ impl LSLFunctions {
         let end = args[2].to_integer();
 
         let len = list.len() as i32;
-        let start_idx = if start < 0 { (len + start).max(0) } else { start.min(len) } as usize;
-        let end_idx = if end < 0 { (len + end).max(0) } else { end.min(len - 1) } as usize;
+        let start_idx = if start < 0 {
+            (len + start).max(0)
+        } else {
+            start.min(len)
+        } as usize;
+        let end_idx = if end < 0 {
+            (len + end).max(0)
+        } else {
+            end.min(len - 1)
+        } as usize;
 
         if start_idx > end_idx {
             let mut result = Vec::new();
@@ -1514,7 +1741,11 @@ impl LSLFunctions {
         Ok(LSLValue::List(result))
     }
 
-    async fn ll_get_list_length(&self, args: &[LSLValue], _context: &ScriptContext) -> Result<LSLValue> {
+    async fn ll_get_list_length(
+        &self,
+        args: &[LSLValue],
+        _context: &ScriptContext,
+    ) -> Result<LSLValue> {
         if args.len() != 1 {
             return Err(anyhow!("llGetListLength expects 1 argument"));
         }
@@ -1546,7 +1777,11 @@ impl LSLFunctions {
         Ok(LSLValue::List(items))
     }
 
-    async fn ll_dump_list2string(&self, args: &[LSLValue], _context: &ScriptContext) -> Result<LSLValue> {
+    async fn ll_dump_list2string(
+        &self,
+        args: &[LSLValue],
+        _context: &ScriptContext,
+    ) -> Result<LSLValue> {
         if args.len() != 2 {
             return Err(anyhow!("llDumpList2String expects 2 arguments"));
         }
@@ -1558,7 +1793,11 @@ impl LSLFunctions {
         Ok(LSLValue::String(strings.join(&separator)))
     }
 
-    async fn ll_parse_string2list(&self, args: &[LSLValue], _context: &ScriptContext) -> Result<LSLValue> {
+    async fn ll_parse_string2list(
+        &self,
+        args: &[LSLValue],
+        _context: &ScriptContext,
+    ) -> Result<LSLValue> {
         if args.len() < 3 {
             return Err(anyhow!("llParseString2List expects at least 3 arguments"));
         }
@@ -1610,7 +1849,9 @@ impl LSLFunctions {
                     result.push(LSLValue::String(current[..best_pos].to_string()));
                 }
                 if is_spacer {
-                    result.push(LSLValue::String(current[best_pos..best_pos + best_len].to_string()));
+                    result.push(LSLValue::String(
+                        current[best_pos..best_pos + best_len].to_string(),
+                    ));
                 }
                 current = &current[best_pos + best_len..];
             } else {
@@ -1622,20 +1863,30 @@ impl LSLFunctions {
         Ok(LSLValue::List(result))
     }
 
-    async fn ll_get_inventory_number(&self, args: &[LSLValue], context: &ScriptContext) -> Result<LSLValue> {
+    async fn ll_get_inventory_number(
+        &self,
+        args: &[LSLValue],
+        context: &ScriptContext,
+    ) -> Result<LSLValue> {
         if args.len() != 1 {
             return Err(anyhow!("llGetInventoryNumber expects 1 argument"));
         }
 
         let inv_type = args[0].to_integer();
-        let count = context.inventory.iter()
+        let count = context
+            .inventory
+            .iter()
             .filter(|item| inv_type < 0 || item.asset_type == inv_type)
             .count();
 
         Ok(LSLValue::Integer(count as i32))
     }
 
-    async fn ll_get_inventory_name(&self, args: &[LSLValue], context: &ScriptContext) -> Result<LSLValue> {
+    async fn ll_get_inventory_name(
+        &self,
+        args: &[LSLValue],
+        context: &ScriptContext,
+    ) -> Result<LSLValue> {
         if args.len() != 2 {
             return Err(anyhow!("llGetInventoryName expects 2 arguments"));
         }
@@ -1643,7 +1894,9 @@ impl LSLFunctions {
         let inv_type = args[0].to_integer();
         let index = args[1].to_integer() as usize;
 
-        let items: Vec<_> = context.inventory.iter()
+        let items: Vec<_> = context
+            .inventory
+            .iter()
             .filter(|item| inv_type < 0 || item.asset_type == inv_type)
             .collect();
 
@@ -1654,7 +1907,11 @@ impl LSLFunctions {
         }
     }
 
-    async fn ll_get_inventory_type(&self, args: &[LSLValue], context: &ScriptContext) -> Result<LSLValue> {
+    async fn ll_get_inventory_type(
+        &self,
+        args: &[LSLValue],
+        context: &ScriptContext,
+    ) -> Result<LSLValue> {
         if args.len() != 1 {
             return Err(anyhow!("llGetInventoryType expects 1 argument"));
         }
@@ -1668,7 +1925,11 @@ impl LSLFunctions {
         }
     }
 
-    async fn ll_get_inventory_key(&self, args: &[LSLValue], context: &ScriptContext) -> Result<LSLValue> {
+    async fn ll_get_inventory_key(
+        &self,
+        args: &[LSLValue],
+        context: &ScriptContext,
+    ) -> Result<LSLValue> {
         if args.len() != 1 {
             return Err(anyhow!("llGetInventoryKey expects 1 argument"));
         }
@@ -1682,7 +1943,11 @@ impl LSLFunctions {
         }
     }
 
-    async fn ll_http_request(&self, args: &[LSLValue], context: &mut ScriptContext) -> Result<LSLValue> {
+    async fn ll_http_request(
+        &self,
+        args: &[LSLValue],
+        context: &mut ScriptContext,
+    ) -> Result<LSLValue> {
         if args.len() != 3 {
             return Err(anyhow!("llHTTPRequest expects 3 arguments"));
         }
@@ -1713,11 +1978,18 @@ impl LSLFunctions {
             },
         ));
 
-        debug!("Queued HTTP request {} for script {}", request_id, context.script_id);
+        debug!(
+            "Queued HTTP request {} for script {}",
+            request_id, context.script_id
+        );
         Ok(LSLValue::Key(request_id))
     }
 
-    async fn ll_http_response(&self, args: &[LSLValue], _context: &ScriptContext) -> Result<LSLValue> {
+    async fn ll_http_response(
+        &self,
+        args: &[LSLValue],
+        _context: &ScriptContext,
+    ) -> Result<LSLValue> {
         if args.len() != 3 {
             return Err(anyhow!("llHTTPResponse expects 3 arguments"));
         }
@@ -1756,11 +2028,18 @@ impl LSLFunctions {
             },
         ));
 
-        debug!("Queued single sensor sweep, type={}, range={}, arc={}", sensor_type, range, arc);
+        debug!(
+            "Queued single sensor sweep, type={}, range={}, arc={}",
+            sensor_type, range, arc
+        );
         Ok(LSLValue::Integer(0))
     }
 
-    async fn ll_sensor_repeat(&self, args: &[LSLValue], context: &mut ScriptContext) -> Result<LSLValue> {
+    async fn ll_sensor_repeat(
+        &self,
+        args: &[LSLValue],
+        context: &mut ScriptContext,
+    ) -> Result<LSLValue> {
         if args.len() != 6 {
             return Err(anyhow!("llSensorRepeat expects 6 arguments"));
         }
@@ -1787,11 +2066,18 @@ impl LSLFunctions {
             },
         ));
 
-        debug!("Queued repeating sensor, type={}, range={}, arc={}, rate={}", sensor_type, range, arc, rate);
+        debug!(
+            "Queued repeating sensor, type={}, range={}, arc={}, rate={}",
+            sensor_type, range, arc, rate
+        );
         Ok(LSLValue::Integer(0))
     }
 
-    async fn ll_sensor_remove(&self, _args: &[LSLValue], context: &mut ScriptContext) -> Result<LSLValue> {
+    async fn ll_sensor_remove(
+        &self,
+        _args: &[LSLValue],
+        context: &mut ScriptContext,
+    ) -> Result<LSLValue> {
         self.action_queue.lock().push((
             context.script_id,
             ScriptAction::SensorRemove {
@@ -1802,11 +2088,19 @@ impl LSLFunctions {
         Ok(LSLValue::Integer(0))
     }
 
-    async fn ll_get_script_name(&self, _args: &[LSLValue], context: &ScriptContext) -> Result<LSLValue> {
+    async fn ll_get_script_name(
+        &self,
+        _args: &[LSLValue],
+        context: &ScriptContext,
+    ) -> Result<LSLValue> {
         Ok(LSLValue::String(context.script_name.clone()))
     }
 
-    async fn ll_reset_script(&self, _args: &[LSLValue], context: &mut ScriptContext) -> Result<LSLValue> {
+    async fn ll_reset_script(
+        &self,
+        _args: &[LSLValue],
+        context: &mut ScriptContext,
+    ) -> Result<LSLValue> {
         context.variables.clear();
         context.timers.clear();
         context.listeners.clear();
@@ -1818,7 +2112,11 @@ impl LSLFunctions {
         Ok(LSLValue::Integer(0))
     }
 
-    async fn ll_apply_impulse(&self, args: &[LSLValue], context: &mut ScriptContext) -> Result<LSLValue> {
+    async fn ll_apply_impulse(
+        &self,
+        args: &[LSLValue],
+        context: &mut ScriptContext,
+    ) -> Result<LSLValue> {
         if args.len() != 2 {
             return Err(anyhow!("llApplyImpulse expects 2 arguments"));
         }
@@ -1837,27 +2135,52 @@ impl LSLFunctions {
             },
         ));
 
-        debug!("Applied impulse ({},{},{}), local={}", impulse.x, impulse.y, impulse.z, local);
+        debug!(
+            "Applied impulse ({},{},{}), local={}",
+            impulse.x, impulse.y, impulse.z, local
+        );
         Ok(LSLValue::Integer(0))
     }
 
-    async fn ll_apply_rotational_impulse(&self, args: &[LSLValue], context: &mut ScriptContext) -> Result<LSLValue> {
-        if args.len() != 2 { return Err(anyhow!("llApplyRotationalImpulse expects 2 arguments")); }
+    async fn ll_apply_rotational_impulse(
+        &self,
+        args: &[LSLValue],
+        context: &mut ScriptContext,
+    ) -> Result<LSLValue> {
+        if args.len() != 2 {
+            return Err(anyhow!("llApplyRotationalImpulse expects 2 arguments"));
+        }
         let impulse = args[0].to_vector();
         let local = args[1].is_true();
-        self.action_queue.lock().push((context.script_id, ScriptAction::ApplyRotationalImpulse {
-            object_id: context.object_id, impulse: [impulse.x as f32, impulse.y as f32, impulse.z as f32], local,
-        }));
+        self.action_queue.lock().push((
+            context.script_id,
+            ScriptAction::ApplyRotationalImpulse {
+                object_id: context.object_id,
+                impulse: [impulse.x as f32, impulse.y as f32, impulse.z as f32],
+                local,
+            },
+        ));
         Ok(LSLValue::Integer(0))
     }
 
-    async fn ll_set_force(&self, args: &[LSLValue], context: &mut ScriptContext) -> Result<LSLValue> {
-        if args.len() != 2 { return Err(anyhow!("llSetForce expects 2 arguments")); }
+    async fn ll_set_force(
+        &self,
+        args: &[LSLValue],
+        context: &mut ScriptContext,
+    ) -> Result<LSLValue> {
+        if args.len() != 2 {
+            return Err(anyhow!("llSetForce expects 2 arguments"));
+        }
         let force = args[0].to_vector();
         let local = args[1].is_true();
-        self.action_queue.lock().push((context.script_id, ScriptAction::SetForce {
-            object_id: context.object_id, force: [force.x as f32, force.y as f32, force.z as f32], local,
-        }));
+        self.action_queue.lock().push((
+            context.script_id,
+            ScriptAction::SetForce {
+                object_id: context.object_id,
+                force: [force.x as f32, force.y as f32, force.z as f32],
+                local,
+            },
+        ));
         Ok(LSLValue::Integer(0))
     }
 
@@ -1865,21 +2188,40 @@ impl LSLFunctions {
         Ok(LSLValue::Vector(LSLVector::zero()))
     }
 
-    async fn ll_set_torque(&self, args: &[LSLValue], context: &mut ScriptContext) -> Result<LSLValue> {
-        if args.len() != 2 { return Err(anyhow!("llSetTorque expects 2 arguments")); }
+    async fn ll_set_torque(
+        &self,
+        args: &[LSLValue],
+        context: &mut ScriptContext,
+    ) -> Result<LSLValue> {
+        if args.len() != 2 {
+            return Err(anyhow!("llSetTorque expects 2 arguments"));
+        }
         let torque = args[0].to_vector();
         let local = args[1].is_true();
-        self.action_queue.lock().push((context.script_id, ScriptAction::SetTorque {
-            object_id: context.object_id, torque: [torque.x as f32, torque.y as f32, torque.z as f32], local,
-        }));
+        self.action_queue.lock().push((
+            context.script_id,
+            ScriptAction::SetTorque {
+                object_id: context.object_id,
+                torque: [torque.x as f32, torque.y as f32, torque.z as f32],
+                local,
+            },
+        ));
         Ok(LSLValue::Integer(0))
     }
 
-    async fn ll_get_torque(&self, _args: &[LSLValue], _context: &ScriptContext) -> Result<LSLValue> {
+    async fn ll_get_torque(
+        &self,
+        _args: &[LSLValue],
+        _context: &ScriptContext,
+    ) -> Result<LSLValue> {
         Ok(LSLValue::Vector(LSLVector::zero()))
     }
 
-    async fn ll_set_buoyancy(&self, args: &[LSLValue], context: &mut ScriptContext) -> Result<LSLValue> {
+    async fn ll_set_buoyancy(
+        &self,
+        args: &[LSLValue],
+        context: &mut ScriptContext,
+    ) -> Result<LSLValue> {
         if args.len() != 1 {
             return Err(anyhow!("llSetBuoyancy expects 1 argument"));
         }
@@ -1894,45 +2236,99 @@ impl LSLFunctions {
         Ok(LSLValue::Integer(0))
     }
 
-    async fn ll_set_hover_height(&self, args: &[LSLValue], context: &mut ScriptContext) -> Result<LSLValue> {
-        if args.len() != 3 { return Err(anyhow!("llSetHoverHeight expects 3 arguments")); }
+    async fn ll_set_hover_height(
+        &self,
+        args: &[LSLValue],
+        context: &mut ScriptContext,
+    ) -> Result<LSLValue> {
+        if args.len() != 3 {
+            return Err(anyhow!("llSetHoverHeight expects 3 arguments"));
+        }
         let height = args[0].to_float() as f32;
         let water = args[1].to_integer();
         let tau = args[2].to_float().max(0.1) as f32;
-        self.action_queue.lock().push((context.script_id, ScriptAction::SetHoverHeight { object_id: context.object_id, height, water, tau }));
+        self.action_queue.lock().push((
+            context.script_id,
+            ScriptAction::SetHoverHeight {
+                object_id: context.object_id,
+                height,
+                water,
+                tau,
+            },
+        ));
         Ok(LSLValue::Integer(0))
     }
 
-    async fn ll_stop_hover(&self, _args: &[LSLValue], context: &mut ScriptContext) -> Result<LSLValue> {
-        self.action_queue.lock().push((context.script_id, ScriptAction::StopHover { object_id: context.object_id }));
+    async fn ll_stop_hover(
+        &self,
+        _args: &[LSLValue],
+        context: &mut ScriptContext,
+    ) -> Result<LSLValue> {
+        self.action_queue.lock().push((
+            context.script_id,
+            ScriptAction::StopHover {
+                object_id: context.object_id,
+            },
+        ));
         Ok(LSLValue::Integer(0))
     }
 
-    async fn ll_move_to_target(&self, args: &[LSLValue], context: &mut ScriptContext) -> Result<LSLValue> {
-        if args.len() != 2 { return Err(anyhow!("llMoveToTarget expects 2 arguments")); }
+    async fn ll_move_to_target(
+        &self,
+        args: &[LSLValue],
+        context: &mut ScriptContext,
+    ) -> Result<LSLValue> {
+        if args.len() != 2 {
+            return Err(anyhow!("llMoveToTarget expects 2 arguments"));
+        }
         let target = args[0].to_vector();
         let tau = args[1].to_float().max(0.1) as f32;
-        self.action_queue.lock().push((context.script_id, ScriptAction::MoveToTarget {
-            object_id: context.object_id, target: [target.x as f32, target.y as f32, target.z as f32], tau,
-        }));
+        self.action_queue.lock().push((
+            context.script_id,
+            ScriptAction::MoveToTarget {
+                object_id: context.object_id,
+                target: [target.x as f32, target.y as f32, target.z as f32],
+                tau,
+            },
+        ));
         Ok(LSLValue::Integer(0))
     }
 
-    async fn ll_stop_move_to_target(&self, _args: &[LSLValue], context: &mut ScriptContext) -> Result<LSLValue> {
-        self.action_queue.lock().push((context.script_id, ScriptAction::StopMoveToTarget { object_id: context.object_id }));
+    async fn ll_stop_move_to_target(
+        &self,
+        _args: &[LSLValue],
+        context: &mut ScriptContext,
+    ) -> Result<LSLValue> {
+        self.action_queue.lock().push((
+            context.script_id,
+            ScriptAction::StopMoveToTarget {
+                object_id: context.object_id,
+            },
+        ));
         Ok(LSLValue::Integer(0))
     }
 
     async fn ll_push_object(&self, args: &[LSLValue], context: &ScriptContext) -> Result<LSLValue> {
-        if args.len() != 4 { return Err(anyhow!("llPushObject expects 4 arguments")); }
+        if args.len() != 4 {
+            return Err(anyhow!("llPushObject expects 4 arguments"));
+        }
         let target_id = args[0].to_key();
         let impulse = args[1].to_vector();
         let angular_impulse = args[2].to_vector();
         let local = args[3].is_true();
-        self.action_queue.lock().push((context.script_id, ScriptAction::PushObject {
-            target_id, impulse: [impulse.x as f32, impulse.y as f32, impulse.z as f32],
-            angular_impulse: [angular_impulse.x as f32, angular_impulse.y as f32, angular_impulse.z as f32], local,
-        }));
+        self.action_queue.lock().push((
+            context.script_id,
+            ScriptAction::PushObject {
+                target_id,
+                impulse: [impulse.x as f32, impulse.y as f32, impulse.z as f32],
+                angular_impulse: [
+                    angular_impulse.x as f32,
+                    angular_impulse.y as f32,
+                    angular_impulse.z as f32,
+                ],
+                local,
+            },
+        ));
         Ok(LSLValue::Integer(0))
     }
 
@@ -1944,26 +2340,47 @@ impl LSLFunctions {
         Ok(LSLValue::Vector(LSLVector::new(0.0, 0.0, 0.0)))
     }
 
-    async fn ll_target_omega(&self, args: &[LSLValue], context: &mut ScriptContext) -> Result<LSLValue> {
-        if args.len() != 3 { return Err(anyhow!("llTargetOmega expects 3 arguments")); }
+    async fn ll_target_omega(
+        &self,
+        args: &[LSLValue],
+        context: &mut ScriptContext,
+    ) -> Result<LSLValue> {
+        if args.len() != 3 {
+            return Err(anyhow!("llTargetOmega expects 3 arguments"));
+        }
         let axis = args[0].to_vector();
         let spinrate = args[1].to_float();
         let gain = args[2].to_float();
-        self.action_queue.lock().push((context.script_id, ScriptAction::TargetOmega {
-            object_id: context.object_id,
-            axis: [axis.x as f32, axis.y as f32, axis.z as f32],
-            spinrate, gain,
-        }));
+        self.action_queue.lock().push((
+            context.script_id,
+            ScriptAction::TargetOmega {
+                object_id: context.object_id,
+                axis: [axis.x as f32, axis.y as f32, axis.z as f32],
+                spinrate,
+                gain,
+            },
+        ));
         Ok(LSLValue::Integer(0))
     }
 
-    async fn ll_set_angular_velocity(&self, args: &[LSLValue], context: &mut ScriptContext) -> Result<LSLValue> {
-        if args.len() != 2 { return Err(anyhow!("llSetAngularVelocity expects 2 arguments")); }
+    async fn ll_set_angular_velocity(
+        &self,
+        args: &[LSLValue],
+        context: &mut ScriptContext,
+    ) -> Result<LSLValue> {
+        if args.len() != 2 {
+            return Err(anyhow!("llSetAngularVelocity expects 2 arguments"));
+        }
         let omega = args[0].to_vector();
         let local = args[1].is_true();
-        self.action_queue.lock().push((context.script_id, ScriptAction::SetAngularVelocity {
-            object_id: context.object_id, velocity: [omega.x as f32, omega.y as f32, omega.z as f32], local,
-        }));
+        self.action_queue.lock().push((
+            context.script_id,
+            ScriptAction::SetAngularVelocity {
+                object_id: context.object_id,
+                velocity: [omega.x as f32, omega.y as f32, omega.z as f32],
+                local,
+            },
+        ));
         Ok(LSLValue::Integer(0))
     }
 
@@ -1971,11 +2388,19 @@ impl LSLFunctions {
         Ok(LSLValue::Float(1.0))
     }
 
-    async fn ll_get_mass_mks(&self, _args: &[LSLValue], _context: &ScriptContext) -> Result<LSLValue> {
+    async fn ll_get_mass_mks(
+        &self,
+        _args: &[LSLValue],
+        _context: &ScriptContext,
+    ) -> Result<LSLValue> {
         Ok(LSLValue::Float(1.0))
     }
 
-    async fn ll_get_object_mass(&self, args: &[LSLValue], _context: &ScriptContext) -> Result<LSLValue> {
+    async fn ll_get_object_mass(
+        &self,
+        args: &[LSLValue],
+        _context: &ScriptContext,
+    ) -> Result<LSLValue> {
         if args.len() != 1 {
             return Err(anyhow!("llGetObjectMass expects 1 argument"));
         }
@@ -1983,42 +2408,84 @@ impl LSLFunctions {
         Ok(LSLValue::Float(1.0))
     }
 
-    async fn ll_ground_repel(&self, args: &[LSLValue], context: &mut ScriptContext) -> Result<LSLValue> {
-        if args.len() != 3 { return Err(anyhow!("llGroundRepel expects 3 arguments")); }
+    async fn ll_ground_repel(
+        &self,
+        args: &[LSLValue],
+        context: &mut ScriptContext,
+    ) -> Result<LSLValue> {
+        if args.len() != 3 {
+            return Err(anyhow!("llGroundRepel expects 3 arguments"));
+        }
         let height = args[0].to_float() as f32;
         let water = args[1].to_integer();
         let tau = args[2].to_float().max(0.1) as f32;
-        self.action_queue.lock().push((context.script_id, ScriptAction::GroundRepel { object_id: context.object_id, height, water, tau }));
+        self.action_queue.lock().push((
+            context.script_id,
+            ScriptAction::GroundRepel {
+                object_id: context.object_id,
+                height,
+                water,
+                tau,
+            },
+        ));
         Ok(LSLValue::Integer(0))
     }
 
-    async fn ll_set_force_and_torque(&self, args: &[LSLValue], context: &mut ScriptContext) -> Result<LSLValue> {
-        if args.len() != 3 { return Err(anyhow!("llSetForceAndTorque expects 3 arguments")); }
+    async fn ll_set_force_and_torque(
+        &self,
+        args: &[LSLValue],
+        context: &mut ScriptContext,
+    ) -> Result<LSLValue> {
+        if args.len() != 3 {
+            return Err(anyhow!("llSetForceAndTorque expects 3 arguments"));
+        }
         let force = args[0].to_vector();
         let torque = args[1].to_vector();
         let local = args[2].is_true();
-        self.action_queue.lock().push((context.script_id, ScriptAction::SetForceAndTorque {
-            object_id: context.object_id,
-            force: [force.x as f32, force.y as f32, force.z as f32],
-            torque: [torque.x as f32, torque.y as f32, torque.z as f32], local,
-        }));
+        self.action_queue.lock().push((
+            context.script_id,
+            ScriptAction::SetForceAndTorque {
+                object_id: context.object_id,
+                force: [force.x as f32, force.y as f32, force.z as f32],
+                torque: [torque.x as f32, torque.y as f32, torque.z as f32],
+                local,
+            },
+        ));
         Ok(LSLValue::Integer(0))
     }
 
-    async fn ll_set_physics_material(&self, args: &[LSLValue], context: &mut ScriptContext) -> Result<LSLValue> {
-        if args.len() != 5 { return Err(anyhow!("llSetPhysicsMaterial expects 5 arguments")); }
+    async fn ll_set_physics_material(
+        &self,
+        args: &[LSLValue],
+        context: &mut ScriptContext,
+    ) -> Result<LSLValue> {
+        if args.len() != 5 {
+            return Err(anyhow!("llSetPhysicsMaterial expects 5 arguments"));
+        }
         let flags = args[0].to_integer();
         let gravity = args[1].to_float() as f32;
         let restitution = args[2].to_float() as f32;
         let friction = args[3].to_float() as f32;
         let density = args[4].to_float() as f32;
-        self.action_queue.lock().push((context.script_id, ScriptAction::SetPhysicsMaterial {
-            object_id: context.object_id, gravity, restitution, friction, density, flags,
-        }));
+        self.action_queue.lock().push((
+            context.script_id,
+            ScriptAction::SetPhysicsMaterial {
+                object_id: context.object_id,
+                gravity,
+                restitution,
+                friction,
+                density,
+                flags,
+            },
+        ));
         Ok(LSLValue::Integer(0))
     }
 
-    async fn ll_get_physics_material(&self, _args: &[LSLValue], _context: &ScriptContext) -> Result<LSLValue> {
+    async fn ll_get_physics_material(
+        &self,
+        _args: &[LSLValue],
+        _context: &ScriptContext,
+    ) -> Result<LSLValue> {
         Ok(LSLValue::List(vec![
             LSLValue::Float(1.0),
             LSLValue::Float(0.5),
@@ -2027,7 +2494,11 @@ impl LSLFunctions {
         ]))
     }
 
-    async fn ll_start_animation(&self, args: &[LSLValue], context: &mut ScriptContext) -> Result<LSLValue> {
+    async fn ll_start_animation(
+        &self,
+        args: &[LSLValue],
+        context: &mut ScriptContext,
+    ) -> Result<LSLValue> {
         if args.len() != 1 {
             return Err(anyhow!("llStartAnimation expects 1 argument"));
         }
@@ -2046,23 +2517,51 @@ impl LSLFunctions {
         if !active.contains(&anim_val) {
             active.push(anim_val);
         }
-        context.variables.insert("__active_animations".to_string(), LSLValue::List(active));
-        self.action_queue.lock().push((context.script_id, ScriptAction::StartAnimation { avatar_id: context.permission_key, anim_name: anim }));
+        context
+            .variables
+            .insert("__active_animations".to_string(), LSLValue::List(active));
+        self.action_queue.lock().push((
+            context.script_id,
+            ScriptAction::StartAnimation {
+                avatar_id: context.permission_key,
+                anim_name: anim,
+            },
+        ));
         Ok(LSLValue::Integer(0))
     }
 
-    async fn ll_stop_animation(&self, args: &[LSLValue], context: &mut ScriptContext) -> Result<LSLValue> {
-        if args.len() != 1 { return Err(anyhow!("llStopAnimation expects 1 argument")); }
-        if context.permissions & 0x0010 == 0 { return Ok(LSLValue::Integer(0)); }
+    async fn ll_stop_animation(
+        &self,
+        args: &[LSLValue],
+        context: &mut ScriptContext,
+    ) -> Result<LSLValue> {
+        if args.len() != 1 {
+            return Err(anyhow!("llStopAnimation expects 1 argument"));
+        }
+        if context.permissions & 0x0010 == 0 {
+            return Ok(LSLValue::Integer(0));
+        }
         let anim = args[0].to_string();
-        if let Some(LSLValue::List(ref mut active)) = context.variables.get_mut("__active_animations") {
+        if let Some(LSLValue::List(ref mut active)) =
+            context.variables.get_mut("__active_animations")
+        {
             active.retain(|v| v.to_string() != anim);
         }
-        self.action_queue.lock().push((context.script_id, ScriptAction::StopAnimation { avatar_id: context.permission_key, anim_name: anim }));
+        self.action_queue.lock().push((
+            context.script_id,
+            ScriptAction::StopAnimation {
+                avatar_id: context.permission_key,
+                anim_name: anim,
+            },
+        ));
         Ok(LSLValue::Integer(0))
     }
 
-    async fn ll_get_animation(&self, args: &[LSLValue], _context: &ScriptContext) -> Result<LSLValue> {
+    async fn ll_get_animation(
+        &self,
+        args: &[LSLValue],
+        _context: &ScriptContext,
+    ) -> Result<LSLValue> {
         if args.len() != 1 {
             return Err(anyhow!("llGetAnimation expects 1 argument"));
         }
@@ -2073,7 +2572,11 @@ impl LSLFunctions {
         Ok(LSLValue::String("Standing".to_string()))
     }
 
-    async fn ll_get_animation_list(&self, args: &[LSLValue], _context: &ScriptContext) -> Result<LSLValue> {
+    async fn ll_get_animation_list(
+        &self,
+        args: &[LSLValue],
+        _context: &ScriptContext,
+    ) -> Result<LSLValue> {
         if args.len() != 1 {
             return Err(anyhow!("llGetAnimationList expects 1 argument"));
         }
@@ -2084,7 +2587,11 @@ impl LSLFunctions {
         Ok(LSLValue::List(vec![]))
     }
 
-    async fn ll_set_animation_override(&self, args: &[LSLValue], context: &mut ScriptContext) -> Result<LSLValue> {
+    async fn ll_set_animation_override(
+        &self,
+        args: &[LSLValue],
+        context: &mut ScriptContext,
+    ) -> Result<LSLValue> {
         if args.len() != 2 {
             return Err(anyhow!("llSetAnimationOverride expects 2 arguments"));
         }
@@ -2094,21 +2601,52 @@ impl LSLFunctions {
         let anim_state = args[0].to_string();
         let anim = args[1].to_string();
         let valid_states = [
-            "Crouching", "CrouchWalking", "Falling Down", "Flying", "FlyingSlow",
-            "Hovering", "Hovering Down", "Hovering Up", "Jumping", "Landing",
-            "PreJumping", "Running", "Sitting", "Sitting on Ground", "Standing",
-            "Standing Up", "Striding", "Soft Landing", "Taking Off", "Turning Left",
-            "Turning Right", "Walking",
+            "Crouching",
+            "CrouchWalking",
+            "Falling Down",
+            "Flying",
+            "FlyingSlow",
+            "Hovering",
+            "Hovering Down",
+            "Hovering Up",
+            "Jumping",
+            "Landing",
+            "PreJumping",
+            "Running",
+            "Sitting",
+            "Sitting on Ground",
+            "Standing",
+            "Standing Up",
+            "Striding",
+            "Soft Landing",
+            "Taking Off",
+            "Turning Left",
+            "Turning Right",
+            "Walking",
         ];
         if !valid_states.iter().any(|s| *s == anim_state) {
             return Ok(LSLValue::Integer(0));
         }
-        context.variables.insert(format!("__anim_override_{}", anim_state), LSLValue::String(anim.clone()));
-        self.action_queue.lock().push((context.script_id, ScriptAction::SetAnimationOverride { avatar_id: context.permission_key, anim_state: anim_state.clone(), anim_name: anim }));
+        context.variables.insert(
+            format!("__anim_override_{}", anim_state),
+            LSLValue::String(anim.clone()),
+        );
+        self.action_queue.lock().push((
+            context.script_id,
+            ScriptAction::SetAnimationOverride {
+                avatar_id: context.permission_key,
+                anim_state: anim_state.clone(),
+                anim_name: anim,
+            },
+        ));
         Ok(LSLValue::Integer(0))
     }
 
-    async fn ll_get_animation_override(&self, args: &[LSLValue], context: &ScriptContext) -> Result<LSLValue> {
+    async fn ll_get_animation_override(
+        &self,
+        args: &[LSLValue],
+        context: &ScriptContext,
+    ) -> Result<LSLValue> {
         if args.len() != 1 {
             return Err(anyhow!("llGetAnimationOverride expects 1 argument"));
         }
@@ -2116,13 +2654,20 @@ impl LSLFunctions {
             return Ok(LSLValue::String(String::new()));
         }
         let anim_state = args[0].to_string();
-        match context.variables.get(&format!("__anim_override_{}", anim_state)) {
+        match context
+            .variables
+            .get(&format!("__anim_override_{}", anim_state))
+        {
             Some(LSLValue::String(s)) => Ok(LSLValue::String(s.clone())),
             _ => Ok(LSLValue::String(String::new())),
         }
     }
 
-    async fn ll_reset_animation_override(&self, args: &[LSLValue], context: &mut ScriptContext) -> Result<LSLValue> {
+    async fn ll_reset_animation_override(
+        &self,
+        args: &[LSLValue],
+        context: &mut ScriptContext,
+    ) -> Result<LSLValue> {
         if args.len() != 1 {
             return Err(anyhow!("llResetAnimationOverride expects 1 argument"));
         }
@@ -2131,214 +2676,490 @@ impl LSLFunctions {
         }
         let anim_state = args[0].to_string();
         if anim_state == "ALL" {
-            let keys: Vec<String> = context.variables.keys()
+            let keys: Vec<String> = context
+                .variables
+                .keys()
                 .filter(|k| k.starts_with("__anim_override_"))
-                .cloned().collect();
+                .cloned()
+                .collect();
             for key in keys {
                 context.variables.remove(&key);
             }
         } else {
-            context.variables.remove(&format!("__anim_override_{}", anim_state));
+            context
+                .variables
+                .remove(&format!("__anim_override_{}", anim_state));
         }
-        self.action_queue.lock().push((context.script_id, ScriptAction::ResetAnimationOverride { avatar_id: context.permission_key, anim_state: anim_state.clone() }));
+        self.action_queue.lock().push((
+            context.script_id,
+            ScriptAction::ResetAnimationOverride {
+                avatar_id: context.permission_key,
+                anim_state: anim_state.clone(),
+            },
+        ));
         Ok(LSLValue::Integer(0))
     }
 
-    async fn ll_start_object_animation(&self, args: &[LSLValue], context: &ScriptContext) -> Result<LSLValue> {
+    async fn ll_start_object_animation(
+        &self,
+        args: &[LSLValue],
+        context: &ScriptContext,
+    ) -> Result<LSLValue> {
         if args.len() != 1 {
             return Err(anyhow!("llStartObjectAnimation expects 1 argument"));
         }
         let anim = args[0].to_string();
         self.action_queue.lock().push((
             context.script_id,
-            ScriptAction::StartObjectAnimation { object_id: context.object_id, anim_name: anim },
+            ScriptAction::StartObjectAnimation {
+                object_id: context.object_id,
+                anim_name: anim,
+            },
         ));
         Ok(LSLValue::Integer(0))
     }
 
-    async fn ll_stop_object_animation(&self, args: &[LSLValue], context: &ScriptContext) -> Result<LSLValue> {
+    async fn ll_stop_object_animation(
+        &self,
+        args: &[LSLValue],
+        context: &ScriptContext,
+    ) -> Result<LSLValue> {
         if args.len() != 1 {
             return Err(anyhow!("llStopObjectAnimation expects 1 argument"));
         }
         let anim = args[0].to_string();
         self.action_queue.lock().push((
             context.script_id,
-            ScriptAction::StopObjectAnimation { object_id: context.object_id, anim_name: anim },
+            ScriptAction::StopObjectAnimation {
+                object_id: context.object_id,
+                anim_name: anim,
+            },
         ));
         Ok(LSLValue::Integer(0))
     }
 
-    async fn ll_get_object_animation_names(&self, _args: &[LSLValue], _context: &ScriptContext) -> Result<LSLValue> {
+    async fn ll_get_object_animation_names(
+        &self,
+        _args: &[LSLValue],
+        _context: &ScriptContext,
+    ) -> Result<LSLValue> {
         Ok(LSLValue::List(vec![]))
     }
 
-    async fn ll_play_sound(&self, args: &[LSLValue], context: &mut ScriptContext) -> Result<LSLValue> {
-        if args.len() != 2 { return Err(anyhow!("llPlaySound expects 2 arguments")); }
+    async fn ll_play_sound(
+        &self,
+        args: &[LSLValue],
+        context: &mut ScriptContext,
+    ) -> Result<LSLValue> {
+        if args.len() != 2 {
+            return Err(anyhow!("llPlaySound expects 2 arguments"));
+        }
         let sound_id = Uuid::parse_str(&args[0].to_string()).unwrap_or(Uuid::nil());
         let volume = args[1].to_float().clamp(0.0, 1.0);
-        self.action_queue.lock().push((context.script_id, ScriptAction::PlaySound { object_id: context.object_id, sound_id, volume }));
+        self.action_queue.lock().push((
+            context.script_id,
+            ScriptAction::PlaySound {
+                object_id: context.object_id,
+                sound_id,
+                volume,
+            },
+        ));
         Ok(LSLValue::Integer(0))
     }
 
-    async fn ll_loop_sound(&self, args: &[LSLValue], context: &mut ScriptContext) -> Result<LSLValue> {
-        if args.len() != 2 { return Err(anyhow!("llLoopSound expects 2 arguments")); }
+    async fn ll_loop_sound(
+        &self,
+        args: &[LSLValue],
+        context: &mut ScriptContext,
+    ) -> Result<LSLValue> {
+        if args.len() != 2 {
+            return Err(anyhow!("llLoopSound expects 2 arguments"));
+        }
         let sound_id = Uuid::parse_str(&args[0].to_string()).unwrap_or(Uuid::nil());
         let volume = args[1].to_float().clamp(0.0, 1.0);
-        self.action_queue.lock().push((context.script_id, ScriptAction::LoopSound { object_id: context.object_id, sound_id, volume }));
+        self.action_queue.lock().push((
+            context.script_id,
+            ScriptAction::LoopSound {
+                object_id: context.object_id,
+                sound_id,
+                volume,
+            },
+        ));
         Ok(LSLValue::Integer(0))
     }
 
-    async fn ll_loop_sound_master(&self, args: &[LSLValue], context: &mut ScriptContext) -> Result<LSLValue> {
-        if args.len() != 2 { return Err(anyhow!("llLoopSoundMaster expects 2 arguments")); }
+    async fn ll_loop_sound_master(
+        &self,
+        args: &[LSLValue],
+        context: &mut ScriptContext,
+    ) -> Result<LSLValue> {
+        if args.len() != 2 {
+            return Err(anyhow!("llLoopSoundMaster expects 2 arguments"));
+        }
         let sound_id = Uuid::parse_str(&args[0].to_string()).unwrap_or(Uuid::nil());
         let volume = args[1].to_float().clamp(0.0, 1.0);
-        self.action_queue.lock().push((context.script_id, ScriptAction::LoopSoundMaster { object_id: context.object_id, sound_id, volume }));
+        self.action_queue.lock().push((
+            context.script_id,
+            ScriptAction::LoopSoundMaster {
+                object_id: context.object_id,
+                sound_id,
+                volume,
+            },
+        ));
         Ok(LSLValue::Integer(0))
     }
 
-    async fn ll_loop_sound_slave(&self, args: &[LSLValue], context: &mut ScriptContext) -> Result<LSLValue> {
-        if args.len() != 2 { return Err(anyhow!("llLoopSoundSlave expects 2 arguments")); }
+    async fn ll_loop_sound_slave(
+        &self,
+        args: &[LSLValue],
+        context: &mut ScriptContext,
+    ) -> Result<LSLValue> {
+        if args.len() != 2 {
+            return Err(anyhow!("llLoopSoundSlave expects 2 arguments"));
+        }
         let sound_id = Uuid::parse_str(&args[0].to_string()).unwrap_or(Uuid::nil());
         let volume = args[1].to_float().clamp(0.0, 1.0);
-        self.action_queue.lock().push((context.script_id, ScriptAction::LoopSoundSlave { object_id: context.object_id, sound_id, volume }));
+        self.action_queue.lock().push((
+            context.script_id,
+            ScriptAction::LoopSoundSlave {
+                object_id: context.object_id,
+                sound_id,
+                volume,
+            },
+        ));
         Ok(LSLValue::Integer(0))
     }
 
-    async fn ll_play_sound_slave(&self, args: &[LSLValue], context: &mut ScriptContext) -> Result<LSLValue> {
-        if args.len() != 2 { return Err(anyhow!("llPlaySoundSlave expects 2 arguments")); }
+    async fn ll_play_sound_slave(
+        &self,
+        args: &[LSLValue],
+        context: &mut ScriptContext,
+    ) -> Result<LSLValue> {
+        if args.len() != 2 {
+            return Err(anyhow!("llPlaySoundSlave expects 2 arguments"));
+        }
         let sound_id = Uuid::parse_str(&args[0].to_string()).unwrap_or(Uuid::nil());
         let volume = args[1].to_float().clamp(0.0, 1.0);
-        self.action_queue.lock().push((context.script_id, ScriptAction::PlaySoundSlave { object_id: context.object_id, sound_id, volume }));
+        self.action_queue.lock().push((
+            context.script_id,
+            ScriptAction::PlaySoundSlave {
+                object_id: context.object_id,
+                sound_id,
+                volume,
+            },
+        ));
         Ok(LSLValue::Integer(0))
     }
 
-    async fn ll_stop_sound(&self, _args: &[LSLValue], context: &mut ScriptContext) -> Result<LSLValue> {
-        self.action_queue.lock().push((context.script_id, ScriptAction::StopSound { object_id: context.object_id }));
+    async fn ll_stop_sound(
+        &self,
+        _args: &[LSLValue],
+        context: &mut ScriptContext,
+    ) -> Result<LSLValue> {
+        self.action_queue.lock().push((
+            context.script_id,
+            ScriptAction::StopSound {
+                object_id: context.object_id,
+            },
+        ));
         Ok(LSLValue::Integer(0))
     }
 
-    async fn ll_trigger_sound(&self, args: &[LSLValue], context: &ScriptContext) -> Result<LSLValue> {
-        if args.len() != 2 { return Err(anyhow!("llTriggerSound expects 2 arguments")); }
+    async fn ll_trigger_sound(
+        &self,
+        args: &[LSLValue],
+        context: &ScriptContext,
+    ) -> Result<LSLValue> {
+        if args.len() != 2 {
+            return Err(anyhow!("llTriggerSound expects 2 arguments"));
+        }
         let sound_id = Uuid::parse_str(&args[0].to_string()).unwrap_or(Uuid::nil());
         let volume = args[1].to_float().clamp(0.0, 1.0) as f32;
-        self.action_queue.lock().push((context.script_id, ScriptAction::TriggerSound { object_id: context.object_id, sound_id, volume }));
+        self.action_queue.lock().push((
+            context.script_id,
+            ScriptAction::TriggerSound {
+                object_id: context.object_id,
+                sound_id,
+                volume,
+            },
+        ));
         Ok(LSLValue::Integer(0))
     }
 
-    async fn ll_trigger_sound_limited(&self, args: &[LSLValue], context: &ScriptContext) -> Result<LSLValue> {
-        if args.len() != 5 { return Err(anyhow!("llTriggerSoundLimited expects 5 arguments")); }
+    async fn ll_trigger_sound_limited(
+        &self,
+        args: &[LSLValue],
+        context: &ScriptContext,
+    ) -> Result<LSLValue> {
+        if args.len() != 5 {
+            return Err(anyhow!("llTriggerSoundLimited expects 5 arguments"));
+        }
         let sound_id = Uuid::parse_str(&args[0].to_string()).unwrap_or(Uuid::nil());
         let volume = args[1].to_float().clamp(0.0, 1.0) as f32;
         let top_ne = args[2].to_vector();
         let bot_sw = args[3].to_vector();
-        self.action_queue.lock().push((context.script_id, ScriptAction::TriggerSoundLimited {
-            object_id: context.object_id, sound_id, volume,
-            top_ne: [top_ne.x as f32, top_ne.y as f32, top_ne.z as f32],
-            bot_sw: [bot_sw.x as f32, bot_sw.y as f32, bot_sw.z as f32],
-        }));
+        self.action_queue.lock().push((
+            context.script_id,
+            ScriptAction::TriggerSoundLimited {
+                object_id: context.object_id,
+                sound_id,
+                volume,
+                top_ne: [top_ne.x as f32, top_ne.y as f32, top_ne.z as f32],
+                bot_sw: [bot_sw.x as f32, bot_sw.y as f32, bot_sw.z as f32],
+            },
+        ));
         Ok(LSLValue::Integer(0))
     }
 
-    async fn ll_preload_sound(&self, args: &[LSLValue], context: &ScriptContext) -> Result<LSLValue> {
-        if args.len() != 1 { return Err(anyhow!("llPreloadSound expects 1 argument")); }
+    async fn ll_preload_sound(
+        &self,
+        args: &[LSLValue],
+        context: &ScriptContext,
+    ) -> Result<LSLValue> {
+        if args.len() != 1 {
+            return Err(anyhow!("llPreloadSound expects 1 argument"));
+        }
         let sound_id = Uuid::parse_str(&args[0].to_string()).unwrap_or(Uuid::nil());
-        self.action_queue.lock().push((context.script_id, ScriptAction::PreloadSound { object_id: context.object_id, sound_id }));
+        self.action_queue.lock().push((
+            context.script_id,
+            ScriptAction::PreloadSound {
+                object_id: context.object_id,
+                sound_id,
+            },
+        ));
         Ok(LSLValue::Integer(0))
     }
 
     async fn ll_sound(&self, args: &[LSLValue], context: &ScriptContext) -> Result<LSLValue> {
-        if args.len() < 2 { return Err(anyhow!("llSound expects at least 2 arguments")); }
+        if args.len() < 2 {
+            return Err(anyhow!("llSound expects at least 2 arguments"));
+        }
         let sound_id = Uuid::parse_str(&args[0].to_string()).unwrap_or(Uuid::nil());
         let volume = args[1].to_float().clamp(0.0, 1.0) as f32;
-        self.action_queue.lock().push((context.script_id, ScriptAction::PlaySound { object_id: context.object_id, sound_id, volume }));
+        self.action_queue.lock().push((
+            context.script_id,
+            ScriptAction::PlaySound {
+                object_id: context.object_id,
+                sound_id,
+                volume,
+            },
+        ));
         Ok(LSLValue::Integer(0))
     }
 
-    async fn ll_sound_preload(&self, args: &[LSLValue], context: &ScriptContext) -> Result<LSLValue> {
-        if args.len() != 1 { return Err(anyhow!("llSoundPreload expects 1 argument")); }
+    async fn ll_sound_preload(
+        &self,
+        args: &[LSLValue],
+        context: &ScriptContext,
+    ) -> Result<LSLValue> {
+        if args.len() != 1 {
+            return Err(anyhow!("llSoundPreload expects 1 argument"));
+        }
         let sound_id = Uuid::parse_str(&args[0].to_string()).unwrap_or(Uuid::nil());
-        self.action_queue.lock().push((context.script_id, ScriptAction::PreloadSound { object_id: context.object_id, sound_id }));
+        self.action_queue.lock().push((
+            context.script_id,
+            ScriptAction::PreloadSound {
+                object_id: context.object_id,
+                sound_id,
+            },
+        ));
         Ok(LSLValue::Integer(0))
     }
 
-    async fn ll_adjust_sound_volume(&self, args: &[LSLValue], context: &mut ScriptContext) -> Result<LSLValue> {
-        if args.len() != 1 { return Err(anyhow!("llAdjustSoundVolume expects 1 argument")); }
+    async fn ll_adjust_sound_volume(
+        &self,
+        args: &[LSLValue],
+        context: &mut ScriptContext,
+    ) -> Result<LSLValue> {
+        if args.len() != 1 {
+            return Err(anyhow!("llAdjustSoundVolume expects 1 argument"));
+        }
         let volume = args[0].to_float().clamp(0.0, 1.0) as f32;
-        self.action_queue.lock().push((context.script_id, ScriptAction::AdjustSoundVolume { object_id: context.object_id, volume }));
+        self.action_queue.lock().push((
+            context.script_id,
+            ScriptAction::AdjustSoundVolume {
+                object_id: context.object_id,
+                volume,
+            },
+        ));
         Ok(LSLValue::Integer(0))
     }
 
-    async fn ll_set_sound_queueing(&self, args: &[LSLValue], context: &mut ScriptContext) -> Result<LSLValue> {
-        if args.len() != 1 { return Err(anyhow!("llSetSoundQueueing expects 1 argument")); }
+    async fn ll_set_sound_queueing(
+        &self,
+        args: &[LSLValue],
+        context: &mut ScriptContext,
+    ) -> Result<LSLValue> {
+        if args.len() != 1 {
+            return Err(anyhow!("llSetSoundQueueing expects 1 argument"));
+        }
         let queueing = args[0].is_true();
-        self.action_queue.lock().push((context.script_id, ScriptAction::SetSoundQueueing { object_id: context.object_id, queueing }));
+        self.action_queue.lock().push((
+            context.script_id,
+            ScriptAction::SetSoundQueueing {
+                object_id: context.object_id,
+                queueing,
+            },
+        ));
         Ok(LSLValue::Integer(0))
     }
 
-    async fn ll_set_sound_radius(&self, args: &[LSLValue], context: &mut ScriptContext) -> Result<LSLValue> {
-        if args.len() != 1 { return Err(anyhow!("llSetSoundRadius expects 1 argument")); }
+    async fn ll_set_sound_radius(
+        &self,
+        args: &[LSLValue],
+        context: &mut ScriptContext,
+    ) -> Result<LSLValue> {
+        if args.len() != 1 {
+            return Err(anyhow!("llSetSoundRadius expects 1 argument"));
+        }
         let radius = args[0].to_float().max(0.0) as f32;
-        self.action_queue.lock().push((context.script_id, ScriptAction::SetSoundRadius { object_id: context.object_id, radius }));
+        self.action_queue.lock().push((
+            context.script_id,
+            ScriptAction::SetSoundRadius {
+                object_id: context.object_id,
+                radius,
+            },
+        ));
         Ok(LSLValue::Integer(0))
     }
 
-    async fn ll_link_play_sound(&self, args: &[LSLValue], context: &ScriptContext) -> Result<LSLValue> {
-        if args.len() != 3 { return Err(anyhow!("llLinkPlaySound expects 3 arguments")); }
+    async fn ll_link_play_sound(
+        &self,
+        args: &[LSLValue],
+        context: &ScriptContext,
+    ) -> Result<LSLValue> {
+        if args.len() != 3 {
+            return Err(anyhow!("llLinkPlaySound expects 3 arguments"));
+        }
         let link_num = args[0].to_integer();
         let sound_id = Uuid::parse_str(&args[1].to_string()).unwrap_or(Uuid::nil());
         let volume = args[2].to_float().clamp(0.0, 1.0) as f32;
-        self.action_queue.lock().push((context.script_id, ScriptAction::LinkPlaySound { object_id: context.object_id, link_num, sound_id, volume, flags: 0 }));
+        self.action_queue.lock().push((
+            context.script_id,
+            ScriptAction::LinkPlaySound {
+                object_id: context.object_id,
+                link_num,
+                sound_id,
+                volume,
+                flags: 0,
+            },
+        ));
         Ok(LSLValue::Integer(0))
     }
 
-    async fn ll_link_stop_sound(&self, args: &[LSLValue], context: &ScriptContext) -> Result<LSLValue> {
-        if args.len() != 1 { return Err(anyhow!("llLinkStopSound expects 1 argument")); }
+    async fn ll_link_stop_sound(
+        &self,
+        args: &[LSLValue],
+        context: &ScriptContext,
+    ) -> Result<LSLValue> {
+        if args.len() != 1 {
+            return Err(anyhow!("llLinkStopSound expects 1 argument"));
+        }
         let link_num = args[0].to_integer();
-        self.action_queue.lock().push((context.script_id, ScriptAction::LinkStopSound { object_id: context.object_id, link_num }));
+        self.action_queue.lock().push((
+            context.script_id,
+            ScriptAction::LinkStopSound {
+                object_id: context.object_id,
+                link_num,
+            },
+        ));
         Ok(LSLValue::Integer(0))
     }
 
-    async fn ll_link_adjust_sound_volume(&self, args: &[LSLValue], context: &ScriptContext) -> Result<LSLValue> {
-        if args.len() != 2 { return Err(anyhow!("llLinkAdjustSoundVolume expects 2 arguments")); }
+    async fn ll_link_adjust_sound_volume(
+        &self,
+        args: &[LSLValue],
+        context: &ScriptContext,
+    ) -> Result<LSLValue> {
+        if args.len() != 2 {
+            return Err(anyhow!("llLinkAdjustSoundVolume expects 2 arguments"));
+        }
         let link_num = args[0].to_integer();
         let volume = args[1].to_float().clamp(0.0, 1.0) as f32;
-        self.action_queue.lock().push((context.script_id, ScriptAction::LinkAdjustSoundVolume { object_id: context.object_id, link_num, volume }));
+        self.action_queue.lock().push((
+            context.script_id,
+            ScriptAction::LinkAdjustSoundVolume {
+                object_id: context.object_id,
+                link_num,
+                volume,
+            },
+        ));
         Ok(LSLValue::Integer(0))
     }
 
-    async fn ll_link_set_sound_queueing(&self, args: &[LSLValue], context: &ScriptContext) -> Result<LSLValue> {
-        if args.len() != 2 { return Err(anyhow!("llLinkSetSoundQueueing expects 2 arguments")); }
+    async fn ll_link_set_sound_queueing(
+        &self,
+        args: &[LSLValue],
+        context: &ScriptContext,
+    ) -> Result<LSLValue> {
+        if args.len() != 2 {
+            return Err(anyhow!("llLinkSetSoundQueueing expects 2 arguments"));
+        }
         let _link = args[0].to_integer();
         let queueing = args[1].is_true();
-        self.action_queue.lock().push((context.script_id, ScriptAction::SetSoundQueueing { object_id: context.object_id, queueing }));
+        self.action_queue.lock().push((
+            context.script_id,
+            ScriptAction::SetSoundQueueing {
+                object_id: context.object_id,
+                queueing,
+            },
+        ));
         Ok(LSLValue::Integer(0))
     }
 
-    async fn ll_link_set_sound_radius(&self, args: &[LSLValue], context: &ScriptContext) -> Result<LSLValue> {
-        if args.len() != 2 { return Err(anyhow!("llLinkSetSoundRadius expects 2 arguments")); }
+    async fn ll_link_set_sound_radius(
+        &self,
+        args: &[LSLValue],
+        context: &ScriptContext,
+    ) -> Result<LSLValue> {
+        if args.len() != 2 {
+            return Err(anyhow!("llLinkSetSoundRadius expects 2 arguments"));
+        }
         let _link = args[0].to_integer();
         let radius = args[1].to_float().max(0.0) as f32;
-        self.action_queue.lock().push((context.script_id, ScriptAction::SetSoundRadius { object_id: context.object_id, radius }));
+        self.action_queue.lock().push((
+            context.script_id,
+            ScriptAction::SetSoundRadius {
+                object_id: context.object_id,
+                radius,
+            },
+        ));
         Ok(LSLValue::Integer(0))
     }
 
-    async fn ll_collision_sound(&self, args: &[LSLValue], context: &ScriptContext) -> Result<LSLValue> {
-        if args.len() != 2 { return Err(anyhow!("llCollisionSound expects 2 arguments")); }
+    async fn ll_collision_sound(
+        &self,
+        args: &[LSLValue],
+        context: &ScriptContext,
+    ) -> Result<LSLValue> {
+        if args.len() != 2 {
+            return Err(anyhow!("llCollisionSound expects 2 arguments"));
+        }
         let sound_id = Uuid::parse_str(&args[0].to_string()).unwrap_or(Uuid::nil());
         let volume = args[1].to_float().clamp(0.0, 1.0) as f32;
-        self.action_queue.lock().push((context.script_id, ScriptAction::SetCollisionSound { object_id: context.object_id, sound_id, volume }));
+        self.action_queue.lock().push((
+            context.script_id,
+            ScriptAction::SetCollisionSound {
+                object_id: context.object_id,
+                sound_id,
+                volume,
+            },
+        ));
         Ok(LSLValue::Integer(0))
     }
 
-    async fn ll_set_texture(&self, args: &[LSLValue], context: &mut ScriptContext) -> Result<LSLValue> {
+    async fn ll_set_texture(
+        &self,
+        args: &[LSLValue],
+        context: &mut ScriptContext,
+    ) -> Result<LSLValue> {
         if args.len() != 2 {
             return Err(anyhow!("llSetTexture expects 2 arguments"));
         }
         let texture = args[0].to_string();
         let face = args[1].to_integer();
-        let texture_id = Uuid::parse_str(&texture).unwrap_or_else(|_| {
-            Uuid::parse_str("89556747-24cb-43ed-920b-47caed15465f").unwrap()
-        });
+        let texture_id = Uuid::parse_str(&texture)
+            .unwrap_or_else(|_| Uuid::parse_str("89556747-24cb-43ed-920b-47caed15465f").unwrap());
         self.action_queue.lock().push((
             context.script_id,
             ScriptAction::SetTexture {
@@ -2350,7 +3171,11 @@ impl LSLFunctions {
         Ok(LSLValue::Integer(0))
     }
 
-    async fn ll_get_texture(&self, args: &[LSLValue], _context: &ScriptContext) -> Result<LSLValue> {
+    async fn ll_get_texture(
+        &self,
+        args: &[LSLValue],
+        _context: &ScriptContext,
+    ) -> Result<LSLValue> {
         if args.len() != 1 {
             return Err(anyhow!("llGetTexture expects 1 argument"));
         }
@@ -2358,7 +3183,11 @@ impl LSLFunctions {
         Ok(LSLValue::String(Uuid::nil().to_string()))
     }
 
-    async fn ll_set_color(&self, args: &[LSLValue], context: &mut ScriptContext) -> Result<LSLValue> {
+    async fn ll_set_color(
+        &self,
+        args: &[LSLValue],
+        context: &mut ScriptContext,
+    ) -> Result<LSLValue> {
         if args.len() != 2 {
             return Err(anyhow!("llSetColor expects 2 arguments"));
         }
@@ -2368,7 +3197,11 @@ impl LSLFunctions {
             context.script_id,
             ScriptAction::SetColor {
                 object_id: context.object_id,
-                color: [color.x.clamp(0.0, 1.0), color.y.clamp(0.0, 1.0), color.z.clamp(0.0, 1.0)],
+                color: [
+                    color.x.clamp(0.0, 1.0),
+                    color.y.clamp(0.0, 1.0),
+                    color.z.clamp(0.0, 1.0),
+                ],
                 face,
             },
         ));
@@ -2383,7 +3216,11 @@ impl LSLFunctions {
         Ok(LSLValue::Vector(LSLVector::new(1.0, 1.0, 1.0)))
     }
 
-    async fn ll_set_alpha(&self, args: &[LSLValue], context: &mut ScriptContext) -> Result<LSLValue> {
+    async fn ll_set_alpha(
+        &self,
+        args: &[LSLValue],
+        context: &mut ScriptContext,
+    ) -> Result<LSLValue> {
         if args.len() != 2 {
             return Err(anyhow!("llSetAlpha expects 2 arguments"));
         }
@@ -2408,7 +3245,11 @@ impl LSLFunctions {
         Ok(LSLValue::Float(1.0))
     }
 
-    async fn ll_set_scale(&self, args: &[LSLValue], context: &mut ScriptContext) -> Result<LSLValue> {
+    async fn ll_set_scale(
+        &self,
+        args: &[LSLValue],
+        context: &mut ScriptContext,
+    ) -> Result<LSLValue> {
         if args.len() != 1 {
             return Err(anyhow!("llSetScale expects 1 argument"));
         }
@@ -2435,7 +3276,11 @@ impl LSLFunctions {
         )))
     }
 
-    async fn ll_scale_texture(&self, args: &[LSLValue], context: &mut ScriptContext) -> Result<LSLValue> {
+    async fn ll_scale_texture(
+        &self,
+        args: &[LSLValue],
+        context: &mut ScriptContext,
+    ) -> Result<LSLValue> {
         if args.len() != 3 {
             return Err(anyhow!("llScaleTexture expects 3 arguments"));
         }
@@ -2446,13 +3291,19 @@ impl LSLFunctions {
             context.script_id,
             ScriptAction::ScaleTexture {
                 object_id: context.object_id,
-                u, v, face,
+                u,
+                v,
+                face,
             },
         ));
         Ok(LSLValue::Integer(0))
     }
 
-    async fn ll_offset_texture(&self, args: &[LSLValue], context: &mut ScriptContext) -> Result<LSLValue> {
+    async fn ll_offset_texture(
+        &self,
+        args: &[LSLValue],
+        context: &mut ScriptContext,
+    ) -> Result<LSLValue> {
         if args.len() != 3 {
             return Err(anyhow!("llOffsetTexture expects 3 arguments"));
         }
@@ -2463,13 +3314,19 @@ impl LSLFunctions {
             context.script_id,
             ScriptAction::OffsetTexture {
                 object_id: context.object_id,
-                u, v, face,
+                u,
+                v,
+                face,
             },
         ));
         Ok(LSLValue::Integer(0))
     }
 
-    async fn ll_rotate_texture(&self, args: &[LSLValue], context: &mut ScriptContext) -> Result<LSLValue> {
+    async fn ll_rotate_texture(
+        &self,
+        args: &[LSLValue],
+        context: &mut ScriptContext,
+    ) -> Result<LSLValue> {
         if args.len() != 2 {
             return Err(anyhow!("llRotateTexture expects 2 arguments"));
         }
@@ -2479,13 +3336,18 @@ impl LSLFunctions {
             context.script_id,
             ScriptAction::RotateTexture {
                 object_id: context.object_id,
-                rotation, face,
+                rotation,
+                face,
             },
         ));
         Ok(LSLValue::Integer(0))
     }
 
-    async fn ll_get_texture_offset(&self, args: &[LSLValue], _context: &ScriptContext) -> Result<LSLValue> {
+    async fn ll_get_texture_offset(
+        &self,
+        args: &[LSLValue],
+        _context: &ScriptContext,
+    ) -> Result<LSLValue> {
         if args.len() != 1 {
             return Err(anyhow!("llGetTextureOffset expects 1 argument"));
         }
@@ -2493,7 +3355,11 @@ impl LSLFunctions {
         Ok(LSLValue::Vector(LSLVector::new(0.0, 0.0, 0.0)))
     }
 
-    async fn ll_get_texture_scale(&self, args: &[LSLValue], _context: &ScriptContext) -> Result<LSLValue> {
+    async fn ll_get_texture_scale(
+        &self,
+        args: &[LSLValue],
+        _context: &ScriptContext,
+    ) -> Result<LSLValue> {
         if args.len() != 1 {
             return Err(anyhow!("llGetTextureScale expects 1 argument"));
         }
@@ -2501,7 +3367,11 @@ impl LSLFunctions {
         Ok(LSLValue::Vector(LSLVector::new(1.0, 1.0, 0.0)))
     }
 
-    async fn ll_get_texture_rot(&self, args: &[LSLValue], _context: &ScriptContext) -> Result<LSLValue> {
+    async fn ll_get_texture_rot(
+        &self,
+        args: &[LSLValue],
+        _context: &ScriptContext,
+    ) -> Result<LSLValue> {
         if args.len() != 1 {
             return Err(anyhow!("llGetTextureRot expects 1 argument"));
         }
@@ -2509,7 +3379,11 @@ impl LSLFunctions {
         Ok(LSLValue::Float(0.0))
     }
 
-    async fn ll_set_texture_anim(&self, args: &[LSLValue], context: &mut ScriptContext) -> Result<LSLValue> {
+    async fn ll_set_texture_anim(
+        &self,
+        args: &[LSLValue],
+        context: &mut ScriptContext,
+    ) -> Result<LSLValue> {
         if args.len() != 7 {
             return Err(anyhow!("llSetTextureAnim expects 7 arguments"));
         }
@@ -2524,13 +3398,23 @@ impl LSLFunctions {
             context.script_id,
             ScriptAction::SetTextureAnim {
                 object_id: context.object_id,
-                mode, face, size_x, size_y, start, length, rate,
+                mode,
+                face,
+                size_x,
+                size_y,
+                start,
+                length,
+                rate,
             },
         ));
         Ok(LSLValue::Integer(0))
     }
 
-    async fn ll_set_link_texture(&self, args: &[LSLValue], context: &mut ScriptContext) -> Result<LSLValue> {
+    async fn ll_set_link_texture(
+        &self,
+        args: &[LSLValue],
+        context: &mut ScriptContext,
+    ) -> Result<LSLValue> {
         if args.len() != 3 {
             return Err(anyhow!("llSetLinkTexture expects 3 arguments"));
         }
@@ -2538,13 +3422,23 @@ impl LSLFunctions {
         let texture = args[1].to_string();
         let face = args[2].to_integer();
         let texture_id = Uuid::parse_str(&texture).unwrap_or(Uuid::nil());
-        self.action_queue.lock().push((context.script_id, ScriptAction::SetLinkTexture {
-            object_id: context.object_id, link_num: link, texture_id, face,
-        }));
+        self.action_queue.lock().push((
+            context.script_id,
+            ScriptAction::SetLinkTexture {
+                object_id: context.object_id,
+                link_num: link,
+                texture_id,
+                face,
+            },
+        ));
         Ok(LSLValue::Integer(0))
     }
 
-    async fn ll_set_link_color(&self, args: &[LSLValue], context: &mut ScriptContext) -> Result<LSLValue> {
+    async fn ll_set_link_color(
+        &self,
+        args: &[LSLValue],
+        context: &mut ScriptContext,
+    ) -> Result<LSLValue> {
         if args.len() != 3 {
             return Err(anyhow!("llSetLinkColor expects 3 arguments"));
         }
@@ -2556,14 +3450,22 @@ impl LSLFunctions {
             ScriptAction::SetLinkColor {
                 object_id: context.object_id,
                 link_num: link,
-                color: [color.x.clamp(0.0, 1.0), color.y.clamp(0.0, 1.0), color.z.clamp(0.0, 1.0)],
+                color: [
+                    color.x.clamp(0.0, 1.0),
+                    color.y.clamp(0.0, 1.0),
+                    color.z.clamp(0.0, 1.0),
+                ],
                 face,
             },
         ));
         Ok(LSLValue::Integer(0))
     }
 
-    async fn ll_set_link_alpha(&self, args: &[LSLValue], context: &mut ScriptContext) -> Result<LSLValue> {
+    async fn ll_set_link_alpha(
+        &self,
+        args: &[LSLValue],
+        context: &mut ScriptContext,
+    ) -> Result<LSLValue> {
         if args.len() != 3 {
             return Err(anyhow!("llSetLinkAlpha expects 3 arguments"));
         }
@@ -2582,7 +3484,11 @@ impl LSLFunctions {
         Ok(LSLValue::Integer(0))
     }
 
-    async fn ll_set_link_texture_anim(&self, args: &[LSLValue], context: &mut ScriptContext) -> Result<LSLValue> {
+    async fn ll_set_link_texture_anim(
+        &self,
+        args: &[LSLValue],
+        context: &mut ScriptContext,
+    ) -> Result<LSLValue> {
         if args.len() != 8 {
             return Err(anyhow!("llSetLinkTextureAnim expects 8 arguments"));
         }
@@ -2594,10 +3500,20 @@ impl LSLFunctions {
         let start = args[5].to_float() as f32;
         let length = args[6].to_float() as f32;
         let rate = args[7].to_float() as f32;
-        self.action_queue.lock().push((context.script_id, ScriptAction::SetLinkTextureAnim {
-            object_id: context.object_id, link_num: link, mode, face,
-            sizex: size_x, sizey: size_y, start, length, rate,
-        }));
+        self.action_queue.lock().push((
+            context.script_id,
+            ScriptAction::SetLinkTextureAnim {
+                object_id: context.object_id,
+                link_num: link,
+                mode,
+                face,
+                sizex: size_x,
+                sizey: size_y,
+                start,
+                length,
+                rate,
+            },
+        ));
         Ok(LSLValue::Integer(0))
     }
 
@@ -2609,69 +3525,107 @@ impl LSLFunctions {
             let code = params[i].to_integer();
             i += 1;
             match code {
-                2 => { // PRIM_MATERIAL
+                2 => {
+                    // PRIM_MATERIAL
                     if i < params.len() {
-                        rules.push(PrimParamRule::Material { material: params[i].to_integer() });
+                        rules.push(PrimParamRule::Material {
+                            material: params[i].to_integer(),
+                        });
                         i += 1;
                     }
                 }
-                3 => { // PRIM_PHYSICS
+                3 => {
+                    // PRIM_PHYSICS
                     if i < params.len() {
-                        rules.push(PrimParamRule::Physics { value: params[i].is_true() });
+                        rules.push(PrimParamRule::Physics {
+                            value: params[i].is_true(),
+                        });
                         i += 1;
                     }
                 }
-                4 => { // PRIM_TEMP_ON_REZ
+                4 => {
+                    // PRIM_TEMP_ON_REZ
                     if i < params.len() {
-                        rules.push(PrimParamRule::TempOnRez { value: params[i].is_true() });
+                        rules.push(PrimParamRule::TempOnRez {
+                            value: params[i].is_true(),
+                        });
                         i += 1;
                     }
                 }
-                5 => { // PRIM_PHANTOM
+                5 => {
+                    // PRIM_PHANTOM
                     if i < params.len() {
-                        rules.push(PrimParamRule::Phantom { value: params[i].is_true() });
+                        rules.push(PrimParamRule::Phantom {
+                            value: params[i].is_true(),
+                        });
                         i += 1;
                     }
                 }
-                6 => { // PRIM_POSITION
+                6 => {
+                    // PRIM_POSITION
                     if i < params.len() {
                         let v = params[i].to_vector();
                         context.position = (v.x, v.y, v.z);
-                        rules.push(PrimParamRule::Position { pos: [v.x, v.y, v.z] });
+                        rules.push(PrimParamRule::Position {
+                            pos: [v.x, v.y, v.z],
+                        });
                         i += 1;
                     }
                 }
-                7 => { // PRIM_SIZE
+                7 => {
+                    // PRIM_SIZE
                     if i < params.len() {
                         let v = params[i].to_vector();
-                        let s = [v.x.clamp(0.01, 64.0), v.y.clamp(0.01, 64.0), v.z.clamp(0.01, 64.0)];
+                        let s = [
+                            v.x.clamp(0.01, 64.0),
+                            v.y.clamp(0.01, 64.0),
+                            v.z.clamp(0.01, 64.0),
+                        ];
                         context.scale = (s[0], s[1], s[2]);
                         rules.push(PrimParamRule::Size { size: s });
                         i += 1;
                     }
                 }
-                8 => { // PRIM_ROTATION
+                8 => {
+                    // PRIM_ROTATION
                     if i < params.len() {
                         let r = params[i].to_rotation();
                         context.rotation = (r.x, r.y, r.z, r.s);
-                        rules.push(PrimParamRule::Rotation { rot: [r.x, r.y, r.z, r.s] });
+                        rules.push(PrimParamRule::Rotation {
+                            rot: [r.x, r.y, r.z, r.s],
+                        });
                         i += 1;
                     }
                 }
-                9 => { // PRIM_TYPE - shape_type + shape-specific params (skip but consume)
+                9 => {
+                    // PRIM_TYPE - shape_type + shape-specific params (skip but consume)
                     if i < params.len() {
-                        let shape = params[i].to_integer(); i += 1;
+                        let shape = params[i].to_integer();
+                        i += 1;
                         let skip = match shape {
-                            0 => 7, 1 => 7, 2 => 5, 3 => 5,
-                            4 => 4, 5 => 4, 6 => 4, 7 => 4,
+                            0 => 7,
+                            1 => 7,
+                            2 => 5,
+                            3 => 5,
+                            4 => 4,
+                            5 => 4,
+                            6 => 4,
+                            7 => 4,
                             _ => 0,
                         };
-                        let extra = if shape >= 4 && shape <= 6 { 5 } else if shape == 7 { 2 } else { 0 };
+                        let extra = if shape >= 4 && shape <= 6 {
+                            5
+                        } else if shape == 7 {
+                            2
+                        } else {
+                            0
+                        };
                         i += (skip + extra).min(params.len() - i);
                         debug!("Set PRIM_TYPE shape={}", shape);
                     }
                 }
-                17 => { // PRIM_TEXTURE: face, texture, repeats, offsets, rotation
+                17 => {
+                    // PRIM_TEXTURE: face, texture, repeats, offsets, rotation
                     if i + 4 < params.len() {
                         let face = params[i].to_integer();
                         let tex_str = params[i + 1].to_string();
@@ -2682,7 +3636,8 @@ impl LSLFunctions {
                             Uuid::parse_str("89556747-24cb-43ed-920b-47caed15465f").unwrap()
                         });
                         rules.push(PrimParamRule::Texture {
-                            face, texture_id,
+                            face,
+                            texture_id,
                             repeats: [repeats.x, repeats.y],
                             offsets: [offsets.x, offsets.y],
                             rotation,
@@ -2690,20 +3645,26 @@ impl LSLFunctions {
                     }
                     i += 5.min(params.len() - i);
                 }
-                18 => { // PRIM_COLOR: face, color, alpha
+                18 => {
+                    // PRIM_COLOR: face, color, alpha
                     if i + 2 < params.len() {
                         let face = params[i].to_integer();
                         let color = params[i + 1].to_vector();
                         let alpha = params[i + 2].to_float() as f32;
                         rules.push(PrimParamRule::Color {
                             face,
-                            color: [color.x.clamp(0.0, 1.0), color.y.clamp(0.0, 1.0), color.z.clamp(0.0, 1.0)],
+                            color: [
+                                color.x.clamp(0.0, 1.0),
+                                color.y.clamp(0.0, 1.0),
+                                color.z.clamp(0.0, 1.0),
+                            ],
                             alpha: alpha.clamp(0.0, 1.0),
                         });
                     }
                     i += 3.min(params.len() - i);
                 }
-                19 => { // PRIM_BUMP_SHINY: face, shiny, bump
+                19 => {
+                    // PRIM_BUMP_SHINY: face, shiny, bump
                     if i + 2 < params.len() {
                         rules.push(PrimParamRule::BumpShiny {
                             face: params[i].to_integer(),
@@ -2713,7 +3674,8 @@ impl LSLFunctions {
                     }
                     i += 3.min(params.len() - i);
                 }
-                20 => { // PRIM_FULLBRIGHT: face, value
+                20 => {
+                    // PRIM_FULLBRIGHT: face, value
                     if i + 1 < params.len() {
                         rules.push(PrimParamRule::Fullbright {
                             face: params[i].to_integer(),
@@ -2722,7 +3684,8 @@ impl LSLFunctions {
                     }
                     i += 2.min(params.len() - i);
                 }
-                21 => { // PRIM_FLEXIBLE: active, softness, gravity, friction, wind, tension, force
+                21 => {
+                    // PRIM_FLEXIBLE: active, softness, gravity, friction, wind, tension, force
                     if i + 6 < params.len() {
                         let force = params[i + 6].to_vector();
                         rules.push(PrimParamRule::Flexible {
@@ -2737,10 +3700,12 @@ impl LSLFunctions {
                     }
                     i += 7.min(params.len() - i);
                 }
-                22 => { // PRIM_TEXGEN: face, value
+                22 => {
+                    // PRIM_TEXGEN: face, value
                     i += 2.min(params.len() - i);
                 }
-                23 => { // PRIM_POINT_LIGHT: active, color, intensity, radius, falloff
+                23 => {
+                    // PRIM_POINT_LIGHT: active, color, intensity, radius, falloff
                     if i + 4 < params.len() {
                         let color = params[i + 1].to_vector();
                         rules.push(PrimParamRule::PointLight {
@@ -2753,7 +3718,8 @@ impl LSLFunctions {
                     }
                     i += 5.min(params.len() - i);
                 }
-                25 => { // PRIM_GLOW: face, intensity
+                25 => {
+                    // PRIM_GLOW: face, intensity
                     if i + 1 < params.len() {
                         rules.push(PrimParamRule::Glow {
                             face: params[i].to_integer(),
@@ -2762,34 +3728,55 @@ impl LSLFunctions {
                     }
                     i += 2.min(params.len() - i);
                 }
-                26 => { // PRIM_TEXT: text, color, alpha
+                26 => {
+                    // PRIM_TEXT: text, color, alpha
                     if i + 2 < params.len() {
                         let text = params[i].to_string();
                         let color = params[i + 1].to_vector();
                         let alpha = params[i + 2].to_float();
-                        context.floating_text = if text.is_empty() { None } else {
-                            Some(super::FloatingText { text, color: (color.x, color.y, color.z), alpha })
+                        context.floating_text = if text.is_empty() {
+                            None
+                        } else {
+                            Some(super::FloatingText {
+                                text,
+                                color: (color.x, color.y, color.z),
+                                alpha,
+                            })
                         };
                     }
                     i += 3.min(params.len() - i);
                 }
-                27 => { // PRIM_NAME
-                    if i < params.len() { context.object_name = params[i].to_string(); i += 1; }
+                27 => {
+                    // PRIM_NAME
+                    if i < params.len() {
+                        context.object_name = params[i].to_string();
+                        i += 1;
+                    }
                 }
-                28 => { // PRIM_DESC
-                    if i < params.len() { context.object_description = params[i].to_string(); i += 1; }
+                28 => {
+                    // PRIM_DESC
+                    if i < params.len() {
+                        context.object_description = params[i].to_string();
+                        i += 1;
+                    }
                 }
-                29 => { // PRIM_ROT_LOCAL
+                29 => {
+                    // PRIM_ROT_LOCAL
                     if i < params.len() {
                         let r = params[i].to_rotation();
                         context.rotation = (r.x, r.y, r.z, r.s);
                         i += 1;
                     }
                 }
-                30 => { // PRIM_PHYSICS_SHAPE_TYPE
-                    if i < params.len() { debug!("Set PRIM_PHYSICS_SHAPE_TYPE={}", params[i].to_integer()); i += 1; }
+                30 => {
+                    // PRIM_PHYSICS_SHAPE_TYPE
+                    if i < params.len() {
+                        debug!("Set PRIM_PHYSICS_SHAPE_TYPE={}", params[i].to_integer());
+                        i += 1;
+                    }
                 }
-                32 => { // PRIM_OMEGA: axis, spinrate, gain
+                32 => {
+                    // PRIM_OMEGA: axis, spinrate, gain
                     if i + 2 < params.len() {
                         let axis = params[i].to_vector();
                         let spinrate = params[i + 1].to_float() as f64;
@@ -2809,35 +3796,53 @@ impl LSLFunctions {
                         i += 3.min(params.len() - i);
                     }
                 }
-                33 => { // PRIM_POS_LOCAL
+                33 => {
+                    // PRIM_POS_LOCAL
                     if i < params.len() {
                         let v = params[i].to_vector();
                         context.position = (v.x, v.y, v.z);
                         i += 1;
                     }
                 }
-                34 => { // PRIM_LINK_TARGET
-                    if i < params.len() { debug!("Set PRIM_LINK_TARGET={}", params[i].to_integer()); i += 1; }
+                34 => {
+                    // PRIM_LINK_TARGET
+                    if i < params.len() {
+                        debug!("Set PRIM_LINK_TARGET={}", params[i].to_integer());
+                        i += 1;
+                    }
                 }
-                35 => { // PRIM_SLICE
-                    if i < params.len() { i += 1; }
+                35 => {
+                    // PRIM_SLICE
+                    if i < params.len() {
+                        i += 1;
+                    }
                 }
-                36 => { // PRIM_SPECULAR: face, texture, repeats, offsets, rotation, color, env_intensity
+                36 => {
+                    // PRIM_SPECULAR: face, texture, repeats, offsets, rotation, color, env_intensity
                     i += 7.min(params.len() - i);
                 }
-                37 => { // PRIM_NORMAL: face, texture, repeats, offsets, rotation
+                37 => {
+                    // PRIM_NORMAL: face, texture, repeats, offsets, rotation
                     i += 5.min(params.len() - i);
                 }
-                38 => { // PRIM_ALPHA_MODE: face, mode, mask_cutoff
+                38 => {
+                    // PRIM_ALPHA_MODE: face, mode, mask_cutoff
                     i += 3.min(params.len() - i);
                 }
-                39 => { // PRIM_ALLOW_UNSIT
-                    if i < params.len() { i += 1; }
+                39 => {
+                    // PRIM_ALLOW_UNSIT
+                    if i < params.len() {
+                        i += 1;
+                    }
                 }
-                40 => { // PRIM_SCRIPTED_SIT_ONLY
-                    if i < params.len() { i += 1; }
+                40 => {
+                    // PRIM_SCRIPTED_SIT_ONLY
+                    if i < params.len() {
+                        i += 1;
+                    }
                 }
-                41 => { // PRIM_SIT_TARGET: active, offset, rotation
+                41 => {
+                    // PRIM_SIT_TARGET: active, offset, rotation
                     i += 3.min(params.len() - i);
                 }
                 _ => {
@@ -2858,7 +3863,12 @@ impl LSLFunctions {
         }
     }
 
-    fn apply_prim_params_for_link(&self, link_num: i32, params: &[LSLValue], context: &mut ScriptContext) {
+    fn apply_prim_params_for_link(
+        &self,
+        link_num: i32,
+        params: &[LSLValue],
+        context: &mut ScriptContext,
+    ) {
         use crate::scripting::executor::PrimParamRule;
         let mut rules: Vec<PrimParamRule> = Vec::new();
         let mut i = 0;
@@ -2866,9 +3876,36 @@ impl LSLFunctions {
             let code = params[i].to_integer();
             i += 1;
             match code {
-                6 => { if i < params.len() { let v = params[i].to_vector(); rules.push(PrimParamRule::Position { pos: [v.x, v.y, v.z] }); i += 1; } }
-                7 => { if i < params.len() { let v = params[i].to_vector(); let s = [v.x.clamp(0.01, 64.0), v.y.clamp(0.01, 64.0), v.z.clamp(0.01, 64.0)]; rules.push(PrimParamRule::Size { size: s }); i += 1; } }
-                8 => { if i < params.len() { let r = params[i].to_rotation(); rules.push(PrimParamRule::Rotation { rot: [r.x, r.y, r.z, r.s] }); i += 1; } }
+                6 => {
+                    if i < params.len() {
+                        let v = params[i].to_vector();
+                        rules.push(PrimParamRule::Position {
+                            pos: [v.x, v.y, v.z],
+                        });
+                        i += 1;
+                    }
+                }
+                7 => {
+                    if i < params.len() {
+                        let v = params[i].to_vector();
+                        let s = [
+                            v.x.clamp(0.01, 64.0),
+                            v.y.clamp(0.01, 64.0),
+                            v.z.clamp(0.01, 64.0),
+                        ];
+                        rules.push(PrimParamRule::Size { size: s });
+                        i += 1;
+                    }
+                }
+                8 => {
+                    if i < params.len() {
+                        let r = params[i].to_rotation();
+                        rules.push(PrimParamRule::Rotation {
+                            rot: [r.x, r.y, r.z, r.s],
+                        });
+                        i += 1;
+                    }
+                }
                 17 => {
                     if i + 4 < params.len() {
                         let face = params[i].to_integer();
@@ -2876,8 +3913,16 @@ impl LSLFunctions {
                         let repeats = params[i + 2].to_vector();
                         let offsets = params[i + 3].to_vector();
                         let rotation = params[i + 4].to_float() as f32;
-                        let texture_id = Uuid::parse_str(&tex_str).unwrap_or_else(|_| Uuid::parse_str("89556747-24cb-43ed-920b-47caed15465f").unwrap());
-                        rules.push(PrimParamRule::Texture { face, texture_id, repeats: [repeats.x, repeats.y], offsets: [offsets.x, offsets.y], rotation });
+                        let texture_id = Uuid::parse_str(&tex_str).unwrap_or_else(|_| {
+                            Uuid::parse_str("89556747-24cb-43ed-920b-47caed15465f").unwrap()
+                        });
+                        rules.push(PrimParamRule::Texture {
+                            face,
+                            texture_id,
+                            repeats: [repeats.x, repeats.y],
+                            offsets: [offsets.x, offsets.y],
+                            rotation,
+                        });
                     }
                     i += 5.min(params.len() - i);
                 }
@@ -2886,41 +3931,136 @@ impl LSLFunctions {
                         let face = params[i].to_integer();
                         let color = params[i + 1].to_vector();
                         let alpha = params[i + 2].to_float() as f32;
-                        rules.push(PrimParamRule::Color { face, color: [color.x.clamp(0.0, 1.0), color.y.clamp(0.0, 1.0), color.z.clamp(0.0, 1.0)], alpha: alpha.clamp(0.0, 1.0) });
+                        rules.push(PrimParamRule::Color {
+                            face,
+                            color: [
+                                color.x.clamp(0.0, 1.0),
+                                color.y.clamp(0.0, 1.0),
+                                color.z.clamp(0.0, 1.0),
+                            ],
+                            alpha: alpha.clamp(0.0, 1.0),
+                        });
                     }
                     i += 3.min(params.len() - i);
                 }
-                20 => { if i + 1 < params.len() { rules.push(PrimParamRule::Fullbright { face: params[i].to_integer(), value: params[i + 1].is_true() }); } i += 2.min(params.len() - i); }
-                25 => { if i + 1 < params.len() { rules.push(PrimParamRule::Glow { face: params[i].to_integer(), intensity: params[i + 1].to_float() as f32 }); } i += 2.min(params.len() - i); }
-                2 => { if i < params.len() { rules.push(PrimParamRule::Material { material: params[i].to_integer() }); i += 1; } }
-                3 => { if i < params.len() { rules.push(PrimParamRule::Physics { value: params[i].is_true() }); i += 1; } }
-                5 => { if i < params.len() { rules.push(PrimParamRule::Phantom { value: params[i].is_true() }); i += 1; } }
-                29 => { if i < params.len() { let r = params[i].to_rotation(); rules.push(PrimParamRule::Rotation { rot: [r.x, r.y, r.z, r.s] }); i += 1; } }
+                20 => {
+                    if i + 1 < params.len() {
+                        rules.push(PrimParamRule::Fullbright {
+                            face: params[i].to_integer(),
+                            value: params[i + 1].is_true(),
+                        });
+                    }
+                    i += 2.min(params.len() - i);
+                }
+                25 => {
+                    if i + 1 < params.len() {
+                        rules.push(PrimParamRule::Glow {
+                            face: params[i].to_integer(),
+                            intensity: params[i + 1].to_float() as f32,
+                        });
+                    }
+                    i += 2.min(params.len() - i);
+                }
+                2 => {
+                    if i < params.len() {
+                        rules.push(PrimParamRule::Material {
+                            material: params[i].to_integer(),
+                        });
+                        i += 1;
+                    }
+                }
+                3 => {
+                    if i < params.len() {
+                        rules.push(PrimParamRule::Physics {
+                            value: params[i].is_true(),
+                        });
+                        i += 1;
+                    }
+                }
+                5 => {
+                    if i < params.len() {
+                        rules.push(PrimParamRule::Phantom {
+                            value: params[i].is_true(),
+                        });
+                        i += 1;
+                    }
+                }
+                29 => {
+                    if i < params.len() {
+                        let r = params[i].to_rotation();
+                        rules.push(PrimParamRule::Rotation {
+                            rot: [r.x, r.y, r.z, r.s],
+                        });
+                        i += 1;
+                    }
+                }
                 32 => {
                     if i + 2 < params.len() {
                         let axis = params[i].to_vector();
                         let spinrate = params[i + 1].to_float() as f64;
                         let gain = params[i + 2].to_float() as f64;
-                        self.action_queue.lock().push((context.script_id, ScriptAction::SetOmega { object_id: context.object_id, link_num, axis: [axis.x, axis.y, axis.z], spinrate, gain }));
+                        self.action_queue.lock().push((
+                            context.script_id,
+                            ScriptAction::SetOmega {
+                                object_id: context.object_id,
+                                link_num,
+                                axis: [axis.x, axis.y, axis.z],
+                                spinrate,
+                                gain,
+                            },
+                        ));
                         i += 3;
-                    } else { i += 3.min(params.len() - i); }
+                    } else {
+                        i += 3.min(params.len() - i);
+                    }
                 }
-                33 => { if i < params.len() { let v = params[i].to_vector(); rules.push(PrimParamRule::Position { pos: [v.x, v.y, v.z] }); i += 1; } }
+                33 => {
+                    if i < params.len() {
+                        let v = params[i].to_vector();
+                        rules.push(PrimParamRule::Position {
+                            pos: [v.x, v.y, v.z],
+                        });
+                        i += 1;
+                    }
+                }
                 9 => {
                     if i < params.len() {
-                        let shape = params[i].to_integer(); i += 1;
-                        let skip = match shape { 0 => 7, 1 => 7, 2 => 5, 3 => 5, 4 => 4, 5 => 4, 6 => 4, 7 => 4, _ => 0 };
-                        let extra = if shape >= 4 && shape <= 6 { 5 } else if shape == 7 { 2 } else { 0 };
+                        let shape = params[i].to_integer();
+                        i += 1;
+                        let skip = match shape {
+                            0 => 7,
+                            1 => 7,
+                            2 => 5,
+                            3 => 5,
+                            4 => 4,
+                            5 => 4,
+                            6 => 4,
+                            7 => 4,
+                            _ => 0,
+                        };
+                        let extra = if shape >= 4 && shape <= 6 {
+                            5
+                        } else if shape == 7 {
+                            2
+                        } else {
+                            0
+                        };
                         i += (skip + extra).min(params.len() - i);
                     }
                 }
-                _ => { i += 1.min(params.len() - i); }
+                _ => {
+                    i += 1.min(params.len() - i);
+                }
             }
         }
         if !rules.is_empty() {
             self.action_queue.lock().push((
                 context.script_id,
-                ScriptAction::SetPrimParams { object_id: context.object_id, link_num, rules },
+                ScriptAction::SetPrimParams {
+                    object_id: context.object_id,
+                    link_num,
+                    rules,
+                },
             ));
         }
     }
@@ -2936,42 +4076,78 @@ impl LSLFunctions {
                 3 => result.push(LSLValue::Integer(0)), // PRIM_PHYSICS
                 4 => result.push(LSLValue::Integer(0)), // PRIM_TEMP_ON_REZ
                 5 => result.push(LSLValue::Integer(0)), // PRIM_PHANTOM
-                6 => result.push(LSLValue::Vector(LSLVector::new(context.position.0, context.position.1, context.position.2))),
-                7 => result.push(LSLValue::Vector(LSLVector::new(context.scale.0, context.scale.1, context.scale.2))),
-                8 => result.push(LSLValue::Rotation(LSLRotation::new(context.rotation.0, context.rotation.1, context.rotation.2, context.rotation.3))),
-                9 => { // PRIM_TYPE: returns [shape, ...shape_params]
+                6 => result.push(LSLValue::Vector(LSLVector::new(
+                    context.position.0,
+                    context.position.1,
+                    context.position.2,
+                ))),
+                7 => result.push(LSLValue::Vector(LSLVector::new(
+                    context.scale.0,
+                    context.scale.1,
+                    context.scale.2,
+                ))),
+                8 => result.push(LSLValue::Rotation(LSLRotation::new(
+                    context.rotation.0,
+                    context.rotation.1,
+                    context.rotation.2,
+                    context.rotation.3,
+                ))),
+                9 => {
+                    // PRIM_TYPE: returns [shape, ...shape_params]
                     result.push(LSLValue::Integer(0)); // PRIM_TYPE_BOX
                     result.push(LSLValue::Integer(0)); // hole_shape
                     result.push(LSLValue::Vector(LSLVector::new(0.0, 1.0, 0.0))); // cut
                     result.push(LSLValue::Float(0.0)); // hollow
                     result.push(LSLValue::Vector(LSLVector::new(0.0, 0.0, 0.0))); // twist
                     result.push(LSLValue::Vector(LSLVector::new(0.0, 0.0, 0.0))); // taper
-                    result.push(LSLValue::Vector(LSLVector::new(0.0, 0.0, 0.0))); // top_shear
+                    result.push(LSLValue::Vector(LSLVector::new(0.0, 0.0, 0.0)));
+                    // top_shear
                 }
-                17 => { // PRIM_TEXTURE: needs face param
-                    let face = if i < param_codes.len() { let f = param_codes[i].to_integer(); i += 1; f } else { 0 };
+                17 => {
+                    // PRIM_TEXTURE: needs face param
+                    let face = if i < param_codes.len() {
+                        let f = param_codes[i].to_integer();
+                        i += 1;
+                        f
+                    } else {
+                        0
+                    };
                     let _ = face;
                     result.push(LSLValue::String(Uuid::nil().to_string())); // texture
                     result.push(LSLValue::Vector(LSLVector::new(1.0, 1.0, 0.0))); // repeats
                     result.push(LSLValue::Vector(LSLVector::new(0.0, 0.0, 0.0))); // offsets
                     result.push(LSLValue::Float(0.0)); // rotation
                 }
-                18 => { // PRIM_COLOR: needs face param
-                    let face = if i < param_codes.len() { let f = param_codes[i].to_integer(); i += 1; f } else { 0 };
+                18 => {
+                    // PRIM_COLOR: needs face param
+                    let face = if i < param_codes.len() {
+                        let f = param_codes[i].to_integer();
+                        i += 1;
+                        f
+                    } else {
+                        0
+                    };
                     let _ = face;
                     result.push(LSLValue::Vector(LSLVector::new(1.0, 1.0, 1.0))); // color
                     result.push(LSLValue::Float(1.0)); // alpha
                 }
-                19 => { // PRIM_BUMP_SHINY: needs face
-                    if i < param_codes.len() { i += 1; }
+                19 => {
+                    // PRIM_BUMP_SHINY: needs face
+                    if i < param_codes.len() {
+                        i += 1;
+                    }
                     result.push(LSLValue::Integer(0)); // shiny
                     result.push(LSLValue::Integer(0)); // bump
                 }
-                20 => { // PRIM_FULLBRIGHT: needs face
-                    if i < param_codes.len() { i += 1; }
+                20 => {
+                    // PRIM_FULLBRIGHT: needs face
+                    if i < param_codes.len() {
+                        i += 1;
+                    }
                     result.push(LSLValue::Integer(0));
                 }
-                21 => { // PRIM_FLEXIBLE
+                21 => {
+                    // PRIM_FLEXIBLE
                     result.push(LSLValue::Integer(0)); // active
                     result.push(LSLValue::Integer(0)); // softness
                     result.push(LSLValue::Float(0.0)); // gravity
@@ -2980,25 +4156,35 @@ impl LSLFunctions {
                     result.push(LSLValue::Float(0.0)); // tension
                     result.push(LSLValue::Vector(LSLVector::zero())); // force
                 }
-                22 => { // PRIM_TEXGEN: needs face
-                    if i < param_codes.len() { i += 1; }
+                22 => {
+                    // PRIM_TEXGEN: needs face
+                    if i < param_codes.len() {
+                        i += 1;
+                    }
                     result.push(LSLValue::Integer(0));
                 }
-                23 => { // PRIM_POINT_LIGHT
+                23 => {
+                    // PRIM_POINT_LIGHT
                     result.push(LSLValue::Integer(0)); // active
                     result.push(LSLValue::Vector(LSLVector::new(1.0, 1.0, 1.0))); // color
                     result.push(LSLValue::Float(1.0)); // intensity
                     result.push(LSLValue::Float(10.0)); // radius
                     result.push(LSLValue::Float(0.75)); // falloff
                 }
-                25 => { // PRIM_GLOW: needs face
-                    if i < param_codes.len() { i += 1; }
+                25 => {
+                    // PRIM_GLOW: needs face
+                    if i < param_codes.len() {
+                        i += 1;
+                    }
                     result.push(LSLValue::Float(0.0));
                 }
-                26 => { // PRIM_TEXT
+                26 => {
+                    // PRIM_TEXT
                     if let Some(ref ft) = context.floating_text {
                         result.push(LSLValue::String(ft.text.clone()));
-                        result.push(LSLValue::Vector(LSLVector::new(ft.color.0, ft.color.1, ft.color.2)));
+                        result.push(LSLValue::Vector(LSLVector::new(
+                            ft.color.0, ft.color.1, ft.color.2,
+                        )));
                         result.push(LSLValue::Float(ft.alpha));
                     } else {
                         result.push(LSLValue::String(String::new()));
@@ -3008,17 +4194,30 @@ impl LSLFunctions {
                 }
                 27 => result.push(LSLValue::String(context.object_name.clone())),
                 28 => result.push(LSLValue::String(context.object_description.clone())),
-                29 => result.push(LSLValue::Rotation(LSLRotation::new(context.rotation.0, context.rotation.1, context.rotation.2, context.rotation.3))),
+                29 => result.push(LSLValue::Rotation(LSLRotation::new(
+                    context.rotation.0,
+                    context.rotation.1,
+                    context.rotation.2,
+                    context.rotation.3,
+                ))),
                 30 => result.push(LSLValue::Integer(0)), // PRIM_PHYSICS_SHAPE_TYPE
-                32 => { // PRIM_OMEGA
+                32 => {
+                    // PRIM_OMEGA
                     result.push(LSLValue::Vector(LSLVector::zero())); // axis
                     result.push(LSLValue::Float(0.0)); // spinrate
                     result.push(LSLValue::Float(0.0)); // gain
                 }
-                33 => result.push(LSLValue::Vector(LSLVector::new(context.position.0, context.position.1, context.position.2))),
+                33 => result.push(LSLValue::Vector(LSLVector::new(
+                    context.position.0,
+                    context.position.1,
+                    context.position.2,
+                ))),
                 35 => result.push(LSLValue::Vector(LSLVector::new(0.0, 1.0, 0.0))), // PRIM_SLICE
-                36 => { // PRIM_SPECULAR: needs face
-                    if i < param_codes.len() { i += 1; }
+                36 => {
+                    // PRIM_SPECULAR: needs face
+                    if i < param_codes.len() {
+                        i += 1;
+                    }
                     result.push(LSLValue::String(Uuid::nil().to_string()));
                     result.push(LSLValue::Vector(LSLVector::new(1.0, 1.0, 0.0)));
                     result.push(LSLValue::Vector(LSLVector::zero()));
@@ -3026,21 +4225,28 @@ impl LSLFunctions {
                     result.push(LSLValue::Vector(LSLVector::new(1.0, 1.0, 1.0)));
                     result.push(LSLValue::Integer(0)); // env_intensity
                 }
-                37 => { // PRIM_NORMAL: needs face
-                    if i < param_codes.len() { i += 1; }
+                37 => {
+                    // PRIM_NORMAL: needs face
+                    if i < param_codes.len() {
+                        i += 1;
+                    }
                     result.push(LSLValue::String(Uuid::nil().to_string()));
                     result.push(LSLValue::Vector(LSLVector::new(1.0, 1.0, 0.0)));
                     result.push(LSLValue::Vector(LSLVector::zero()));
                     result.push(LSLValue::Float(0.0));
                 }
-                38 => { // PRIM_ALPHA_MODE: needs face
-                    if i < param_codes.len() { i += 1; }
+                38 => {
+                    // PRIM_ALPHA_MODE: needs face
+                    if i < param_codes.len() {
+                        i += 1;
+                    }
                     result.push(LSLValue::Integer(0)); // mode
                     result.push(LSLValue::Integer(0)); // mask_cutoff
                 }
                 39 => result.push(LSLValue::Integer(0)), // PRIM_ALLOW_UNSIT
                 40 => result.push(LSLValue::Integer(0)), // PRIM_SCRIPTED_SIT_ONLY
-                41 => { // PRIM_SIT_TARGET
+                41 => {
+                    // PRIM_SIT_TARGET
                     result.push(LSLValue::Integer(0)); // active
                     result.push(LSLValue::Vector(LSLVector::zero())); // offset
                     result.push(LSLValue::Rotation(LSLRotation::identity())); // rotation
@@ -3053,7 +4259,11 @@ impl LSLFunctions {
         result
     }
 
-    async fn ll_set_primitive_params(&self, args: &[LSLValue], context: &mut ScriptContext) -> Result<LSLValue> {
+    async fn ll_set_primitive_params(
+        &self,
+        args: &[LSLValue],
+        context: &mut ScriptContext,
+    ) -> Result<LSLValue> {
         if args.len() != 1 {
             return Err(anyhow!("llSetPrimitiveParams expects 1 argument (list)"));
         }
@@ -3062,7 +4272,11 @@ impl LSLFunctions {
         Ok(LSLValue::Integer(0))
     }
 
-    async fn ll_get_primitive_params(&self, args: &[LSLValue], context: &ScriptContext) -> Result<LSLValue> {
+    async fn ll_get_primitive_params(
+        &self,
+        args: &[LSLValue],
+        context: &ScriptContext,
+    ) -> Result<LSLValue> {
         if args.len() != 1 {
             return Err(anyhow!("llGetPrimitiveParams expects 1 argument (list)"));
         }
@@ -3070,7 +4284,11 @@ impl LSLFunctions {
         Ok(LSLValue::List(self.get_prim_params(&param_codes, context)))
     }
 
-    async fn ll_set_link_primitive_params(&self, args: &[LSLValue], context: &mut ScriptContext) -> Result<LSLValue> {
+    async fn ll_set_link_primitive_params(
+        &self,
+        args: &[LSLValue],
+        context: &mut ScriptContext,
+    ) -> Result<LSLValue> {
         if args.len() != 2 {
             return Err(anyhow!("llSetLinkPrimitiveParams expects 2 arguments"));
         }
@@ -3084,7 +4302,11 @@ impl LSLFunctions {
         Ok(LSLValue::Integer(0))
     }
 
-    async fn ll_set_link_primitive_params_fast(&self, args: &[LSLValue], context: &mut ScriptContext) -> Result<LSLValue> {
+    async fn ll_set_link_primitive_params_fast(
+        &self,
+        args: &[LSLValue],
+        context: &mut ScriptContext,
+    ) -> Result<LSLValue> {
         if args.len() != 2 {
             return Err(anyhow!("llSetLinkPrimitiveParamsFast expects 2 arguments"));
         }
@@ -3098,7 +4320,11 @@ impl LSLFunctions {
         Ok(LSLValue::Integer(0))
     }
 
-    async fn ll_get_link_primitive_params(&self, args: &[LSLValue], context: &ScriptContext) -> Result<LSLValue> {
+    async fn ll_get_link_primitive_params(
+        &self,
+        args: &[LSLValue],
+        context: &ScriptContext,
+    ) -> Result<LSLValue> {
         if args.len() != 2 {
             return Err(anyhow!("llGetLinkPrimitiveParams expects 2 arguments"));
         }
@@ -3111,7 +4337,9 @@ impl LSLFunctions {
             for param in &param_codes {
                 let code = param.to_integer();
                 if code == 7 {
-                    if let Some((_, scale)) = context.link_scales.iter().find(|(num, _)| *num == link) {
+                    if let Some((_, scale)) =
+                        context.link_scales.iter().find(|(num, _)| *num == link)
+                    {
                         result.push(LSLValue::Vector(LSLVector::new(scale.0, scale.1, scale.2)));
                     } else {
                         result.push(LSLValue::Vector(LSLVector::new(1.0, 1.0, 1.0)));
@@ -3122,11 +4350,19 @@ impl LSLFunctions {
         }
     }
 
-    async fn ll_get_number_of_sides(&self, _args: &[LSLValue], _context: &ScriptContext) -> Result<LSLValue> {
+    async fn ll_get_number_of_sides(
+        &self,
+        _args: &[LSLValue],
+        _context: &ScriptContext,
+    ) -> Result<LSLValue> {
         Ok(LSLValue::Integer(6))
     }
 
-    async fn ll_get_link_number_of_sides(&self, args: &[LSLValue], _context: &ScriptContext) -> Result<LSLValue> {
+    async fn ll_get_link_number_of_sides(
+        &self,
+        args: &[LSLValue],
+        _context: &ScriptContext,
+    ) -> Result<LSLValue> {
         if args.len() != 1 {
             return Err(anyhow!("llGetLinkNumberOfSides expects 1 argument"));
         }
@@ -3134,107 +4370,167 @@ impl LSLFunctions {
         Ok(LSLValue::Integer(6))
     }
 
-    async fn ll_detected_key(&self, args: &[LSLValue], context: &ScriptContext) -> Result<LSLValue> {
+    async fn ll_detected_key(
+        &self,
+        args: &[LSLValue],
+        context: &ScriptContext,
+    ) -> Result<LSLValue> {
         if args.len() != 1 {
             return Err(anyhow!("llDetectedKey expects 1 argument"));
         }
         let index = args[0].to_integer() as usize;
-        let key = context.detected_objects.get(index)
+        let key = context
+            .detected_objects
+            .get(index)
             .map(|d| d.key)
             .unwrap_or(Uuid::nil());
         Ok(LSLValue::Key(key))
     }
 
-    async fn ll_detected_name(&self, args: &[LSLValue], context: &ScriptContext) -> Result<LSLValue> {
+    async fn ll_detected_name(
+        &self,
+        args: &[LSLValue],
+        context: &ScriptContext,
+    ) -> Result<LSLValue> {
         if args.len() != 1 {
             return Err(anyhow!("llDetectedName expects 1 argument"));
         }
         let index = args[0].to_integer() as usize;
-        let name = context.detected_objects.get(index)
+        let name = context
+            .detected_objects
+            .get(index)
             .map(|d| d.name.clone())
             .unwrap_or_default();
         Ok(LSLValue::String(name))
     }
 
-    async fn ll_detected_owner(&self, args: &[LSLValue], context: &ScriptContext) -> Result<LSLValue> {
+    async fn ll_detected_owner(
+        &self,
+        args: &[LSLValue],
+        context: &ScriptContext,
+    ) -> Result<LSLValue> {
         if args.len() != 1 {
             return Err(anyhow!("llDetectedOwner expects 1 argument"));
         }
         let index = args[0].to_integer() as usize;
-        let owner = context.detected_objects.get(index)
+        let owner = context
+            .detected_objects
+            .get(index)
             .map(|d| d.owner)
             .unwrap_or(Uuid::nil());
         Ok(LSLValue::Key(owner))
     }
 
-    async fn ll_detected_type(&self, args: &[LSLValue], context: &ScriptContext) -> Result<LSLValue> {
+    async fn ll_detected_type(
+        &self,
+        args: &[LSLValue],
+        context: &ScriptContext,
+    ) -> Result<LSLValue> {
         if args.len() != 1 {
             return Err(anyhow!("llDetectedType expects 1 argument"));
         }
         let index = args[0].to_integer() as usize;
-        let obj_type = context.detected_objects.get(index)
+        let obj_type = context
+            .detected_objects
+            .get(index)
             .map(|d| d.object_type)
             .unwrap_or(0);
         Ok(LSLValue::Integer(obj_type))
     }
 
-    async fn ll_detected_pos(&self, args: &[LSLValue], context: &ScriptContext) -> Result<LSLValue> {
+    async fn ll_detected_pos(
+        &self,
+        args: &[LSLValue],
+        context: &ScriptContext,
+    ) -> Result<LSLValue> {
         if args.len() != 1 {
             return Err(anyhow!("llDetectedPos expects 1 argument"));
         }
         let index = args[0].to_integer() as usize;
-        let pos = context.detected_objects.get(index)
+        let pos = context
+            .detected_objects
+            .get(index)
             .map(|d| LSLVector::new(d.position.0, d.position.1, d.position.2))
             .unwrap_or(LSLVector::new(0.0, 0.0, 0.0));
         Ok(LSLValue::Vector(pos))
     }
 
-    async fn ll_detected_vel(&self, args: &[LSLValue], context: &ScriptContext) -> Result<LSLValue> {
+    async fn ll_detected_vel(
+        &self,
+        args: &[LSLValue],
+        context: &ScriptContext,
+    ) -> Result<LSLValue> {
         if args.len() != 1 {
             return Err(anyhow!("llDetectedVel expects 1 argument"));
         }
         let index = args[0].to_integer() as usize;
-        let vel = context.detected_objects.get(index)
+        let vel = context
+            .detected_objects
+            .get(index)
             .map(|d| LSLVector::new(d.velocity.0, d.velocity.1, d.velocity.2))
             .unwrap_or(LSLVector::new(0.0, 0.0, 0.0));
         Ok(LSLValue::Vector(vel))
     }
 
-    async fn ll_detected_rot(&self, args: &[LSLValue], context: &ScriptContext) -> Result<LSLValue> {
+    async fn ll_detected_rot(
+        &self,
+        args: &[LSLValue],
+        context: &ScriptContext,
+    ) -> Result<LSLValue> {
         if args.len() != 1 {
             return Err(anyhow!("llDetectedRot expects 1 argument"));
         }
         let index = args[0].to_integer() as usize;
-        let rot = context.detected_objects.get(index)
+        let rot = context
+            .detected_objects
+            .get(index)
             .map(|d| LSLRotation::new(d.rotation.0, d.rotation.1, d.rotation.2, d.rotation.3))
             .unwrap_or(LSLRotation::new(0.0, 0.0, 0.0, 1.0));
         Ok(LSLValue::Rotation(rot))
     }
 
-    async fn ll_detected_group(&self, args: &[LSLValue], context: &ScriptContext) -> Result<LSLValue> {
+    async fn ll_detected_group(
+        &self,
+        args: &[LSLValue],
+        context: &ScriptContext,
+    ) -> Result<LSLValue> {
         if args.len() != 1 {
             return Err(anyhow!("llDetectedGroup expects 1 argument"));
         }
         let index = args[0].to_integer() as usize;
-        let group = context.detected_objects.get(index)
+        let group = context
+            .detected_objects
+            .get(index)
             .map(|d| d.group)
             .unwrap_or(Uuid::nil());
         Ok(LSLValue::Key(group))
     }
 
-    async fn ll_detected_link_number(&self, args: &[LSLValue], context: &ScriptContext) -> Result<LSLValue> {
+    async fn ll_detected_link_number(
+        &self,
+        args: &[LSLValue],
+        context: &ScriptContext,
+    ) -> Result<LSLValue> {
         if args.len() != 1 {
             return Err(anyhow!("llDetectedLinkNumber expects 1 argument"));
         }
         let index = args[0].to_integer() as usize;
-        let link = context.detected_objects.get(index)
+        let link = context
+            .detected_objects
+            .get(index)
             .map(|d| d.link_number)
             .unwrap_or(0);
         Ok(LSLValue::Integer(link))
     }
 
-    async fn ll_detected_grab(&self, args: &[LSLValue], context: &ScriptContext) -> Result<LSLValue> {
-        if args.len() != 1 { return Err(anyhow!("llDetectedGrab expects 1 argument")); }
+    async fn ll_detected_grab(
+        &self,
+        args: &[LSLValue],
+        context: &ScriptContext,
+    ) -> Result<LSLValue> {
+        if args.len() != 1 {
+            return Err(anyhow!("llDetectedGrab expects 1 argument"));
+        }
         let index = args[0].to_integer() as usize;
         if let Some(det) = context.detected_objects.get(index) {
             let p = det.touch_position;
@@ -3243,8 +4539,14 @@ impl LSLFunctions {
         Ok(LSLValue::Vector(LSLVector::zero()))
     }
 
-    async fn ll_detected_touch_face(&self, args: &[LSLValue], context: &ScriptContext) -> Result<LSLValue> {
-        if args.len() != 1 { return Err(anyhow!("llDetectedTouchFace expects 1 argument")); }
+    async fn ll_detected_touch_face(
+        &self,
+        args: &[LSLValue],
+        context: &ScriptContext,
+    ) -> Result<LSLValue> {
+        if args.len() != 1 {
+            return Err(anyhow!("llDetectedTouchFace expects 1 argument"));
+        }
         let index = args[0].to_integer() as usize;
         if let Some(det) = context.detected_objects.get(index) {
             return Ok(LSLValue::Integer(det.touch_face));
@@ -3252,8 +4554,14 @@ impl LSLFunctions {
         Ok(LSLValue::Integer(-1))
     }
 
-    async fn ll_detected_touch_pos(&self, args: &[LSLValue], context: &ScriptContext) -> Result<LSLValue> {
-        if args.len() != 1 { return Err(anyhow!("llDetectedTouchPos expects 1 argument")); }
+    async fn ll_detected_touch_pos(
+        &self,
+        args: &[LSLValue],
+        context: &ScriptContext,
+    ) -> Result<LSLValue> {
+        if args.len() != 1 {
+            return Err(anyhow!("llDetectedTouchPos expects 1 argument"));
+        }
         let index = args[0].to_integer() as usize;
         if let Some(det) = context.detected_objects.get(index) {
             let p = det.touch_position;
@@ -3262,8 +4570,14 @@ impl LSLFunctions {
         Ok(LSLValue::Vector(LSLVector::zero()))
     }
 
-    async fn ll_detected_touch_normal(&self, args: &[LSLValue], context: &ScriptContext) -> Result<LSLValue> {
-        if args.len() != 1 { return Err(anyhow!("llDetectedTouchNormal expects 1 argument")); }
+    async fn ll_detected_touch_normal(
+        &self,
+        args: &[LSLValue],
+        context: &ScriptContext,
+    ) -> Result<LSLValue> {
+        if args.len() != 1 {
+            return Err(anyhow!("llDetectedTouchNormal expects 1 argument"));
+        }
         let index = args[0].to_integer() as usize;
         if let Some(det) = context.detected_objects.get(index) {
             let n = det.touch_normal;
@@ -3272,8 +4586,14 @@ impl LSLFunctions {
         Ok(LSLValue::Vector(LSLVector::zero()))
     }
 
-    async fn ll_detected_touch_binormal(&self, args: &[LSLValue], context: &ScriptContext) -> Result<LSLValue> {
-        if args.len() != 1 { return Err(anyhow!("llDetectedTouchBinormal expects 1 argument")); }
+    async fn ll_detected_touch_binormal(
+        &self,
+        args: &[LSLValue],
+        context: &ScriptContext,
+    ) -> Result<LSLValue> {
+        if args.len() != 1 {
+            return Err(anyhow!("llDetectedTouchBinormal expects 1 argument"));
+        }
         let index = args[0].to_integer() as usize;
         if let Some(det) = context.detected_objects.get(index) {
             let b = det.touch_binormal;
@@ -3282,25 +4602,49 @@ impl LSLFunctions {
         Ok(LSLValue::Vector(LSLVector::zero()))
     }
 
-    async fn ll_detected_touch_st(&self, args: &[LSLValue], context: &ScriptContext) -> Result<LSLValue> {
-        if args.len() != 1 { return Err(anyhow!("llDetectedTouchST expects 1 argument")); }
+    async fn ll_detected_touch_st(
+        &self,
+        args: &[LSLValue],
+        context: &ScriptContext,
+    ) -> Result<LSLValue> {
+        if args.len() != 1 {
+            return Err(anyhow!("llDetectedTouchST expects 1 argument"));
+        }
         let index = args[0].to_integer() as usize;
         if let Some(det) = context.detected_objects.get(index) {
-            return Ok(LSLValue::Vector(LSLVector::new(det.touch_st.0, det.touch_st.1, 0.0)));
+            return Ok(LSLValue::Vector(LSLVector::new(
+                det.touch_st.0,
+                det.touch_st.1,
+                0.0,
+            )));
         }
         Ok(LSLValue::Vector(LSLVector::new(-1.0, -1.0, 0.0)))
     }
 
-    async fn ll_detected_touch_uv(&self, args: &[LSLValue], context: &ScriptContext) -> Result<LSLValue> {
-        if args.len() != 1 { return Err(anyhow!("llDetectedTouchUV expects 1 argument")); }
+    async fn ll_detected_touch_uv(
+        &self,
+        args: &[LSLValue],
+        context: &ScriptContext,
+    ) -> Result<LSLValue> {
+        if args.len() != 1 {
+            return Err(anyhow!("llDetectedTouchUV expects 1 argument"));
+        }
         let index = args[0].to_integer() as usize;
         if let Some(det) = context.detected_objects.get(index) {
-            return Ok(LSLValue::Vector(LSLVector::new(det.touch_uv.0, det.touch_uv.1, 0.0)));
+            return Ok(LSLValue::Vector(LSLVector::new(
+                det.touch_uv.0,
+                det.touch_uv.1,
+                0.0,
+            )));
         }
         Ok(LSLValue::Vector(LSLVector::new(-1.0, -1.0, 0.0)))
     }
 
-    async fn ll_get_agent_info(&self, args: &[LSLValue], _context: &ScriptContext) -> Result<LSLValue> {
+    async fn ll_get_agent_info(
+        &self,
+        args: &[LSLValue],
+        _context: &ScriptContext,
+    ) -> Result<LSLValue> {
         if args.len() != 1 {
             return Err(anyhow!("llGetAgentInfo expects 1 argument"));
         }
@@ -3312,7 +4656,11 @@ impl LSLFunctions {
         Ok(LSLValue::Integer(flags))
     }
 
-    async fn ll_get_agent_size(&self, args: &[LSLValue], _context: &ScriptContext) -> Result<LSLValue> {
+    async fn ll_get_agent_size(
+        &self,
+        args: &[LSLValue],
+        _context: &ScriptContext,
+    ) -> Result<LSLValue> {
         if args.len() != 1 {
             return Err(anyhow!("llGetAgentSize expects 1 argument"));
         }
@@ -3323,25 +4671,45 @@ impl LSLFunctions {
         Ok(LSLValue::Vector(LSLVector::new(0.45, 0.6, 1.8)))
     }
 
-    async fn ll_get_agent_language(&self, args: &[LSLValue], _context: &ScriptContext) -> Result<LSLValue> {
+    async fn ll_get_agent_language(
+        &self,
+        args: &[LSLValue],
+        _context: &ScriptContext,
+    ) -> Result<LSLValue> {
         if args.len() != 1 {
             return Err(anyhow!("llGetAgentLanguage expects 1 argument"));
         }
         let id = args[0].to_key();
-        if id == Uuid::nil() { return Ok(LSLValue::String(String::new())); }
+        if id == Uuid::nil() {
+            return Ok(LSLValue::String(String::new()));
+        }
         Ok(LSLValue::String("en-us".to_string()))
     }
 
-    async fn ll_get_agent_list(&self, args: &[LSLValue], context: &ScriptContext) -> Result<LSLValue> {
-        if args.len() != 2 { return Err(anyhow!("llGetAgentList expects 2 arguments")); }
+    async fn ll_get_agent_list(
+        &self,
+        args: &[LSLValue],
+        context: &ScriptContext,
+    ) -> Result<LSLValue> {
+        if args.len() != 2 {
+            return Err(anyhow!("llGetAgentList expects 2 arguments"));
+        }
         let scope = args[0].to_integer();
-        self.action_queue.lock().push((context.script_id, ScriptAction::GetAgentList {
-            object_id: context.object_id, scope,
-        }));
+        self.action_queue.lock().push((
+            context.script_id,
+            ScriptAction::GetAgentList {
+                object_id: context.object_id,
+                scope,
+            },
+        ));
         Ok(LSLValue::List(vec![]))
     }
 
-    async fn ll_request_agent_data(&self, args: &[LSLValue], context: &mut ScriptContext) -> Result<LSLValue> {
+    async fn ll_request_agent_data(
+        &self,
+        args: &[LSLValue],
+        context: &mut ScriptContext,
+    ) -> Result<LSLValue> {
         if args.len() != 2 {
             return Err(anyhow!("llRequestAgentData expects 2 arguments"));
         }
@@ -3349,11 +4717,11 @@ impl LSLFunctions {
         let data_type = args[1].to_integer();
         let request_id = Uuid::new_v4();
         let reply_data = match data_type {
-            1 => "1".to_string(),  // DATA_ONLINE
-            2 => "Unknown Agent".to_string(),  // DATA_NAME
-            3 => Uuid::nil().to_string(),  // DATA_BORN
-            4 => "0".to_string(),  // DATA_RATING
-            5 => "0".to_string(),  // DATA_PAYINFO
+            1 => "1".to_string(),             // DATA_ONLINE
+            2 => "Unknown Agent".to_string(), // DATA_NAME
+            3 => Uuid::nil().to_string(),     // DATA_BORN
+            4 => "0".to_string(),             // DATA_RATING
+            5 => "0".to_string(),             // DATA_PAYINFO
             _ => String::new(),
         };
         self.action_queue.lock().push((
@@ -3364,7 +4732,10 @@ impl LSLFunctions {
                 data: reply_data,
             },
         ));
-        debug!("llRequestAgentData agent={} type={} query={}", agent_id, data_type, request_id);
+        debug!(
+            "llRequestAgentData agent={} type={} query={}",
+            agent_id, data_type, request_id
+        );
         Ok(LSLValue::Key(request_id))
     }
 
@@ -3384,7 +4755,11 @@ impl LSLFunctions {
         Ok(LSLValue::Key(Uuid::nil()))
     }
 
-    async fn ll_get_display_name(&self, args: &[LSLValue], _context: &ScriptContext) -> Result<LSLValue> {
+    async fn ll_get_display_name(
+        &self,
+        args: &[LSLValue],
+        _context: &ScriptContext,
+    ) -> Result<LSLValue> {
         if args.len() != 1 {
             return Err(anyhow!("llGetDisplayName expects 1 argument"));
         }
@@ -3392,7 +4767,11 @@ impl LSLFunctions {
         Ok(LSLValue::String(String::new()))
     }
 
-    async fn ll_get_username(&self, args: &[LSLValue], _context: &ScriptContext) -> Result<LSLValue> {
+    async fn ll_get_username(
+        &self,
+        args: &[LSLValue],
+        _context: &ScriptContext,
+    ) -> Result<LSLValue> {
         if args.len() != 1 {
             return Err(anyhow!("llGetUsername expects 1 argument"));
         }
@@ -3400,7 +4779,11 @@ impl LSLFunctions {
         Ok(LSLValue::String(String::new()))
     }
 
-    async fn ll_request_display_name(&self, args: &[LSLValue], context: &mut ScriptContext) -> Result<LSLValue> {
+    async fn ll_request_display_name(
+        &self,
+        args: &[LSLValue],
+        context: &mut ScriptContext,
+    ) -> Result<LSLValue> {
         if args.len() != 1 {
             return Err(anyhow!("llRequestDisplayName expects 1 argument"));
         }
@@ -3417,7 +4800,11 @@ impl LSLFunctions {
         Ok(LSLValue::Key(request_id))
     }
 
-    async fn ll_request_username(&self, args: &[LSLValue], context: &mut ScriptContext) -> Result<LSLValue> {
+    async fn ll_request_username(
+        &self,
+        args: &[LSLValue],
+        context: &mut ScriptContext,
+    ) -> Result<LSLValue> {
         if args.len() != 1 {
             return Err(anyhow!("llRequestUsername expects 1 argument"));
         }
@@ -3434,7 +4821,11 @@ impl LSLFunctions {
         Ok(LSLValue::Key(request_id))
     }
 
-    async fn ll_request_user_key(&self, args: &[LSLValue], context: &mut ScriptContext) -> Result<LSLValue> {
+    async fn ll_request_user_key(
+        &self,
+        args: &[LSLValue],
+        context: &mut ScriptContext,
+    ) -> Result<LSLValue> {
         if args.len() != 1 {
             return Err(anyhow!("llRequestUserKey expects 1 argument"));
         }
@@ -3460,11 +4851,19 @@ impl LSLFunctions {
         Ok(LSLValue::Float(100.0))
     }
 
-    async fn ll_get_energy(&self, _args: &[LSLValue], _context: &ScriptContext) -> Result<LSLValue> {
+    async fn ll_get_energy(
+        &self,
+        _args: &[LSLValue],
+        _context: &ScriptContext,
+    ) -> Result<LSLValue> {
         Ok(LSLValue::Float(1.0))
     }
 
-    async fn ll_teleport_agent(&self, args: &[LSLValue], context: &ScriptContext) -> Result<LSLValue> {
+    async fn ll_teleport_agent(
+        &self,
+        args: &[LSLValue],
+        context: &ScriptContext,
+    ) -> Result<LSLValue> {
         if args.len() != 4 {
             return Err(anyhow!("llTeleportAgent expects 4 arguments"));
         }
@@ -3484,19 +4883,29 @@ impl LSLFunctions {
         Ok(LSLValue::Integer(0))
     }
 
-    async fn ll_teleport_agent_home(&self, args: &[LSLValue], context: &ScriptContext) -> Result<LSLValue> {
+    async fn ll_teleport_agent_home(
+        &self,
+        args: &[LSLValue],
+        context: &ScriptContext,
+    ) -> Result<LSLValue> {
         if args.len() != 1 {
             return Err(anyhow!("llTeleportAgentHome expects 1 argument"));
         }
         let agent_id = args[0].to_key();
         self.action_queue.lock().push((
             context.script_id,
-            ScriptAction::TeleportAgentHome { avatar_id: agent_id },
+            ScriptAction::TeleportAgentHome {
+                avatar_id: agent_id,
+            },
         ));
         Ok(LSLValue::Integer(0))
     }
 
-    async fn ll_teleport_agent_global_coords(&self, args: &[LSLValue], context: &ScriptContext) -> Result<LSLValue> {
+    async fn ll_teleport_agent_global_coords(
+        &self,
+        args: &[LSLValue],
+        context: &ScriptContext,
+    ) -> Result<LSLValue> {
         if args.len() != 4 {
             return Err(anyhow!("llTeleportAgentGlobalCoords expects 4 arguments"));
         }
@@ -3516,19 +4925,30 @@ impl LSLFunctions {
         Ok(LSLValue::Integer(0))
     }
 
-    async fn ll_eject_from_land(&self, args: &[LSLValue], context: &ScriptContext) -> Result<LSLValue> {
+    async fn ll_eject_from_land(
+        &self,
+        args: &[LSLValue],
+        context: &ScriptContext,
+    ) -> Result<LSLValue> {
         if args.len() != 1 {
             return Err(anyhow!("llEjectFromLand expects 1 argument"));
         }
         let agent_id = args[0].to_key();
         self.action_queue.lock().push((
             context.script_id,
-            ScriptAction::EjectFromLand { object_id: context.object_id, agent_id },
+            ScriptAction::EjectFromLand {
+                object_id: context.object_id,
+                agent_id,
+            },
         ));
         Ok(LSLValue::Integer(0))
     }
 
-    async fn ll_instant_message(&self, args: &[LSLValue], context: &ScriptContext) -> Result<LSLValue> {
+    async fn ll_instant_message(
+        &self,
+        args: &[LSLValue],
+        context: &ScriptContext,
+    ) -> Result<LSLValue> {
         if args.len() != 2 {
             return Err(anyhow!("llInstantMessage expects 2 arguments"));
         }
@@ -3554,12 +4974,21 @@ impl LSLFunctions {
         let amount = args[1].to_integer();
         self.action_queue.lock().push((
             context.script_id,
-            ScriptAction::GiveMoney { owner_id: context.owner_id, destination_id: dest, amount, object_id: context.object_id },
+            ScriptAction::GiveMoney {
+                owner_id: context.owner_id,
+                destination_id: dest,
+                amount,
+                object_id: context.object_id,
+            },
         ));
         Ok(LSLValue::Integer(0))
     }
 
-    async fn ll_transfer_linden_dollars(&self, args: &[LSLValue], context: &ScriptContext) -> Result<LSLValue> {
+    async fn ll_transfer_linden_dollars(
+        &self,
+        args: &[LSLValue],
+        context: &ScriptContext,
+    ) -> Result<LSLValue> {
         if args.len() != 2 {
             return Err(anyhow!("llTransferLindenDollars expects 2 arguments"));
         }
@@ -3567,12 +4996,21 @@ impl LSLFunctions {
         let amount = args[1].to_integer();
         self.action_queue.lock().push((
             context.script_id,
-            ScriptAction::GiveMoney { owner_id: context.owner_id, destination_id: dest, amount, object_id: context.object_id },
+            ScriptAction::GiveMoney {
+                owner_id: context.owner_id,
+                destination_id: dest,
+                amount,
+                object_id: context.object_id,
+            },
         ));
         Ok(LSLValue::Key(Uuid::new_v4()))
     }
 
-    async fn ll_request_permissions(&self, args: &[LSLValue], context: &mut ScriptContext) -> Result<LSLValue> {
+    async fn ll_request_permissions(
+        &self,
+        args: &[LSLValue],
+        context: &mut ScriptContext,
+    ) -> Result<LSLValue> {
         if args.len() != 2 {
             return Err(anyhow!("llRequestPermissions expects 2 arguments"));
         }
@@ -3595,15 +5033,27 @@ impl LSLFunctions {
         Ok(LSLValue::Integer(0))
     }
 
-    async fn ll_get_permissions(&self, _args: &[LSLValue], context: &ScriptContext) -> Result<LSLValue> {
+    async fn ll_get_permissions(
+        &self,
+        _args: &[LSLValue],
+        context: &ScriptContext,
+    ) -> Result<LSLValue> {
         Ok(LSLValue::Integer(context.permissions as i32))
     }
 
-    async fn ll_get_permissions_key(&self, _args: &[LSLValue], context: &ScriptContext) -> Result<LSLValue> {
+    async fn ll_get_permissions_key(
+        &self,
+        _args: &[LSLValue],
+        context: &ScriptContext,
+    ) -> Result<LSLValue> {
         Ok(LSLValue::Key(context.permission_key))
     }
 
-    async fn ll_take_controls(&self, args: &[LSLValue], context: &ScriptContext) -> Result<LSLValue> {
+    async fn ll_take_controls(
+        &self,
+        args: &[LSLValue],
+        context: &ScriptContext,
+    ) -> Result<LSLValue> {
         if args.len() != 3 {
             return Err(anyhow!("llTakeControls expects 3 arguments"));
         }
@@ -3625,11 +5075,18 @@ impl LSLFunctions {
                 pass_on,
             },
         ));
-        debug!("Taking controls: controls=0x{:X}, accept={}, pass_on={}", controls, accept, pass_on);
+        debug!(
+            "Taking controls: controls=0x{:X}, accept={}, pass_on={}",
+            controls, accept, pass_on
+        );
         Ok(LSLValue::Integer(0))
     }
 
-    async fn ll_release_controls(&self, _args: &[LSLValue], context: &ScriptContext) -> Result<LSLValue> {
+    async fn ll_release_controls(
+        &self,
+        _args: &[LSLValue],
+        context: &ScriptContext,
+    ) -> Result<LSLValue> {
         if context.permissions & 0x0004 == 0 {
             return Ok(LSLValue::Integer(0));
         }
@@ -3646,45 +5103,102 @@ impl LSLFunctions {
     }
 
     async fn ll_take_camera(&self, args: &[LSLValue], context: &ScriptContext) -> Result<LSLValue> {
-        if args.len() != 1 { return Err(anyhow!("llTakeCamera expects 1 argument")); }
+        if args.len() != 1 {
+            return Err(anyhow!("llTakeCamera expects 1 argument"));
+        }
         let avatar_id = args[0].to_key();
-        self.action_queue.lock().push((context.script_id, ScriptAction::SetCameraParams {
-            avatar_id, object_id: context.object_id, params: vec![(0, 1.0)],
-        }));
+        self.action_queue.lock().push((
+            context.script_id,
+            ScriptAction::SetCameraParams {
+                avatar_id,
+                object_id: context.object_id,
+                params: vec![(0, 1.0)],
+            },
+        ));
         Ok(LSLValue::Integer(0))
     }
 
-    async fn ll_release_camera(&self, args: &[LSLValue], context: &ScriptContext) -> Result<LSLValue> {
-        if args.len() != 1 { return Err(anyhow!("llReleaseCamera expects 1 argument")); }
+    async fn ll_release_camera(
+        &self,
+        args: &[LSLValue],
+        context: &ScriptContext,
+    ) -> Result<LSLValue> {
+        if args.len() != 1 {
+            return Err(anyhow!("llReleaseCamera expects 1 argument"));
+        }
         let avatar_id = args[0].to_key();
-        self.action_queue.lock().push((context.script_id, ScriptAction::ClearCameraParams { avatar_id }));
+        self.action_queue.lock().push((
+            context.script_id,
+            ScriptAction::ClearCameraParams { avatar_id },
+        ));
         Ok(LSLValue::Integer(0))
     }
 
-    async fn ll_attach_to_avatar(&self, args: &[LSLValue], context: &ScriptContext) -> Result<LSLValue> {
-        if args.len() != 1 { return Err(anyhow!("llAttachToAvatar expects 1 argument")); }
+    async fn ll_attach_to_avatar(
+        &self,
+        args: &[LSLValue],
+        context: &ScriptContext,
+    ) -> Result<LSLValue> {
+        if args.len() != 1 {
+            return Err(anyhow!("llAttachToAvatar expects 1 argument"));
+        }
         let attach_point = args[0].to_integer();
-        self.action_queue.lock().push((context.script_id, ScriptAction::AttachToAvatar { object_id: context.object_id, attach_point }));
+        self.action_queue.lock().push((
+            context.script_id,
+            ScriptAction::AttachToAvatar {
+                object_id: context.object_id,
+                attach_point,
+            },
+        ));
         Ok(LSLValue::Integer(0))
     }
 
-    async fn ll_attach_to_avatar_temp(&self, args: &[LSLValue], context: &ScriptContext) -> Result<LSLValue> {
-        if args.len() != 1 { return Err(anyhow!("llAttachToAvatarTemp expects 1 argument")); }
+    async fn ll_attach_to_avatar_temp(
+        &self,
+        args: &[LSLValue],
+        context: &ScriptContext,
+    ) -> Result<LSLValue> {
+        if args.len() != 1 {
+            return Err(anyhow!("llAttachToAvatarTemp expects 1 argument"));
+        }
         let attach_point = args[0].to_integer();
-        self.action_queue.lock().push((context.script_id, ScriptAction::AttachToAvatar { object_id: context.object_id, attach_point }));
+        self.action_queue.lock().push((
+            context.script_id,
+            ScriptAction::AttachToAvatar {
+                object_id: context.object_id,
+                attach_point,
+            },
+        ));
         Ok(LSLValue::Integer(0))
     }
 
-    async fn ll_detach_from_avatar(&self, _args: &[LSLValue], context: &ScriptContext) -> Result<LSLValue> {
-        self.action_queue.lock().push((context.script_id, ScriptAction::DetachFromAvatar { object_id: context.object_id }));
+    async fn ll_detach_from_avatar(
+        &self,
+        _args: &[LSLValue],
+        context: &ScriptContext,
+    ) -> Result<LSLValue> {
+        self.action_queue.lock().push((
+            context.script_id,
+            ScriptAction::DetachFromAvatar {
+                object_id: context.object_id,
+            },
+        ));
         Ok(LSLValue::Integer(0))
     }
 
-    async fn ll_get_attached(&self, _args: &[LSLValue], _context: &ScriptContext) -> Result<LSLValue> {
+    async fn ll_get_attached(
+        &self,
+        _args: &[LSLValue],
+        _context: &ScriptContext,
+    ) -> Result<LSLValue> {
         Ok(LSLValue::Integer(0))
     }
 
-    async fn ll_get_attached_list(&self, args: &[LSLValue], _context: &ScriptContext) -> Result<LSLValue> {
+    async fn ll_get_attached_list(
+        &self,
+        args: &[LSLValue],
+        _context: &ScriptContext,
+    ) -> Result<LSLValue> {
         if args.len() != 1 {
             return Err(anyhow!("llGetAttachedList expects 1 argument"));
         }
@@ -3692,7 +5206,11 @@ impl LSLFunctions {
         Ok(LSLValue::List(vec![]))
     }
 
-    async fn ll_set_camera_params(&self, args: &[LSLValue], context: &ScriptContext) -> Result<LSLValue> {
+    async fn ll_set_camera_params(
+        &self,
+        args: &[LSLValue],
+        context: &ScriptContext,
+    ) -> Result<LSLValue> {
         if args.len() != 1 {
             return Err(anyhow!("llSetCameraParams expects 1 argument (list)"));
         }
@@ -3730,7 +5248,11 @@ impl LSLFunctions {
         Ok(LSLValue::Integer(0))
     }
 
-    async fn ll_clear_camera_params(&self, _args: &[LSLValue], context: &ScriptContext) -> Result<LSLValue> {
+    async fn ll_clear_camera_params(
+        &self,
+        _args: &[LSLValue],
+        context: &ScriptContext,
+    ) -> Result<LSLValue> {
         if context.permissions & 0x0800 != 0 {
             self.action_queue.lock().push((
                 context.script_id,
@@ -3745,41 +5267,81 @@ impl LSLFunctions {
         Ok(LSLValue::Integer(0))
     }
 
-    async fn ll_set_camera_at_offset(&self, args: &[LSLValue], context: &ScriptContext) -> Result<LSLValue> {
-        if args.len() != 1 { return Err(anyhow!("llSetCameraAtOffset expects 1 argument")); }
+    async fn ll_set_camera_at_offset(
+        &self,
+        args: &[LSLValue],
+        context: &ScriptContext,
+    ) -> Result<LSLValue> {
+        if args.len() != 1 {
+            return Err(anyhow!("llSetCameraAtOffset expects 1 argument"));
+        }
         let offset = args[0].to_vector();
-        self.action_queue.lock().push((context.script_id, ScriptAction::SetCameraAtOffset {
-            object_id: context.object_id, offset: [offset.x as f32, offset.y as f32, offset.z as f32],
-        }));
+        self.action_queue.lock().push((
+            context.script_id,
+            ScriptAction::SetCameraAtOffset {
+                object_id: context.object_id,
+                offset: [offset.x as f32, offset.y as f32, offset.z as f32],
+            },
+        ));
         Ok(LSLValue::Integer(0))
     }
 
-    async fn ll_set_camera_eye_offset(&self, args: &[LSLValue], context: &ScriptContext) -> Result<LSLValue> {
-        if args.len() != 1 { return Err(anyhow!("llSetCameraEyeOffset expects 1 argument")); }
+    async fn ll_set_camera_eye_offset(
+        &self,
+        args: &[LSLValue],
+        context: &ScriptContext,
+    ) -> Result<LSLValue> {
+        if args.len() != 1 {
+            return Err(anyhow!("llSetCameraEyeOffset expects 1 argument"));
+        }
         let offset = args[0].to_vector();
-        self.action_queue.lock().push((context.script_id, ScriptAction::SetCameraEyeOffset {
-            object_id: context.object_id, offset: [offset.x as f32, offset.y as f32, offset.z as f32],
-        }));
+        self.action_queue.lock().push((
+            context.script_id,
+            ScriptAction::SetCameraEyeOffset {
+                object_id: context.object_id,
+                offset: [offset.x as f32, offset.y as f32, offset.z as f32],
+            },
+        ));
         Ok(LSLValue::Integer(0))
     }
 
-    async fn ll_get_camera_pos(&self, _args: &[LSLValue], _context: &ScriptContext) -> Result<LSLValue> {
+    async fn ll_get_camera_pos(
+        &self,
+        _args: &[LSLValue],
+        _context: &ScriptContext,
+    ) -> Result<LSLValue> {
         Ok(LSLValue::Vector(LSLVector::new(0.0, 0.0, 0.0)))
     }
 
-    async fn ll_get_camera_rot(&self, _args: &[LSLValue], _context: &ScriptContext) -> Result<LSLValue> {
+    async fn ll_get_camera_rot(
+        &self,
+        _args: &[LSLValue],
+        _context: &ScriptContext,
+    ) -> Result<LSLValue> {
         Ok(LSLValue::Rotation(LSLRotation::new(0.0, 0.0, 0.0, 1.0)))
     }
 
-    async fn ll_get_camera_aspect(&self, _args: &[LSLValue], _context: &ScriptContext) -> Result<LSLValue> {
+    async fn ll_get_camera_aspect(
+        &self,
+        _args: &[LSLValue],
+        _context: &ScriptContext,
+    ) -> Result<LSLValue> {
         Ok(LSLValue::Float(1.778))
     }
 
-    async fn ll_get_camera_fov(&self, _args: &[LSLValue], _context: &ScriptContext) -> Result<LSLValue> {
+    async fn ll_get_camera_fov(
+        &self,
+        _args: &[LSLValue],
+        _context: &ScriptContext,
+    ) -> Result<LSLValue> {
         Ok(LSLValue::Float(1.0472))
     }
 
-    async fn ll_force_mouselook(&self, args: &[LSLValue], context: &ScriptContext) -> Result<LSLValue> {
+    async fn ll_force_mouselook(
+        &self,
+        args: &[LSLValue],
+        context: &ScriptContext,
+    ) -> Result<LSLValue> {
         if args.len() != 1 {
             return Err(anyhow!("llForceMouselook expects 1 argument"));
         }
@@ -3804,17 +5366,40 @@ impl LSLFunctions {
         let message = args[1].to_string();
         let buttons = args[2].to_list();
         let channel = args[3].to_integer();
-        let msg = if message.len() > 512 { &message[..512] } else { &message };
+        let msg = if message.len() > 512 {
+            &message[..512]
+        } else {
+            &message
+        };
         let button_count = buttons.len().min(12);
-        let button_labels: Vec<String> = buttons.iter().take(button_count).map(|b| {
-            let label = b.to_string();
-            if label.len() > 24 { label[..24].to_string() } else { label }
-        }).collect();
-        let final_buttons = if button_labels.is_empty() { vec!["OK".to_string()] } else { button_labels };
-        self.action_queue.lock().push((context.script_id, ScriptAction::Dialog {
-            avatar_id: id, object_name: context.object_name.clone(),
-            message: msg.to_string(), buttons: final_buttons, channel, object_id: context.object_id,
-        }));
+        let button_labels: Vec<String> = buttons
+            .iter()
+            .take(button_count)
+            .map(|b| {
+                let label = b.to_string();
+                if label.len() > 24 {
+                    label[..24].to_string()
+                } else {
+                    label
+                }
+            })
+            .collect();
+        let final_buttons = if button_labels.is_empty() {
+            vec!["OK".to_string()]
+        } else {
+            button_labels
+        };
+        self.action_queue.lock().push((
+            context.script_id,
+            ScriptAction::Dialog {
+                avatar_id: id,
+                object_name: context.object_name.clone(),
+                message: msg.to_string(),
+                buttons: final_buttons,
+                channel,
+                object_id: context.object_id,
+            },
+        ));
         Ok(LSLValue::Integer(0))
     }
 
@@ -3825,7 +5410,11 @@ impl LSLFunctions {
         let avatar_id = args[0].to_key();
         let message = args[1].to_string();
         let channel = args[2].to_integer();
-        let msg = if message.len() > 512 { message[..512].to_string() } else { message };
+        let msg = if message.len() > 512 {
+            message[..512].to_string()
+        } else {
+            message
+        };
         self.action_queue.lock().push((
             context.script_id,
             ScriptAction::TextBox {
@@ -3839,68 +5428,142 @@ impl LSLFunctions {
         Ok(LSLValue::Integer(0))
     }
 
-    async fn ll_map_destination(&self, args: &[LSLValue], context: &ScriptContext) -> Result<LSLValue> {
-        if args.len() != 3 { return Err(anyhow!("llMapDestination expects 3 arguments")); }
+    async fn ll_map_destination(
+        &self,
+        args: &[LSLValue],
+        context: &ScriptContext,
+    ) -> Result<LSLValue> {
+        if args.len() != 3 {
+            return Err(anyhow!("llMapDestination expects 3 arguments"));
+        }
         let sim_name = args[0].to_string();
         let position = args[1].to_vector();
         let look_at = args[2].to_vector();
-        self.action_queue.lock().push((context.script_id, ScriptAction::MapDestination {
-            avatar_id: context.permission_key, sim_name,
-            position: [position.x as f32, position.y as f32, position.z as f32],
-            look_at: [look_at.x as f32, look_at.y as f32, look_at.z as f32],
-        }));
+        self.action_queue.lock().push((
+            context.script_id,
+            ScriptAction::MapDestination {
+                avatar_id: context.permission_key,
+                sim_name,
+                position: [position.x as f32, position.y as f32, position.z as f32],
+                look_at: [look_at.x as f32, look_at.y as f32, look_at.z as f32],
+            },
+        ));
         Ok(LSLValue::Integer(0))
     }
 
     async fn ll_load_url(&self, args: &[LSLValue], context: &ScriptContext) -> Result<LSLValue> {
-        if args.len() != 3 { return Err(anyhow!("llLoadURL expects 3 arguments")); }
+        if args.len() != 3 {
+            return Err(anyhow!("llLoadURL expects 3 arguments"));
+        }
         let avatar_id = args[0].to_key();
         let message = args[1].to_string();
         let url = args[2].to_string();
-        self.action_queue.lock().push((context.script_id, ScriptAction::LoadURL {
-            avatar_id, message, url, object_name: context.object_name.clone(),
-        }));
+        self.action_queue.lock().push((
+            context.script_id,
+            ScriptAction::LoadURL {
+                avatar_id,
+                message,
+                url,
+                object_name: context.object_name.clone(),
+            },
+        ));
         Ok(LSLValue::Integer(0))
     }
 
-    async fn ll_set_pay_price(&self, args: &[LSLValue], context: &ScriptContext) -> Result<LSLValue> {
-        if args.len() != 2 { return Err(anyhow!("llSetPayPrice expects 2 arguments")); }
+    async fn ll_set_pay_price(
+        &self,
+        args: &[LSLValue],
+        context: &ScriptContext,
+    ) -> Result<LSLValue> {
+        if args.len() != 2 {
+            return Err(anyhow!("llSetPayPrice expects 2 arguments"));
+        }
         let price = args[0].to_integer();
         let quick_pay = args[1].to_list();
         let mut prices = [price, -2, -2, -2, -2];
         for (i, v) in quick_pay.iter().enumerate().take(4) {
             prices[i + 1] = v.to_integer();
         }
-        self.action_queue.lock().push((context.script_id, ScriptAction::SetPayPrice { object_id: context.object_id, prices }));
+        self.action_queue.lock().push((
+            context.script_id,
+            ScriptAction::SetPayPrice {
+                object_id: context.object_id,
+                prices,
+            },
+        ));
         Ok(LSLValue::Integer(0))
     }
 
-    async fn ll_set_click_action(&self, args: &[LSLValue], context: &ScriptContext) -> Result<LSLValue> {
-        if args.len() != 1 { return Err(anyhow!("llSetClickAction expects 1 argument")); }
+    async fn ll_set_click_action(
+        &self,
+        args: &[LSLValue],
+        context: &ScriptContext,
+    ) -> Result<LSLValue> {
+        if args.len() != 1 {
+            return Err(anyhow!("llSetClickAction expects 1 argument"));
+        }
         let action = args[0].to_integer() as u8;
-        self.action_queue.lock().push((context.script_id, ScriptAction::SetClickAction { object_id: context.object_id, action }));
+        self.action_queue.lock().push((
+            context.script_id,
+            ScriptAction::SetClickAction {
+                object_id: context.object_id,
+                action,
+            },
+        ));
         Ok(LSLValue::Integer(0))
     }
 
-    async fn ll_set_sit_text(&self, args: &[LSLValue], context: &ScriptContext) -> Result<LSLValue> {
-        if args.len() != 1 { return Err(anyhow!("llSetSitText expects 1 argument")); }
+    async fn ll_set_sit_text(
+        &self,
+        args: &[LSLValue],
+        context: &ScriptContext,
+    ) -> Result<LSLValue> {
+        if args.len() != 1 {
+            return Err(anyhow!("llSetSitText expects 1 argument"));
+        }
         let text = args[0].to_string();
-        self.action_queue.lock().push((context.script_id, ScriptAction::SetSitText { object_id: context.object_id, text }));
+        self.action_queue.lock().push((
+            context.script_id,
+            ScriptAction::SetSitText {
+                object_id: context.object_id,
+                text,
+            },
+        ));
         Ok(LSLValue::Integer(0))
     }
 
-    async fn ll_set_touch_text(&self, args: &[LSLValue], context: &ScriptContext) -> Result<LSLValue> {
-        if args.len() != 1 { return Err(anyhow!("llSetTouchText expects 1 argument")); }
+    async fn ll_set_touch_text(
+        &self,
+        args: &[LSLValue],
+        context: &ScriptContext,
+    ) -> Result<LSLValue> {
+        if args.len() != 1 {
+            return Err(anyhow!("llSetTouchText expects 1 argument"));
+        }
         let text = args[0].to_string();
-        self.action_queue.lock().push((context.script_id, ScriptAction::SetTouchText { object_id: context.object_id, text: text.clone() }));
+        self.action_queue.lock().push((
+            context.script_id,
+            ScriptAction::SetTouchText {
+                object_id: context.object_id,
+                text: text.clone(),
+            },
+        ));
         Ok(LSLValue::Integer(0))
     }
 
-    async fn ll_get_link_number(&self, _args: &[LSLValue], context: &ScriptContext) -> Result<LSLValue> {
+    async fn ll_get_link_number(
+        &self,
+        _args: &[LSLValue],
+        context: &ScriptContext,
+    ) -> Result<LSLValue> {
         Ok(LSLValue::Integer(context.link_number))
     }
 
-    async fn ll_get_link_key(&self, args: &[LSLValue], context: &ScriptContext) -> Result<LSLValue> {
+    async fn ll_get_link_key(
+        &self,
+        args: &[LSLValue],
+        context: &ScriptContext,
+    ) -> Result<LSLValue> {
         if args.len() != 1 {
             return Err(anyhow!("llGetLinkKey expects 1 argument"));
         }
@@ -3912,7 +5575,11 @@ impl LSLFunctions {
         }
     }
 
-    async fn ll_get_link_name(&self, args: &[LSLValue], context: &ScriptContext) -> Result<LSLValue> {
+    async fn ll_get_link_name(
+        &self,
+        args: &[LSLValue],
+        context: &ScriptContext,
+    ) -> Result<LSLValue> {
         if args.len() != 1 {
             return Err(anyhow!("llGetLinkName expects 1 argument"));
         }
@@ -3926,11 +5593,19 @@ impl LSLFunctions {
         }
     }
 
-    async fn ll_get_number_of_prims(&self, _args: &[LSLValue], context: &ScriptContext) -> Result<LSLValue> {
+    async fn ll_get_number_of_prims(
+        &self,
+        _args: &[LSLValue],
+        context: &ScriptContext,
+    ) -> Result<LSLValue> {
         Ok(LSLValue::Integer(context.link_count.max(1)))
     }
 
-    async fn ll_get_object_prim_count(&self, args: &[LSLValue], _context: &ScriptContext) -> Result<LSLValue> {
+    async fn ll_get_object_prim_count(
+        &self,
+        args: &[LSLValue],
+        _context: &ScriptContext,
+    ) -> Result<LSLValue> {
         if args.len() != 1 {
             return Err(anyhow!("llGetObjectPrimCount expects 1 argument"));
         }
@@ -3938,7 +5613,11 @@ impl LSLFunctions {
         Ok(LSLValue::Integer(1))
     }
 
-    async fn ll_get_object_link_key(&self, args: &[LSLValue], _context: &ScriptContext) -> Result<LSLValue> {
+    async fn ll_get_object_link_key(
+        &self,
+        args: &[LSLValue],
+        _context: &ScriptContext,
+    ) -> Result<LSLValue> {
         if args.len() != 2 {
             return Err(anyhow!("llGetObjectLinkKey expects 2 arguments"));
         }
@@ -3955,7 +5634,11 @@ impl LSLFunctions {
         let parent = args[1].is_true();
         self.action_queue.lock().push((
             context.script_id,
-            ScriptAction::CreateLink { object_id: context.object_id, target_id: target, parent },
+            ScriptAction::CreateLink {
+                object_id: context.object_id,
+                target_id: target,
+                parent,
+            },
         ));
         Ok(LSLValue::Integer(0))
     }
@@ -3967,20 +5650,33 @@ impl LSLFunctions {
         let link = args[0].to_integer();
         self.action_queue.lock().push((
             context.script_id,
-            ScriptAction::BreakLink { object_id: context.object_id, link_num: link },
+            ScriptAction::BreakLink {
+                object_id: context.object_id,
+                link_num: link,
+            },
         ));
         Ok(LSLValue::Integer(0))
     }
 
-    async fn ll_break_all_links(&self, _args: &[LSLValue], context: &ScriptContext) -> Result<LSLValue> {
+    async fn ll_break_all_links(
+        &self,
+        _args: &[LSLValue],
+        context: &ScriptContext,
+    ) -> Result<LSLValue> {
         self.action_queue.lock().push((
             context.script_id,
-            ScriptAction::BreakAllLinks { object_id: context.object_id },
+            ScriptAction::BreakAllLinks {
+                object_id: context.object_id,
+            },
         ));
         Ok(LSLValue::Integer(0))
     }
 
-    async fn ll_message_linked(&self, args: &[LSLValue], context: &ScriptContext) -> Result<LSLValue> {
+    async fn ll_message_linked(
+        &self,
+        args: &[LSLValue],
+        context: &ScriptContext,
+    ) -> Result<LSLValue> {
         if args.len() != 4 {
             return Err(anyhow!("llMessageLinked expects 4 arguments"));
         }
@@ -3997,11 +5693,18 @@ impl LSLFunctions {
                 id: id.to_string(),
             },
         ));
-        debug!("Message linked: link={}, num={}, str={}, id={}", link, num, str_val, id);
+        debug!(
+            "Message linked: link={}, num={}, str={}, id={}",
+            link, num, str_val, id
+        );
         Ok(LSLValue::Integer(0))
     }
 
-    async fn ll_set_link_camera(&self, args: &[LSLValue], context: &ScriptContext) -> Result<LSLValue> {
+    async fn ll_set_link_camera(
+        &self,
+        args: &[LSLValue],
+        context: &ScriptContext,
+    ) -> Result<LSLValue> {
         if args.len() != 3 {
             return Err(anyhow!("llSetLinkCamera expects 3 arguments"));
         }
@@ -4010,16 +5713,26 @@ impl LSLFunctions {
         let at_offset = args[2].to_vector();
         self.action_queue.lock().push((
             context.script_id,
-            ScriptAction::SetCameraEyeOffset { object_id: context.object_id, offset: [eye_offset.x, eye_offset.y, eye_offset.z] },
+            ScriptAction::SetCameraEyeOffset {
+                object_id: context.object_id,
+                offset: [eye_offset.x, eye_offset.y, eye_offset.z],
+            },
         ));
         self.action_queue.lock().push((
             context.script_id,
-            ScriptAction::SetCameraAtOffset { object_id: context.object_id, offset: [at_offset.x, at_offset.y, at_offset.z] },
+            ScriptAction::SetCameraAtOffset {
+                object_id: context.object_id,
+                offset: [at_offset.x, at_offset.y, at_offset.z],
+            },
         ));
         Ok(LSLValue::Integer(0))
     }
 
-    async fn ll_link_sit_target(&self, args: &[LSLValue], context: &ScriptContext) -> Result<LSLValue> {
+    async fn ll_link_sit_target(
+        &self,
+        args: &[LSLValue],
+        context: &ScriptContext,
+    ) -> Result<LSLValue> {
         if args.len() != 3 {
             return Err(anyhow!("llLinkSitTarget expects 3 arguments"));
         }
@@ -4055,11 +5768,19 @@ impl LSLFunctions {
         Ok(LSLValue::Integer(0))
     }
 
-    async fn ll_avatar_on_sit_target(&self, _args: &[LSLValue], context: &ScriptContext) -> Result<LSLValue> {
+    async fn ll_avatar_on_sit_target(
+        &self,
+        _args: &[LSLValue],
+        context: &ScriptContext,
+    ) -> Result<LSLValue> {
         Ok(LSLValue::Key(context.sitting_avatar_id))
     }
 
-    async fn ll_avatar_on_link_sit_target(&self, args: &[LSLValue], context: &ScriptContext) -> Result<LSLValue> {
+    async fn ll_avatar_on_link_sit_target(
+        &self,
+        args: &[LSLValue],
+        context: &ScriptContext,
+    ) -> Result<LSLValue> {
         if args.len() != 1 {
             return Err(anyhow!("llAvatarOnLinkSitTarget expects 1 argument"));
         }
@@ -4072,15 +5793,18 @@ impl LSLFunctions {
             return Err(anyhow!("llUnSit expects 1 argument"));
         }
         let id = args[0].to_key();
-        self.action_queue.lock().push((
-            context.script_id,
-            ScriptAction::UnSit { avatar_id: id },
-        ));
+        self.action_queue
+            .lock()
+            .push((context.script_id, ScriptAction::UnSit { avatar_id: id }));
         debug!("Unsitting agent {}", id);
         Ok(LSLValue::Integer(0))
     }
 
-    async fn ll_get_link_sit_flags(&self, args: &[LSLValue], _context: &ScriptContext) -> Result<LSLValue> {
+    async fn ll_get_link_sit_flags(
+        &self,
+        args: &[LSLValue],
+        _context: &ScriptContext,
+    ) -> Result<LSLValue> {
         if args.len() != 1 {
             return Err(anyhow!("llGetLinkSitFlags expects 1 argument"));
         }
@@ -4088,7 +5812,11 @@ impl LSLFunctions {
         Ok(LSLValue::Integer(0))
     }
 
-    async fn ll_set_link_sit_flags(&self, args: &[LSLValue], context: &ScriptContext) -> Result<LSLValue> {
+    async fn ll_set_link_sit_flags(
+        &self,
+        args: &[LSLValue],
+        context: &ScriptContext,
+    ) -> Result<LSLValue> {
         if args.len() != 2 {
             return Err(anyhow!("llSetLinkSitFlags expects 2 arguments"));
         }
@@ -4096,12 +5824,19 @@ impl LSLFunctions {
         let flags = args[1].to_integer();
         self.action_queue.lock().push((
             context.script_id,
-            ScriptAction::SetLinkSitFlags { object_id: context.object_id, flags },
+            ScriptAction::SetLinkSitFlags {
+                object_id: context.object_id,
+                flags,
+            },
         ));
         Ok(LSLValue::Integer(0))
     }
 
-    async fn ll_get_parcel_flags(&self, args: &[LSLValue], _context: &ScriptContext) -> Result<LSLValue> {
+    async fn ll_get_parcel_flags(
+        &self,
+        args: &[LSLValue],
+        _context: &ScriptContext,
+    ) -> Result<LSLValue> {
         if args.len() != 1 {
             return Err(anyhow!("llGetParcelFlags expects 1 argument"));
         }
@@ -4109,7 +5844,11 @@ impl LSLFunctions {
         Ok(LSLValue::Integer(13183))
     }
 
-    async fn ll_get_parcel_details(&self, args: &[LSLValue], context: &ScriptContext) -> Result<LSLValue> {
+    async fn ll_get_parcel_details(
+        &self,
+        args: &[LSLValue],
+        context: &ScriptContext,
+    ) -> Result<LSLValue> {
         if args.len() != 2 {
             return Err(anyhow!("llGetParcelDetails expects 2 arguments"));
         }
@@ -4137,7 +5876,11 @@ impl LSLFunctions {
         Ok(LSLValue::List(result))
     }
 
-    async fn ll_get_parcel_max_prims(&self, args: &[LSLValue], _context: &ScriptContext) -> Result<LSLValue> {
+    async fn ll_get_parcel_max_prims(
+        &self,
+        args: &[LSLValue],
+        _context: &ScriptContext,
+    ) -> Result<LSLValue> {
         if args.len() != 2 {
             return Err(anyhow!("llGetParcelMaxPrims expects 2 arguments"));
         }
@@ -4146,7 +5889,11 @@ impl LSLFunctions {
         Ok(LSLValue::Integer(15000))
     }
 
-    async fn ll_get_parcel_prim_count(&self, args: &[LSLValue], _context: &ScriptContext) -> Result<LSLValue> {
+    async fn ll_get_parcel_prim_count(
+        &self,
+        args: &[LSLValue],
+        _context: &ScriptContext,
+    ) -> Result<LSLValue> {
         if args.len() != 3 {
             return Err(anyhow!("llGetParcelPrimCount expects 3 arguments"));
         }
@@ -4156,7 +5903,11 @@ impl LSLFunctions {
         Ok(LSLValue::Integer(0))
     }
 
-    async fn ll_get_parcel_prim_owners(&self, args: &[LSLValue], _context: &ScriptContext) -> Result<LSLValue> {
+    async fn ll_get_parcel_prim_owners(
+        &self,
+        args: &[LSLValue],
+        _context: &ScriptContext,
+    ) -> Result<LSLValue> {
         if args.len() != 1 {
             return Err(anyhow!("llGetParcelPrimOwners expects 1 argument"));
         }
@@ -4164,23 +5915,38 @@ impl LSLFunctions {
         Ok(LSLValue::List(vec![]))
     }
 
-    async fn ll_get_parcel_music_url(&self, _args: &[LSLValue], _context: &ScriptContext) -> Result<LSLValue> {
+    async fn ll_get_parcel_music_url(
+        &self,
+        _args: &[LSLValue],
+        _context: &ScriptContext,
+    ) -> Result<LSLValue> {
         Ok(LSLValue::String(String::new()))
     }
 
-    async fn ll_set_parcel_music_url(&self, args: &[LSLValue], context: &ScriptContext) -> Result<LSLValue> {
+    async fn ll_set_parcel_music_url(
+        &self,
+        args: &[LSLValue],
+        context: &ScriptContext,
+    ) -> Result<LSLValue> {
         if args.len() != 1 {
             return Err(anyhow!("llSetParcelMusicURL expects 1 argument"));
         }
         let url = args[0].to_string();
         self.action_queue.lock().push((
             context.script_id,
-            ScriptAction::SetParcelMusicURL { object_id: context.object_id, url },
+            ScriptAction::SetParcelMusicURL {
+                object_id: context.object_id,
+                url,
+            },
         ));
         Ok(LSLValue::Integer(0))
     }
 
-    async fn ll_get_land_owner_at(&self, args: &[LSLValue], context: &ScriptContext) -> Result<LSLValue> {
+    async fn ll_get_land_owner_at(
+        &self,
+        args: &[LSLValue],
+        context: &ScriptContext,
+    ) -> Result<LSLValue> {
         if args.len() != 1 {
             return Err(anyhow!("llGetLandOwnerAt expects 1 argument"));
         }
@@ -4188,7 +5954,11 @@ impl LSLFunctions {
         Ok(LSLValue::Key(context.owner_id))
     }
 
-    async fn ll_over_my_land(&self, args: &[LSLValue], context: &ScriptContext) -> Result<LSLValue> {
+    async fn ll_over_my_land(
+        &self,
+        args: &[LSLValue],
+        context: &ScriptContext,
+    ) -> Result<LSLValue> {
         if args.len() != 1 {
             return Err(anyhow!("llOverMyLand expects 1 argument"));
         }
@@ -4205,12 +5975,20 @@ impl LSLFunctions {
         let size = args[1].to_integer();
         self.action_queue.lock().push((
             context.script_id,
-            ScriptAction::ModifyLand { object_id: context.object_id, action, brush_size: size },
+            ScriptAction::ModifyLand {
+                object_id: context.object_id,
+                action,
+                brush_size: size,
+            },
         ));
         Ok(LSLValue::Integer(0))
     }
 
-    async fn ll_add_to_land_ban_list(&self, args: &[LSLValue], context: &ScriptContext) -> Result<LSLValue> {
+    async fn ll_add_to_land_ban_list(
+        &self,
+        args: &[LSLValue],
+        context: &ScriptContext,
+    ) -> Result<LSLValue> {
         if args.len() != 2 {
             return Err(anyhow!("llAddToLandBanList expects 2 arguments"));
         }
@@ -4218,24 +5996,41 @@ impl LSLFunctions {
         let hours = args[1].to_float();
         self.action_queue.lock().push((
             context.script_id,
-            ScriptAction::AddToLandBanList { object_id: context.object_id, agent_id: id, hours, is_ban: true },
+            ScriptAction::AddToLandBanList {
+                object_id: context.object_id,
+                agent_id: id,
+                hours,
+                is_ban: true,
+            },
         ));
         Ok(LSLValue::Integer(0))
     }
 
-    async fn ll_remove_from_land_ban_list(&self, args: &[LSLValue], context: &ScriptContext) -> Result<LSLValue> {
+    async fn ll_remove_from_land_ban_list(
+        &self,
+        args: &[LSLValue],
+        context: &ScriptContext,
+    ) -> Result<LSLValue> {
         if args.len() != 1 {
             return Err(anyhow!("llRemoveFromLandBanList expects 1 argument"));
         }
         let id = args[0].to_key();
         self.action_queue.lock().push((
             context.script_id,
-            ScriptAction::RemoveFromLandBanList { object_id: context.object_id, agent_id: id, is_ban: true },
+            ScriptAction::RemoveFromLandBanList {
+                object_id: context.object_id,
+                agent_id: id,
+                is_ban: true,
+            },
         ));
         Ok(LSLValue::Integer(0))
     }
 
-    async fn ll_add_to_land_pass_list(&self, args: &[LSLValue], context: &ScriptContext) -> Result<LSLValue> {
+    async fn ll_add_to_land_pass_list(
+        &self,
+        args: &[LSLValue],
+        context: &ScriptContext,
+    ) -> Result<LSLValue> {
         if args.len() != 2 {
             return Err(anyhow!("llAddToLandPassList expects 2 arguments"));
         }
@@ -4243,40 +6038,71 @@ impl LSLFunctions {
         let hours = args[1].to_float();
         self.action_queue.lock().push((
             context.script_id,
-            ScriptAction::AddToLandBanList { object_id: context.object_id, agent_id: id, hours, is_ban: false },
+            ScriptAction::AddToLandBanList {
+                object_id: context.object_id,
+                agent_id: id,
+                hours,
+                is_ban: false,
+            },
         ));
         Ok(LSLValue::Integer(0))
     }
 
-    async fn ll_remove_from_land_pass_list(&self, args: &[LSLValue], context: &ScriptContext) -> Result<LSLValue> {
+    async fn ll_remove_from_land_pass_list(
+        &self,
+        args: &[LSLValue],
+        context: &ScriptContext,
+    ) -> Result<LSLValue> {
         if args.len() != 1 {
             return Err(anyhow!("llRemoveFromLandPassList expects 1 argument"));
         }
         let id = args[0].to_key();
         self.action_queue.lock().push((
             context.script_id,
-            ScriptAction::RemoveFromLandBanList { object_id: context.object_id, agent_id: id, is_ban: false },
+            ScriptAction::RemoveFromLandBanList {
+                object_id: context.object_id,
+                agent_id: id,
+                is_ban: false,
+            },
         ));
         Ok(LSLValue::Integer(0))
     }
 
-    async fn ll_reset_land_ban_list(&self, _args: &[LSLValue], context: &ScriptContext) -> Result<LSLValue> {
+    async fn ll_reset_land_ban_list(
+        &self,
+        _args: &[LSLValue],
+        context: &ScriptContext,
+    ) -> Result<LSLValue> {
         self.action_queue.lock().push((
             context.script_id,
-            ScriptAction::ResetLandBanList { object_id: context.object_id, is_ban: true },
+            ScriptAction::ResetLandBanList {
+                object_id: context.object_id,
+                is_ban: true,
+            },
         ));
         Ok(LSLValue::Integer(0))
     }
 
-    async fn ll_reset_land_pass_list(&self, _args: &[LSLValue], context: &ScriptContext) -> Result<LSLValue> {
+    async fn ll_reset_land_pass_list(
+        &self,
+        _args: &[LSLValue],
+        context: &ScriptContext,
+    ) -> Result<LSLValue> {
         self.action_queue.lock().push((
             context.script_id,
-            ScriptAction::ResetLandBanList { object_id: context.object_id, is_ban: false },
+            ScriptAction::ResetLandBanList {
+                object_id: context.object_id,
+                is_ban: false,
+            },
         ));
         Ok(LSLValue::Integer(0))
     }
 
-    async fn ll_set_vehicle_type(&self, args: &[LSLValue], context: &mut ScriptContext) -> Result<LSLValue> {
+    async fn ll_set_vehicle_type(
+        &self,
+        args: &[LSLValue],
+        context: &mut ScriptContext,
+    ) -> Result<LSLValue> {
         if args.len() != 1 {
             return Err(anyhow!("llSetVehicleType expects 1 argument"));
         }
@@ -4285,24 +6111,37 @@ impl LSLFunctions {
         if !valid_types.contains(&vehicle_type) {
             return Ok(LSLValue::Integer(0));
         }
-        context.variables.insert("__vehicle_type".to_string(), LSLValue::Integer(vehicle_type));
+        context.variables.insert(
+            "__vehicle_type".to_string(),
+            LSLValue::Integer(vehicle_type),
+        );
         if vehicle_type == 0 {
-            let keys_to_remove: Vec<String> = context.variables.keys()
+            let keys_to_remove: Vec<String> = context
+                .variables
+                .keys()
                 .filter(|k| k.starts_with("__vehicle_"))
-                .cloned().collect();
+                .cloned()
+                .collect();
             for key in keys_to_remove {
                 context.variables.remove(&key);
             }
         }
         self.action_queue.lock().push((
             context.script_id,
-            ScriptAction::SetVehicleType { object_id: context.object_id, vehicle_type },
+            ScriptAction::SetVehicleType {
+                object_id: context.object_id,
+                vehicle_type,
+            },
         ));
         debug!("Setting vehicle type to {}", vehicle_type);
         Ok(LSLValue::Integer(0))
     }
 
-    async fn ll_set_vehicle_flags(&self, args: &[LSLValue], context: &mut ScriptContext) -> Result<LSLValue> {
+    async fn ll_set_vehicle_flags(
+        &self,
+        args: &[LSLValue],
+        context: &mut ScriptContext,
+    ) -> Result<LSLValue> {
         if args.len() != 1 {
             return Err(anyhow!("llSetVehicleFlags expects 1 argument"));
         }
@@ -4311,16 +6150,26 @@ impl LSLFunctions {
             Some(LSLValue::Integer(v)) => *v,
             _ => 0,
         };
-        context.variables.insert("__vehicle_flags".to_string(), LSLValue::Integer(current | flags));
+        context.variables.insert(
+            "__vehicle_flags".to_string(),
+            LSLValue::Integer(current | flags),
+        );
         self.action_queue.lock().push((
             context.script_id,
-            ScriptAction::SetVehicleFlags { object_id: context.object_id, flags },
+            ScriptAction::SetVehicleFlags {
+                object_id: context.object_id,
+                flags,
+            },
         ));
         debug!("Setting vehicle flags to {}", current | flags);
         Ok(LSLValue::Integer(0))
     }
 
-    async fn ll_remove_vehicle_flags(&self, args: &[LSLValue], context: &mut ScriptContext) -> Result<LSLValue> {
+    async fn ll_remove_vehicle_flags(
+        &self,
+        args: &[LSLValue],
+        context: &mut ScriptContext,
+    ) -> Result<LSLValue> {
         if args.len() != 1 {
             return Err(anyhow!("llRemoveVehicleFlags expects 1 argument"));
         }
@@ -4329,61 +6178,103 @@ impl LSLFunctions {
             Some(LSLValue::Integer(v)) => *v,
             _ => 0,
         };
-        context.variables.insert("__vehicle_flags".to_string(), LSLValue::Integer(current & !flags));
+        context.variables.insert(
+            "__vehicle_flags".to_string(),
+            LSLValue::Integer(current & !flags),
+        );
         self.action_queue.lock().push((
             context.script_id,
-            ScriptAction::RemoveVehicleFlags { object_id: context.object_id, flags },
+            ScriptAction::RemoveVehicleFlags {
+                object_id: context.object_id,
+                flags,
+            },
         ));
         debug!("Removed vehicle flags {}", flags);
         Ok(LSLValue::Integer(0))
     }
 
-    async fn ll_set_vehicle_float_param(&self, args: &[LSLValue], context: &mut ScriptContext) -> Result<LSLValue> {
+    async fn ll_set_vehicle_float_param(
+        &self,
+        args: &[LSLValue],
+        context: &mut ScriptContext,
+    ) -> Result<LSLValue> {
         if args.len() != 2 {
             return Err(anyhow!("llSetVehicleFloatParam expects 2 arguments"));
         }
         let param = args[0].to_integer();
         let value = args[1].to_float();
-        context.variables.insert(format!("__vehicle_fp_{}", param), LSLValue::Float(value));
+        context
+            .variables
+            .insert(format!("__vehicle_fp_{}", param), LSLValue::Float(value));
         self.action_queue.lock().push((
             context.script_id,
-            ScriptAction::SetVehicleFloatParam { object_id: context.object_id, param_id: param, value: value as f64 },
+            ScriptAction::SetVehicleFloatParam {
+                object_id: context.object_id,
+                param_id: param,
+                value: value as f64,
+            },
         ));
         debug!("Setting vehicle float param {} to {}", param, value);
         Ok(LSLValue::Integer(0))
     }
 
-    async fn ll_set_vehicle_vector_param(&self, args: &[LSLValue], context: &mut ScriptContext) -> Result<LSLValue> {
+    async fn ll_set_vehicle_vector_param(
+        &self,
+        args: &[LSLValue],
+        context: &mut ScriptContext,
+    ) -> Result<LSLValue> {
         if args.len() != 2 {
             return Err(anyhow!("llSetVehicleVectorParam expects 2 arguments"));
         }
         let param = args[0].to_integer();
         let value = args[1].to_vector();
-        context.variables.insert(format!("__vehicle_vp_{}", param), LSLValue::Vector(value.clone()));
+        context.variables.insert(
+            format!("__vehicle_vp_{}", param),
+            LSLValue::Vector(value.clone()),
+        );
         self.action_queue.lock().push((
             context.script_id,
-            ScriptAction::SetVehicleVectorParam { object_id: context.object_id, param_id: param, value: [value.x, value.y, value.z] },
+            ScriptAction::SetVehicleVectorParam {
+                object_id: context.object_id,
+                param_id: param,
+                value: [value.x, value.y, value.z],
+            },
         ));
         debug!("Setting vehicle vector param {} to {:?}", param, value);
         Ok(LSLValue::Integer(0))
     }
 
-    async fn ll_set_vehicle_rotation_param(&self, args: &[LSLValue], context: &mut ScriptContext) -> Result<LSLValue> {
+    async fn ll_set_vehicle_rotation_param(
+        &self,
+        args: &[LSLValue],
+        context: &mut ScriptContext,
+    ) -> Result<LSLValue> {
         if args.len() != 2 {
             return Err(anyhow!("llSetVehicleRotationParam expects 2 arguments"));
         }
         let param = args[0].to_integer();
         let value = args[1].to_rotation();
-        context.variables.insert(format!("__vehicle_rp_{}", param), LSLValue::Rotation(value.clone()));
+        context.variables.insert(
+            format!("__vehicle_rp_{}", param),
+            LSLValue::Rotation(value.clone()),
+        );
         self.action_queue.lock().push((
             context.script_id,
-            ScriptAction::SetVehicleRotationParam { object_id: context.object_id, param_id: param, value: [value.x, value.y, value.z, value.s] },
+            ScriptAction::SetVehicleRotationParam {
+                object_id: context.object_id,
+                param_id: param,
+                value: [value.x, value.y, value.z, value.s],
+            },
         ));
         debug!("Setting vehicle rotation param {} to {:?}", param, value);
         Ok(LSLValue::Integer(0))
     }
 
-    async fn ll_get_region_flags(&self, _args: &[LSLValue], _context: &ScriptContext) -> Result<LSLValue> {
+    async fn ll_get_region_flags(
+        &self,
+        _args: &[LSLValue],
+        _context: &ScriptContext,
+    ) -> Result<LSLValue> {
         let flags = 0x00000040 // REGION_FLAGS_ALLOW_DAMAGE
             | 0x00000100  // REGION_FLAGS_ALLOW_LANDMARK
             | 0x00000400  // REGION_FLAGS_ALLOW_SET_HOME
@@ -4392,19 +6283,35 @@ impl LSLFunctions {
         Ok(LSLValue::Integer(flags))
     }
 
-    async fn ll_get_region_fps(&self, _args: &[LSLValue], _context: &ScriptContext) -> Result<LSLValue> {
+    async fn ll_get_region_fps(
+        &self,
+        _args: &[LSLValue],
+        _context: &ScriptContext,
+    ) -> Result<LSLValue> {
         Ok(LSLValue::Float(45.0))
     }
 
-    async fn ll_get_region_time_dilation(&self, _args: &[LSLValue], _context: &ScriptContext) -> Result<LSLValue> {
+    async fn ll_get_region_time_dilation(
+        &self,
+        _args: &[LSLValue],
+        _context: &ScriptContext,
+    ) -> Result<LSLValue> {
         Ok(LSLValue::Float(1.0))
     }
 
-    async fn ll_get_region_agent_count(&self, _args: &[LSLValue], _context: &ScriptContext) -> Result<LSLValue> {
+    async fn ll_get_region_agent_count(
+        &self,
+        _args: &[LSLValue],
+        _context: &ScriptContext,
+    ) -> Result<LSLValue> {
         Ok(LSLValue::Integer(1))
     }
 
-    async fn ll_request_simulator_data(&self, args: &[LSLValue], context: &ScriptContext) -> Result<LSLValue> {
+    async fn ll_request_simulator_data(
+        &self,
+        args: &[LSLValue],
+        context: &ScriptContext,
+    ) -> Result<LSLValue> {
         if args.len() != 2 {
             return Err(anyhow!("llRequestSimulatorData expects 2 arguments"));
         }
@@ -4413,19 +6320,46 @@ impl LSLFunctions {
         let request_id = Uuid::new_v4();
         let is_current = region == context.region_name;
         let result = match data_type {
-            5 => if is_current { "1".to_string() } else { "0".to_string() },
-            6 => if is_current { "PG".to_string() } else { String::new() },
+            5 => {
+                if is_current {
+                    "1".to_string()
+                } else {
+                    "0".to_string()
+                }
+            }
+            6 => {
+                if is_current {
+                    "PG".to_string()
+                } else {
+                    String::new()
+                }
+            }
             7 => "256".to_string(),
-            8 => if is_current { context.region_handle.to_string() } else { "0".to_string() },
+            8 => {
+                if is_current {
+                    context.region_handle.to_string()
+                } else {
+                    "0".to_string()
+                }
+            }
             _ => String::new(),
         };
-        self.action_queue.lock().push((context.script_id, ScriptAction::DataserverReply {
-            script_id: context.script_id, query_id: request_id.to_string(), data: result,
-        }));
+        self.action_queue.lock().push((
+            context.script_id,
+            ScriptAction::DataserverReply {
+                script_id: context.script_id,
+                query_id: request_id.to_string(),
+                data: result,
+            },
+        ));
         Ok(LSLValue::Key(request_id))
     }
 
-    async fn ll_get_simulator_hostname(&self, _args: &[LSLValue], _context: &ScriptContext) -> Result<LSLValue> {
+    async fn ll_get_simulator_hostname(
+        &self,
+        _args: &[LSLValue],
+        _context: &ScriptContext,
+    ) -> Result<LSLValue> {
         let hostname = std::env::var("HOSTNAME").unwrap_or_else(|_| "localhost".to_string());
         Ok(LSLValue::String(hostname))
     }
@@ -4449,22 +6383,28 @@ impl LSLFunctions {
             "region_max_prims" => Ok(LSLValue::String("15000".to_string())),
             "sim_channel" => Ok(LSLValue::String("OpenSim Next".to_string())),
             "sim_version" => Ok(LSLValue::String("0.9.3".to_string())),
-            "simulator_hostname" => Ok(LSLValue::String(std::env::var("HOSTNAME").unwrap_or_else(|_| "localhost".to_string()))),
+            "simulator_hostname" => Ok(LSLValue::String(
+                std::env::var("HOSTNAME").unwrap_or_else(|_| "localhost".to_string()),
+            )),
             "region_name" => Ok(LSLValue::String(context.region_name.clone())),
             _ => Ok(LSLValue::String(String::new())),
         }
     }
 
-    async fn ll_get_sim_stats(&self, _args: &[LSLValue], _context: &ScriptContext) -> Result<LSLValue> {
+    async fn ll_get_sim_stats(
+        &self,
+        _args: &[LSLValue],
+        _context: &ScriptContext,
+    ) -> Result<LSLValue> {
         Ok(LSLValue::List(vec![
-            LSLValue::Float(45.0),   // SIM_STAT_PCT_CHARS_STEPPED
-            LSLValue::Float(1.0),    // time dilation
-            LSLValue::Float(45.0),   // sim fps
-            LSLValue::Float(45.0),   // physics fps
-            LSLValue::Integer(1),    // agents in region
-            LSLValue::Integer(0),    // child agents
-            LSLValue::Float(22.0),   // total frame time ms
-            LSLValue::Float(0.5),    // physics step time ms
+            LSLValue::Float(45.0), // SIM_STAT_PCT_CHARS_STEPPED
+            LSLValue::Float(1.0),  // time dilation
+            LSLValue::Float(45.0), // sim fps
+            LSLValue::Float(45.0), // physics fps
+            LSLValue::Integer(1),  // agents in region
+            LSLValue::Integer(0),  // child agents
+            LSLValue::Float(22.0), // total frame time ms
+            LSLValue::Float(0.5),  // physics step time ms
         ]))
     }
 
@@ -4476,7 +6416,11 @@ impl LSLFunctions {
         Ok(LSLValue::Float(context.terrain_height))
     }
 
-    async fn ll_ground_normal(&self, args: &[LSLValue], _context: &ScriptContext) -> Result<LSLValue> {
+    async fn ll_ground_normal(
+        &self,
+        args: &[LSLValue],
+        _context: &ScriptContext,
+    ) -> Result<LSLValue> {
         if args.len() != 1 {
             return Err(anyhow!("llGroundNormal expects 1 argument"));
         }
@@ -4484,7 +6428,11 @@ impl LSLFunctions {
         Ok(LSLValue::Vector(LSLVector::new(0.0, 0.0, 1.0)))
     }
 
-    async fn ll_ground_slope(&self, args: &[LSLValue], _context: &ScriptContext) -> Result<LSLValue> {
+    async fn ll_ground_slope(
+        &self,
+        args: &[LSLValue],
+        _context: &ScriptContext,
+    ) -> Result<LSLValue> {
         if args.len() != 1 {
             return Err(anyhow!("llGroundSlope expects 1 argument"));
         }
@@ -4492,7 +6440,11 @@ impl LSLFunctions {
         Ok(LSLValue::Vector(LSLVector::new(0.0, 0.0, 0.0)))
     }
 
-    async fn ll_ground_contour(&self, args: &[LSLValue], _context: &ScriptContext) -> Result<LSLValue> {
+    async fn ll_ground_contour(
+        &self,
+        args: &[LSLValue],
+        _context: &ScriptContext,
+    ) -> Result<LSLValue> {
         if args.len() != 1 {
             return Err(anyhow!("llGroundContour expects 1 argument"));
         }
@@ -4524,7 +6476,11 @@ impl LSLFunctions {
         Ok(LSLValue::Vector(LSLVector::new(0.0, 0.0, 0.0)))
     }
 
-    async fn ll_edge_of_world(&self, args: &[LSLValue], _context: &ScriptContext) -> Result<LSLValue> {
+    async fn ll_edge_of_world(
+        &self,
+        args: &[LSLValue],
+        _context: &ScriptContext,
+    ) -> Result<LSLValue> {
         if args.len() != 2 {
             return Err(anyhow!("llEdgeOfWorld expects 2 arguments"));
         }
@@ -4533,108 +6489,186 @@ impl LSLFunctions {
         Ok(LSLValue::Integer(0))
     }
 
-    async fn ll_get_sun_direction(&self, _args: &[LSLValue], _context: &ScriptContext) -> Result<LSLValue> {
+    async fn ll_get_sun_direction(
+        &self,
+        _args: &[LSLValue],
+        _context: &ScriptContext,
+    ) -> Result<LSLValue> {
         Ok(LSLValue::Vector(LSLVector::new(0.0, 0.938, -0.347)))
     }
 
-    async fn ll_get_sun_rotation(&self, _args: &[LSLValue], _context: &ScriptContext) -> Result<LSLValue> {
+    async fn ll_get_sun_rotation(
+        &self,
+        _args: &[LSLValue],
+        _context: &ScriptContext,
+    ) -> Result<LSLValue> {
         Ok(LSLValue::Rotation(LSLRotation::new(0.0, 0.0, 0.0, 1.0)))
     }
 
-    async fn ll_get_moon_direction(&self, _args: &[LSLValue], _context: &ScriptContext) -> Result<LSLValue> {
+    async fn ll_get_moon_direction(
+        &self,
+        _args: &[LSLValue],
+        _context: &ScriptContext,
+    ) -> Result<LSLValue> {
         Ok(LSLValue::Vector(LSLVector::new(0.0, -0.938, 0.347)))
     }
 
-    async fn ll_get_moon_rotation(&self, _args: &[LSLValue], _context: &ScriptContext) -> Result<LSLValue> {
+    async fn ll_get_moon_rotation(
+        &self,
+        _args: &[LSLValue],
+        _context: &ScriptContext,
+    ) -> Result<LSLValue> {
         Ok(LSLValue::Rotation(LSLRotation::new(0.0, 0.0, 0.0, 1.0)))
     }
 
-    async fn ll_get_region_sun_direction(&self, _args: &[LSLValue], _context: &ScriptContext) -> Result<LSLValue> {
+    async fn ll_get_region_sun_direction(
+        &self,
+        _args: &[LSLValue],
+        _context: &ScriptContext,
+    ) -> Result<LSLValue> {
         Ok(LSLValue::Vector(LSLVector::new(0.0, 0.938, -0.347)))
     }
 
-    async fn ll_get_region_sun_rotation(&self, _args: &[LSLValue], _context: &ScriptContext) -> Result<LSLValue> {
+    async fn ll_get_region_sun_rotation(
+        &self,
+        _args: &[LSLValue],
+        _context: &ScriptContext,
+    ) -> Result<LSLValue> {
         Ok(LSLValue::Rotation(LSLRotation::new(0.0, 0.0, 0.0, 1.0)))
     }
 
-    async fn ll_get_region_moon_direction(&self, _args: &[LSLValue], _context: &ScriptContext) -> Result<LSLValue> {
+    async fn ll_get_region_moon_direction(
+        &self,
+        _args: &[LSLValue],
+        _context: &ScriptContext,
+    ) -> Result<LSLValue> {
         Ok(LSLValue::Vector(LSLVector::new(0.0, -0.938, 0.347)))
     }
 
-    async fn ll_get_region_moon_rotation(&self, _args: &[LSLValue], _context: &ScriptContext) -> Result<LSLValue> {
+    async fn ll_get_region_moon_rotation(
+        &self,
+        _args: &[LSLValue],
+        _context: &ScriptContext,
+    ) -> Result<LSLValue> {
         Ok(LSLValue::Rotation(LSLRotation::new(0.0, 0.0, 0.0, 1.0)))
     }
 
-    async fn ll_get_day_length(&self, _args: &[LSLValue], _context: &ScriptContext) -> Result<LSLValue> {
+    async fn ll_get_day_length(
+        &self,
+        _args: &[LSLValue],
+        _context: &ScriptContext,
+    ) -> Result<LSLValue> {
         Ok(LSLValue::Integer(14400))
     }
 
-    async fn ll_get_day_offset(&self, _args: &[LSLValue], _context: &ScriptContext) -> Result<LSLValue> {
+    async fn ll_get_day_offset(
+        &self,
+        _args: &[LSLValue],
+        _context: &ScriptContext,
+    ) -> Result<LSLValue> {
         Ok(LSLValue::Integer(0))
     }
 
-    async fn ll_get_region_day_length(&self, _args: &[LSLValue], _context: &ScriptContext) -> Result<LSLValue> {
+    async fn ll_get_region_day_length(
+        &self,
+        _args: &[LSLValue],
+        _context: &ScriptContext,
+    ) -> Result<LSLValue> {
         Ok(LSLValue::Integer(14400))
     }
 
-    async fn ll_get_region_day_offset(&self, _args: &[LSLValue], _context: &ScriptContext) -> Result<LSLValue> {
+    async fn ll_get_region_day_offset(
+        &self,
+        _args: &[LSLValue],
+        _context: &ScriptContext,
+    ) -> Result<LSLValue> {
         Ok(LSLValue::Integer(0))
     }
 
     async fn ll_rez_object(&self, args: &[LSLValue], context: &ScriptContext) -> Result<LSLValue> {
-        if args.len() != 5 { return Err(anyhow!("llRezObject expects 5 arguments")); }
+        if args.len() != 5 {
+            return Err(anyhow!("llRezObject expects 5 arguments"));
+        }
         let inventory = args[0].to_string();
         let pos = args[1].to_vector();
         let vel = args[2].to_vector();
         let rot = args[3].to_rotation();
         let param = args[4].to_integer();
-        self.action_queue.lock().push((context.script_id, ScriptAction::RezObject {
-            prim_id: context.object_id, item_name: inventory,
-            position: [pos.x as f32, pos.y as f32, pos.z as f32],
-            velocity: [vel.x as f32, vel.y as f32, vel.z as f32],
-            rotation: [rot.x as f32, rot.y as f32, rot.z as f32, rot.s as f32],
-            start_param: param, at_root: false, owner_id: context.owner_id,
-        }));
+        self.action_queue.lock().push((
+            context.script_id,
+            ScriptAction::RezObject {
+                prim_id: context.object_id,
+                item_name: inventory,
+                position: [pos.x as f32, pos.y as f32, pos.z as f32],
+                velocity: [vel.x as f32, vel.y as f32, vel.z as f32],
+                rotation: [rot.x as f32, rot.y as f32, rot.z as f32, rot.s as f32],
+                start_param: param,
+                at_root: false,
+                owner_id: context.owner_id,
+            },
+        ));
         Ok(LSLValue::Integer(0))
     }
 
     async fn ll_rez_at_root(&self, args: &[LSLValue], context: &ScriptContext) -> Result<LSLValue> {
-        if args.len() != 5 { return Err(anyhow!("llRezAtRoot expects 5 arguments")); }
+        if args.len() != 5 {
+            return Err(anyhow!("llRezAtRoot expects 5 arguments"));
+        }
         let inventory = args[0].to_string();
         let pos = args[1].to_vector();
         let vel = args[2].to_vector();
         let rot = args[3].to_rotation();
         let param = args[4].to_integer();
-        self.action_queue.lock().push((context.script_id, ScriptAction::RezObject {
-            prim_id: context.object_id, item_name: inventory,
-            position: [pos.x as f32, pos.y as f32, pos.z as f32],
-            velocity: [vel.x as f32, vel.y as f32, vel.z as f32],
-            rotation: [rot.x as f32, rot.y as f32, rot.z as f32, rot.s as f32],
-            start_param: param, at_root: true, owner_id: context.owner_id,
-        }));
+        self.action_queue.lock().push((
+            context.script_id,
+            ScriptAction::RezObject {
+                prim_id: context.object_id,
+                item_name: inventory,
+                position: [pos.x as f32, pos.y as f32, pos.z as f32],
+                velocity: [vel.x as f32, vel.y as f32, vel.z as f32],
+                rotation: [rot.x as f32, rot.y as f32, rot.z as f32, rot.s as f32],
+                start_param: param,
+                at_root: true,
+                owner_id: context.owner_id,
+            },
+        ));
         Ok(LSLValue::Integer(0))
     }
 
-    async fn ll_rez_object_with_params(&self, args: &[LSLValue], _context: &ScriptContext) -> Result<LSLValue> {
+    async fn ll_rez_object_with_params(
+        &self,
+        args: &[LSLValue],
+        _context: &ScriptContext,
+    ) -> Result<LSLValue> {
         if args.len() != 2 {
             return Err(anyhow!("llRezObjectWithParams expects 2 arguments"));
         }
         let inventory = args[0].to_string();
         let params = args[1].to_list();
-        debug!("Rezzing object with params {}: {} params", inventory, params.len());
+        debug!(
+            "Rezzing object with params {}: {} params",
+            inventory,
+            params.len()
+        );
         Ok(LSLValue::Key(Uuid::new_v4()))
     }
 
     async fn ll_die(&self, _args: &[LSLValue], context: &ScriptContext) -> Result<LSLValue> {
         self.action_queue.lock().push((
             context.script_id,
-            ScriptAction::Die { object_id: context.object_id },
+            ScriptAction::Die {
+                object_id: context.object_id,
+            },
         ));
         debug!("Object {} dying", context.object_id);
         Ok(LSLValue::Integer(0))
     }
 
-    async fn ll_derez_object(&self, args: &[LSLValue], _context: &ScriptContext) -> Result<LSLValue> {
+    async fn ll_derez_object(
+        &self,
+        args: &[LSLValue],
+        _context: &ScriptContext,
+    ) -> Result<LSLValue> {
         if args.len() != 2 {
             return Err(anyhow!("llDerezObject expects 2 arguments"));
         }
@@ -4644,11 +6678,19 @@ impl LSLFunctions {
         Ok(LSLValue::Integer(1))
     }
 
-    async fn ll_get_creator(&self, _args: &[LSLValue], context: &ScriptContext) -> Result<LSLValue> {
+    async fn ll_get_creator(
+        &self,
+        _args: &[LSLValue],
+        context: &ScriptContext,
+    ) -> Result<LSLValue> {
         Ok(LSLValue::Key(context.owner_id))
     }
 
-    async fn ll_get_owner_key(&self, args: &[LSLValue], _context: &ScriptContext) -> Result<LSLValue> {
+    async fn ll_get_owner_key(
+        &self,
+        args: &[LSLValue],
+        _context: &ScriptContext,
+    ) -> Result<LSLValue> {
         if args.len() != 1 {
             return Err(anyhow!("llGetOwnerKey expects 1 argument"));
         }
@@ -4656,7 +6698,11 @@ impl LSLFunctions {
         Ok(LSLValue::Key(Uuid::nil()))
     }
 
-    async fn ll_get_bounding_box(&self, args: &[LSLValue], _context: &ScriptContext) -> Result<LSLValue> {
+    async fn ll_get_bounding_box(
+        &self,
+        args: &[LSLValue],
+        _context: &ScriptContext,
+    ) -> Result<LSLValue> {
         if args.len() != 1 {
             return Err(anyhow!("llGetBoundingBox expects 1 argument"));
         }
@@ -4667,15 +6713,27 @@ impl LSLFunctions {
         ]))
     }
 
-    async fn ll_get_geometric_center(&self, _args: &[LSLValue], _context: &ScriptContext) -> Result<LSLValue> {
+    async fn ll_get_geometric_center(
+        &self,
+        _args: &[LSLValue],
+        _context: &ScriptContext,
+    ) -> Result<LSLValue> {
         Ok(LSLValue::Vector(LSLVector::new(0.0, 0.0, 0.0)))
     }
 
-    async fn ll_get_center_of_mass(&self, _args: &[LSLValue], _context: &ScriptContext) -> Result<LSLValue> {
+    async fn ll_get_center_of_mass(
+        &self,
+        _args: &[LSLValue],
+        _context: &ScriptContext,
+    ) -> Result<LSLValue> {
         Ok(LSLValue::Vector(LSLVector::new(0.0, 0.0, 0.0)))
     }
 
-    async fn ll_get_object_details(&self, args: &[LSLValue], context: &ScriptContext) -> Result<LSLValue> {
+    async fn ll_get_object_details(
+        &self,
+        args: &[LSLValue],
+        context: &ScriptContext,
+    ) -> Result<LSLValue> {
         if args.len() != 2 {
             return Err(anyhow!("llGetObjectDetails expects 2 arguments"));
         }
@@ -4685,25 +6743,70 @@ impl LSLFunctions {
         let mut result = Vec::new();
         for detail in details {
             match detail.to_integer() {
-                1 => result.push(LSLValue::String(if is_self { context.object_name.clone() } else { String::new() })),
-                2 => result.push(LSLValue::String(if is_self { context.object_description.clone() } else { String::new() })),
-                3 => result.push(LSLValue::Vector(if is_self { LSLVector::new(context.position.0, context.position.1, context.position.2) } else { LSLVector::zero() })),
-                4 => result.push(LSLValue::Rotation(if is_self { LSLRotation::new(context.rotation.0, context.rotation.1, context.rotation.2, context.rotation.3) } else { LSLRotation::identity() })),
-                5 => result.push(LSLValue::Vector(if is_self { LSLVector::new(context.velocity.0, context.velocity.1, context.velocity.2) } else { LSLVector::zero() })),
-                6 => result.push(LSLValue::Key(if is_self { context.owner_id } else { Uuid::nil() })),
+                1 => result.push(LSLValue::String(if is_self {
+                    context.object_name.clone()
+                } else {
+                    String::new()
+                })),
+                2 => result.push(LSLValue::String(if is_self {
+                    context.object_description.clone()
+                } else {
+                    String::new()
+                })),
+                3 => result.push(LSLValue::Vector(if is_self {
+                    LSLVector::new(context.position.0, context.position.1, context.position.2)
+                } else {
+                    LSLVector::zero()
+                })),
+                4 => result.push(LSLValue::Rotation(if is_self {
+                    LSLRotation::new(
+                        context.rotation.0,
+                        context.rotation.1,
+                        context.rotation.2,
+                        context.rotation.3,
+                    )
+                } else {
+                    LSLRotation::identity()
+                })),
+                5 => result.push(LSLValue::Vector(if is_self {
+                    LSLVector::new(context.velocity.0, context.velocity.1, context.velocity.2)
+                } else {
+                    LSLVector::zero()
+                })),
+                6 => result.push(LSLValue::Key(if is_self {
+                    context.owner_id
+                } else {
+                    Uuid::nil()
+                })),
                 7 => result.push(LSLValue::Key(Uuid::nil())),
                 8 => result.push(LSLValue::Key(context.owner_id)),
                 9 => result.push(LSLValue::Integer(if is_self { 0x01 } else { 0 })),
-                10 => result.push(LSLValue::Integer(if is_self { context.link_number.max(1) } else { 0 })),
-                11 => result.push(LSLValue::String(if is_self { context.script_name.clone() } else { String::new() })),
+                10 => result.push(LSLValue::Integer(if is_self {
+                    context.link_number.max(1)
+                } else {
+                    0
+                })),
+                11 => result.push(LSLValue::String(if is_self {
+                    context.script_name.clone()
+                } else {
+                    String::new()
+                })),
                 12 => result.push(LSLValue::Vector(LSLVector::zero())),
                 13 => result.push(LSLValue::Vector(LSLVector::zero())),
-                14 => result.push(LSLValue::Float(if is_self { context.script_start_time.elapsed().as_secs_f32() } else { 0.0 })),
+                14 => result.push(LSLValue::Float(if is_self {
+                    context.script_start_time.elapsed().as_secs_f32()
+                } else {
+                    0.0
+                })),
                 15 => result.push(LSLValue::Float(1.0)),
                 16 => result.push(LSLValue::Float(1.0)),
                 17 => result.push(LSLValue::String(context.region_name.clone())),
                 18 => result.push(LSLValue::Vector(LSLVector::zero())),
-                19 => result.push(LSLValue::Vector(if is_self { LSLVector::new(context.scale.0, context.scale.1, context.scale.2) } else { LSLVector::new(1.0, 1.0, 1.0) })),
+                19 => result.push(LSLValue::Vector(if is_self {
+                    LSLVector::new(context.scale.0, context.scale.1, context.scale.2)
+                } else {
+                    LSLVector::new(1.0, 1.0, 1.0)
+                })),
                 20 => result.push(LSLValue::Integer(0)),
                 21 => result.push(LSLValue::Integer(0)),
                 22 => result.push(LSLValue::Float(0.0)),
@@ -4731,15 +6834,69 @@ impl LSLFunctions {
         let status = args[0].to_integer();
         let flags = context.flags;
         let result = match status {
-            1 => if flags & 0x01 != 0 { 1 } else { 0 },  // STATUS_PHYSICS
-            2 => if flags & 0x02 != 0 { 1 } else { 0 },  // STATUS_ROTATE_X
-            4 => if flags & 0x04 != 0 { 1 } else { 0 },  // STATUS_ROTATE_Y
-            8 => if flags & 0x08 != 0 { 1 } else { 0 },  // STATUS_ROTATE_Z
-            16 => if flags & 0x20 != 0 { 1 } else { 0 }, // STATUS_PHANTOM (flag bit 0x20)
-            32 => if flags & 0x40 != 0 { 1 } else { 0 }, // STATUS_SANDBOX
-            64 => if flags & 0x400 != 0 { 1 } else { 0 },  // STATUS_BLOCK_GRAB
-            128 => if flags & 0x80 != 0 { 1 } else { 0 }, // STATUS_DIE_AT_EDGE
-            256 => if flags & 0x100 != 0 { 1 } else { 0 }, // STATUS_RETURN_AT_EDGE
+            1 => {
+                if flags & 0x01 != 0 {
+                    1
+                } else {
+                    0
+                }
+            } // STATUS_PHYSICS
+            2 => {
+                if flags & 0x02 != 0 {
+                    1
+                } else {
+                    0
+                }
+            } // STATUS_ROTATE_X
+            4 => {
+                if flags & 0x04 != 0 {
+                    1
+                } else {
+                    0
+                }
+            } // STATUS_ROTATE_Y
+            8 => {
+                if flags & 0x08 != 0 {
+                    1
+                } else {
+                    0
+                }
+            } // STATUS_ROTATE_Z
+            16 => {
+                if flags & 0x20 != 0 {
+                    1
+                } else {
+                    0
+                }
+            } // STATUS_PHANTOM (flag bit 0x20)
+            32 => {
+                if flags & 0x40 != 0 {
+                    1
+                } else {
+                    0
+                }
+            } // STATUS_SANDBOX
+            64 => {
+                if flags & 0x400 != 0 {
+                    1
+                } else {
+                    0
+                }
+            } // STATUS_BLOCK_GRAB
+            128 => {
+                if flags & 0x80 != 0 {
+                    1
+                } else {
+                    0
+                }
+            } // STATUS_DIE_AT_EDGE
+            256 => {
+                if flags & 0x100 != 0 {
+                    1
+                } else {
+                    0
+                }
+            } // STATUS_RETURN_AT_EDGE
             _ => 0,
         };
         Ok(LSLValue::Integer(result))
@@ -4763,48 +6920,111 @@ impl LSLFunctions {
     }
 
     async fn ll_set_damage(&self, args: &[LSLValue], context: &ScriptContext) -> Result<LSLValue> {
-        if args.len() != 1 { return Err(anyhow!("llSetDamage expects 1 argument")); }
+        if args.len() != 1 {
+            return Err(anyhow!("llSetDamage expects 1 argument"));
+        }
         let damage = args[0].to_float() as f32;
-        self.action_queue.lock().push((context.script_id, ScriptAction::SetDamage { object_id: context.object_id, damage }));
+        self.action_queue.lock().push((
+            context.script_id,
+            ScriptAction::SetDamage {
+                object_id: context.object_id,
+                damage,
+            },
+        ));
         Ok(LSLValue::Integer(0))
     }
 
-    async fn ll_allow_inventory_drop(&self, args: &[LSLValue], context: &ScriptContext) -> Result<LSLValue> {
-        if args.len() != 1 { return Err(anyhow!("llAllowInventoryDrop expects 1 argument")); }
+    async fn ll_allow_inventory_drop(
+        &self,
+        args: &[LSLValue],
+        context: &ScriptContext,
+    ) -> Result<LSLValue> {
+        if args.len() != 1 {
+            return Err(anyhow!("llAllowInventoryDrop expects 1 argument"));
+        }
         let allow = args[0].is_true();
-        self.action_queue.lock().push((context.script_id, ScriptAction::SetAllowInventoryDrop { object_id: context.object_id, allow }));
+        self.action_queue.lock().push((
+            context.script_id,
+            ScriptAction::SetAllowInventoryDrop {
+                object_id: context.object_id,
+                allow,
+            },
+        ));
         Ok(LSLValue::Integer(0))
     }
 
-    async fn ll_pass_touches(&self, args: &[LSLValue], context: &ScriptContext) -> Result<LSLValue> {
-        if args.len() != 1 { return Err(anyhow!("llPassTouches expects 1 argument")); }
+    async fn ll_pass_touches(
+        &self,
+        args: &[LSLValue],
+        context: &ScriptContext,
+    ) -> Result<LSLValue> {
+        if args.len() != 1 {
+            return Err(anyhow!("llPassTouches expects 1 argument"));
+        }
         let pass = args[0].is_true();
-        self.action_queue.lock().push((context.script_id, ScriptAction::SetPassTouches { object_id: context.object_id, pass }));
+        self.action_queue.lock().push((
+            context.script_id,
+            ScriptAction::SetPassTouches {
+                object_id: context.object_id,
+                pass,
+            },
+        ));
         Ok(LSLValue::Integer(0))
     }
 
-    async fn ll_pass_collisions(&self, args: &[LSLValue], context: &ScriptContext) -> Result<LSLValue> {
-        if args.len() != 1 { return Err(anyhow!("llPassCollisions expects 1 argument")); }
+    async fn ll_pass_collisions(
+        &self,
+        args: &[LSLValue],
+        context: &ScriptContext,
+    ) -> Result<LSLValue> {
+        if args.len() != 1 {
+            return Err(anyhow!("llPassCollisions expects 1 argument"));
+        }
         let pass = args[0].is_true();
-        self.action_queue.lock().push((context.script_id, ScriptAction::SetPassCollisions { object_id: context.object_id, pass }));
+        self.action_queue.lock().push((
+            context.script_id,
+            ScriptAction::SetPassCollisions {
+                object_id: context.object_id,
+                pass,
+            },
+        ));
         Ok(LSLValue::Integer(0))
     }
 
-    async fn ll_collision_filter(&self, args: &[LSLValue], _context: &ScriptContext) -> Result<LSLValue> {
+    async fn ll_collision_filter(
+        &self,
+        args: &[LSLValue],
+        _context: &ScriptContext,
+    ) -> Result<LSLValue> {
         if args.len() != 3 {
             return Err(anyhow!("llCollisionFilter expects 3 arguments"));
         }
         let name = args[0].to_string();
         let id = args[1].to_key();
         let accept = args[2].is_true();
-        debug!("Collision filter: name={}, id={}, accept={}", name, id, accept);
+        debug!(
+            "Collision filter: name={}, id={}, accept={}",
+            name, id, accept
+        );
         Ok(LSLValue::Integer(0))
     }
 
-    async fn ll_volume_detect(&self, args: &[LSLValue], context: &ScriptContext) -> Result<LSLValue> {
-        if args.len() != 1 { return Err(anyhow!("llVolumeDetect expects 1 argument")); }
+    async fn ll_volume_detect(
+        &self,
+        args: &[LSLValue],
+        context: &ScriptContext,
+    ) -> Result<LSLValue> {
+        if args.len() != 1 {
+            return Err(anyhow!("llVolumeDetect expects 1 argument"));
+        }
         let detect = args[0].is_true();
-        self.action_queue.lock().push((context.script_id, ScriptAction::SetVolumeDetect { object_id: context.object_id, detect }));
+        self.action_queue.lock().push((
+            context.script_id,
+            ScriptAction::SetVolumeDetect {
+                object_id: context.object_id,
+                detect,
+            },
+        ));
         Ok(LSLValue::Integer(0))
     }
 
@@ -4818,7 +7038,10 @@ impl LSLFunctions {
             Some(LSLValue::Integer(h)) => *h,
             _ => 1,
         };
-        context.variables.insert("__target_next_handle".to_string(), LSLValue::Integer(handle + 1));
+        context.variables.insert(
+            "__target_next_handle".to_string(),
+            LSLValue::Integer(handle + 1),
+        );
         self.action_queue.lock().push((
             context.script_id,
             ScriptAction::AddPosTarget {
@@ -4828,11 +7051,18 @@ impl LSLFunctions {
                 range: range as f32,
             },
         ));
-        debug!("Setting target {} at {:?}, range={}", handle, position, range);
+        debug!(
+            "Setting target {} at {:?}, range={}",
+            handle, position, range
+        );
         Ok(LSLValue::Integer(handle))
     }
 
-    async fn ll_target_remove(&self, args: &[LSLValue], context: &mut ScriptContext) -> Result<LSLValue> {
+    async fn ll_target_remove(
+        &self,
+        args: &[LSLValue],
+        context: &mut ScriptContext,
+    ) -> Result<LSLValue> {
         if args.len() != 1 {
             return Err(anyhow!("llTargetRemove expects 1 argument"));
         }
@@ -4848,7 +7078,11 @@ impl LSLFunctions {
         Ok(LSLValue::Integer(0))
     }
 
-    async fn ll_rot_target(&self, args: &[LSLValue], context: &mut ScriptContext) -> Result<LSLValue> {
+    async fn ll_rot_target(
+        &self,
+        args: &[LSLValue],
+        context: &mut ScriptContext,
+    ) -> Result<LSLValue> {
         if args.len() != 2 {
             return Err(anyhow!("llRotTarget expects 2 arguments"));
         }
@@ -4858,7 +7092,10 @@ impl LSLFunctions {
             Some(LSLValue::Integer(h)) => *h,
             _ => 1,
         };
-        context.variables.insert("__rot_target_next_handle".to_string(), LSLValue::Integer(handle + 1));
+        context.variables.insert(
+            "__rot_target_next_handle".to_string(),
+            LSLValue::Integer(handle + 1),
+        );
         self.action_queue.lock().push((
             context.script_id,
             ScriptAction::AddRotTarget {
@@ -4868,11 +7105,18 @@ impl LSLFunctions {
                 error: error as f32,
             },
         ));
-        debug!("Setting rotation target {} {:?}, error={}", handle, rotation, error);
+        debug!(
+            "Setting rotation target {} {:?}, error={}",
+            handle, rotation, error
+        );
         Ok(LSLValue::Integer(handle))
     }
 
-    async fn ll_rot_target_remove(&self, args: &[LSLValue], context: &mut ScriptContext) -> Result<LSLValue> {
+    async fn ll_rot_target_remove(
+        &self,
+        args: &[LSLValue],
+        context: &mut ScriptContext,
+    ) -> Result<LSLValue> {
         if args.len() != 1 {
             return Err(anyhow!("llRotTargetRemove expects 1 argument"));
         }
@@ -4907,15 +7151,25 @@ impl LSLFunctions {
         Ok(LSLValue::Integer(0))
     }
 
-    async fn ll_stop_look_at(&self, _args: &[LSLValue], context: &mut ScriptContext) -> Result<LSLValue> {
+    async fn ll_stop_look_at(
+        &self,
+        _args: &[LSLValue],
+        context: &mut ScriptContext,
+    ) -> Result<LSLValue> {
         self.action_queue.lock().push((
             context.script_id,
-            ScriptAction::StopLookAt { object_id: context.object_id },
+            ScriptAction::StopLookAt {
+                object_id: context.object_id,
+            },
         ));
         Ok(LSLValue::Integer(0))
     }
 
-    async fn ll_rot_look_at(&self, args: &[LSLValue], context: &mut ScriptContext) -> Result<LSLValue> {
+    async fn ll_rot_look_at(
+        &self,
+        args: &[LSLValue],
+        context: &mut ScriptContext,
+    ) -> Result<LSLValue> {
         if args.len() != 3 {
             return Err(anyhow!("llRotLookAt expects 3 arguments"));
         }
@@ -4938,7 +7192,11 @@ impl LSLFunctions {
         Ok(LSLValue::Integer(0))
     }
 
-    async fn ll_stop_point_at(&self, _args: &[LSLValue], _context: &ScriptContext) -> Result<LSLValue> {
+    async fn ll_stop_point_at(
+        &self,
+        _args: &[LSLValue],
+        _context: &ScriptContext,
+    ) -> Result<LSLValue> {
         Ok(LSLValue::Integer(0))
     }
 
@@ -4999,41 +7257,129 @@ impl LSLFunctions {
             let code = rules[i].to_integer();
             i += 1;
             match code {
-                0 => { part_data_flags = rules[i].to_integer() as u32; i += 1; }
-                1 => { let v = rules[i].to_vector(); start_color = [v.x, v.y, v.z, start_color[3]]; i += 1; }
-                2 => { start_color[3] = rules[i].to_float(); i += 1; }
-                3 => { let v = rules[i].to_vector(); end_color = [v.x, v.y, v.z, end_color[3]]; i += 1; }
-                4 => { end_color[3] = rules[i].to_float(); i += 1; }
-                5 => { let v = rules[i].to_vector(); start_scale = [v.x, v.y]; i += 1; }
-                6 => { let v = rules[i].to_vector(); end_scale = [v.x, v.y]; i += 1; }
-                7 => { part_max_age = rules[i].to_float(); i += 1; }
-                8 => { let v = rules[i].to_vector(); accel = [v.x, v.y, v.z]; i += 1; }
-                9 => { pattern = rules[i].to_integer() as u8; i += 1; }
+                0 => {
+                    part_data_flags = rules[i].to_integer() as u32;
+                    i += 1;
+                }
+                1 => {
+                    let v = rules[i].to_vector();
+                    start_color = [v.x, v.y, v.z, start_color[3]];
+                    i += 1;
+                }
+                2 => {
+                    start_color[3] = rules[i].to_float();
+                    i += 1;
+                }
+                3 => {
+                    let v = rules[i].to_vector();
+                    end_color = [v.x, v.y, v.z, end_color[3]];
+                    i += 1;
+                }
+                4 => {
+                    end_color[3] = rules[i].to_float();
+                    i += 1;
+                }
+                5 => {
+                    let v = rules[i].to_vector();
+                    start_scale = [v.x, v.y];
+                    i += 1;
+                }
+                6 => {
+                    let v = rules[i].to_vector();
+                    end_scale = [v.x, v.y];
+                    i += 1;
+                }
+                7 => {
+                    part_max_age = rules[i].to_float();
+                    i += 1;
+                }
+                8 => {
+                    let v = rules[i].to_vector();
+                    accel = [v.x, v.y, v.z];
+                    i += 1;
+                }
+                9 => {
+                    pattern = rules[i].to_integer() as u8;
+                    i += 1;
+                }
                 12 => {
                     let s = rules[i].to_string();
                     texture = Uuid::parse_str(&s).unwrap_or(Uuid::nil());
                     i += 1;
                 }
-                13 => { burst_rate = rules[i].to_float(); i += 1; }
-                15 => { burst_part_count = rules[i].to_integer().clamp(0, 255) as u8; i += 1; }
-                16 => { burst_radius = rules[i].to_float(); i += 1; }
-                17 => { burst_speed_min = rules[i].to_float(); i += 1; }
-                18 => { burst_speed_max = rules[i].to_float(); i += 1; }
-                19 => { max_age = rules[i].to_float(); i += 1; }
-                20 => { target = rules[i].to_key(); i += 1; }
-                21 => { let v = rules[i].to_vector(); ang_vel = [v.x, v.y, v.z]; i += 1; }
-                22 => { inner_angle = rules[i].to_float(); i += 1; }
-                23 => { outer_angle = rules[i].to_float(); i += 1; }
-                24 => { blend_source = rules[i].to_integer() as u8; has_blend = true; i += 1; }
-                25 => { blend_dest = rules[i].to_integer() as u8; has_blend = true; i += 1; }
-                26 => { start_glow = rules[i].to_float(); has_glow = true; i += 1; }
-                27 => { end_glow = rules[i].to_float(); has_glow = true; i += 1; }
-                _ => { i += 1; }
+                13 => {
+                    burst_rate = rules[i].to_float();
+                    i += 1;
+                }
+                15 => {
+                    burst_part_count = rules[i].to_integer().clamp(0, 255) as u8;
+                    i += 1;
+                }
+                16 => {
+                    burst_radius = rules[i].to_float();
+                    i += 1;
+                }
+                17 => {
+                    burst_speed_min = rules[i].to_float();
+                    i += 1;
+                }
+                18 => {
+                    burst_speed_max = rules[i].to_float();
+                    i += 1;
+                }
+                19 => {
+                    max_age = rules[i].to_float();
+                    i += 1;
+                }
+                20 => {
+                    target = rules[i].to_key();
+                    i += 1;
+                }
+                21 => {
+                    let v = rules[i].to_vector();
+                    ang_vel = [v.x, v.y, v.z];
+                    i += 1;
+                }
+                22 => {
+                    inner_angle = rules[i].to_float();
+                    i += 1;
+                }
+                23 => {
+                    outer_angle = rules[i].to_float();
+                    i += 1;
+                }
+                24 => {
+                    blend_source = rules[i].to_integer() as u8;
+                    has_blend = true;
+                    i += 1;
+                }
+                25 => {
+                    blend_dest = rules[i].to_integer() as u8;
+                    has_blend = true;
+                    i += 1;
+                }
+                26 => {
+                    start_glow = rules[i].to_float();
+                    has_glow = true;
+                    i += 1;
+                }
+                27 => {
+                    end_glow = rules[i].to_float();
+                    has_glow = true;
+                    i += 1;
+                }
+                _ => {
+                    i += 1;
+                }
             }
         }
 
-        if has_glow { part_data_flags |= 0x10000; }
-        if has_blend { part_data_flags |= 0x20000; }
+        if has_glow {
+            part_data_flags |= 0x10000;
+        }
+        if has_blend {
+            part_data_flags |= 0x20000;
+        }
 
         let part_data_size: u32 = 18 + if has_glow { 2 } else { 0 } + if has_blend { 2 } else { 0 };
         let mut buf = Vec::with_capacity(92);
@@ -5093,7 +7439,11 @@ impl LSLFunctions {
         buf
     }
 
-    async fn ll_particle_system(&self, args: &[LSLValue], context: &mut ScriptContext) -> Result<LSLValue> {
+    async fn ll_particle_system(
+        &self,
+        args: &[LSLValue],
+        context: &mut ScriptContext,
+    ) -> Result<LSLValue> {
         if args.len() != 1 {
             return Err(anyhow!("llParticleSystem expects 1 argument"));
         }
@@ -5109,7 +7459,11 @@ impl LSLFunctions {
         Ok(LSLValue::Integer(0))
     }
 
-    async fn ll_link_particle_system(&self, args: &[LSLValue], context: &mut ScriptContext) -> Result<LSLValue> {
+    async fn ll_link_particle_system(
+        &self,
+        args: &[LSLValue],
+        context: &mut ScriptContext,
+    ) -> Result<LSLValue> {
         if args.len() != 2 {
             return Err(anyhow!("llLinkParticleSystem expects 2 arguments"));
         }
@@ -5126,71 +7480,143 @@ impl LSLFunctions {
         Ok(LSLValue::Integer(0))
     }
 
-    async fn ll_make_explosion(&self, args: &[LSLValue], context: &mut ScriptContext) -> Result<LSLValue> {
-        if args.len() < 5 { return Err(anyhow!("llMakeExplosion expects at least 5 arguments")); }
+    async fn ll_make_explosion(
+        &self,
+        args: &[LSLValue],
+        context: &mut ScriptContext,
+    ) -> Result<LSLValue> {
+        if args.len() < 5 {
+            return Err(anyhow!("llMakeExplosion expects at least 5 arguments"));
+        }
         let particles = args[0].to_integer();
         let scale = args[1].to_float();
         let rules = vec![
-            LSLValue::Integer(0), LSLValue::Integer(0x02 | 0x20),
-            LSLValue::Integer(1), LSLValue::Integer(particles.min(100)),
-            LSLValue::Integer(2), LSLValue::Float(1.0),
-            LSLValue::Integer(3), LSLValue::Float(0.5),
-            LSLValue::Integer(5), LSLValue::Float(scale),
-            LSLValue::Integer(7), LSLValue::Float(2.0),
+            LSLValue::Integer(0),
+            LSLValue::Integer(0x02 | 0x20),
+            LSLValue::Integer(1),
+            LSLValue::Integer(particles.min(100)),
+            LSLValue::Integer(2),
+            LSLValue::Float(1.0),
+            LSLValue::Integer(3),
+            LSLValue::Float(0.5),
+            LSLValue::Integer(5),
+            LSLValue::Float(scale),
+            LSLValue::Integer(7),
+            LSLValue::Float(2.0),
         ];
         let ps_bytes = self.encode_particle_system(&rules);
-        self.action_queue.lock().push((context.script_id, ScriptAction::ParticleSystem { object_id: context.object_id, rules: ps_bytes }));
+        self.action_queue.lock().push((
+            context.script_id,
+            ScriptAction::ParticleSystem {
+                object_id: context.object_id,
+                rules: ps_bytes,
+            },
+        ));
         Ok(LSLValue::Integer(0))
     }
 
-    async fn ll_make_fire(&self, args: &[LSLValue], context: &mut ScriptContext) -> Result<LSLValue> {
-        if args.len() < 5 { return Err(anyhow!("llMakeFire expects at least 5 arguments")); }
+    async fn ll_make_fire(
+        &self,
+        args: &[LSLValue],
+        context: &mut ScriptContext,
+    ) -> Result<LSLValue> {
+        if args.len() < 5 {
+            return Err(anyhow!("llMakeFire expects at least 5 arguments"));
+        }
         let particles = args[0].to_integer();
         let scale = args[1].to_float();
         let rules = vec![
-            LSLValue::Integer(0), LSLValue::Integer(0x02 | 0x10 | 0x100),
-            LSLValue::Integer(1), LSLValue::Integer(particles.min(100)),
-            LSLValue::Integer(2), LSLValue::Float(3.0),
-            LSLValue::Integer(3), LSLValue::Float(0.5),
-            LSLValue::Integer(5), LSLValue::Float(scale),
-            LSLValue::Integer(7), LSLValue::Float(0.5),
+            LSLValue::Integer(0),
+            LSLValue::Integer(0x02 | 0x10 | 0x100),
+            LSLValue::Integer(1),
+            LSLValue::Integer(particles.min(100)),
+            LSLValue::Integer(2),
+            LSLValue::Float(3.0),
+            LSLValue::Integer(3),
+            LSLValue::Float(0.5),
+            LSLValue::Integer(5),
+            LSLValue::Float(scale),
+            LSLValue::Integer(7),
+            LSLValue::Float(0.5),
         ];
         let ps_bytes = self.encode_particle_system(&rules);
-        self.action_queue.lock().push((context.script_id, ScriptAction::ParticleSystem { object_id: context.object_id, rules: ps_bytes }));
+        self.action_queue.lock().push((
+            context.script_id,
+            ScriptAction::ParticleSystem {
+                object_id: context.object_id,
+                rules: ps_bytes,
+            },
+        ));
         Ok(LSLValue::Integer(0))
     }
 
-    async fn ll_make_fountain(&self, args: &[LSLValue], context: &mut ScriptContext) -> Result<LSLValue> {
-        if args.len() < 5 { return Err(anyhow!("llMakeFountain expects at least 5 arguments")); }
+    async fn ll_make_fountain(
+        &self,
+        args: &[LSLValue],
+        context: &mut ScriptContext,
+    ) -> Result<LSLValue> {
+        if args.len() < 5 {
+            return Err(anyhow!("llMakeFountain expects at least 5 arguments"));
+        }
         let particles = args[0].to_integer();
         let scale = args[1].to_float();
         let rules = vec![
-            LSLValue::Integer(0), LSLValue::Integer(0x02 | 0x80),
-            LSLValue::Integer(1), LSLValue::Integer(particles.min(100)),
-            LSLValue::Integer(2), LSLValue::Float(5.0),
-            LSLValue::Integer(3), LSLValue::Float(1.0),
-            LSLValue::Integer(5), LSLValue::Float(scale),
-            LSLValue::Integer(7), LSLValue::Float(0.5),
+            LSLValue::Integer(0),
+            LSLValue::Integer(0x02 | 0x80),
+            LSLValue::Integer(1),
+            LSLValue::Integer(particles.min(100)),
+            LSLValue::Integer(2),
+            LSLValue::Float(5.0),
+            LSLValue::Integer(3),
+            LSLValue::Float(1.0),
+            LSLValue::Integer(5),
+            LSLValue::Float(scale),
+            LSLValue::Integer(7),
+            LSLValue::Float(0.5),
         ];
         let ps_bytes = self.encode_particle_system(&rules);
-        self.action_queue.lock().push((context.script_id, ScriptAction::ParticleSystem { object_id: context.object_id, rules: ps_bytes }));
+        self.action_queue.lock().push((
+            context.script_id,
+            ScriptAction::ParticleSystem {
+                object_id: context.object_id,
+                rules: ps_bytes,
+            },
+        ));
         Ok(LSLValue::Integer(0))
     }
 
-    async fn ll_make_smoke(&self, args: &[LSLValue], context: &mut ScriptContext) -> Result<LSLValue> {
-        if args.len() < 5 { return Err(anyhow!("llMakeSmoke expects at least 5 arguments")); }
+    async fn ll_make_smoke(
+        &self,
+        args: &[LSLValue],
+        context: &mut ScriptContext,
+    ) -> Result<LSLValue> {
+        if args.len() < 5 {
+            return Err(anyhow!("llMakeSmoke expects at least 5 arguments"));
+        }
         let particles = args[0].to_integer();
         let scale = args[1].to_float();
         let rules = vec![
-            LSLValue::Integer(0), LSLValue::Integer(0x02 | 0x10 | 0x100),
-            LSLValue::Integer(1), LSLValue::Integer(particles.min(100)),
-            LSLValue::Integer(2), LSLValue::Float(8.0),
-            LSLValue::Integer(3), LSLValue::Float(2.0),
-            LSLValue::Integer(5), LSLValue::Float(scale),
-            LSLValue::Integer(7), LSLValue::Float(0.2),
+            LSLValue::Integer(0),
+            LSLValue::Integer(0x02 | 0x10 | 0x100),
+            LSLValue::Integer(1),
+            LSLValue::Integer(particles.min(100)),
+            LSLValue::Integer(2),
+            LSLValue::Float(8.0),
+            LSLValue::Integer(3),
+            LSLValue::Float(2.0),
+            LSLValue::Integer(5),
+            LSLValue::Float(scale),
+            LSLValue::Integer(7),
+            LSLValue::Float(0.2),
         ];
         let ps_bytes = self.encode_particle_system(&rules);
-        self.action_queue.lock().push((context.script_id, ScriptAction::ParticleSystem { object_id: context.object_id, rules: ps_bytes }));
+        self.action_queue.lock().push((
+            context.script_id,
+            ScriptAction::ParticleSystem {
+                object_id: context.object_id,
+                rules: ps_bytes,
+            },
+        ));
         Ok(LSLValue::Integer(0))
     }
 
@@ -5203,12 +7629,21 @@ impl LSLFunctions {
         let message = args[2].to_string();
         self.action_queue.lock().push((
             context.script_id,
-            ScriptAction::Email { object_id: context.object_id, address, subject, message },
+            ScriptAction::Email {
+                object_id: context.object_id,
+                address,
+                subject,
+                message,
+            },
         ));
         Ok(LSLValue::Integer(0))
     }
 
-    async fn ll_targeted_email(&self, args: &[LSLValue], context: &ScriptContext) -> Result<LSLValue> {
+    async fn ll_targeted_email(
+        &self,
+        args: &[LSLValue],
+        context: &ScriptContext,
+    ) -> Result<LSLValue> {
         if args.len() != 4 {
             return Err(anyhow!("llTargetedEmail expects 4 arguments"));
         }
@@ -5218,12 +7653,21 @@ impl LSLFunctions {
         let message = args[3].to_string();
         self.action_queue.lock().push((
             context.script_id,
-            ScriptAction::Email { object_id: context.object_id, address, subject, message },
+            ScriptAction::Email {
+                object_id: context.object_id,
+                address,
+                subject,
+                message,
+            },
         ));
         Ok(LSLValue::Integer(0))
     }
 
-    async fn ll_get_next_email(&self, args: &[LSLValue], _context: &ScriptContext) -> Result<LSLValue> {
+    async fn ll_get_next_email(
+        &self,
+        args: &[LSLValue],
+        _context: &ScriptContext,
+    ) -> Result<LSLValue> {
         if args.len() != 2 {
             return Err(anyhow!("llGetNextEmail expects 2 arguments"));
         }
@@ -5233,20 +7677,38 @@ impl LSLFunctions {
         Ok(LSLValue::Integer(0))
     }
 
-    async fn ll_request_url(&self, _args: &[LSLValue], context: &ScriptContext) -> Result<LSLValue> {
+    async fn ll_request_url(
+        &self,
+        _args: &[LSLValue],
+        context: &ScriptContext,
+    ) -> Result<LSLValue> {
         let request_id = Uuid::new_v4();
         self.action_queue.lock().push((
             context.script_id,
-            ScriptAction::RequestURL { script_id: context.script_id, object_id: context.object_id, request_id, secure: false },
+            ScriptAction::RequestURL {
+                script_id: context.script_id,
+                object_id: context.object_id,
+                request_id,
+                secure: false,
+            },
         ));
         Ok(LSLValue::Key(request_id))
     }
 
-    async fn ll_request_secure_url(&self, _args: &[LSLValue], context: &ScriptContext) -> Result<LSLValue> {
+    async fn ll_request_secure_url(
+        &self,
+        _args: &[LSLValue],
+        context: &ScriptContext,
+    ) -> Result<LSLValue> {
         let request_id = Uuid::new_v4();
         self.action_queue.lock().push((
             context.script_id,
-            ScriptAction::RequestURL { script_id: context.script_id, object_id: context.object_id, request_id, secure: true },
+            ScriptAction::RequestURL {
+                script_id: context.script_id,
+                object_id: context.object_id,
+                request_id,
+                secure: true,
+            },
         ));
         Ok(LSLValue::Key(request_id))
     }
@@ -5256,18 +7718,25 @@ impl LSLFunctions {
             return Err(anyhow!("llReleaseURL expects 1 argument"));
         }
         let url = args[0].to_string();
-        self.action_queue.lock().push((
-            context.script_id,
-            ScriptAction::ReleaseURL { url },
-        ));
+        self.action_queue
+            .lock()
+            .push((context.script_id, ScriptAction::ReleaseURL { url }));
         Ok(LSLValue::Integer(0))
     }
 
-    async fn ll_get_free_urls(&self, _args: &[LSLValue], _context: &ScriptContext) -> Result<LSLValue> {
+    async fn ll_get_free_urls(
+        &self,
+        _args: &[LSLValue],
+        _context: &ScriptContext,
+    ) -> Result<LSLValue> {
         Ok(LSLValue::Integer(10))
     }
 
-    async fn ll_get_http_header(&self, args: &[LSLValue], _context: &ScriptContext) -> Result<LSLValue> {
+    async fn ll_get_http_header(
+        &self,
+        args: &[LSLValue],
+        _context: &ScriptContext,
+    ) -> Result<LSLValue> {
         if args.len() != 2 {
             return Err(anyhow!("llGetHTTPHeader expects 2 arguments"));
         }
@@ -5276,7 +7745,11 @@ impl LSLFunctions {
         Ok(LSLValue::String(String::new()))
     }
 
-    async fn ll_set_content_type(&self, args: &[LSLValue], _context: &ScriptContext) -> Result<LSLValue> {
+    async fn ll_set_content_type(
+        &self,
+        args: &[LSLValue],
+        _context: &ScriptContext,
+    ) -> Result<LSLValue> {
         if args.len() != 2 {
             return Err(anyhow!("llSetContentType expects 2 arguments"));
         }
@@ -5286,12 +7759,20 @@ impl LSLFunctions {
         Ok(LSLValue::Integer(0))
     }
 
-    async fn ll_open_remote_data_channel(&self, _args: &[LSLValue], _context: &ScriptContext) -> Result<LSLValue> {
+    async fn ll_open_remote_data_channel(
+        &self,
+        _args: &[LSLValue],
+        _context: &ScriptContext,
+    ) -> Result<LSLValue> {
         debug!("Opening remote data channel");
         Ok(LSLValue::Integer(0))
     }
 
-    async fn ll_close_remote_data_channel(&self, args: &[LSLValue], _context: &ScriptContext) -> Result<LSLValue> {
+    async fn ll_close_remote_data_channel(
+        &self,
+        args: &[LSLValue],
+        _context: &ScriptContext,
+    ) -> Result<LSLValue> {
         if args.len() != 1 {
             return Err(anyhow!("llCloseRemoteDataChannel expects 1 argument"));
         }
@@ -5300,7 +7781,11 @@ impl LSLFunctions {
         Ok(LSLValue::Integer(0))
     }
 
-    async fn ll_send_remote_data(&self, args: &[LSLValue], _context: &ScriptContext) -> Result<LSLValue> {
+    async fn ll_send_remote_data(
+        &self,
+        args: &[LSLValue],
+        _context: &ScriptContext,
+    ) -> Result<LSLValue> {
         if args.len() != 4 {
             return Err(anyhow!("llSendRemoteData expects 4 arguments"));
         }
@@ -5308,11 +7793,18 @@ impl LSLFunctions {
         let dest = args[1].to_string();
         let idata = args[2].to_integer();
         let sdata = args[3].to_string();
-        debug!("Sending remote data on channel {}: dest={}, idata={}, sdata={}", channel, dest, idata, sdata);
+        debug!(
+            "Sending remote data on channel {}: dest={}, idata={}, sdata={}",
+            channel, dest, idata, sdata
+        );
         Ok(LSLValue::Key(Uuid::new_v4()))
     }
 
-    async fn ll_remote_data_reply(&self, args: &[LSLValue], _context: &ScriptContext) -> Result<LSLValue> {
+    async fn ll_remote_data_reply(
+        &self,
+        args: &[LSLValue],
+        _context: &ScriptContext,
+    ) -> Result<LSLValue> {
         if args.len() != 4 {
             return Err(anyhow!("llRemoteDataReply expects 4 arguments"));
         }
@@ -5320,11 +7812,18 @@ impl LSLFunctions {
         let message_id = args[1].to_key();
         let sdata = args[2].to_string();
         let idata = args[3].to_integer();
-        debug!("Remote data reply on channel {}: msg={}, sdata={}, idata={}", channel, message_id, sdata, idata);
+        debug!(
+            "Remote data reply on channel {}: msg={}, sdata={}, idata={}",
+            channel, message_id, sdata, idata
+        );
         Ok(LSLValue::Integer(0))
     }
 
-    async fn ll_remote_data_set_region(&self, _args: &[LSLValue], _context: &ScriptContext) -> Result<LSLValue> {
+    async fn ll_remote_data_set_region(
+        &self,
+        _args: &[LSLValue],
+        _context: &ScriptContext,
+    ) -> Result<LSLValue> {
         debug!("Remote data set region (deprecated)");
         Ok(LSLValue::Integer(0))
     }
@@ -5336,8 +7835,9 @@ impl LSLFunctions {
         let json = args[0].to_string();
         if let Ok(parsed) = serde_json::from_str::<serde_json::Value>(&json) {
             let list = match parsed {
-                serde_json::Value::Array(arr) => {
-                    arr.iter().map(|v| match v {
+                serde_json::Value::Array(arr) => arr
+                    .iter()
+                    .map(|v| match v {
                         serde_json::Value::Number(n) => {
                             if let Some(i) = n.as_i64() {
                                 LSLValue::Integer(i as i32)
@@ -5350,8 +7850,8 @@ impl LSLFunctions {
                         serde_json::Value::String(s) => LSLValue::String(s.clone()),
                         serde_json::Value::Bool(b) => LSLValue::Integer(if *b { 1 } else { 0 }),
                         _ => LSLValue::String(v.to_string()),
-                    }).collect()
-                }
+                    })
+                    .collect(),
                 serde_json::Value::Object(obj) => {
                     let mut result = Vec::new();
                     for (k, v) in obj {
@@ -5376,16 +7876,17 @@ impl LSLFunctions {
         let values = args[1].to_list();
 
         let json = if json_type == "JSON_ARRAY" {
-            let arr: Vec<serde_json::Value> = values.iter().map(|v| {
-                match v {
+            let arr: Vec<serde_json::Value> = values
+                .iter()
+                .map(|v| match v {
                     LSLValue::Integer(i) => serde_json::Value::Number((*i).into()),
                     LSLValue::Float(f) => serde_json::Number::from_f64(*f as f64)
                         .map(serde_json::Value::Number)
                         .unwrap_or(serde_json::Value::Null),
                     LSLValue::String(s) => serde_json::Value::String(s.clone()),
                     _ => serde_json::Value::String(v.to_string()),
-                }
-            }).collect();
+                })
+                .collect();
             serde_json::to_string(&arr).unwrap_or_default()
         } else {
             let mut obj = serde_json::Map::new();
@@ -5399,7 +7900,11 @@ impl LSLFunctions {
         Ok(LSLValue::String(json))
     }
 
-    async fn ll_json_get_value(&self, args: &[LSLValue], _context: &ScriptContext) -> Result<LSLValue> {
+    async fn ll_json_get_value(
+        &self,
+        args: &[LSLValue],
+        _context: &ScriptContext,
+    ) -> Result<LSLValue> {
         if args.len() != 2 {
             return Err(anyhow!("llJsonGetValue expects 2 arguments"));
         }
@@ -5442,7 +7947,11 @@ impl LSLFunctions {
         }
     }
 
-    async fn ll_json_set_value(&self, args: &[LSLValue], _context: &ScriptContext) -> Result<LSLValue> {
+    async fn ll_json_set_value(
+        &self,
+        args: &[LSLValue],
+        _context: &ScriptContext,
+    ) -> Result<LSLValue> {
         if args.len() != 3 {
             return Err(anyhow!("llJsonSetValue expects 3 arguments"));
         }
@@ -5458,15 +7967,19 @@ impl LSLFunctions {
         let json_val = if new_value == "JSON_DELETE" {
             None
         } else {
-            Some(match serde_json::from_str::<serde_json::Value>(&new_value) {
-                Ok(v) => v,
-                Err(_) => serde_json::Value::String(new_value),
-            })
+            Some(
+                match serde_json::from_str::<serde_json::Value>(&new_value) {
+                    Ok(v) => v,
+                    Err(_) => serde_json::Value::String(new_value),
+                },
+            )
         };
 
         if specifiers.is_empty() {
             return match json_val {
-                Some(v) => Ok(LSLValue::String(serde_json::to_string(&v).unwrap_or_default())),
+                Some(v) => Ok(LSLValue::String(
+                    serde_json::to_string(&v).unwrap_or_default(),
+                )),
                 None => Ok(LSLValue::String("JSON_INVALID".to_string())),
             };
         }
@@ -5486,7 +7999,11 @@ impl LSLFunctions {
                                     }
                                     arr[i] = v.clone();
                                 }
-                                None => { if i < arr.len() { arr.remove(i); } }
+                                None => {
+                                    if i < arr.len() {
+                                        arr.remove(i);
+                                    }
+                                }
                             }
                         }
                         break;
@@ -5504,8 +8021,12 @@ impl LSLFunctions {
                     if is_last {
                         if let Some(obj) = current.as_object_mut() {
                             match &json_val {
-                                Some(v) => { obj.insert(s.clone(), v.clone()); }
-                                None => { obj.remove(s); }
+                                Some(v) => {
+                                    obj.insert(s.clone(), v.clone());
+                                }
+                                None => {
+                                    obj.remove(s);
+                                }
                             }
                         }
                         break;
@@ -5514,7 +8035,10 @@ impl LSLFunctions {
                         return Ok(LSLValue::String("JSON_INVALID".to_string()));
                     }
                     if !current.as_object().unwrap().contains_key(s) {
-                        current.as_object_mut().unwrap().insert(s.clone(), serde_json::Value::Object(Default::default()));
+                        current
+                            .as_object_mut()
+                            .unwrap()
+                            .insert(s.clone(), serde_json::Value::Object(Default::default()));
                     }
                     current = current.as_object_mut().unwrap().get_mut(s).unwrap();
                 }
@@ -5522,10 +8046,16 @@ impl LSLFunctions {
             }
         }
 
-        Ok(LSLValue::String(serde_json::to_string(&root).unwrap_or_default()))
+        Ok(LSLValue::String(
+            serde_json::to_string(&root).unwrap_or_default(),
+        ))
     }
 
-    async fn ll_json_value_type(&self, args: &[LSLValue], _context: &ScriptContext) -> Result<LSLValue> {
+    async fn ll_json_value_type(
+        &self,
+        args: &[LSLValue],
+        _context: &ScriptContext,
+    ) -> Result<LSLValue> {
         if args.len() != 2 {
             return Err(anyhow!("llJsonValueType expects 2 arguments"));
         }
@@ -5579,7 +8109,11 @@ impl LSLFunctions {
         data.iter().map(|(k, v)| k.len() + v.len()).sum()
     }
 
-    async fn ll_linkset_data_write(&self, args: &[LSLValue], context: &mut ScriptContext) -> Result<LSLValue> {
+    async fn ll_linkset_data_write(
+        &self,
+        args: &[LSLValue],
+        context: &mut ScriptContext,
+    ) -> Result<LSLValue> {
         if args.len() != 2 {
             return Err(anyhow!("llLinksetDataWrite expects 2 arguments"));
         }
@@ -5590,15 +8124,24 @@ impl LSLFunctions {
         }
         let new_size = key.len() + value.len();
         let current_size = Self::linkset_data_size(&context.linkset_data);
-        let existing_size = context.linkset_data.get(&key).map(|v| key.len() + v.len()).unwrap_or(0);
-        if current_size - existing_size + new_size > 131072 { // 128KB
+        let existing_size = context
+            .linkset_data
+            .get(&key)
+            .map(|v| key.len() + v.len())
+            .unwrap_or(0);
+        if current_size - existing_size + new_size > 131072 {
+            // 128KB
             return Ok(LSLValue::Integer(4)); // DATA_TOO_LARGE
         }
         context.linkset_data.insert(key, value);
         Ok(LSLValue::Integer(0))
     }
 
-    async fn ll_linkset_data_write_protected(&self, args: &[LSLValue], context: &mut ScriptContext) -> Result<LSLValue> {
+    async fn ll_linkset_data_write_protected(
+        &self,
+        args: &[LSLValue],
+        context: &mut ScriptContext,
+    ) -> Result<LSLValue> {
         if args.len() != 3 {
             return Err(anyhow!("llLinksetDataWriteProtected expects 3 arguments"));
         }
@@ -5616,7 +8159,11 @@ impl LSLFunctions {
         }
         let new_size = key.len() + value.len();
         let current_size = Self::linkset_data_size(&context.linkset_data);
-        let existing_size = context.linkset_data.get(&key).map(|v| key.len() + v.len()).unwrap_or(0);
+        let existing_size = context
+            .linkset_data
+            .get(&key)
+            .map(|v| key.len() + v.len())
+            .unwrap_or(0);
         if current_size - existing_size + new_size > 131072 {
             return Ok(LSLValue::Integer(4));
         }
@@ -5627,7 +8174,11 @@ impl LSLFunctions {
         Ok(LSLValue::Integer(0))
     }
 
-    async fn ll_linkset_data_read(&self, args: &[LSLValue], context: &ScriptContext) -> Result<LSLValue> {
+    async fn ll_linkset_data_read(
+        &self,
+        args: &[LSLValue],
+        context: &ScriptContext,
+    ) -> Result<LSLValue> {
         if args.len() != 1 {
             return Err(anyhow!("llLinksetDataRead expects 1 argument"));
         }
@@ -5636,7 +8187,11 @@ impl LSLFunctions {
         Ok(LSLValue::String(value))
     }
 
-    async fn ll_linkset_data_read_protected(&self, args: &[LSLValue], context: &ScriptContext) -> Result<LSLValue> {
+    async fn ll_linkset_data_read_protected(
+        &self,
+        args: &[LSLValue],
+        context: &ScriptContext,
+    ) -> Result<LSLValue> {
         if args.len() != 2 {
             return Err(anyhow!("llLinksetDataReadProtected expects 2 arguments"));
         }
@@ -5646,7 +8201,11 @@ impl LSLFunctions {
         Ok(LSLValue::String(value))
     }
 
-    async fn ll_linkset_data_delete(&self, args: &[LSLValue], context: &mut ScriptContext) -> Result<LSLValue> {
+    async fn ll_linkset_data_delete(
+        &self,
+        args: &[LSLValue],
+        context: &mut ScriptContext,
+    ) -> Result<LSLValue> {
         if args.len() != 1 {
             return Err(anyhow!("llLinksetDataDelete expects 1 argument"));
         }
@@ -5655,7 +8214,11 @@ impl LSLFunctions {
         Ok(LSLValue::Integer(if removed { 0 } else { 1 }))
     }
 
-    async fn ll_linkset_data_delete_protected(&self, args: &[LSLValue], context: &mut ScriptContext) -> Result<LSLValue> {
+    async fn ll_linkset_data_delete_protected(
+        &self,
+        args: &[LSLValue],
+        context: &mut ScriptContext,
+    ) -> Result<LSLValue> {
         if args.len() != 2 {
             return Err(anyhow!("llLinksetDataDeleteProtected expects 2 arguments"));
         }
@@ -5665,13 +8228,19 @@ impl LSLFunctions {
         Ok(LSLValue::Integer(if removed { 0 } else { 1 }))
     }
 
-    async fn ll_linkset_data_delete_found(&self, args: &[LSLValue], context: &mut ScriptContext) -> Result<LSLValue> {
+    async fn ll_linkset_data_delete_found(
+        &self,
+        args: &[LSLValue],
+        context: &mut ScriptContext,
+    ) -> Result<LSLValue> {
         if args.len() != 2 {
             return Err(anyhow!("llLinksetDataDeleteFound expects 2 arguments"));
         }
         let pattern = args[0].to_string();
         let _pass = args[1].to_string();
-        let keys_to_delete: Vec<String> = context.linkset_data.keys()
+        let keys_to_delete: Vec<String> = context
+            .linkset_data
+            .keys()
             .filter(|k| k.contains(&pattern))
             .cloned()
             .collect();
@@ -5682,23 +8251,37 @@ impl LSLFunctions {
         Ok(LSLValue::Integer(count as i32))
     }
 
-    async fn ll_linkset_data_count_keys(&self, _args: &[LSLValue], context: &ScriptContext) -> Result<LSLValue> {
+    async fn ll_linkset_data_count_keys(
+        &self,
+        _args: &[LSLValue],
+        context: &ScriptContext,
+    ) -> Result<LSLValue> {
         Ok(LSLValue::Integer(context.linkset_data.len() as i32))
     }
 
-    async fn ll_linkset_data_count_found(&self, args: &[LSLValue], context: &ScriptContext) -> Result<LSLValue> {
+    async fn ll_linkset_data_count_found(
+        &self,
+        args: &[LSLValue],
+        context: &ScriptContext,
+    ) -> Result<LSLValue> {
         if args.len() != 2 {
             return Err(anyhow!("llLinksetDataCountFound expects 2 arguments"));
         }
         let pattern = args[0].to_string();
         let _pass = args[1].to_string();
-        let count = context.linkset_data.keys()
+        let count = context
+            .linkset_data
+            .keys()
             .filter(|k| k.contains(&pattern))
             .count();
         Ok(LSLValue::Integer(count as i32))
     }
 
-    async fn ll_linkset_data_find_keys(&self, args: &[LSLValue], context: &ScriptContext) -> Result<LSLValue> {
+    async fn ll_linkset_data_find_keys(
+        &self,
+        args: &[LSLValue],
+        context: &ScriptContext,
+    ) -> Result<LSLValue> {
         if args.len() != 4 {
             return Err(anyhow!("llLinksetDataFindKeys expects 4 arguments"));
         }
@@ -5707,7 +8290,9 @@ impl LSLFunctions {
         let count = args[2].to_integer() as usize;
         let _pass = args[3].to_string();
 
-        let keys: Vec<LSLValue> = context.linkset_data.keys()
+        let keys: Vec<LSLValue> = context
+            .linkset_data
+            .keys()
             .filter(|k| k.contains(&pattern))
             .skip(start)
             .take(count)
@@ -5716,14 +8301,20 @@ impl LSLFunctions {
         Ok(LSLValue::List(keys))
     }
 
-    async fn ll_linkset_data_list_keys(&self, args: &[LSLValue], context: &ScriptContext) -> Result<LSLValue> {
+    async fn ll_linkset_data_list_keys(
+        &self,
+        args: &[LSLValue],
+        context: &ScriptContext,
+    ) -> Result<LSLValue> {
         if args.len() != 2 {
             return Err(anyhow!("llLinksetDataListKeys expects 2 arguments"));
         }
         let start = args[0].to_integer() as usize;
         let count = args[1].to_integer() as usize;
 
-        let keys: Vec<LSLValue> = context.linkset_data.keys()
+        let keys: Vec<LSLValue> = context
+            .linkset_data
+            .keys()
             .skip(start)
             .take(count)
             .map(|k| LSLValue::String(k.clone()))
@@ -5731,11 +8322,19 @@ impl LSLFunctions {
         Ok(LSLValue::List(keys))
     }
 
-    async fn ll_linkset_data_available(&self, _args: &[LSLValue], _context: &ScriptContext) -> Result<LSLValue> {
+    async fn ll_linkset_data_available(
+        &self,
+        _args: &[LSLValue],
+        _context: &ScriptContext,
+    ) -> Result<LSLValue> {
         Ok(LSLValue::Integer(65536))
     }
 
-    async fn ll_linkset_data_reset(&self, _args: &[LSLValue], context: &mut ScriptContext) -> Result<LSLValue> {
+    async fn ll_linkset_data_reset(
+        &self,
+        _args: &[LSLValue],
+        context: &mut ScriptContext,
+    ) -> Result<LSLValue> {
         context.linkset_data.clear();
         Ok(LSLValue::Integer(0))
     }
@@ -5751,24 +8350,32 @@ impl LSLFunctions {
         Ok(LSLValue::String(format!("{:x}", digest)))
     }
 
-    async fn ll_sha1_string(&self, args: &[LSLValue], _context: &ScriptContext) -> Result<LSLValue> {
+    async fn ll_sha1_string(
+        &self,
+        args: &[LSLValue],
+        _context: &ScriptContext,
+    ) -> Result<LSLValue> {
         if args.len() != 1 {
             return Err(anyhow!("llSHA1String expects 1 argument"));
         }
         let src = args[0].to_string();
-        use sha1::{Sha1, Digest};
+        use sha1::{Digest, Sha1};
         let mut hasher = Sha1::new();
         hasher.update(src.as_bytes());
         let result = hasher.finalize();
         Ok(LSLValue::String(format!("{:x}", result)))
     }
 
-    async fn ll_sha256_string(&self, args: &[LSLValue], _context: &ScriptContext) -> Result<LSLValue> {
+    async fn ll_sha256_string(
+        &self,
+        args: &[LSLValue],
+        _context: &ScriptContext,
+    ) -> Result<LSLValue> {
         if args.len() != 1 {
             return Err(anyhow!("llSHA256String expects 1 argument"));
         }
         let src = args[0].to_string();
-        use sha2::{Sha256, Digest};
+        use sha2::{Digest, Sha256};
         let mut hasher = Sha256::new();
         hasher.update(src.as_bytes());
         let result = hasher.finalize();
@@ -5811,7 +8418,11 @@ impl LSLFunctions {
         }
     }
 
-    async fn ll_compute_hash(&self, args: &[LSLValue], _context: &ScriptContext) -> Result<LSLValue> {
+    async fn ll_compute_hash(
+        &self,
+        args: &[LSLValue],
+        _context: &ScriptContext,
+    ) -> Result<LSLValue> {
         if args.len() != 2 {
             return Err(anyhow!("llComputeHash expects 2 arguments"));
         }
@@ -5821,19 +8432,19 @@ impl LSLFunctions {
         let hash = match algorithm.as_str() {
             "md5" | "MD5" => format!("{:x}", md5::compute(data.as_bytes())),
             "sha1" | "SHA1" => {
-                use sha1::{Sha1, Digest};
+                use sha1::{Digest, Sha1};
                 let mut hasher = Sha1::new();
                 hasher.update(data.as_bytes());
                 format!("{:x}", hasher.finalize())
             }
             "sha256" | "SHA256" => {
-                use sha2::{Sha256, Digest};
+                use sha2::{Digest, Sha256};
                 let mut hasher = Sha256::new();
                 hasher.update(data.as_bytes());
                 format!("{:x}", hasher.finalize())
             }
             "sha512" | "SHA512" => {
-                use sha2::{Sha512, Digest};
+                use sha2::{Digest, Sha512};
                 let mut hasher = Sha512::new();
                 hasher.update(data.as_bytes());
                 format!("{:x}", hasher.finalize())
@@ -5855,43 +8466,63 @@ impl LSLFunctions {
         Ok(LSLValue::Integer(hash))
     }
 
-    async fn ll_string_to_base64(&self, args: &[LSLValue], _context: &ScriptContext) -> Result<LSLValue> {
+    async fn ll_string_to_base64(
+        &self,
+        args: &[LSLValue],
+        _context: &ScriptContext,
+    ) -> Result<LSLValue> {
         if args.len() != 1 {
             return Err(anyhow!("llStringToBase64 expects 1 argument"));
         }
         let src = args[0].to_string();
-        use base64::{Engine as _, engine::general_purpose};
-        Ok(LSLValue::String(general_purpose::STANDARD.encode(src.as_bytes())))
+        use base64::{engine::general_purpose, Engine as _};
+        Ok(LSLValue::String(
+            general_purpose::STANDARD.encode(src.as_bytes()),
+        ))
     }
 
-    async fn ll_base64_to_string(&self, args: &[LSLValue], _context: &ScriptContext) -> Result<LSLValue> {
+    async fn ll_base64_to_string(
+        &self,
+        args: &[LSLValue],
+        _context: &ScriptContext,
+    ) -> Result<LSLValue> {
         if args.len() != 1 {
             return Err(anyhow!("llBase64ToString expects 1 argument"));
         }
         let src = args[0].to_string();
-        use base64::{Engine as _, engine::general_purpose};
+        use base64::{engine::general_purpose, Engine as _};
         match general_purpose::STANDARD.decode(&src) {
-            Ok(bytes) => Ok(LSLValue::String(String::from_utf8_lossy(&bytes).to_string())),
+            Ok(bytes) => Ok(LSLValue::String(
+                String::from_utf8_lossy(&bytes).to_string(),
+            )),
             Err(_) => Ok(LSLValue::String(String::new())),
         }
     }
 
-    async fn ll_integer_to_base64(&self, args: &[LSLValue], _context: &ScriptContext) -> Result<LSLValue> {
+    async fn ll_integer_to_base64(
+        &self,
+        args: &[LSLValue],
+        _context: &ScriptContext,
+    ) -> Result<LSLValue> {
         if args.len() != 1 {
             return Err(anyhow!("llIntegerToBase64 expects 1 argument"));
         }
         let value = args[0].to_integer();
         let bytes = value.to_be_bytes();
-        use base64::{Engine as _, engine::general_purpose};
+        use base64::{engine::general_purpose, Engine as _};
         Ok(LSLValue::String(general_purpose::STANDARD.encode(&bytes)))
     }
 
-    async fn ll_base64_to_integer(&self, args: &[LSLValue], _context: &ScriptContext) -> Result<LSLValue> {
+    async fn ll_base64_to_integer(
+        &self,
+        args: &[LSLValue],
+        _context: &ScriptContext,
+    ) -> Result<LSLValue> {
         if args.len() != 1 {
             return Err(anyhow!("llBase64ToInteger expects 1 argument"));
         }
         let src = args[0].to_string();
-        use base64::{Engine as _, engine::general_purpose};
+        use base64::{engine::general_purpose, Engine as _};
         match general_purpose::STANDARD.decode(&src) {
             Ok(bytes) if bytes.len() >= 4 => {
                 let value = i32::from_be_bytes([bytes[0], bytes[1], bytes[2], bytes[3]]);
@@ -5907,12 +8538,13 @@ impl LSLFunctions {
         }
         let str1 = args[0].to_string();
         let str2 = args[1].to_string();
-        use base64::{Engine as _, engine::general_purpose};
+        use base64::{engine::general_purpose, Engine as _};
 
         let bytes1 = general_purpose::STANDARD.decode(&str1).unwrap_or_default();
         let bytes2 = general_purpose::STANDARD.decode(&str2).unwrap_or_default();
 
-        let result: Vec<u8> = bytes1.iter()
+        let result: Vec<u8> = bytes1
+            .iter()
             .zip(bytes2.iter().cycle())
             .map(|(a, b)| a ^ b)
             .collect();
@@ -5920,11 +8552,19 @@ impl LSLFunctions {
         Ok(LSLValue::String(general_purpose::STANDARD.encode(&result)))
     }
 
-    async fn ll_xor_base64_strings(&self, args: &[LSLValue], _context: &ScriptContext) -> Result<LSLValue> {
+    async fn ll_xor_base64_strings(
+        &self,
+        args: &[LSLValue],
+        _context: &ScriptContext,
+    ) -> Result<LSLValue> {
         self.ll_xor_base64(args, _context).await
     }
 
-    async fn ll_xor_base64_strings_correct(&self, args: &[LSLValue], _context: &ScriptContext) -> Result<LSLValue> {
+    async fn ll_xor_base64_strings_correct(
+        &self,
+        args: &[LSLValue],
+        _context: &ScriptContext,
+    ) -> Result<LSLValue> {
         self.ll_xor_base64(args, _context).await
     }
 
@@ -5956,7 +8596,11 @@ impl LSLFunctions {
         Ok(LSLValue::String(escaped.to_string()))
     }
 
-    async fn ll_unescape_url(&self, args: &[LSLValue], _context: &ScriptContext) -> Result<LSLValue> {
+    async fn ll_unescape_url(
+        &self,
+        args: &[LSLValue],
+        _context: &ScriptContext,
+    ) -> Result<LSLValue> {
         if args.len() != 1 {
             return Err(anyhow!("llUnescapeURL expects 1 argument"));
         }
@@ -5965,7 +8609,11 @@ impl LSLFunctions {
         Ok(LSLValue::String(unescaped.to_string()))
     }
 
-    async fn ll_string_trim(&self, args: &[LSLValue], _context: &ScriptContext) -> Result<LSLValue> {
+    async fn ll_string_trim(
+        &self,
+        args: &[LSLValue],
+        _context: &ScriptContext,
+    ) -> Result<LSLValue> {
         if args.len() != 2 {
             return Err(anyhow!("llStringTrim expects 2 arguments"));
         }
@@ -5980,7 +8628,11 @@ impl LSLFunctions {
         Ok(LSLValue::String(result))
     }
 
-    async fn ll_replace_sub_string(&self, args: &[LSLValue], _context: &ScriptContext) -> Result<LSLValue> {
+    async fn ll_replace_sub_string(
+        &self,
+        args: &[LSLValue],
+        _context: &ScriptContext,
+    ) -> Result<LSLValue> {
         if args.len() != 4 {
             return Err(anyhow!("llReplaceSubString expects 4 arguments"));
         }
@@ -5992,18 +8644,27 @@ impl LSLFunctions {
         if count == 0 {
             Ok(LSLValue::String(src.replace(&pattern, &replacement)))
         } else {
-            Ok(LSLValue::String(src.replacen(&pattern, &replacement, count as usize)))
+            Ok(LSLValue::String(src.replacen(
+                &pattern,
+                &replacement,
+                count as usize,
+            )))
         }
     }
 
-    async fn ll_list_statistics(&self, args: &[LSLValue], _context: &ScriptContext) -> Result<LSLValue> {
+    async fn ll_list_statistics(
+        &self,
+        args: &[LSLValue],
+        _context: &ScriptContext,
+    ) -> Result<LSLValue> {
         if args.len() != 2 {
             return Err(anyhow!("llListStatistics expects 2 arguments"));
         }
         let operation = args[0].to_integer();
         let list = args[1].to_list();
 
-        let numbers: Vec<f32> = list.iter()
+        let numbers: Vec<f32> = list
+            .iter()
             .filter_map(|v| match v {
                 LSLValue::Float(f) => Some(*f),
                 LSLValue::Integer(i) => Some(*i as f32),
@@ -6016,15 +8677,17 @@ impl LSLFunctions {
         }
 
         let result = match operation {
-            0 => { // LIST_STAT_RANGE
+            0 => {
+                // LIST_STAT_RANGE
                 let min = numbers.iter().cloned().reduce(f32::min).unwrap_or(0.0);
                 let max = numbers.iter().cloned().reduce(f32::max).unwrap_or(0.0);
                 max - min
             }
             1 => numbers.iter().cloned().reduce(f32::min).unwrap_or(0.0), // LIST_STAT_MIN
             2 => numbers.iter().cloned().reduce(f32::max).unwrap_or(0.0), // LIST_STAT_MAX
-            3 => numbers.iter().sum::<f32>() / numbers.len() as f32, // LIST_STAT_MEAN
-            4 => { // LIST_STAT_MEDIAN
+            3 => numbers.iter().sum::<f32>() / numbers.len() as f32,      // LIST_STAT_MEAN
+            4 => {
+                // LIST_STAT_MEDIAN
                 let mut sorted = numbers.clone();
                 sorted.sort_by(|a, b| a.partial_cmp(b).unwrap_or(std::cmp::Ordering::Equal));
                 let mid = sorted.len() / 2;
@@ -6034,15 +8697,18 @@ impl LSLFunctions {
                     sorted[mid]
                 }
             }
-            5 => { // LIST_STAT_STD_DEV
+            5 => {
+                // LIST_STAT_STD_DEV
                 let mean = numbers.iter().sum::<f32>() / numbers.len() as f32;
-                let variance = numbers.iter().map(|x| (x - mean).powi(2)).sum::<f32>() / numbers.len() as f32;
+                let variance =
+                    numbers.iter().map(|x| (x - mean).powi(2)).sum::<f32>() / numbers.len() as f32;
                 variance.sqrt()
             }
-            6 => numbers.iter().sum(), // LIST_STAT_SUM
+            6 => numbers.iter().sum(),                // LIST_STAT_SUM
             7 => numbers.iter().map(|x| x * x).sum(), // LIST_STAT_SUM_SQUARES
-            8 => numbers.len() as f32, // LIST_STAT_NUM_COUNT
-            9 => { // LIST_STAT_GEOMETRIC_MEAN
+            8 => numbers.len() as f32,                // LIST_STAT_NUM_COUNT
+            9 => {
+                // LIST_STAT_GEOMETRIC_MEAN
                 let product: f64 = numbers.iter().map(|x| (*x as f64).ln()).sum();
                 (product / numbers.len() as f64).exp() as f32
             }
@@ -6068,7 +8734,11 @@ impl LSLFunctions {
             let mut sorted = list;
             sorted.sort_by(|a, b| {
                 let cmp = a.to_string().cmp(&b.to_string());
-                if ascending { cmp } else { cmp.reverse() }
+                if ascending {
+                    cmp
+                } else {
+                    cmp.reverse()
+                }
             });
             return Ok(LSLValue::List(sorted));
         }
@@ -6085,7 +8755,11 @@ impl LSLFunctions {
 
         chunks.sort_by(|a, b| {
             let cmp = a[0].to_string().cmp(&b[0].to_string());
-            if ascending { cmp } else { cmp.reverse() }
+            if ascending {
+                cmp
+            } else {
+                cmp.reverse()
+            }
         });
 
         let mut result: Vec<LSLValue> = chunks.into_iter().flatten().collect();
@@ -6093,11 +8767,19 @@ impl LSLFunctions {
         Ok(LSLValue::List(result))
     }
 
-    async fn ll_list_sort_strided(&self, args: &[LSLValue], _context: &ScriptContext) -> Result<LSLValue> {
+    async fn ll_list_sort_strided(
+        &self,
+        args: &[LSLValue],
+        _context: &ScriptContext,
+    ) -> Result<LSLValue> {
         self.ll_list_sort(args, _context).await
     }
 
-    async fn ll_list_randomize(&self, args: &[LSLValue], _context: &ScriptContext) -> Result<LSLValue> {
+    async fn ll_list_randomize(
+        &self,
+        args: &[LSLValue],
+        _context: &ScriptContext,
+    ) -> Result<LSLValue> {
         if args.len() != 2 {
             return Err(anyhow!("llListRandomize expects 2 arguments"));
         }
@@ -6111,7 +8793,11 @@ impl LSLFunctions {
         Ok(LSLValue::List(list))
     }
 
-    async fn ll_list_replace_list(&self, args: &[LSLValue], _context: &ScriptContext) -> Result<LSLValue> {
+    async fn ll_list_replace_list(
+        &self,
+        args: &[LSLValue],
+        _context: &ScriptContext,
+    ) -> Result<LSLValue> {
         if args.len() != 4 {
             return Err(anyhow!("llListReplaceList expects 4 arguments"));
         }
@@ -6136,17 +8822,33 @@ impl LSLFunctions {
         let end = args[2].to_integer();
 
         let len = list.len() as i32;
-        let start = if start < 0 { (len + start).max(0) } else { start.min(len) } as usize;
-        let end = if end < 0 { (len + end + 1).max(0) } else { (end + 1).min(len) } as usize;
+        let start = if start < 0 {
+            (len + start).max(0)
+        } else {
+            start.min(len)
+        } as usize;
+        let end = if end < 0 {
+            (len + end + 1).max(0)
+        } else {
+            (end + 1).min(len)
+        } as usize;
 
         Ok(LSLValue::List(list[start..end].to_vec()))
     }
 
-    async fn ll_list2list_slice(&self, args: &[LSLValue], _context: &ScriptContext) -> Result<LSLValue> {
+    async fn ll_list2list_slice(
+        &self,
+        args: &[LSLValue],
+        _context: &ScriptContext,
+    ) -> Result<LSLValue> {
         self.ll_list2list(args, _context).await
     }
 
-    async fn ll_list2list_strided(&self, args: &[LSLValue], _context: &ScriptContext) -> Result<LSLValue> {
+    async fn ll_list2list_strided(
+        &self,
+        args: &[LSLValue],
+        _context: &ScriptContext,
+    ) -> Result<LSLValue> {
         if args.len() != 4 {
             return Err(anyhow!("llList2ListStrided expects 4 arguments"));
         }
@@ -6155,7 +8857,7 @@ impl LSLFunctions {
         let end = args[2].to_integer() as usize;
         let stride = args[3].to_integer().max(1) as usize;
 
-        let result: Vec<LSLValue> = list[start..=end.min(list.len()-1)]
+        let result: Vec<LSLValue> = list[start..=end.min(list.len() - 1)]
             .iter()
             .step_by(stride)
             .cloned()
@@ -6164,7 +8866,11 @@ impl LSLFunctions {
         Ok(LSLValue::List(result))
     }
 
-    async fn ll_list_find_list(&self, args: &[LSLValue], _context: &ScriptContext) -> Result<LSLValue> {
+    async fn ll_list_find_list(
+        &self,
+        args: &[LSLValue],
+        _context: &ScriptContext,
+    ) -> Result<LSLValue> {
         if args.len() != 2 {
             return Err(anyhow!("llListFindList expects 2 arguments"));
         }
@@ -6176,7 +8882,8 @@ impl LSLFunctions {
         }
 
         for i in 0..=(haystack.len().saturating_sub(needle.len())) {
-            if haystack[i..i+needle.len()].iter()
+            if haystack[i..i + needle.len()]
+                .iter()
                 .zip(needle.iter())
                 .all(|(a, b)| a.to_string() == b.to_string())
             {
@@ -6187,7 +8894,11 @@ impl LSLFunctions {
         Ok(LSLValue::Integer(-1))
     }
 
-    async fn ll_list_find_list_next(&self, args: &[LSLValue], _context: &ScriptContext) -> Result<LSLValue> {
+    async fn ll_list_find_list_next(
+        &self,
+        args: &[LSLValue],
+        _context: &ScriptContext,
+    ) -> Result<LSLValue> {
         if args.len() != 3 {
             return Err(anyhow!("llListFindListNext expects 3 arguments"));
         }
@@ -6200,7 +8911,8 @@ impl LSLFunctions {
         }
 
         for i in start..=(haystack.len().saturating_sub(needle.len())) {
-            if haystack[i..i+needle.len()].iter()
+            if haystack[i..i + needle.len()]
+                .iter()
                 .zip(needle.iter())
                 .all(|(a, b)| a.to_string() == b.to_string())
             {
@@ -6211,14 +8923,22 @@ impl LSLFunctions {
         Ok(LSLValue::Integer(-1))
     }
 
-    async fn ll_list_find_strided(&self, args: &[LSLValue], _context: &ScriptContext) -> Result<LSLValue> {
+    async fn ll_list_find_strided(
+        &self,
+        args: &[LSLValue],
+        _context: &ScriptContext,
+    ) -> Result<LSLValue> {
         if args.len() != 5 {
             return Err(anyhow!("llListFindStrided expects 5 arguments"));
         }
         self.ll_list_find_list(&args[0..2].to_vec(), _context).await
     }
 
-    async fn ll_get_list_entry_type(&self, args: &[LSLValue], _context: &ScriptContext) -> Result<LSLValue> {
+    async fn ll_get_list_entry_type(
+        &self,
+        args: &[LSLValue],
+        _context: &ScriptContext,
+    ) -> Result<LSLValue> {
         if args.len() != 2 {
             return Err(anyhow!("llGetListEntryType expects 2 arguments"));
         }
@@ -6241,7 +8961,11 @@ impl LSLFunctions {
         }
     }
 
-    async fn ll_parse_string_keep_nulls(&self, args: &[LSLValue], _context: &ScriptContext) -> Result<LSLValue> {
+    async fn ll_parse_string_keep_nulls(
+        &self,
+        args: &[LSLValue],
+        _context: &ScriptContext,
+    ) -> Result<LSLValue> {
         if args.len() != 3 {
             return Err(anyhow!("llParseStringKeepNulls expects 3 arguments"));
         }
@@ -6265,10 +8989,16 @@ impl LSLFunctions {
             result = new_result;
         }
 
-        Ok(LSLValue::List(result.into_iter().map(LSLValue::String).collect()))
+        Ok(LSLValue::List(
+            result.into_iter().map(LSLValue::String).collect(),
+        ))
     }
 
-    async fn ll_axis_angle2rot(&self, args: &[LSLValue], _context: &ScriptContext) -> Result<LSLValue> {
+    async fn ll_axis_angle2rot(
+        &self,
+        args: &[LSLValue],
+        _context: &ScriptContext,
+    ) -> Result<LSLValue> {
         if args.len() != 2 {
             return Err(anyhow!("llAxisAngle2Rot expects 2 arguments"));
         }
@@ -6292,7 +9022,11 @@ impl LSLFunctions {
         }
     }
 
-    async fn ll_rot_between(&self, args: &[LSLValue], _context: &ScriptContext) -> Result<LSLValue> {
+    async fn ll_rot_between(
+        &self,
+        args: &[LSLValue],
+        _context: &ScriptContext,
+    ) -> Result<LSLValue> {
         if args.len() != 2 {
             return Err(anyhow!("llRotBetween expects 2 arguments"));
         }
@@ -6353,7 +9087,11 @@ impl LSLFunctions {
         Ok(LSLValue::Vector(LSLVector::new(x, y, z)))
     }
 
-    async fn ll_get_local_rot(&self, _args: &[LSLValue], context: &ScriptContext) -> Result<LSLValue> {
+    async fn ll_get_local_rot(
+        &self,
+        _args: &[LSLValue],
+        context: &ScriptContext,
+    ) -> Result<LSLValue> {
         Ok(LSLValue::Rotation(LSLRotation::new(
             context.rotation.0,
             context.rotation.1,
@@ -6362,7 +9100,11 @@ impl LSLFunctions {
         )))
     }
 
-    async fn ll_set_local_rot(&self, args: &[LSLValue], context: &mut ScriptContext) -> Result<LSLValue> {
+    async fn ll_set_local_rot(
+        &self,
+        args: &[LSLValue],
+        context: &mut ScriptContext,
+    ) -> Result<LSLValue> {
         if args.len() != 1 {
             return Err(anyhow!("llSetLocalRot expects 1 argument"));
         }
@@ -6378,7 +9120,11 @@ impl LSLFunctions {
         Ok(LSLValue::Integer(0))
     }
 
-    async fn ll_get_root_rotation(&self, _args: &[LSLValue], context: &ScriptContext) -> Result<LSLValue> {
+    async fn ll_get_root_rotation(
+        &self,
+        _args: &[LSLValue],
+        context: &ScriptContext,
+    ) -> Result<LSLValue> {
         Ok(LSLValue::Rotation(LSLRotation::new(
             context.rotation.0,
             context.rotation.1,
@@ -6387,7 +9133,11 @@ impl LSLFunctions {
         )))
     }
 
-    async fn ll_get_local_pos(&self, _args: &[LSLValue], context: &ScriptContext) -> Result<LSLValue> {
+    async fn ll_get_local_pos(
+        &self,
+        _args: &[LSLValue],
+        context: &ScriptContext,
+    ) -> Result<LSLValue> {
         Ok(LSLValue::Vector(LSLVector::new(
             context.position.0,
             context.position.1,
@@ -6395,7 +9145,11 @@ impl LSLFunctions {
         )))
     }
 
-    async fn ll_get_root_position(&self, _args: &[LSLValue], context: &ScriptContext) -> Result<LSLValue> {
+    async fn ll_get_root_position(
+        &self,
+        _args: &[LSLValue],
+        context: &ScriptContext,
+    ) -> Result<LSLValue> {
         Ok(LSLValue::Vector(LSLVector::new(
             context.position.0,
             context.position.1,
@@ -6403,13 +9157,20 @@ impl LSLFunctions {
         )))
     }
 
-    async fn ll_give_inventory(&self, args: &[LSLValue], context: &ScriptContext) -> Result<LSLValue> {
+    async fn ll_give_inventory(
+        &self,
+        args: &[LSLValue],
+        context: &ScriptContext,
+    ) -> Result<LSLValue> {
         if args.len() != 2 {
             return Err(anyhow!("llGiveInventory expects 2 arguments"));
         }
         let destination_id = args[0].to_key();
         let item_name = args[1].to_string();
-        info!("llGiveInventory: giving '{}' to {}", item_name, destination_id);
+        info!(
+            "llGiveInventory: giving '{}' to {}",
+            item_name, destination_id
+        );
         if !destination_id.is_nil() {
             self.action_queue.lock().push((
                 context.script_id,
@@ -6424,18 +9185,31 @@ impl LSLFunctions {
         Ok(LSLValue::Integer(0))
     }
 
-    async fn ll_give_inventory_list(&self, args: &[LSLValue], _context: &ScriptContext) -> Result<LSLValue> {
+    async fn ll_give_inventory_list(
+        &self,
+        args: &[LSLValue],
+        _context: &ScriptContext,
+    ) -> Result<LSLValue> {
         if args.len() != 3 {
             return Err(anyhow!("llGiveInventoryList expects 3 arguments"));
         }
         let destination = args[0].to_key();
         let folder = args[1].to_string();
         let items = args[2].to_list();
-        debug!("Giving inventory list to {}: folder={}, {} items", destination, folder, items.len());
+        debug!(
+            "Giving inventory list to {}: folder={}, {} items",
+            destination,
+            folder,
+            items.len()
+        );
         Ok(LSLValue::Integer(0))
     }
 
-    async fn ll_remove_inventory(&self, args: &[LSLValue], _context: &ScriptContext) -> Result<LSLValue> {
+    async fn ll_remove_inventory(
+        &self,
+        args: &[LSLValue],
+        _context: &ScriptContext,
+    ) -> Result<LSLValue> {
         if args.len() != 1 {
             return Err(anyhow!("llRemoveInventory expects 1 argument"));
         }
@@ -6444,7 +9218,11 @@ impl LSLFunctions {
         Ok(LSLValue::Integer(0))
     }
 
-    async fn ll_get_inventory_creator(&self, args: &[LSLValue], _context: &ScriptContext) -> Result<LSLValue> {
+    async fn ll_get_inventory_creator(
+        &self,
+        args: &[LSLValue],
+        _context: &ScriptContext,
+    ) -> Result<LSLValue> {
         if args.len() != 1 {
             return Err(anyhow!("llGetInventoryCreator expects 1 argument"));
         }
@@ -6452,7 +9230,11 @@ impl LSLFunctions {
         Ok(LSLValue::Key(Uuid::nil()))
     }
 
-    async fn ll_get_inventory_perm_mask(&self, args: &[LSLValue], context: &ScriptContext) -> Result<LSLValue> {
+    async fn ll_get_inventory_perm_mask(
+        &self,
+        args: &[LSLValue],
+        context: &ScriptContext,
+    ) -> Result<LSLValue> {
         if args.len() != 2 {
             return Err(anyhow!("llGetInventoryPermMask expects 2 arguments"));
         }
@@ -6474,18 +9256,29 @@ impl LSLFunctions {
         }
     }
 
-    async fn ll_set_inventory_perm_mask(&self, args: &[LSLValue], _context: &ScriptContext) -> Result<LSLValue> {
+    async fn ll_set_inventory_perm_mask(
+        &self,
+        args: &[LSLValue],
+        _context: &ScriptContext,
+    ) -> Result<LSLValue> {
         if args.len() != 3 {
             return Err(anyhow!("llSetInventoryPermMask expects 3 arguments"));
         }
         let item = args[0].to_string();
         let mask = args[1].to_integer();
         let value = args[2].to_integer();
-        debug!("Setting inventory perm mask for {}: mask={}, value={}", item, mask, value);
+        debug!(
+            "Setting inventory perm mask for {}: mask={}, value={}",
+            item, mask, value
+        );
         Ok(LSLValue::Integer(0))
     }
 
-    async fn ll_get_inventory_desc(&self, args: &[LSLValue], _context: &ScriptContext) -> Result<LSLValue> {
+    async fn ll_get_inventory_desc(
+        &self,
+        args: &[LSLValue],
+        _context: &ScriptContext,
+    ) -> Result<LSLValue> {
         if args.len() != 1 {
             return Err(anyhow!("llGetInventoryDesc expects 1 argument"));
         }
@@ -6493,7 +9286,11 @@ impl LSLFunctions {
         Ok(LSLValue::String(String::new()))
     }
 
-    async fn ll_get_inventory_acquire_time(&self, args: &[LSLValue], _context: &ScriptContext) -> Result<LSLValue> {
+    async fn ll_get_inventory_acquire_time(
+        &self,
+        args: &[LSLValue],
+        _context: &ScriptContext,
+    ) -> Result<LSLValue> {
         if args.len() != 1 {
             return Err(anyhow!("llGetInventoryAcquireTime expects 1 argument"));
         }
@@ -6501,24 +9298,40 @@ impl LSLFunctions {
         Ok(LSLValue::String(String::new()))
     }
 
-    async fn ll_request_inventory_data(&self, args: &[LSLValue], context: &ScriptContext) -> Result<LSLValue> {
+    async fn ll_request_inventory_data(
+        &self,
+        args: &[LSLValue],
+        context: &ScriptContext,
+    ) -> Result<LSLValue> {
         if args.len() != 1 {
             return Err(anyhow!("llRequestInventoryData expects 1 argument"));
         }
         let item = args[0].to_string();
         let request_id = Uuid::new_v4();
         let data = if let Some(inv) = context.inventory.iter().find(|i| i.name == item) {
-            format!("<{:.6}, {:.6}, {:.6}>", context.position.0, context.position.1, context.position.2)
+            format!(
+                "<{:.6}, {:.6}, {:.6}>",
+                context.position.0, context.position.1, context.position.2
+            )
         } else {
             String::new()
         };
-        self.action_queue.lock().push((context.script_id, ScriptAction::DataserverReply {
-            script_id: context.script_id, query_id: request_id.to_string(), data,
-        }));
+        self.action_queue.lock().push((
+            context.script_id,
+            ScriptAction::DataserverReply {
+                script_id: context.script_id,
+                query_id: request_id.to_string(),
+                data,
+            },
+        ));
         Ok(LSLValue::Key(request_id))
     }
 
-    async fn ll_get_object_perm_mask(&self, args: &[LSLValue], context: &ScriptContext) -> Result<LSLValue> {
+    async fn ll_get_object_perm_mask(
+        &self,
+        args: &[LSLValue],
+        context: &ScriptContext,
+    ) -> Result<LSLValue> {
         if args.len() != 1 {
             return Err(anyhow!("llGetObjectPermMask expects 1 argument"));
         }
@@ -6534,19 +9347,32 @@ impl LSLFunctions {
         Ok(LSLValue::Integer(result as i32))
     }
 
-    async fn ll_set_object_perm_mask(&self, args: &[LSLValue], context: &ScriptContext) -> Result<LSLValue> {
+    async fn ll_set_object_perm_mask(
+        &self,
+        args: &[LSLValue],
+        context: &ScriptContext,
+    ) -> Result<LSLValue> {
         if args.len() != 2 {
             return Err(anyhow!("llSetObjectPermMask expects 2 arguments"));
         }
         let mask = args[0].to_integer();
         let value = args[1].to_integer();
-        self.action_queue.lock().push((context.script_id, ScriptAction::SetObjectPermMask {
-            object_id: context.object_id, mask_type: mask, mask_value: value as u32,
-        }));
+        self.action_queue.lock().push((
+            context.script_id,
+            ScriptAction::SetObjectPermMask {
+                object_id: context.object_id,
+                mask_type: mask,
+                mask_value: value as u32,
+            },
+        ));
         Ok(LSLValue::Integer(0))
     }
 
-    async fn ll_get_notecard_line(&self, args: &[LSLValue], context: &mut ScriptContext) -> Result<LSLValue> {
+    async fn ll_get_notecard_line(
+        &self,
+        args: &[LSLValue],
+        context: &mut ScriptContext,
+    ) -> Result<LSLValue> {
         if args.len() != 2 {
             return Err(anyhow!("llGetNotecardLine expects 2 arguments"));
         }
@@ -6561,11 +9387,18 @@ impl LSLFunctions {
                 data: EOF_MARKER.to_string(),
             },
         ));
-        debug!("llGetNotecardLine notecard='{}' line={} query={}", name, line, request_id);
+        debug!(
+            "llGetNotecardLine notecard='{}' line={} query={}",
+            name, line, request_id
+        );
         Ok(LSLValue::Key(request_id))
     }
 
-    async fn ll_get_notecard_line_sync(&self, args: &[LSLValue], _context: &ScriptContext) -> Result<LSLValue> {
+    async fn ll_get_notecard_line_sync(
+        &self,
+        args: &[LSLValue],
+        _context: &ScriptContext,
+    ) -> Result<LSLValue> {
         if args.len() != 2 {
             return Err(anyhow!("llGetNotecardLineSync expects 2 arguments"));
         }
@@ -6574,7 +9407,11 @@ impl LSLFunctions {
         Ok(LSLValue::String(String::new()))
     }
 
-    async fn ll_get_number_of_notecard_lines(&self, args: &[LSLValue], context: &mut ScriptContext) -> Result<LSLValue> {
+    async fn ll_get_number_of_notecard_lines(
+        &self,
+        args: &[LSLValue],
+        context: &mut ScriptContext,
+    ) -> Result<LSLValue> {
         if args.len() != 1 {
             return Err(anyhow!("llGetNumberOfNotecardLines expects 1 argument"));
         }
@@ -6588,11 +9425,18 @@ impl LSLFunctions {
                 data: "0".to_string(),
             },
         ));
-        debug!("llGetNumberOfNotecardLines notecard='{}' query={}", name, request_id);
+        debug!(
+            "llGetNumberOfNotecardLines notecard='{}' query={}",
+            name, request_id
+        );
         Ok(LSLValue::Key(request_id))
     }
 
-    async fn ll_set_prim_media_params(&self, args: &[LSLValue], context: &mut ScriptContext) -> Result<LSLValue> {
+    async fn ll_set_prim_media_params(
+        &self,
+        args: &[LSLValue],
+        context: &mut ScriptContext,
+    ) -> Result<LSLValue> {
         if args.len() != 2 {
             return Err(anyhow!("llSetPrimMediaParams expects 2 arguments"));
         }
@@ -6601,20 +9445,32 @@ impl LSLFunctions {
             return Ok(LSLValue::Integer(1));
         }
         let params = args[1].to_list();
-        context.variables.insert(format!("__media_face_{}", face), LSLValue::List(params.clone()));
+        context.variables.insert(
+            format!("__media_face_{}", face),
+            LSLValue::List(params.clone()),
+        );
         let mut param_pairs: Vec<(i32, String)> = Vec::new();
         let mut pi = 0;
         while pi + 1 < params.len() {
             param_pairs.push((params[pi].to_integer(), params[pi + 1].to_string()));
             pi += 2;
         }
-        self.action_queue.lock().push((context.script_id, ScriptAction::SetPrimMediaParams {
-            object_id: context.object_id, face, params: param_pairs,
-        }));
+        self.action_queue.lock().push((
+            context.script_id,
+            ScriptAction::SetPrimMediaParams {
+                object_id: context.object_id,
+                face,
+                params: param_pairs,
+            },
+        ));
         Ok(LSLValue::Integer(0))
     }
 
-    async fn ll_get_prim_media_params(&self, args: &[LSLValue], context: &ScriptContext) -> Result<LSLValue> {
+    async fn ll_get_prim_media_params(
+        &self,
+        args: &[LSLValue],
+        context: &ScriptContext,
+    ) -> Result<LSLValue> {
         if args.len() != 2 {
             return Err(anyhow!("llGetPrimMediaParams expects 2 arguments"));
         }
@@ -6647,7 +9503,11 @@ impl LSLFunctions {
         Ok(LSLValue::List(result))
     }
 
-    async fn ll_clear_prim_media(&self, args: &[LSLValue], context: &mut ScriptContext) -> Result<LSLValue> {
+    async fn ll_clear_prim_media(
+        &self,
+        args: &[LSLValue],
+        context: &mut ScriptContext,
+    ) -> Result<LSLValue> {
         if args.len() != 1 {
             return Err(anyhow!("llClearPrimMedia expects 1 argument"));
         }
@@ -6656,13 +9516,21 @@ impl LSLFunctions {
             return Ok(LSLValue::Integer(1));
         }
         context.variables.remove(&format!("__media_face_{}", face));
-        self.action_queue.lock().push((context.script_id, ScriptAction::ClearPrimMedia {
-            object_id: context.object_id, face,
-        }));
+        self.action_queue.lock().push((
+            context.script_id,
+            ScriptAction::ClearPrimMedia {
+                object_id: context.object_id,
+                face,
+            },
+        ));
         Ok(LSLValue::Integer(0))
     }
 
-    async fn ll_set_link_media(&self, args: &[LSLValue], context: &ScriptContext) -> Result<LSLValue> {
+    async fn ll_set_link_media(
+        &self,
+        args: &[LSLValue],
+        context: &ScriptContext,
+    ) -> Result<LSLValue> {
         if args.len() != 3 {
             return Err(anyhow!("llSetLinkMedia expects 3 arguments"));
         }
@@ -6675,55 +9543,94 @@ impl LSLFunctions {
             param_pairs.push((params[pi].to_integer(), params[pi + 1].to_string()));
             pi += 2;
         }
-        self.action_queue.lock().push((context.script_id, ScriptAction::SetPrimMediaParams {
-            object_id: context.object_id, face, params: param_pairs,
-        }));
+        self.action_queue.lock().push((
+            context.script_id,
+            ScriptAction::SetPrimMediaParams {
+                object_id: context.object_id,
+                face,
+                params: param_pairs,
+            },
+        ));
         Ok(LSLValue::Integer(0))
     }
 
-    async fn ll_get_link_media(&self, args: &[LSLValue], _context: &ScriptContext) -> Result<LSLValue> {
+    async fn ll_get_link_media(
+        &self,
+        args: &[LSLValue],
+        _context: &ScriptContext,
+    ) -> Result<LSLValue> {
         if args.len() != 3 {
             return Err(anyhow!("llGetLinkMedia expects 3 arguments"));
         }
         let _link = args[0].to_integer();
         let _face = args[1].to_integer();
         let params = args[2].to_list();
-        Ok(LSLValue::List(vec![LSLValue::String(String::new()); params.len()]))
+        Ok(LSLValue::List(vec![
+            LSLValue::String(String::new());
+            params.len()
+        ]))
     }
 
-    async fn ll_clear_link_media(&self, args: &[LSLValue], context: &ScriptContext) -> Result<LSLValue> {
+    async fn ll_clear_link_media(
+        &self,
+        args: &[LSLValue],
+        context: &ScriptContext,
+    ) -> Result<LSLValue> {
         if args.len() != 2 {
             return Err(anyhow!("llClearLinkMedia expects 2 arguments"));
         }
         let _link = args[0].to_integer();
         let face = args[1].to_integer();
-        self.action_queue.lock().push((context.script_id, ScriptAction::ClearPrimMedia {
-            object_id: context.object_id, face,
-        }));
+        self.action_queue.lock().push((
+            context.script_id,
+            ScriptAction::ClearPrimMedia {
+                object_id: context.object_id,
+                face,
+            },
+        ));
         Ok(LSLValue::Integer(0))
     }
 
-    async fn ll_parcel_media_command_list(&self, args: &[LSLValue], context: &ScriptContext) -> Result<LSLValue> {
+    async fn ll_parcel_media_command_list(
+        &self,
+        args: &[LSLValue],
+        context: &ScriptContext,
+    ) -> Result<LSLValue> {
         if args.len() != 1 {
             return Err(anyhow!("llParcelMediaCommandList expects 1 argument"));
         }
         let commands = args[0].to_list();
         let cmd_ints: Vec<i32> = commands.iter().map(|c| c.to_integer()).collect();
-        self.action_queue.lock().push((context.script_id, ScriptAction::ParcelMediaCommandList {
-            object_id: context.object_id, commands: cmd_ints,
-        }));
+        self.action_queue.lock().push((
+            context.script_id,
+            ScriptAction::ParcelMediaCommandList {
+                object_id: context.object_id,
+                commands: cmd_ints,
+            },
+        ));
         Ok(LSLValue::Integer(0))
     }
 
-    async fn ll_parcel_media_query(&self, args: &[LSLValue], _context: &ScriptContext) -> Result<LSLValue> {
+    async fn ll_parcel_media_query(
+        &self,
+        args: &[LSLValue],
+        _context: &ScriptContext,
+    ) -> Result<LSLValue> {
         if args.len() != 1 {
             return Err(anyhow!("llParcelMediaQuery expects 1 argument"));
         }
         let query = args[0].to_list();
-        Ok(LSLValue::List(vec![LSLValue::String(String::new()); query.len()]))
+        Ok(LSLValue::List(vec![
+            LSLValue::String(String::new());
+            query.len()
+        ]))
     }
 
-    async fn ll_set_prim_url(&self, args: &[LSLValue], _context: &ScriptContext) -> Result<LSLValue> {
+    async fn ll_set_prim_url(
+        &self,
+        args: &[LSLValue],
+        _context: &ScriptContext,
+    ) -> Result<LSLValue> {
         if args.len() != 1 {
             return Err(anyhow!("llSetPrimURL expects 1 argument"));
         }
@@ -6732,7 +9639,11 @@ impl LSLFunctions {
         Ok(LSLValue::Integer(0))
     }
 
-    async fn ll_refresh_prim_url(&self, _args: &[LSLValue], _context: &ScriptContext) -> Result<LSLValue> {
+    async fn ll_refresh_prim_url(
+        &self,
+        _args: &[LSLValue],
+        _context: &ScriptContext,
+    ) -> Result<LSLValue> {
         debug!("Refreshing prim URL");
         Ok(LSLValue::Integer(0))
     }
@@ -6749,27 +9660,42 @@ impl LSLFunctions {
         let mut i = 0;
         while i + 1 < options.len() {
             match options[i].to_integer() {
-                0 => { reject_types = options[i + 1].to_integer(); },
-                2 => { max_hits = options[i + 1].to_integer().max(1).min(256); },
+                0 => {
+                    reject_types = options[i + 1].to_integer();
+                }
+                2 => {
+                    max_hits = options[i + 1].to_integer().max(1).min(256);
+                }
                 _ => {}
             }
             i += 2;
         }
-        self.action_queue.lock().push((context.script_id, ScriptAction::CastRay {
-            object_id: context.object_id,
-            start: [start.x, start.y, start.z],
-            end: [end.x, end.y, end.z],
-            reject_types,
-            max_hits,
-        }));
+        self.action_queue.lock().push((
+            context.script_id,
+            ScriptAction::CastRay {
+                object_id: context.object_id,
+                start: [start.x, start.y, start.z],
+                end: [end.x, end.y, end.z],
+                reject_types,
+                max_hits,
+            },
+        ));
         Ok(LSLValue::List(vec![LSLValue::Integer(0)]))
     }
 
-    async fn ll_cast_ray_v3(&self, args: &[LSLValue], _context: &ScriptContext) -> Result<LSLValue> {
+    async fn ll_cast_ray_v3(
+        &self,
+        args: &[LSLValue],
+        _context: &ScriptContext,
+    ) -> Result<LSLValue> {
         self.ll_cast_ray(args, _context).await
     }
 
-    async fn ll_linear2srgb(&self, args: &[LSLValue], _context: &ScriptContext) -> Result<LSLValue> {
+    async fn ll_linear2srgb(
+        &self,
+        args: &[LSLValue],
+        _context: &ScriptContext,
+    ) -> Result<LSLValue> {
         if args.len() != 1 {
             return Err(anyhow!("llLinear2sRGB expects 1 argument"));
         }
@@ -6788,7 +9714,11 @@ impl LSLFunctions {
         )))
     }
 
-    async fn ll_srgb2linear(&self, args: &[LSLValue], _context: &ScriptContext) -> Result<LSLValue> {
+    async fn ll_srgb2linear(
+        &self,
+        args: &[LSLValue],
+        _context: &ScriptContext,
+    ) -> Result<LSLValue> {
         if args.len() != 1 {
             return Err(anyhow!("llsRGB2Linear expects 1 argument"));
         }
@@ -6812,13 +9742,21 @@ impl LSLFunctions {
         Ok(LSLValue::Float(elapsed))
     }
 
-    async fn ll_get_and_reset_time(&self, _args: &[LSLValue], context: &mut ScriptContext) -> Result<LSLValue> {
+    async fn ll_get_and_reset_time(
+        &self,
+        _args: &[LSLValue],
+        context: &mut ScriptContext,
+    ) -> Result<LSLValue> {
         let elapsed = context.script_start_time.elapsed().as_secs_f32();
         context.script_start_time = std::time::Instant::now();
         Ok(LSLValue::Float(elapsed))
     }
 
-    async fn ll_reset_time(&self, _args: &[LSLValue], context: &mut ScriptContext) -> Result<LSLValue> {
+    async fn ll_reset_time(
+        &self,
+        _args: &[LSLValue],
+        context: &mut ScriptContext,
+    ) -> Result<LSLValue> {
         context.script_start_time = std::time::Instant::now();
         Ok(LSLValue::Integer(0))
     }
@@ -6828,26 +9766,42 @@ impl LSLFunctions {
         Ok(LSLValue::String(now.format("%Y-%m-%d").to_string()))
     }
 
-    async fn ll_get_gmt_clock(&self, _args: &[LSLValue], _context: &ScriptContext) -> Result<LSLValue> {
+    async fn ll_get_gmt_clock(
+        &self,
+        _args: &[LSLValue],
+        _context: &ScriptContext,
+    ) -> Result<LSLValue> {
         use chrono::Timelike;
         let now = chrono::Utc::now();
         let seconds = now.num_seconds_from_midnight() as f32;
         Ok(LSLValue::Float(seconds))
     }
 
-    async fn ll_get_wallclock(&self, _args: &[LSLValue], _context: &ScriptContext) -> Result<LSLValue> {
+    async fn ll_get_wallclock(
+        &self,
+        _args: &[LSLValue],
+        _context: &ScriptContext,
+    ) -> Result<LSLValue> {
         use chrono::Timelike;
         let now = chrono::Local::now();
         let seconds = now.num_seconds_from_midnight() as f32;
         Ok(LSLValue::Float(seconds))
     }
 
-    async fn ll_get_time_of_day(&self, _args: &[LSLValue], _context: &ScriptContext) -> Result<LSLValue> {
+    async fn ll_get_time_of_day(
+        &self,
+        _args: &[LSLValue],
+        _context: &ScriptContext,
+    ) -> Result<LSLValue> {
         let seconds = (chrono::Utc::now().timestamp() % 14400) as f32;
         Ok(LSLValue::Float(seconds))
     }
 
-    async fn ll_get_script_state(&self, args: &[LSLValue], _context: &ScriptContext) -> Result<LSLValue> {
+    async fn ll_get_script_state(
+        &self,
+        args: &[LSLValue],
+        _context: &ScriptContext,
+    ) -> Result<LSLValue> {
         if args.len() != 1 {
             return Err(anyhow!("llGetScriptState expects 1 argument"));
         }
@@ -6855,7 +9809,11 @@ impl LSLFunctions {
         Ok(LSLValue::Integer(1))
     }
 
-    async fn ll_set_script_state(&self, args: &[LSLValue], context: &ScriptContext) -> Result<LSLValue> {
+    async fn ll_set_script_state(
+        &self,
+        args: &[LSLValue],
+        context: &ScriptContext,
+    ) -> Result<LSLValue> {
         if args.len() != 2 {
             return Err(anyhow!("llSetScriptState expects 2 arguments"));
         }
@@ -6863,24 +9821,39 @@ impl LSLFunctions {
         let running = args[1].is_true();
         self.action_queue.lock().push((
             context.script_id,
-            ScriptAction::SetScriptState { object_id: context.object_id, script_name: script, running },
+            ScriptAction::SetScriptState {
+                object_id: context.object_id,
+                script_name: script,
+                running,
+            },
         ));
         Ok(LSLValue::Integer(0))
     }
 
-    async fn ll_reset_other_script(&self, args: &[LSLValue], context: &ScriptContext) -> Result<LSLValue> {
+    async fn ll_reset_other_script(
+        &self,
+        args: &[LSLValue],
+        context: &ScriptContext,
+    ) -> Result<LSLValue> {
         if args.len() != 1 {
             return Err(anyhow!("llResetOtherScript expects 1 argument"));
         }
         let script = args[0].to_string();
         self.action_queue.lock().push((
             context.script_id,
-            ScriptAction::ResetOtherScript { object_id: context.object_id, script_name: script },
+            ScriptAction::ResetOtherScript {
+                object_id: context.object_id,
+                script_name: script,
+            },
         ));
         Ok(LSLValue::Integer(0))
     }
 
-    async fn ll_remote_load_script(&self, args: &[LSLValue], _context: &ScriptContext) -> Result<LSLValue> {
+    async fn ll_remote_load_script(
+        &self,
+        args: &[LSLValue],
+        _context: &ScriptContext,
+    ) -> Result<LSLValue> {
         if args.len() < 4 {
             return Err(anyhow!("llRemoteLoadScript expects at least 4 arguments"));
         }
@@ -6888,7 +9861,11 @@ impl LSLFunctions {
         Ok(LSLValue::Integer(0))
     }
 
-    async fn ll_remote_load_script_pin(&self, args: &[LSLValue], _context: &ScriptContext) -> Result<LSLValue> {
+    async fn ll_remote_load_script_pin(
+        &self,
+        args: &[LSLValue],
+        _context: &ScriptContext,
+    ) -> Result<LSLValue> {
         if args.len() != 5 {
             return Err(anyhow!("llRemoteLoadScriptPin expects 5 arguments"));
         }
@@ -6897,27 +9874,45 @@ impl LSLFunctions {
         let pin = args[2].to_integer();
         let running = args[3].is_true();
         let start_param = args[4].to_integer();
-        debug!("Remote load script {} to {}, pin={}, running={}, param={}", script, target, pin, running, start_param);
+        debug!(
+            "Remote load script {} to {}, pin={}, running={}, param={}",
+            script, target, pin, running, start_param
+        );
         Ok(LSLValue::Integer(0))
     }
 
-    async fn ll_set_remote_script_access_pin(&self, args: &[LSLValue], context: &ScriptContext) -> Result<LSLValue> {
+    async fn ll_set_remote_script_access_pin(
+        &self,
+        args: &[LSLValue],
+        context: &ScriptContext,
+    ) -> Result<LSLValue> {
         if args.len() != 1 {
             return Err(anyhow!("llSetRemoteScriptAccessPin expects 1 argument"));
         }
         let pin = args[0].to_integer();
         self.action_queue.lock().push((
             context.script_id,
-            ScriptAction::SetScriptAccessPin { object_id: context.object_id, pin },
+            ScriptAction::SetScriptAccessPin {
+                object_id: context.object_id,
+                pin,
+            },
         ));
         Ok(LSLValue::Integer(0))
     }
 
-    async fn ll_get_start_parameter(&self, _args: &[LSLValue], context: &ScriptContext) -> Result<LSLValue> {
+    async fn ll_get_start_parameter(
+        &self,
+        _args: &[LSLValue],
+        context: &ScriptContext,
+    ) -> Result<LSLValue> {
         Ok(LSLValue::Integer(context.start_parameter))
     }
 
-    async fn ll_min_event_delay(&self, args: &[LSLValue], context: &mut ScriptContext) -> Result<LSLValue> {
+    async fn ll_min_event_delay(
+        &self,
+        args: &[LSLValue],
+        context: &mut ScriptContext,
+    ) -> Result<LSLValue> {
         if args.len() != 1 {
             return Err(anyhow!("llMinEventDelay expects 1 argument"));
         }
@@ -6926,7 +9921,11 @@ impl LSLFunctions {
         Ok(LSLValue::Integer(0))
     }
 
-    async fn ll_script_danger(&self, args: &[LSLValue], _context: &ScriptContext) -> Result<LSLValue> {
+    async fn ll_script_danger(
+        &self,
+        args: &[LSLValue],
+        _context: &ScriptContext,
+    ) -> Result<LSLValue> {
         if args.len() != 1 {
             return Err(anyhow!("llScriptDanger expects 1 argument"));
         }
@@ -6934,7 +9933,11 @@ impl LSLFunctions {
         Ok(LSLValue::Integer(0))
     }
 
-    async fn ll_script_profiler(&self, args: &[LSLValue], _context: &ScriptContext) -> Result<LSLValue> {
+    async fn ll_script_profiler(
+        &self,
+        args: &[LSLValue],
+        _context: &ScriptContext,
+    ) -> Result<LSLValue> {
         if args.len() != 1 {
             return Err(anyhow!("llScriptProfiler expects 1 argument"));
         }
@@ -6943,11 +9946,19 @@ impl LSLFunctions {
         Ok(LSLValue::Integer(0))
     }
 
-    async fn ll_get_memory_limit(&self, _args: &[LSLValue], _context: &ScriptContext) -> Result<LSLValue> {
+    async fn ll_get_memory_limit(
+        &self,
+        _args: &[LSLValue],
+        _context: &ScriptContext,
+    ) -> Result<LSLValue> {
         Ok(LSLValue::Integer(65536))
     }
 
-    async fn ll_set_memory_limit(&self, args: &[LSLValue], _context: &ScriptContext) -> Result<LSLValue> {
+    async fn ll_set_memory_limit(
+        &self,
+        args: &[LSLValue],
+        _context: &ScriptContext,
+    ) -> Result<LSLValue> {
         if args.len() != 1 {
             return Err(anyhow!("llSetMemoryLimit expects 1 argument"));
         }
@@ -6955,11 +9966,19 @@ impl LSLFunctions {
         Ok(LSLValue::Integer(65536))
     }
 
-    async fn ll_get_sp_max_memory(&self, _args: &[LSLValue], _context: &ScriptContext) -> Result<LSLValue> {
+    async fn ll_get_sp_max_memory(
+        &self,
+        _args: &[LSLValue],
+        _context: &ScriptContext,
+    ) -> Result<LSLValue> {
         Ok(LSLValue::Integer(65536))
     }
 
-    async fn ll_generate_key(&self, _args: &[LSLValue], _context: &ScriptContext) -> Result<LSLValue> {
+    async fn ll_generate_key(
+        &self,
+        _args: &[LSLValue],
+        _context: &ScriptContext,
+    ) -> Result<LSLValue> {
         Ok(LSLValue::Key(Uuid::new_v4()))
     }
 
@@ -6979,7 +9998,11 @@ impl LSLFunctions {
         Ok(LSLValue::Integer(0))
     }
 
-    async fn ll_scale_by_factor(&self, args: &[LSLValue], context: &mut ScriptContext) -> Result<LSLValue> {
+    async fn ll_scale_by_factor(
+        &self,
+        args: &[LSLValue],
+        context: &mut ScriptContext,
+    ) -> Result<LSLValue> {
         if args.len() != 1 {
             return Err(anyhow!("llScaleByFactor expects 1 argument"));
         }
@@ -6989,20 +10012,35 @@ impl LSLFunctions {
         context.scale.2 *= factor as f32;
         self.action_queue.lock().push((
             context.script_id,
-            ScriptAction::ScaleByFactor { object_id: context.object_id, factor },
+            ScriptAction::ScaleByFactor {
+                object_id: context.object_id,
+                factor,
+            },
         ));
         Ok(LSLValue::Integer(1))
     }
 
-    async fn ll_get_max_scale_factor(&self, _args: &[LSLValue], _context: &ScriptContext) -> Result<LSLValue> {
+    async fn ll_get_max_scale_factor(
+        &self,
+        _args: &[LSLValue],
+        _context: &ScriptContext,
+    ) -> Result<LSLValue> {
         Ok(LSLValue::Float(64.0))
     }
 
-    async fn ll_get_min_scale_factor(&self, _args: &[LSLValue], _context: &ScriptContext) -> Result<LSLValue> {
+    async fn ll_get_min_scale_factor(
+        &self,
+        _args: &[LSLValue],
+        _context: &ScriptContext,
+    ) -> Result<LSLValue> {
         Ok(LSLValue::Float(0.01))
     }
 
-    async fn ll_manage_estate_access(&self, args: &[LSLValue], context: &ScriptContext) -> Result<LSLValue> {
+    async fn ll_manage_estate_access(
+        &self,
+        args: &[LSLValue],
+        context: &ScriptContext,
+    ) -> Result<LSLValue> {
         if args.len() != 2 {
             return Err(anyhow!("llManageEstateAccess expects 2 arguments"));
         }
@@ -7010,12 +10048,20 @@ impl LSLFunctions {
         let agent_id = args[1].to_key();
         self.action_queue.lock().push((
             context.script_id,
-            ScriptAction::ManageEstateAccess { object_id: context.object_id, action, agent_id },
+            ScriptAction::ManageEstateAccess {
+                object_id: context.object_id,
+                action,
+                agent_id,
+            },
         ));
         Ok(LSLValue::Integer(1))
     }
 
-    async fn ll_set_region_pos(&self, args: &[LSLValue], context: &mut ScriptContext) -> Result<LSLValue> {
+    async fn ll_set_region_pos(
+        &self,
+        args: &[LSLValue],
+        context: &mut ScriptContext,
+    ) -> Result<LSLValue> {
         if args.len() != 1 {
             return Err(anyhow!("llSetRegionPos expects 1 argument"));
         }
@@ -7031,7 +10077,11 @@ impl LSLFunctions {
         Ok(LSLValue::Integer(1))
     }
 
-    async fn ll_set_keyframed_motion(&self, args: &[LSLValue], context: &mut ScriptContext) -> Result<LSLValue> {
+    async fn ll_set_keyframed_motion(
+        &self,
+        args: &[LSLValue],
+        context: &mut ScriptContext,
+    ) -> Result<LSLValue> {
         if args.len() != 2 {
             return Err(anyhow!("llSetKeyframedMotion expects 2 arguments"));
         }
@@ -7046,7 +10096,9 @@ impl LSLFunctions {
             match opt {
                 0 => mode = val,
                 1 => data = val,
-                2 => { data = val; }
+                2 => {
+                    data = val;
+                }
                 _ => {}
             }
             i += 2;
@@ -7064,7 +10116,11 @@ impl LSLFunctions {
         Ok(LSLValue::Integer(0))
     }
 
-    async fn ll_collision_sprite(&self, args: &[LSLValue], _context: &ScriptContext) -> Result<LSLValue> {
+    async fn ll_collision_sprite(
+        &self,
+        args: &[LSLValue],
+        _context: &ScriptContext,
+    ) -> Result<LSLValue> {
         if args.len() != 1 {
             return Err(anyhow!("llCollisionSprite expects 1 argument"));
         }
@@ -7073,7 +10129,11 @@ impl LSLFunctions {
         Ok(LSLValue::Integer(0))
     }
 
-    async fn ll_god_like_rez_object(&self, args: &[LSLValue], _context: &ScriptContext) -> Result<LSLValue> {
+    async fn ll_god_like_rez_object(
+        &self,
+        args: &[LSLValue],
+        _context: &ScriptContext,
+    ) -> Result<LSLValue> {
         if args.len() != 2 {
             return Err(anyhow!("llGodLikeRezObject expects 2 arguments"));
         }
@@ -7083,7 +10143,11 @@ impl LSLFunctions {
         Ok(LSLValue::Integer(0))
     }
 
-    async fn ll_get_visual_params(&self, args: &[LSLValue], _context: &ScriptContext) -> Result<LSLValue> {
+    async fn ll_get_visual_params(
+        &self,
+        args: &[LSLValue],
+        _context: &ScriptContext,
+    ) -> Result<LSLValue> {
         if args.len() != 2 {
             return Err(anyhow!("llGetVisualParams expects 2 arguments"));
         }

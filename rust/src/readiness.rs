@@ -82,13 +82,25 @@ impl ReadinessTracker {
 
     pub fn status_breakdown(&self) -> Vec<(&'static str, bool)> {
         vec![
-            ("database_connected", self.database_connected.load(Ordering::SeqCst)),
-            ("migrations_complete", self.migrations_complete.load(Ordering::SeqCst)),
-            ("robust_registered", self.robust_registered.load(Ordering::SeqCst)),
+            (
+                "database_connected",
+                self.database_connected.load(Ordering::SeqCst),
+            ),
+            (
+                "migrations_complete",
+                self.migrations_complete.load(Ordering::SeqCst),
+            ),
+            (
+                "robust_registered",
+                self.robust_registered.load(Ordering::SeqCst),
+            ),
             ("udp_bound", self.udp_bound.load(Ordering::SeqCst)),
             ("terrain_loaded", self.terrain_loaded.load(Ordering::SeqCst)),
             ("scene_loaded", self.scene_loaded.load(Ordering::SeqCst)),
-            ("scripts_initialized", self.scripts_initialized.load(Ordering::SeqCst)),
+            (
+                "scripts_initialized",
+                self.scripts_initialized.load(Ordering::SeqCst),
+            ),
         ]
     }
 
@@ -103,7 +115,10 @@ impl ReadinessTracker {
 
         if all_ready && !self.login_ready.load(Ordering::SeqCst) {
             self.login_ready.store(true, Ordering::SeqCst);
-            tracing::info!("[READINESS] ALL SYSTEMS READY — login is now safe (startup took {}s)", self.uptime_secs());
+            tracing::info!(
+                "[READINESS] ALL SYSTEMS READY — login is now safe (startup took {}s)",
+                self.uptime_secs()
+            );
         }
     }
 }

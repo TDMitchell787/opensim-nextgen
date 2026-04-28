@@ -13,7 +13,9 @@ use std::time::Duration;
 use tracing::{debug, info, warn};
 use uuid::Uuid;
 
-use crate::services::traits::{InventoryServiceTrait, InventoryFolder, InventoryItem, InventoryCollection};
+use crate::services::traits::{
+    InventoryCollection, InventoryFolder, InventoryItem, InventoryServiceTrait,
+};
 
 pub struct RemoteInventoryService {
     client: Client,
@@ -35,7 +37,11 @@ impl RemoteInventoryService {
         }
     }
 
-    async fn send_request(&self, method: &str, params: &HashMap<String, String>) -> Result<HashMap<String, String>> {
+    async fn send_request(
+        &self,
+        method: &str,
+        params: &HashMap<String, String>,
+    ) -> Result<HashMap<String, String>> {
         let url = format!("{}/xinventory", self.server_uri);
 
         let mut form_data = params.clone();
@@ -43,7 +49,8 @@ impl RemoteInventoryService {
 
         debug!("Inventory service request: {} to {}", method, url);
 
-        let response = self.client
+        let response = self
+            .client
             .post(&url)
             .form(&form_data)
             .send()
@@ -51,17 +58,23 @@ impl RemoteInventoryService {
             .map_err(|e| anyhow!("Inventory service request failed: {}", e))?;
 
         if !response.status().is_success() {
-            return Err(anyhow!("Inventory service returned status: {}", response.status()));
+            return Err(anyhow!(
+                "Inventory service returned status: {}",
+                response.status()
+            ));
         }
 
-        let body = response.text().await
+        let body = response
+            .text()
+            .await
             .map_err(|e| anyhow!("Failed to read inventory service response: {}", e))?;
 
         self.parse_response(&body)
     }
 
     fn parse_response(&self, body: &str) -> Result<HashMap<String, String>> {
-        if let Some(xml_result) = crate::services::robust::xml_response::try_parse_xml_to_flat(body) {
+        if let Some(xml_result) = crate::services::robust::xml_response::try_parse_xml_to_flat(body)
+        {
             return Ok(xml_result);
         }
 
@@ -77,27 +90,33 @@ impl RemoteInventoryService {
 
     fn params_to_folder(&self, params: &HashMap<String, String>) -> InventoryFolder {
         InventoryFolder {
-            folder_id: params.get("ID")
+            folder_id: params
+                .get("ID")
                 .or_else(|| params.get("folderID"))
                 .and_then(|s| Uuid::parse_str(s).ok())
                 .unwrap_or_default(),
-            parent_id: params.get("ParentID")
+            parent_id: params
+                .get("ParentID")
                 .or_else(|| params.get("parentFolderID"))
                 .and_then(|s| Uuid::parse_str(s).ok())
                 .unwrap_or_default(),
-            owner_id: params.get("Owner")
+            owner_id: params
+                .get("Owner")
                 .or_else(|| params.get("agentID"))
                 .and_then(|s| Uuid::parse_str(s).ok())
                 .unwrap_or_default(),
-            name: params.get("Name")
+            name: params
+                .get("Name")
                 .or_else(|| params.get("name"))
                 .cloned()
                 .unwrap_or_default(),
-            folder_type: params.get("Type")
+            folder_type: params
+                .get("Type")
                 .or_else(|| params.get("type"))
                 .and_then(|s| s.parse().ok())
                 .unwrap_or(0),
-            version: params.get("Version")
+            version: params
+                .get("Version")
                 .or_else(|| params.get("version"))
                 .and_then(|s| s.parse().ok())
                 .unwrap_or(1),
@@ -106,60 +125,98 @@ impl RemoteInventoryService {
 
     fn params_to_item(&self, params: &HashMap<String, String>) -> InventoryItem {
         InventoryItem {
-            item_id: params.get("ID")
+            item_id: params
+                .get("ID")
                 .or_else(|| params.get("inventoryID"))
                 .and_then(|s| Uuid::parse_str(s).ok())
                 .unwrap_or_default(),
-            asset_id: params.get("AssetID")
+            asset_id: params
+                .get("AssetID")
                 .or_else(|| params.get("assetID"))
                 .and_then(|s| Uuid::parse_str(s).ok())
                 .unwrap_or_default(),
-            folder_id: params.get("Folder")
+            folder_id: params
+                .get("Folder")
                 .or_else(|| params.get("parentFolderID"))
                 .and_then(|s| Uuid::parse_str(s).ok())
                 .unwrap_or_default(),
-            owner_id: params.get("Owner")
+            owner_id: params
+                .get("Owner")
                 .or_else(|| params.get("avatarID"))
                 .and_then(|s| Uuid::parse_str(s).ok())
                 .unwrap_or_default(),
-            creator_id: params.get("CreatorId")
+            creator_id: params
+                .get("CreatorId")
                 .or_else(|| params.get("creatorID"))
                 .and_then(|s| Uuid::parse_str(s).ok())
                 .unwrap_or_default(),
-            name: params.get("Name")
+            name: params
+                .get("Name")
                 .or_else(|| params.get("inventoryName"))
                 .cloned()
                 .unwrap_or_default(),
-            description: params.get("Description")
+            description: params
+                .get("Description")
                 .or_else(|| params.get("inventoryDescription"))
                 .cloned()
                 .unwrap_or_default(),
-            asset_type: params.get("AssetType")
+            asset_type: params
+                .get("AssetType")
                 .or_else(|| params.get("assetType"))
                 .and_then(|s| s.parse().ok())
                 .unwrap_or(0),
-            inv_type: params.get("InvType")
+            inv_type: params
+                .get("InvType")
                 .or_else(|| params.get("invType"))
                 .and_then(|s| s.parse().ok())
                 .unwrap_or(0),
-            flags: params.get("Flags")
+            flags: params
+                .get("Flags")
                 .or_else(|| params.get("flags"))
                 .and_then(|s| s.parse().ok())
                 .unwrap_or(0),
-            creation_date: params.get("CreationDate")
+            creation_date: params
+                .get("CreationDate")
                 .or_else(|| params.get("creationDate"))
                 .and_then(|s| s.parse().ok())
                 .unwrap_or(0),
             creator_data: params.get("CreatorData").cloned().unwrap_or_default(),
-            base_permissions: params.get("BasePermissions").and_then(|s| s.parse().ok()).unwrap_or(0x7FFFFFFF),
-            current_permissions: params.get("CurrentPermissions").and_then(|s| s.parse().ok()).unwrap_or(0x7FFFFFFF),
-            everyone_permissions: params.get("EveryOnePermissions").and_then(|s| s.parse().ok()).unwrap_or(0),
-            next_permissions: params.get("NextPermissions").and_then(|s| s.parse().ok()).unwrap_or(0x7FFFFFFF),
-            group_permissions: params.get("GroupPermissions").and_then(|s| s.parse().ok()).unwrap_or(0),
-            group_id: params.get("GroupID").and_then(|s| Uuid::parse_str(s).ok()).unwrap_or_default(),
-            group_owned: params.get("GroupOwned").map(|s| s == "True" || s == "true").unwrap_or(false),
-            sale_price: params.get("SalePrice").and_then(|s| s.parse().ok()).unwrap_or(0),
-            sale_type: params.get("SaleType").and_then(|s| s.parse().ok()).unwrap_or(0),
+            base_permissions: params
+                .get("BasePermissions")
+                .and_then(|s| s.parse().ok())
+                .unwrap_or(0x7FFFFFFF),
+            current_permissions: params
+                .get("CurrentPermissions")
+                .and_then(|s| s.parse().ok())
+                .unwrap_or(0x7FFFFFFF),
+            everyone_permissions: params
+                .get("EveryOnePermissions")
+                .and_then(|s| s.parse().ok())
+                .unwrap_or(0),
+            next_permissions: params
+                .get("NextPermissions")
+                .and_then(|s| s.parse().ok())
+                .unwrap_or(0x7FFFFFFF),
+            group_permissions: params
+                .get("GroupPermissions")
+                .and_then(|s| s.parse().ok())
+                .unwrap_or(0),
+            group_id: params
+                .get("GroupID")
+                .and_then(|s| Uuid::parse_str(s).ok())
+                .unwrap_or_default(),
+            group_owned: params
+                .get("GroupOwned")
+                .map(|s| s == "True" || s == "true")
+                .unwrap_or(false),
+            sale_price: params
+                .get("SalePrice")
+                .and_then(|s| s.parse().ok())
+                .unwrap_or(0),
+            sale_type: params
+                .get("SaleType")
+                .and_then(|s| s.parse().ok())
+                .unwrap_or(0),
         }
     }
 
@@ -194,7 +251,9 @@ impl RemoteInventoryService {
         let mut folders = Vec::new();
         let mut i = 0;
 
-        while response.contains_key(&format!("ID_{}", i)) || response.contains_key(&format!("folderID_{}", i)) {
+        while response.contains_key(&format!("ID_{}", i))
+            || response.contains_key(&format!("folderID_{}", i))
+        {
             let suffix = format!("_{}", i);
             let mut folder_params = HashMap::new();
 
@@ -219,7 +278,9 @@ impl RemoteInventoryService {
         let mut items = Vec::new();
         let mut i = 0;
 
-        while response.contains_key(&format!("ID_{}", i)) || response.contains_key(&format!("inventoryID_{}", i)) {
+        while response.contains_key(&format!("ID_{}", i))
+            || response.contains_key(&format!("inventoryID_{}", i))
+        {
             let suffix = format!("_{}", i);
             let mut item_params = HashMap::new();
 
@@ -251,7 +312,8 @@ impl InventoryServiceTrait for RemoteInventoryService {
 
         let response = self.send_request("GETFOLDER", &params).await?;
 
-        let result = response.get("RESULT")
+        let result = response
+            .get("RESULT")
             .map(|s| s != "False" && s != "null")
             .unwrap_or(true);
 
@@ -270,7 +332,8 @@ impl InventoryServiceTrait for RemoteInventoryService {
 
         let response = self.send_request("GETROOTFOLDER", &params).await?;
 
-        let result = response.get("RESULT")
+        let result = response
+            .get("RESULT")
             .map(|s| s != "False" && s != "null")
             .unwrap_or(true);
 
@@ -281,8 +344,15 @@ impl InventoryServiceTrait for RemoteInventoryService {
         }
     }
 
-    async fn get_folder_content(&self, principal_id: Uuid, folder_id: Uuid) -> Result<InventoryCollection> {
-        debug!("Remote: Getting folder content: {} for user: {}", folder_id, principal_id);
+    async fn get_folder_content(
+        &self,
+        principal_id: Uuid,
+        folder_id: Uuid,
+    ) -> Result<InventoryCollection> {
+        debug!(
+            "Remote: Getting folder content: {} for user: {}",
+            folder_id, principal_id
+        );
 
         let mut params = HashMap::new();
         params.insert("PRINCIPAL".to_string(), principal_id.to_string());
@@ -297,29 +367,41 @@ impl InventoryServiceTrait for RemoteInventoryService {
     }
 
     async fn create_folder(&self, folder: &InventoryFolder) -> Result<bool> {
-        info!("Remote: Creating folder: {} ({})", folder.name, folder.folder_id);
+        info!(
+            "Remote: Creating folder: {} ({})",
+            folder.name, folder.folder_id
+        );
 
         let params = self.folder_to_params(folder);
         let response = self.send_request("CREATEFOLDER", &params).await?;
 
-        Ok(response.get("RESULT")
+        Ok(response
+            .get("RESULT")
             .map(|s| s == "True" || s == "true")
             .unwrap_or(false))
     }
 
     async fn update_folder(&self, folder: &InventoryFolder) -> Result<bool> {
-        info!("Remote: Updating folder: {} ({})", folder.name, folder.folder_id);
+        info!(
+            "Remote: Updating folder: {} ({})",
+            folder.name, folder.folder_id
+        );
 
         let params = self.folder_to_params(folder);
         let response = self.send_request("UPDATEFOLDER", &params).await?;
 
-        Ok(response.get("RESULT")
+        Ok(response
+            .get("RESULT")
             .map(|s| s == "True" || s == "true")
             .unwrap_or(false))
     }
 
     async fn delete_folders(&self, principal_id: Uuid, folder_ids: &[Uuid]) -> Result<bool> {
-        warn!("Remote: Deleting {} folders for user: {}", folder_ids.len(), principal_id);
+        warn!(
+            "Remote: Deleting {} folders for user: {}",
+            folder_ids.len(),
+            principal_id
+        );
 
         for folder_id in folder_ids {
             let mut params = HashMap::new();
@@ -338,7 +420,8 @@ impl InventoryServiceTrait for RemoteInventoryService {
 
         let response = self.send_request("GETITEM", &params).await?;
 
-        let result = response.get("RESULT")
+        let result = response
+            .get("RESULT")
             .map(|s| s != "False" && s != "null")
             .unwrap_or(true);
 
@@ -355,7 +438,8 @@ impl InventoryServiceTrait for RemoteInventoryService {
         let params = self.item_to_params(item);
         let response = self.send_request("ADDITEM", &params).await?;
 
-        Ok(response.get("RESULT")
+        Ok(response
+            .get("RESULT")
             .map(|s| s == "True" || s == "true")
             .unwrap_or(false))
     }
@@ -366,13 +450,18 @@ impl InventoryServiceTrait for RemoteInventoryService {
         let params = self.item_to_params(item);
         let response = self.send_request("UPDATEITEM", &params).await?;
 
-        Ok(response.get("RESULT")
+        Ok(response
+            .get("RESULT")
             .map(|s| s == "True" || s == "true")
             .unwrap_or(false))
     }
 
     async fn delete_items(&self, principal_id: Uuid, item_ids: &[Uuid]) -> Result<bool> {
-        warn!("Remote: Deleting {} items for user: {}", item_ids.len(), principal_id);
+        warn!(
+            "Remote: Deleting {} items for user: {}",
+            item_ids.len(),
+            principal_id
+        );
 
         for item_id in item_ids {
             let mut params = HashMap::new();
@@ -384,7 +473,10 @@ impl InventoryServiceTrait for RemoteInventoryService {
     }
 
     async fn get_inventory_skeleton(&self, principal_id: Uuid) -> Result<Vec<InventoryFolder>> {
-        debug!("Remote: Getting inventory skeleton for user: {}", principal_id);
+        debug!(
+            "Remote: Getting inventory skeleton for user: {}",
+            principal_id
+        );
 
         let mut params = HashMap::new();
         params.insert("PRINCIPAL".to_string(), principal_id.to_string());
@@ -394,7 +486,11 @@ impl InventoryServiceTrait for RemoteInventoryService {
     }
 
     async fn move_items(&self, principal_id: Uuid, items: &[(Uuid, Uuid)]) -> Result<bool> {
-        info!("Remote: Moving {} items for user: {}", items.len(), principal_id);
+        info!(
+            "Remote: Moving {} items for user: {}",
+            items.len(),
+            principal_id
+        );
         let mut params = HashMap::new();
         params.insert("PRINCIPAL".to_string(), principal_id.to_string());
         let id_list: Vec<String> = items.iter().map(|(id, _)| id.to_string()).collect();
@@ -402,26 +498,46 @@ impl InventoryServiceTrait for RemoteInventoryService {
         params.insert("IDLIST".to_string(), id_list.join(","));
         params.insert("DESTLIST".to_string(), dest_list.join(","));
         let response = self.send_request("MOVEITEMS", &params).await?;
-        Ok(response.get("RESULT").map(|s| s == "True" || s == "true").unwrap_or(false))
+        Ok(response
+            .get("RESULT")
+            .map(|s| s == "True" || s == "true")
+            .unwrap_or(false))
     }
 
-    async fn move_folder(&self, principal_id: Uuid, folder_id: Uuid, new_parent_id: Uuid) -> Result<bool> {
-        info!("Remote: Moving folder {} to {} for user {}", folder_id, new_parent_id, principal_id);
+    async fn move_folder(
+        &self,
+        principal_id: Uuid,
+        folder_id: Uuid,
+        new_parent_id: Uuid,
+    ) -> Result<bool> {
+        info!(
+            "Remote: Moving folder {} to {} for user {}",
+            folder_id, new_parent_id, principal_id
+        );
         let mut params = HashMap::new();
         params.insert("PRINCIPAL".to_string(), principal_id.to_string());
         params.insert("ID".to_string(), folder_id.to_string());
         params.insert("ParentID".to_string(), new_parent_id.to_string());
         let response = self.send_request("MOVEFOLDER", &params).await?;
-        Ok(response.get("RESULT").map(|s| s == "True" || s == "true").unwrap_or(false))
+        Ok(response
+            .get("RESULT")
+            .map(|s| s == "True" || s == "true")
+            .unwrap_or(false))
     }
 
     async fn purge_folder(&self, principal_id: Uuid, folder_id: Uuid) -> Result<bool> {
-        warn!("Remote: Purging folder {} for user {}", folder_id, principal_id);
+        warn!(
+            "Remote: Purging folder {} for user {}",
+            folder_id, principal_id
+        );
         let mut params = HashMap::new();
         params.insert("PRINCIPAL".to_string(), principal_id.to_string());
         params.insert("ID".to_string(), folder_id.to_string());
         let response = self.send_request("PURGEFOLDER", &params).await?;
-        Ok(response.get("RESULT").map(|s| s == "True" || s == "true").unwrap_or(false))
+        Ok(response
+            .get("RESULT")
+            .map(|s| s == "True" || s == "true")
+            .unwrap_or(false))
     }
 
     async fn get_active_gestures(&self, principal_id: Uuid) -> Result<Vec<InventoryItem>> {
@@ -432,8 +548,16 @@ impl InventoryServiceTrait for RemoteInventoryService {
         Ok(self.parse_item_list(&response))
     }
 
-    async fn get_multiple_folders_content(&self, principal_id: Uuid, folder_ids: &[Uuid]) -> Result<Vec<InventoryCollection>> {
-        debug!("Remote: Getting content for {} folders for user: {}", folder_ids.len(), principal_id);
+    async fn get_multiple_folders_content(
+        &self,
+        principal_id: Uuid,
+        folder_ids: &[Uuid],
+    ) -> Result<Vec<InventoryCollection>> {
+        debug!(
+            "Remote: Getting content for {} folders for user: {}",
+            folder_ids.len(),
+            principal_id
+        );
         let mut results = Vec::new();
         for &folder_id in folder_ids {
             let collection = self.get_folder_content(principal_id, folder_id).await?;
@@ -447,7 +571,8 @@ impl InventoryServiceTrait for RemoteInventoryService {
         params.insert("PRINCIPAL".to_string(), principal_id.to_string());
         params.insert("ASSET".to_string(), asset_id.to_string());
         let response = self.send_request("GETASSETPERMISSIONS", &params).await?;
-        Ok(response.get("RESULT")
+        Ok(response
+            .get("RESULT")
             .and_then(|s| s.parse::<i32>().ok())
             .unwrap_or(0))
     }

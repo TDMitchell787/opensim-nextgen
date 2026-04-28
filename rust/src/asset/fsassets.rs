@@ -1,11 +1,11 @@
-use std::path::{Path, PathBuf};
-use std::sync::Arc;
-use std::sync::atomic::{AtomicU64, Ordering};
 use anyhow::{anyhow, Result};
 use flate2::read::GzDecoder;
 use flate2::write::GzEncoder;
 use flate2::Compression;
 use sha2::{Digest, Sha256};
+use std::path::{Path, PathBuf};
+use std::sync::atomic::{AtomicU64, Ordering};
+use std::sync::Arc;
 use tokio::sync::Notify;
 use tracing::{debug, error, info, warn};
 use uuid::Uuid;
@@ -71,12 +71,14 @@ impl FSAssetsStorage {
 
     pub fn hash_to_path(&self, hash: &str) -> PathBuf {
         if self.config.use_osgrid_format {
-            self.config.base_directory
+            self.config
+                .base_directory
                 .join(&hash[0..3])
                 .join(&hash[3..6])
                 .join(format!("{}.gz", hash))
         } else {
-            self.config.base_directory
+            self.config
+                .base_directory
                 .join(&hash[0..2])
                 .join(&hash[2..4])
                 .join(&hash[4..6])
@@ -86,7 +88,10 @@ impl FSAssetsStorage {
     }
 
     fn spool_path(&self, hash: &str) -> PathBuf {
-        self.config.spool_directory.join("spool").join(format!("{}.asset", hash))
+        self.config
+            .spool_directory
+            .join("spool")
+            .join(format!("{}.asset", hash))
     }
 
     fn staging_path(&self, hash: &str) -> PathBuf {
@@ -115,7 +120,9 @@ impl FSAssetsStorage {
         tokio::fs::rename(&spool, staging_dir.join(format!("{}.asset", hash))).await?;
 
         self.stats.writes.fetch_add(1, Ordering::Relaxed);
-        self.stats.write_bytes.fetch_add(data.len() as u64, Ordering::Relaxed);
+        self.stats
+            .write_bytes
+            .fetch_add(data.len() as u64, Ordering::Relaxed);
 
         self.spool_notify.notify_one();
 
@@ -130,7 +137,9 @@ impl FSAssetsStorage {
             match tokio::fs::read(&staging).await {
                 Ok(data) => {
                     self.stats.spool_reads.fetch_add(1, Ordering::Relaxed);
-                    self.stats.read_bytes.fetch_add(data.len() as u64, Ordering::Relaxed);
+                    self.stats
+                        .read_bytes
+                        .fetch_add(data.len() as u64, Ordering::Relaxed);
                     return Ok(Some(data));
                 }
                 Err(e) => {
@@ -149,9 +158,12 @@ impl FSAssetsStorage {
                         let mut buf = Vec::new();
                         decoder.read_to_end(&mut buf)?;
                         Ok::<Vec<u8>, std::io::Error>(buf)
-                    }).await??;
+                    })
+                    .await??;
                     self.stats.gz_reads.fetch_add(1, Ordering::Relaxed);
-                    self.stats.read_bytes.fetch_add(decompressed.len() as u64, Ordering::Relaxed);
+                    self.stats
+                        .read_bytes
+                        .fetch_add(decompressed.len() as u64, Ordering::Relaxed);
                     return Ok(Some(decompressed));
                 }
                 Err(e) => {
@@ -229,7 +241,8 @@ impl FSAssetsStorage {
                 let mut encoder = GzEncoder::new(Vec::new(), Compression::new(level));
                 encoder.write_all(&data)?;
                 encoder.finish()
-            }).await??;
+            })
+            .await??;
 
             if let Some(parent) = final_path.parent() {
                 tokio::fs::create_dir_all(parent).await?;
@@ -241,7 +254,12 @@ impl FSAssetsStorage {
             tokio::fs::remove_file(&path).await?;
 
             self.stats.compressions.fetch_add(1, Ordering::Relaxed);
-            debug!("Compressed {} ({} -> {} bytes)", hash, data_len, compressed.len());
+            debug!(
+                "Compressed {} ({} -> {} bytes)",
+                hash,
+                data_len,
+                compressed.len()
+            );
         }
 
         Ok(())
@@ -293,7 +311,10 @@ mod tests {
     fn test_compute_hash() {
         let hash = FSAssetsStorage::compute_hash(b"hello world");
         assert_eq!(hash.len(), 64);
-        assert_eq!(hash, "b94d27b9934d3e08a52e52d7da7dabfac484efe37a5380ee9088f7ace2efcde9");
+        assert_eq!(
+            hash,
+            "b94d27b9934d3e08a52e52d7da7dabfac484efe37a5380ee9088f7ace2efcde9"
+        );
     }
 
     #[test]
@@ -303,7 +324,8 @@ mod tests {
         let storage = FSAssetsStorage::new(config.clone()).unwrap();
         let hash = "a1b2c3d4e5f60000000000000000000000000000000000000000000000000000";
         let path = storage.hash_to_path(hash);
-        let expected = config.base_directory
+        let expected = config
+            .base_directory
             .join("a1")
             .join("b2")
             .join("c3")
@@ -320,7 +342,8 @@ mod tests {
         let storage = FSAssetsStorage::new(config.clone()).unwrap();
         let hash = "a1b2c3d4e5f60000000000000000000000000000000000000000000000000000";
         let path = storage.hash_to_path(hash);
-        let expected = config.base_directory
+        let expected = config
+            .base_directory
             .join("a1b")
             .join("2c3")
             .join(format!("{}.gz", hash));
@@ -379,7 +402,10 @@ mod tests {
         let config = test_config(&dir);
         let storage = FSAssetsStorage::new(config).unwrap();
 
-        let result = storage.retrieve("0000000000000000000000000000000000000000000000000000000000000000").await.unwrap();
+        let result = storage
+            .retrieve("0000000000000000000000000000000000000000000000000000000000000000")
+            .await
+            .unwrap();
         assert!(result.is_none());
 
         let stats = storage.get_stats();
@@ -396,7 +422,11 @@ mod tests {
         let hash = storage.store(data).await.unwrap();
 
         assert!(storage.exists(&hash).await);
-        assert!(!storage.exists("0000000000000000000000000000000000000000000000000000000000000000").await);
+        assert!(
+            !storage
+                .exists("0000000000000000000000000000000000000000000000000000000000000000")
+                .await
+        );
     }
 
     #[tokio::test]
@@ -414,7 +444,10 @@ mod tests {
         assert!(gz_path.exists(), "GZ file should exist after compression");
 
         let staging = storage.staging_path(&hash);
-        assert!(!staging.exists(), "Staging file should be removed after compression");
+        assert!(
+            !staging.exists(),
+            "Staging file should be removed after compression"
+        );
 
         let retrieved = storage.retrieve(&hash).await.unwrap();
         assert!(retrieved.is_some());

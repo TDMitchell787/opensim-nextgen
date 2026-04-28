@@ -1,7 +1,7 @@
 //! LSL data types and constants
 
-use std::fmt;
 use serde::{Deserialize, Serialize};
+use std::fmt;
 use uuid::Uuid;
 
 /// LSL value types
@@ -149,29 +149,33 @@ impl LSLRotation {
 
     pub fn to_euler(&self) -> (f32, f32, f32) {
         let test = self.x * self.y + self.z * self.s;
-        
-        if test > 0.499 { // Singularity at north pole
+
+        if test > 0.499 {
+            // Singularity at north pole
             let yaw = 2.0 * self.x.atan2(self.s);
             let pitch = std::f32::consts::PI / 2.0;
             let roll = 0.0;
             return (roll, pitch, yaw);
         }
-        
-        if test < -0.499 { // Singularity at south pole
+
+        if test < -0.499 {
+            // Singularity at south pole
             let yaw = -2.0 * self.x.atan2(self.s);
             let pitch = -std::f32::consts::PI / 2.0;
             let roll = 0.0;
             return (roll, pitch, yaw);
         }
-        
+
         let sqx = self.x * self.x;
         let sqy = self.y * self.y;
         let sqz = self.z * self.z;
-        
-        let yaw = (2.0 * self.y * self.s - 2.0 * self.x * self.z).atan2(1.0 - 2.0 * sqy - 2.0 * sqz);
+
+        let yaw =
+            (2.0 * self.y * self.s - 2.0 * self.x * self.z).atan2(1.0 - 2.0 * sqy - 2.0 * sqz);
         let pitch = (2.0 * test).asin();
-        let roll = (2.0 * self.x * self.s - 2.0 * self.y * self.z).atan2(1.0 - 2.0 * sqx - 2.0 * sqz);
-        
+        let roll =
+            (2.0 * self.x * self.s - 2.0 * self.y * self.z).atan2(1.0 - 2.0 * sqx - 2.0 * sqz);
+
         (roll, pitch, yaw)
     }
 }
@@ -258,7 +262,9 @@ impl LSLValue {
     pub fn to_rotation(&self) -> LSLRotation {
         match self {
             LSLValue::Rotation(r) => *r,
-            LSLValue::String(s) => parse_rotation_string(s).unwrap_or_else(|| LSLRotation::identity()),
+            LSLValue::String(s) => {
+                parse_rotation_string(s).unwrap_or_else(|| LSLRotation::identity())
+            }
             _ => LSLRotation::identity(),
         }
     }
@@ -304,9 +310,7 @@ impl LSLValue {
             LSLValue::Key(_) => 16,
             LSLValue::Vector(_) => 12,
             LSLValue::Rotation(_) => 16,
-            LSLValue::List(l) => {
-                4 + l.iter().map(|v| v.heap_size()).sum::<usize>()
-            }
+            LSLValue::List(l) => 4 + l.iter().map(|v| v.heap_size()).sum::<usize>(),
         }
     }
 
@@ -327,18 +331,16 @@ impl LSLValue {
         match to_type {
             "integer" => LSLValue::Integer(self.to_integer()),
             "float" => LSLValue::Float(self.to_float()),
-            "string" => {
-                match self {
-                    LSLValue::Float(f) => LSLValue::String(format!("{:.6}", f)),
-                    LSLValue::Vector(v) => LSLValue::String(
-                        format!("<{:.6}, {:.6}, {:.6}>", v.x, v.y, v.z)
-                    ),
-                    LSLValue::Rotation(r) => LSLValue::String(
-                        format!("<{:.6}, {:.6}, {:.6}, {:.6}>", r.x, r.y, r.z, r.s)
-                    ),
-                    _ => LSLValue::String(self.to_string()),
+            "string" => match self {
+                LSLValue::Float(f) => LSLValue::String(format!("{:.6}", f)),
+                LSLValue::Vector(v) => {
+                    LSLValue::String(format!("<{:.6}, {:.6}, {:.6}>", v.x, v.y, v.z))
                 }
-            }
+                LSLValue::Rotation(r) => {
+                    LSLValue::String(format!("<{:.6}, {:.6}, {:.6}, {:.6}>", r.x, r.y, r.z, r.s))
+                }
+                _ => LSLValue::String(self.to_string()),
+            },
             "key" => LSLValue::Key(self.to_key()),
             "vector" => LSLValue::Vector(self.to_vector()),
             "rotation" => LSLValue::Rotation(self.to_rotation()),
@@ -381,18 +383,18 @@ fn parse_vector_string(s: &str) -> Option<LSLVector> {
     if !s.starts_with('<') || !s.ends_with('>') {
         return None;
     }
-    
-    let inner = &s[1..s.len()-1];
+
+    let inner = &s[1..s.len() - 1];
     let parts: Vec<&str> = inner.split(',').map(|p| p.trim()).collect();
-    
+
     if parts.len() != 3 {
         return None;
     }
-    
+
     let x = parts[0].parse().ok()?;
     let y = parts[1].parse().ok()?;
     let z = parts[2].parse().ok()?;
-    
+
     Some(LSLVector::new(x, y, z))
 }
 
@@ -402,22 +404,21 @@ fn parse_rotation_string(s: &str) -> Option<LSLRotation> {
     if !s.starts_with('<') || !s.ends_with('>') {
         return None;
     }
-    
-    let inner = &s[1..s.len()-1];
+
+    let inner = &s[1..s.len() - 1];
     let parts: Vec<&str> = inner.split(',').map(|p| p.trim()).collect();
-    
+
     if parts.len() != 4 {
         return None;
     }
-    
+
     let x = parts[0].parse().ok()?;
     let y = parts[1].parse().ok()?;
     let z = parts[2].parse().ok()?;
     let s = parts[3].parse().ok()?;
-    
+
     Some(LSLRotation::new(x, y, z, s))
 }
-
 
 #[cfg(test)]
 mod tests {
@@ -456,10 +457,13 @@ mod tests {
 
         let r2 = LSLRotation::from_euler(0.0, 0.0, std::f32::consts::PI / 2.0);
         let normalized = r2.normalize();
-        
+
         // Check that normalization produces a unit quaternion
-        let mag = (normalized.x * normalized.x + normalized.y * normalized.y + 
-                  normalized.z * normalized.z + normalized.s * normalized.s).sqrt();
+        let mag = (normalized.x * normalized.x
+            + normalized.y * normalized.y
+            + normalized.z * normalized.z
+            + normalized.s * normalized.s)
+            .sqrt();
         assert!((mag - 1.0).abs() < 0.001);
     }
 
@@ -507,8 +511,14 @@ mod tests {
     fn test_type_default() {
         assert_eq!(LSLValue::type_default("integer"), LSLValue::Integer(0));
         assert_eq!(LSLValue::type_default("float"), LSLValue::Float(0.0));
-        assert_eq!(LSLValue::type_default("string"), LSLValue::String(String::new()));
-        assert_eq!(LSLValue::type_default("vector"), LSLValue::Vector(LSLVector::zero()));
+        assert_eq!(
+            LSLValue::type_default("string"),
+            LSLValue::String(String::new())
+        );
+        assert_eq!(
+            LSLValue::type_default("vector"),
+            LSLValue::Vector(LSLVector::zero())
+        );
     }
 
     #[test]

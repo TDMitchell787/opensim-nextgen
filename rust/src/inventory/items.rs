@@ -73,7 +73,7 @@ impl InventoryItem {
             updated_at: now,
         }
     }
-    
+
     pub fn new_with_id(
         id: Uuid,
         asset_id: Uuid,
@@ -125,7 +125,7 @@ impl InventoryItem {
             InventoryAssetType::Texture,
         )
     }
-    
+
     /// Create an object item
     pub fn new_object(
         asset_id: Uuid,
@@ -144,7 +144,7 @@ impl InventoryItem {
             InventoryAssetType::Object,
         )
     }
-    
+
     /// Create a script item
     pub fn new_script(
         asset_id: Uuid,
@@ -163,7 +163,7 @@ impl InventoryItem {
             InventoryAssetType::LSLText,
         )
     }
-    
+
     /// Create a notecard item
     pub fn new_notecard(
         asset_id: Uuid,
@@ -182,7 +182,7 @@ impl InventoryItem {
             InventoryAssetType::Notecard,
         )
     }
-    
+
     /// Convert to login response format (if needed for advanced inventory)
     pub fn to_login_item(&self) -> LoginInventoryItem {
         LoginInventoryItem {
@@ -200,7 +200,7 @@ impl InventoryItem {
             sale_price: self.sale_price.to_string(),
         }
     }
-    
+
     /// Update item
     pub fn update(&mut self, name: Option<String>, description: Option<String>) {
         if let Some(new_name) = name {
@@ -211,19 +211,19 @@ impl InventoryItem {
         }
         self.updated_at = Utc::now();
     }
-    
+
     /// Check if item is for sale
     pub fn is_for_sale(&self) -> bool {
         self.sale_type > 0 && self.sale_price > 0
     }
-    
+
     /// Set item for sale
     pub fn set_for_sale(&mut self, sale_type: u8, price: i32) {
         self.sale_type = sale_type;
         self.sale_price = price;
         self.updated_at = Utc::now();
     }
-    
+
     /// Remove item from sale
     pub fn remove_from_sale(&mut self) {
         self.sale_type = 0;
@@ -317,9 +317,18 @@ impl LoginInventoryItem {
                 </member>
               </struct>
             </value>"#,
-            self.item_id, self.asset_id, self.folder_id, self.owner_id, self.creator_id,
-            self.name, self.description, self.asset_type, self.inventory_type,
-            self.flags, self.sale_type, self.sale_price
+            self.item_id,
+            self.asset_id,
+            self.folder_id,
+            self.owner_id,
+            self.creator_id,
+            self.name,
+            self.description,
+            self.asset_type,
+            self.inventory_type,
+            self.flags,
+            self.sale_type,
+            self.sale_price
         )
     }
 }
@@ -371,7 +380,7 @@ mod tests {
         let folder_id = Uuid::new_v4();
         let owner_id = Uuid::new_v4();
         let creator_id = Uuid::new_v4();
-        
+
         let item = InventoryItem::new(
             asset_id,
             folder_id,
@@ -381,7 +390,7 @@ mod tests {
             "A test item".to_string(),
             InventoryAssetType::Texture,
         );
-        
+
         assert_eq!(item.asset_id, asset_id);
         assert_eq!(item.folder_id, folder_id);
         assert_eq!(item.owner_id, owner_id);
@@ -391,14 +400,14 @@ mod tests {
         assert_eq!(item.asset_type, InventoryAssetType::Texture);
         assert!(!item.is_for_sale());
     }
-    
+
     #[test]
     fn test_texture_item_creation() {
         let asset_id = Uuid::new_v4();
         let folder_id = Uuid::new_v4();
         let owner_id = Uuid::new_v4();
         let creator_id = Uuid::new_v4();
-        
+
         let item = InventoryItem::new_texture(
             asset_id,
             folder_id,
@@ -406,19 +415,19 @@ mod tests {
             creator_id,
             "My Texture".to_string(),
         );
-        
+
         assert_eq!(item.name, "My Texture");
         assert_eq!(item.description, "A texture");
         assert_eq!(item.asset_type, InventoryAssetType::Texture);
     }
-    
+
     #[test]
     fn test_item_sale_operations() {
         let asset_id = Uuid::new_v4();
         let folder_id = Uuid::new_v4();
         let owner_id = Uuid::new_v4();
         let creator_id = Uuid::new_v4();
-        
+
         let mut item = InventoryItem::new_object(
             asset_id,
             folder_id,
@@ -426,29 +435,29 @@ mod tests {
             creator_id,
             "My Object".to_string(),
         );
-        
+
         assert!(!item.is_for_sale());
-        
+
         // Set for sale
         item.set_for_sale(2, 100); // Copy for 100
         assert!(item.is_for_sale());
         assert_eq!(item.sale_type, 2);
         assert_eq!(item.sale_price, 100);
-        
+
         // Remove from sale
         item.remove_from_sale();
         assert!(!item.is_for_sale());
         assert_eq!(item.sale_type, 0);
         assert_eq!(item.sale_price, 0);
     }
-    
+
     #[test]
     fn test_item_update() {
         let asset_id = Uuid::new_v4();
         let folder_id = Uuid::new_v4();
         let owner_id = Uuid::new_v4();
         let creator_id = Uuid::new_v4();
-        
+
         let mut item = InventoryItem::new_notecard(
             asset_id,
             folder_id,
@@ -456,29 +465,29 @@ mod tests {
             creator_id,
             "Old Name".to_string(),
         );
-        
+
         let initial_updated = item.updated_at;
-        
+
         // Small delay to ensure timestamp difference
         std::thread::sleep(std::time::Duration::from_millis(1));
-        
+
         item.update(
             Some("New Name".to_string()),
             Some("New description".to_string()),
         );
-        
+
         assert_eq!(item.name, "New Name");
         assert_eq!(item.description, "New description");
         assert!(item.updated_at > initial_updated);
     }
-    
+
     #[test]
     fn test_login_item_conversion() {
         let asset_id = Uuid::new_v4();
         let folder_id = Uuid::new_v4();
         let owner_id = Uuid::new_v4();
         let creator_id = Uuid::new_v4();
-        
+
         let item = InventoryItem::new_script(
             asset_id,
             folder_id,
@@ -486,22 +495,22 @@ mod tests {
             creator_id,
             "My Script".to_string(),
         );
-        
+
         let login_item = item.to_login_item();
-        
+
         assert_eq!(login_item.item_id, item.id.to_string());
         assert_eq!(login_item.asset_id, asset_id.to_string());
         assert_eq!(login_item.name, "My Script");
         assert_eq!(login_item.asset_type, "10"); // LSLText
     }
-    
+
     #[test]
     fn test_xmlrpc_item_struct() {
         let asset_id = Uuid::new_v4();
         let folder_id = Uuid::new_v4();
         let owner_id = Uuid::new_v4();
         let creator_id = Uuid::new_v4();
-        
+
         let item = InventoryItem::new_object(
             asset_id,
             folder_id,
@@ -509,10 +518,10 @@ mod tests {
             creator_id,
             "Test Object".to_string(),
         );
-        
+
         let login_item = item.to_login_item();
         let xmlrpc = login_item.to_xmlrpc_struct();
-        
+
         assert!(xmlrpc.contains(&format!("<string>{}</string>", item.id)));
         assert!(xmlrpc.contains("<string>Test Object</string>"));
         assert!(xmlrpc.contains("<string>6</string>")); // Object type

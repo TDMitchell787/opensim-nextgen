@@ -1,5 +1,5 @@
 //! Social Features Manager for OpenSim Next
-//! 
+//!
 //! Orchestrates all social features including friends, groups, messaging,
 //! community management, and social networking capabilities.
 
@@ -7,7 +7,7 @@ use super::*;
 use crate::database::DatabaseManager;
 use anyhow::Result;
 use std::sync::Arc;
-use tracing::{info, warn, error};
+use tracing::{error, info, warn};
 use uuid::Uuid;
 
 /// Main social features management system
@@ -96,12 +96,30 @@ impl SocialFeaturesManager {
     /// Create new social features manager
     pub fn new(database: Arc<DatabaseManager>, config: SocialConfig) -> Self {
         // Initialize all subsystems
-        let friend_system = Arc::new(super::friends::FriendSystem::new(database.clone(), config.clone()));
-        let group_system = Arc::new(super::groups::GroupSystem::new(database.clone(), config.clone()));
-        let messaging_system = Arc::new(super::messaging::MessagingSystem::new(database.clone(), config.clone()));
-        let community_system = Arc::new(super::community::CommunityManager::new(database.clone(), config.clone()));
-        let notification_system = Arc::new(super::notifications::NotificationSystem::new(database.clone(), config.clone()));
-        let moderation_system = Arc::new(super::moderation::ModerationSystem::new(database.clone(), config.clone()));
+        let friend_system = Arc::new(super::friends::FriendSystem::new(
+            database.clone(),
+            config.clone(),
+        ));
+        let group_system = Arc::new(super::groups::GroupSystem::new(
+            database.clone(),
+            config.clone(),
+        ));
+        let messaging_system = Arc::new(super::messaging::MessagingSystem::new(
+            database.clone(),
+            config.clone(),
+        ));
+        let community_system = Arc::new(super::community::CommunityManager::new(
+            database.clone(),
+            config.clone(),
+        ));
+        let notification_system = Arc::new(super::notifications::NotificationSystem::new(
+            database.clone(),
+            config.clone(),
+        ));
+        let moderation_system = Arc::new(super::moderation::ModerationSystem::new(
+            database.clone(),
+            config.clone(),
+        ));
 
         Self {
             database,
@@ -162,7 +180,11 @@ impl SocialFeaturesManager {
     }
 
     /// Create user social profile
-    pub async fn create_user_social_profile(&self, user_id: Uuid, display_name: String) -> SocialResult<UserSocialProfile> {
+    pub async fn create_user_social_profile(
+        &self,
+        user_id: Uuid,
+        display_name: String,
+    ) -> SocialResult<UserSocialProfile> {
         info!("Creating social profile for user {}", user_id);
 
         let profile = UserSocialProfile {
@@ -189,7 +211,11 @@ impl SocialFeaturesManager {
     }
 
     /// Update user social profile
-    pub async fn update_user_social_profile(&self, user_id: Uuid, updates: UserSocialProfileUpdate) -> SocialResult<UserSocialProfile> {
+    pub async fn update_user_social_profile(
+        &self,
+        user_id: Uuid,
+        updates: UserSocialProfileUpdate,
+    ) -> SocialResult<UserSocialProfile> {
         info!("Updating social profile for user {}", user_id);
 
         let mut profile = self.get_user_social_profile(user_id).await?;
@@ -227,11 +253,20 @@ impl SocialFeaturesManager {
     }
 
     /// Update user online status
-    pub async fn update_user_online_status(&self, user_id: Uuid, status: OnlineStatus) -> SocialResult<()> {
-        info!("Updating online status for user {} to {:?}", user_id, status);
+    pub async fn update_user_online_status(
+        &self,
+        user_id: Uuid,
+        status: OnlineStatus,
+    ) -> SocialResult<()> {
+        info!(
+            "Updating online status for user {} to {:?}",
+            user_id, status
+        );
 
         // Update in messaging system
-        self.messaging_system.update_user_status(user_id, status.clone()).await?;
+        self.messaging_system
+            .update_user_status(user_id, status.clone())
+            .await?;
 
         // Update user profile
         let mut profile = self.get_user_social_profile(user_id).await?;
@@ -244,13 +279,19 @@ impl SocialFeaturesManager {
     }
 
     /// Get comprehensive user social statistics
-    pub async fn get_user_social_statistics(&self, user_id: Uuid) -> SocialResult<UserSocialStatistics> {
+    pub async fn get_user_social_statistics(
+        &self,
+        user_id: Uuid,
+    ) -> SocialResult<UserSocialStatistics> {
         info!("Generating social statistics for user {}", user_id);
 
         // Get data from all subsystems
         let friend_list = self.friend_system.get_friend_list(user_id).await?;
         let pending_requests = self.friend_system.get_pending_requests(user_id).await?;
-        let user_conversations = self.messaging_system.get_user_conversations(user_id).await?;
+        let user_conversations = self
+            .messaging_system
+            .get_user_conversations(user_id)
+            .await?;
 
         let group_memberships = 0u32;
         let community_memberships = 0u32;
@@ -309,8 +350,14 @@ impl SocialFeaturesManager {
     }
 
     /// Get complete social statistics for user and system
-    pub async fn get_social_statistics(&self, user_id: Uuid) -> SocialResult<SocialStatisticsResponse> {
-        info!("Generating comprehensive social statistics for user {}", user_id);
+    pub async fn get_social_statistics(
+        &self,
+        user_id: Uuid,
+    ) -> SocialResult<SocialStatisticsResponse> {
+        info!(
+            "Generating comprehensive social statistics for user {}",
+            user_id
+        );
 
         let user_statistics = self.get_user_social_statistics(user_id).await?;
         let system_statistics = self.get_system_social_statistics().await?;
@@ -326,8 +373,15 @@ impl SocialFeaturesManager {
     }
 
     /// Search across all social features
-    pub async fn search_social_content(&self, user_id: Uuid, criteria: SocialSearchCriteria) -> SocialResult<SocialSearchResults> {
-        info!("Searching social content for user {} with query: {:?}", user_id, criteria.query);
+    pub async fn search_social_content(
+        &self,
+        user_id: Uuid,
+        criteria: SocialSearchCriteria,
+    ) -> SocialResult<SocialSearchResults> {
+        info!(
+            "Searching social content for user {} with query: {:?}",
+            user_id, criteria.query
+        );
 
         let mut results = SocialSearchResults {
             users: Vec::new(),
@@ -346,7 +400,11 @@ impl SocialFeaturesManager {
                     query: criteria.query.clone(),
                     ..Default::default()
                 };
-                results.groups = self.group_system.search_groups(group_criteria).await.unwrap_or_default();
+                results.groups = self
+                    .group_system
+                    .search_groups(group_criteria)
+                    .await
+                    .unwrap_or_default();
             }
             SocialSearchType::Communities => {
                 // Community search
@@ -356,25 +414,43 @@ impl SocialFeaturesManager {
                     query: criteria.query.clone().unwrap_or_default(),
                     ..Default::default()
                 };
-                results.messages = self.messaging_system.search_messages(user_id, message_criteria).await.unwrap_or_default();
+                results.messages = self
+                    .messaging_system
+                    .search_messages(user_id, message_criteria)
+                    .await
+                    .unwrap_or_default();
             }
             SocialSearchType::All => {
                 let group_criteria = super::groups::GroupSearchCriteria {
                     query: criteria.query.clone(),
                     ..Default::default()
                 };
-                results.groups = self.group_system.search_groups(group_criteria).await.unwrap_or_default();
+                results.groups = self
+                    .group_system
+                    .search_groups(group_criteria)
+                    .await
+                    .unwrap_or_default();
                 let message_criteria = super::messaging::MessageSearchCriteria {
                     query: criteria.query.clone().unwrap_or_default(),
                     ..Default::default()
                 };
-                results.messages = self.messaging_system.search_messages(user_id, message_criteria).await.unwrap_or_default();
+                results.messages = self
+                    .messaging_system
+                    .search_messages(user_id, message_criteria)
+                    .await
+                    .unwrap_or_default();
             }
         }
 
-        results.total_results = results.users.len() + results.groups.len() + results.communities.len() + results.messages.len();
+        results.total_results = results.users.len()
+            + results.groups.len()
+            + results.communities.len()
+            + results.messages.len();
 
-        info!("Social search returned {} total results", results.total_results);
+        info!(
+            "Social search returned {} total results",
+            results.total_results
+        );
         Ok(results)
     }
 
@@ -390,9 +466,16 @@ impl SocialFeaturesManager {
         let moderation_system_healthy = true;
 
         let healthy_count = [
-            friend_system_healthy, group_system_healthy, messaging_system_healthy,
-            community_system_healthy, notification_system_healthy, moderation_system_healthy
-        ].iter().filter(|&&h| h).count();
+            friend_system_healthy,
+            group_system_healthy,
+            messaging_system_healthy,
+            community_system_healthy,
+            notification_system_healthy,
+            moderation_system_healthy,
+        ]
+        .iter()
+        .filter(|&&h| h)
+        .count();
 
         let status = match healthy_count {
             6 => "healthy",
@@ -401,7 +484,8 @@ impl SocialFeaturesManager {
         };
 
         let system_stats = self.get_system_social_statistics().await.ok();
-        let total_active_users = system_stats.as_ref()
+        let total_active_users = system_stats
+            .as_ref()
             .map(|s| s.active_users_today as u32)
             .unwrap_or(0);
 
@@ -438,37 +522,52 @@ impl SocialFeaturesManager {
         // Cleanup expired friend requests
         match self.cleanup_expired_friend_requests().await {
             Ok(count) => {
-                report.tasks_completed.push(format!("Cleaned up {} expired friend requests", count));
+                report
+                    .tasks_completed
+                    .push(format!("Cleaned up {} expired friend requests", count));
             }
             Err(e) => {
-                report.errors_encountered.push(format!("Failed to cleanup friend requests: {}", e));
+                report
+                    .errors_encountered
+                    .push(format!("Failed to cleanup friend requests: {}", e));
             }
         }
 
         // Cleanup expired group invitations
         match self.cleanup_expired_group_invitations().await {
             Ok(count) => {
-                report.tasks_completed.push(format!("Cleaned up {} expired group invitations", count));
+                report
+                    .tasks_completed
+                    .push(format!("Cleaned up {} expired group invitations", count));
             }
             Err(e) => {
-                report.errors_encountered.push(format!("Failed to cleanup group invitations: {}", e));
+                report
+                    .errors_encountered
+                    .push(format!("Failed to cleanup group invitations: {}", e));
             }
         }
 
         // Update user statistics
         match self.update_user_statistics().await {
             Ok(count) => {
-                report.tasks_completed.push(format!("Updated statistics for {} users", count));
+                report
+                    .tasks_completed
+                    .push(format!("Updated statistics for {} users", count));
             }
             Err(e) => {
-                report.errors_encountered.push(format!("Failed to update user statistics: {}", e));
+                report
+                    .errors_encountered
+                    .push(format!("Failed to update user statistics: {}", e));
             }
         }
 
         report.completed_at = Some(Utc::now());
 
-        info!("Social features maintenance completed with {} tasks and {} errors", 
-              report.tasks_completed.len(), report.errors_encountered.len());
+        info!(
+            "Social features maintenance completed with {} tasks and {} errors",
+            report.tasks_completed.len(),
+            report.errors_encountered.len()
+        );
         Ok(report)
     }
 

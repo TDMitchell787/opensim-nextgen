@@ -7,7 +7,7 @@ use axum::{
 };
 use serde::Serialize;
 
-use crate::ai::skill_engine::{SkillDomain, SkillRegistry, RegistryDashboard, SkillInfo};
+use crate::ai::skill_engine::{RegistryDashboard, SkillDomain, SkillInfo, SkillRegistry};
 
 fn registry() -> SkillRegistry {
     SkillRegistry::new()
@@ -75,7 +75,8 @@ async fn list_domain_skills(Path(domain): Path<String>) -> impl IntoResponse {
         return (
             StatusCode::NOT_FOUND,
             Json(serde_json::json!({"error": format!("Unknown domain: {}", domain)})),
-        ).into_response();
+        )
+            .into_response();
     };
     let reg = registry();
     let skills: Vec<SkillInfo> = reg.list_domain(d).iter().map(|s| s.to_info()).collect();
@@ -87,7 +88,8 @@ async fn list_domain_skills(Path(domain): Path<String>) -> impl IntoResponse {
         "score": dash.score,
         "by_level": dash.by_level,
         "skills": skills,
-    })).into_response()
+    }))
+    .into_response()
 }
 
 async fn get_skill(Path((domain, skill_id)): Path<(String, String)>) -> impl IntoResponse {
@@ -95,7 +97,8 @@ async fn get_skill(Path((domain, skill_id)): Path<(String, String)>) -> impl Int
         return (
             StatusCode::NOT_FOUND,
             Json(serde_json::json!({"error": format!("Unknown domain: {}", domain)})),
-        ).into_response();
+        )
+            .into_response();
     };
     let reg = registry();
     let Some(skill) = reg.find(d, &skill_id) else {
@@ -107,13 +110,16 @@ async fn get_skill(Path((domain, skill_id)): Path<(String, String)>) -> impl Int
     Json(skill.to_info()).into_response()
 }
 
-async fn search_skills(axum::extract::Query(params): axum::extract::Query<std::collections::HashMap<String, String>>) -> impl IntoResponse {
+async fn search_skills(
+    axum::extract::Query(params): axum::extract::Query<std::collections::HashMap<String, String>>,
+) -> impl IntoResponse {
     let query = params.get("q").cloned().unwrap_or_default();
     if query.is_empty() {
         return (
             StatusCode::BAD_REQUEST,
             Json(serde_json::json!({"error": "Missing query parameter 'q'"})),
-        ).into_response();
+        )
+            .into_response();
     }
     let reg = registry();
     let results: Vec<SkillInfo> = reg.search(&query).iter().map(|s| s.to_info()).collect();
@@ -121,7 +127,8 @@ async fn search_skills(axum::extract::Query(params): axum::extract::Query<std::c
         "query": query,
         "count": results.len(),
         "results": results,
-    })).into_response()
+    }))
+    .into_response()
 }
 
 pub fn create_skill_api_router() -> Router {

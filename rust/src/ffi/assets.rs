@@ -41,7 +41,10 @@ impl AssetProcessor {
         };
 
         if result != 0 {
-            return Err(anyhow::anyhow!("Asset processing failed with code {}", result));
+            return Err(anyhow::anyhow!(
+                "Asset processing failed with code {}",
+                result
+            ));
         }
 
         if out_data.is_null() {
@@ -61,4 +64,4 @@ impl Drop for AssetProcessor {
     fn drop(&mut self) {
         unsafe { asset_processor_destroy(self.ptr) };
     }
-} 
+}

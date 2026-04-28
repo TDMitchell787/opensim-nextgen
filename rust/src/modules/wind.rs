@@ -79,21 +79,27 @@ impl IWindModule for WindModule {
     fn get_average_wind(&self) -> (f32, f32) {
         let grid = self.wind_grid.read();
         let count = grid.len() as f32;
-        let (sum_u, sum_v) = grid.iter().fold((0.0f32, 0.0f32), |acc, &(u, v)| {
-            (acc.0 + u, acc.1 + v)
-        });
+        let (sum_u, sum_v) = grid
+            .iter()
+            .fold((0.0f32, 0.0f32), |acc, &(u, v)| (acc.0 + u, acc.1 + v));
         (sum_u / count, sum_v / count)
     }
 }
 
 #[async_trait]
 impl RegionModule for WindModule {
-    fn name(&self) -> &'static str { "WindModule" }
-    fn replaceable_interface(&self) -> Option<&'static str> { Some("IWindModule") }
+    fn name(&self) -> &'static str {
+        "WindModule"
+    }
+    fn replaceable_interface(&self) -> Option<&'static str> {
+        Some("IWindModule")
+    }
 
     async fn initialize(&mut self, _config: &ModuleConfig) -> Result<()> {
-        info!("[WIND MODULE] Initialized (grid={}x{}, update interval={})",
-              WIND_GRID_SIZE, WIND_GRID_SIZE, WIND_UPDATE_INTERVAL);
+        info!(
+            "[WIND MODULE] Initialized (grid={}x{}, update interval={})",
+            WIND_GRID_SIZE, WIND_GRID_SIZE, WIND_UPDATE_INTERVAL
+        );
         Ok(())
     }
 
@@ -114,22 +120,27 @@ impl RegionModule for WindModule {
             10, // low priority - wind is background
         );
 
-        scene.service_registry.write().register::<WindModule>(
-            Arc::new(WindModule {
+        scene
+            .service_registry
+            .write()
+            .register::<WindModule>(Arc::new(WindModule {
                 wind_grid: self.wind_grid.clone(),
                 tick_counter: self.tick_counter.clone(),
                 socket: self.socket.clone(),
                 avatar_states: self.avatar_states.clone(),
                 service_registry: self.service_registry.clone(),
-            }),
-        );
+            }));
 
         info!("[WIND MODULE] Added to region {:?}", scene.region_name);
         Ok(())
     }
 
-    fn as_any(&self) -> &dyn Any { self }
-    fn as_any_mut(&mut self) -> &mut dyn Any { self }
+    fn as_any(&self) -> &dyn Any {
+        self
+    }
+    fn as_any_mut(&mut self) -> &mut dyn Any {
+        self
+    }
 }
 
 #[async_trait]
@@ -146,8 +157,12 @@ struct WindEventHandler {
 impl EventHandler for WindEventHandler {
     async fn handle_event(&self, event: &SceneEvent, _scene: &SceneContext) -> Result<()> {
         if let SceneEvent::OnFrame { tick } = event {
-            let count = self.tick_counter.fetch_add(1, std::sync::atomic::Ordering::Relaxed);
-            if count % WIND_UPDATE_INTERVAL != 0 { return Ok(()); }
+            let count = self
+                .tick_counter
+                .fetch_add(1, std::sync::atomic::Ordering::Relaxed);
+            if count % WIND_UPDATE_INTERVAL != 0 {
+                return Ok(());
+            }
 
             // Update wind grid
             {

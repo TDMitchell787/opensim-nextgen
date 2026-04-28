@@ -1,16 +1,16 @@
 use anyhow::Result;
 use async_trait::async_trait;
-use uuid::Uuid;
-use std::sync::Arc;
-use std::collections::HashMap;
-use tracing::{info, warn, debug};
 use sqlx::Row;
+use std::collections::HashMap;
+use std::sync::Arc;
+use tracing::{debug, info, warn};
+use uuid::Uuid;
 
-use crate::services::traits::{
-    UserAgentServiceTrait, HGRegionInfo, AgentCircuitData,
-    GridServiceTrait, UserAccountServiceTrait, PresenceServiceTrait,
-};
 use crate::database::DatabaseConnection;
+use crate::services::traits::{
+    AgentCircuitData, GridServiceTrait, HGRegionInfo, PresenceServiceTrait,
+    UserAccountServiceTrait, UserAgentServiceTrait,
+};
 
 pub struct LocalUserAgentService {
     grid_service: Arc<dyn GridServiceTrait>,
@@ -46,7 +46,10 @@ impl LocalUserAgentService {
         }
     }
 
-    async fn get_traveling_data(&self, session_id: Uuid) -> Result<Option<(String, String, String)>> {
+    async fn get_traveling_data(
+        &self,
+        session_id: Uuid,
+    ) -> Result<Option<(String, String, String)>> {
         match self.db.as_ref() {
             DatabaseConnection::PostgreSQL(pool) => {
                 let row = sqlx::query(
@@ -172,11 +175,17 @@ impl UserAgentServiceTrait for LocalUserAgentService {
     }
 
     async fn verify_client(&self, session_id: Uuid, reported_ip: &str) -> Result<bool> {
-        info!("verify_client: session={}, reported_ip='{}'", session_id, reported_ip);
+        info!(
+            "verify_client: session={}, reported_ip='{}'",
+            session_id, reported_ip
+        );
         let data = self.get_traveling_data(session_id).await?;
         match data {
             Some((grid_name, _token, stored_ip)) => {
-                info!("verify_client: found traveling data — grid='{}', stored_ip='{}'", grid_name, stored_ip);
+                info!(
+                    "verify_client: found traveling data — grid='{}', stored_ip='{}'",
+                    grid_name, stored_ip
+                );
                 let mut valid = stored_ip == reported_ip || stored_ip.is_empty();
                 if !valid {
                     let uris_to_check: Vec<&str> = if !self.external_uri.is_empty() {
@@ -185,10 +194,18 @@ impl UserAgentServiceTrait for LocalUserAgentService {
                         vec![&self.home_uri]
                     };
                     for uri in &uris_to_check {
-                        if valid { break; }
+                        if valid {
+                            break;
+                        }
                         if let Ok(url) = url::Url::parse(uri) {
                             if let Some(host) = url.host_str() {
-                                if let Ok(addrs) = tokio::net::lookup_host(format!("{}:{}", host, url.port().unwrap_or(9000))).await {
+                                if let Ok(addrs) = tokio::net::lookup_host(format!(
+                                    "{}:{}",
+                                    host,
+                                    url.port().unwrap_or(9000)
+                                ))
+                                .await
+                                {
                                     for addr in addrs {
                                         if addr.ip().to_string() == reported_ip {
                                             valid = true;
@@ -201,15 +218,23 @@ impl UserAgentServiceTrait for LocalUserAgentService {
                         }
                     }
                 }
-                info!("verify_client: result={} (stored_ip='{}', reported_ip='{}')", valid, stored_ip, reported_ip);
+                info!(
+                    "verify_client: result={} (stored_ip='{}', reported_ip='{}')",
+                    valid, stored_ip, reported_ip
+                );
                 if !valid {
-                    warn!("verify_client: IP mismatch for session {} (stored={}, reported={})",
-                        session_id, stored_ip, reported_ip);
+                    warn!(
+                        "verify_client: IP mismatch for session {} (stored={}, reported={})",
+                        session_id, stored_ip, reported_ip
+                    );
                 }
                 Ok(valid)
             }
             None => {
-                info!("verify_client: no traveling data for session {} — returning true", session_id);
+                info!(
+                    "verify_client: no traveling data for session {} — returning true",
+                    session_id
+                );
                 Ok(true)
             }
         }
@@ -229,10 +254,18 @@ impl UserAgentServiceTrait for LocalUserAgentService {
 
         let defaults = self.grid_service.get_default_regions(Uuid::nil()).await?;
         if let Some(region) = defaults.first() {
-            let ext_host = ext.trim_start_matches("http://").trim_start_matches("https://")
-                .split(':').next().unwrap_or("localhost");
-            let ext_port = ext.trim_start_matches("http://").trim_start_matches("https://")
-                .split(':').nth(1).and_then(|p| p.trim_end_matches('/').parse::<u16>().ok())
+            let ext_host = ext
+                .trim_start_matches("http://")
+                .trim_start_matches("https://")
+                .split(':')
+                .next()
+                .unwrap_or("localhost");
+            let ext_port = ext
+                .trim_start_matches("http://")
+                .trim_start_matches("https://")
+                .split(':')
+                .nth(1)
+                .and_then(|p| p.trim_end_matches('/').parse::<u16>().ok())
                 .unwrap_or(region.server_port);
 
             let hg_info = HGRegionInfo {
@@ -250,7 +283,10 @@ impl UserAgentServiceTrait for LocalUserAgentService {
                 hostname: ext_host.to_string(),
                 internal_port: region.server_port,
             };
-            info!("get_home_region for {}: ext={}, server_uri={}, region={}", user_id, ext, hg_info.server_uri, hg_info.region_name);
+            info!(
+                "get_home_region for {}: ext={}, server_uri={}, region={}",
+                user_id, ext, hg_info.server_uri, hg_info.region_name
+            );
             let position = [128.0f32, 128.0, 21.0];
             let look_at = [0.0f32, 1.0, 0.0];
             return Ok(Some((hg_info, position, look_at)));
@@ -270,12 +306,18 @@ impl UserAgentServiceTrait for LocalUserAgentService {
         } else {
             ext
         };
-        info!("get_server_urls for user {}: home={}, robust={}", user_id, ext, robust);
+        info!(
+            "get_server_urls for user {}: home={}, robust={}",
+            user_id, ext, robust
+        );
         let mut urls = HashMap::new();
         urls.insert("SRV_HomeURI".to_string(), ext.to_string());
         urls.insert("SRV_GatekeeperURI".to_string(), ext.to_string());
         urls.insert("SRV_AssetServerURI".to_string(), robust.to_string());
-        urls.insert("SRV_InventoryServerURI".to_string(), format!("{}/hg", robust));
+        urls.insert(
+            "SRV_InventoryServerURI".to_string(),
+            format!("{}/hg", robust),
+        );
         urls.insert("SRV_ProfileServerURI".to_string(), robust.to_string());
         urls.insert("SRV_FriendsServerURI".to_string(), robust.to_string());
         urls.insert("SRV_IMServerURI".to_string(), robust.to_string());
@@ -290,25 +332,25 @@ impl UserAgentServiceTrait for LocalUserAgentService {
     }
 
     async fn get_uui(&self, _user_id: Uuid, target_user_id: Uuid) -> Result<String> {
-        let account = self.user_service
+        let account = self
+            .user_service
             .get_user_account(Uuid::nil(), target_user_id)
             .await?;
 
         match account {
-            Some(acct) => {
-                Ok(crate::services::hypergrid::uui::format_uui(
-                    target_user_id,
-                    &self.home_uri,
-                    &acct.first_name,
-                    &acct.last_name,
-                ))
-            }
+            Some(acct) => Ok(crate::services::hypergrid::uui::format_uui(
+                target_user_id,
+                &self.home_uri,
+                &acct.first_name,
+                &acct.last_name,
+            )),
             None => Ok(target_user_id.to_string()),
         }
     }
 
     async fn get_uuid(&self, first: &str, last: &str) -> Result<Option<Uuid>> {
-        let account = self.user_service
+        let account = self
+            .user_service
             .get_user_account_by_name(Uuid::nil(), first, last)
             .await?;
         Ok(account.map(|a| a.principal_id))
@@ -323,12 +365,11 @@ impl UserAgentServiceTrait for LocalUserAgentService {
         Ok(Vec::new())
     }
 
-    async fn is_agent_coming_home(
-        &self,
-        session_id: Uuid,
-        external_name: &str,
-    ) -> Result<bool> {
-        debug!("is_agent_coming_home: session={}, external={}", session_id, external_name);
+    async fn is_agent_coming_home(&self, session_id: Uuid, external_name: &str) -> Result<bool> {
+        debug!(
+            "is_agent_coming_home: session={}, external={}",
+            session_id, external_name
+        );
         let normalized_home = self.home_uri.trim_end_matches('/').to_lowercase();
         let normalized_ext = external_name.trim_end_matches('/').to_lowercase();
         Ok(normalized_home == normalized_ext)
@@ -341,7 +382,10 @@ impl UserAgentServiceTrait for LocalUserAgentService {
         destination: &HGRegionInfo,
         _from_login: bool,
     ) -> Result<(bool, String)> {
-        info!("login_agent_to_grid: {} {} -> {}", agent.first_name, agent.last_name, destination.server_uri);
+        info!(
+            "login_agent_to_grid: {} {} -> {}",
+            agent.first_name, agent.last_name, destination.server_uri
+        );
 
         // CRITICAL: Use agent.service_session_id as the service token.
         // The remote grid's gatekeeper will callback verify_agent(session_id, service_session_id)
@@ -358,7 +402,8 @@ impl UserAgentServiceTrait for LocalUserAgentService {
             &destination.server_uri,
             &service_token,
             &agent.client_ip,
-        ).await?;
+        )
+        .await?;
 
         Ok((true, "success".to_string()))
     }
@@ -370,12 +415,11 @@ impl UserAgentServiceTrait for LocalUserAgentService {
             _ => return Err(anyhow::anyhow!("Requires PostgreSQL")),
         };
 
-        let row = sqlx::query(
-            "SELECT firstname, lastname FROM useraccounts WHERE principalid = $1"
-        )
-        .bind(user_id)
-        .fetch_optional(pool)
-        .await?;
+        let row =
+            sqlx::query("SELECT firstname, lastname FROM useraccounts WHERE principalid = $1")
+                .bind(user_id)
+                .fetch_optional(pool)
+                .await?;
 
         let mut info = HashMap::new();
         if let Some(row) = row {

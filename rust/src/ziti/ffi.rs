@@ -2,11 +2,11 @@
 //!
 //! Provides safe Rust bindings to the OpenZiti C library through Zig FFI layer.
 
-use std::ffi::{CStr, CString};
-use std::os::raw::{c_char, c_int, c_void, c_uint};
-use std::ptr;
+use anyhow::{anyhow, Result};
 use serde::{Deserialize, Serialize};
-use anyhow::{Result, anyhow};
+use std::ffi::{CStr, CString};
+use std::os::raw::{c_char, c_int, c_uint, c_void};
+use std::ptr;
 
 /// OpenZiti context handle
 pub type ZitiContextHandle = *mut c_void;
@@ -18,13 +18,20 @@ pub type ZitiConnectionHandle = *mut c_void;
 pub type ZitiServiceHandle = *mut c_void;
 
 /// Callback function type for connection events
-pub type ZitiConnectionCallback = extern "C" fn(connection: ZitiConnectionHandle, status: c_int, data: *mut c_void);
+pub type ZitiConnectionCallback =
+    extern "C" fn(connection: ZitiConnectionHandle, status: c_int, data: *mut c_void);
 
 /// Callback function type for data events
-pub type ZitiDataCallback = extern "C" fn(connection: ZitiConnectionHandle, data: *const c_char, len: c_uint, user_data: *mut c_void);
+pub type ZitiDataCallback = extern "C" fn(
+    connection: ZitiConnectionHandle,
+    data: *const c_char,
+    len: c_uint,
+    user_data: *mut c_void,
+);
 
 /// Callback function type for service events
-pub type ZitiServiceCallback = extern "C" fn(service: ZitiServiceHandle, status: c_int, data: *mut c_void);
+pub type ZitiServiceCallback =
+    extern "C" fn(service: ZitiServiceHandle, status: c_int, data: *mut c_void);
 
 /// OpenZiti initialization parameters
 #[repr(C)]
@@ -74,90 +81,81 @@ pub struct ZitiNetworkStats {
 extern "C" {
     /// Initialize OpenZiti context
     fn ziti_init(params: *const ZitiInitParams) -> ZitiContextHandle;
-    
+
     /// Shutdown OpenZiti context
     fn ziti_shutdown(context: ZitiContextHandle) -> c_int;
-    
+
     /// Connect to OpenZiti service
     fn ziti_connect(
         context: ZitiContextHandle,
         params: *const ZitiConnectParams,
-        callback: ZitiConnectionCallback
+        callback: ZitiConnectionCallback,
     ) -> c_int;
-    
+
     /// Disconnect from OpenZiti service
     fn ziti_disconnect(connection: ZitiConnectionHandle) -> c_int;
-    
+
     /// Send data through OpenZiti connection
     fn ziti_send(
         connection: ZitiConnectionHandle,
         data: *const c_char,
         len: c_uint,
         callback: ZitiDataCallback,
-        user_data: *mut c_void
+        user_data: *mut c_void,
     ) -> c_int;
-    
+
     /// Receive data from OpenZiti connection
     fn ziti_receive(
         connection: ZitiConnectionHandle,
         buffer: *mut c_char,
         buffer_len: c_uint,
         callback: ZitiDataCallback,
-        user_data: *mut c_void
+        user_data: *mut c_void,
     ) -> c_int;
-    
+
     /// Create OpenZiti service
     fn ziti_create_service(
         context: ZitiContextHandle,
         config: *const ZitiServiceConfig,
-        callback: ZitiServiceCallback
+        callback: ZitiServiceCallback,
     ) -> c_int;
-    
+
     /// Delete OpenZiti service
-    fn ziti_delete_service(
-        context: ZitiContextHandle,
-        service_name: *const c_char
-    ) -> c_int;
-    
+    fn ziti_delete_service(context: ZitiContextHandle, service_name: *const c_char) -> c_int;
+
     /// Get network statistics
-    fn ziti_get_stats(
-        context: ZitiContextHandle,
-        stats: *mut ZitiNetworkStats
-    ) -> c_int;
-    
+    fn ziti_get_stats(context: ZitiContextHandle, stats: *mut ZitiNetworkStats) -> c_int;
+
     /// Set log level
     fn ziti_set_log_level(level: c_int) -> c_int;
-    
+
     /// Get version information
     fn ziti_get_version() -> *const c_char;
-    
+
     /// Check if context is ready
     fn ziti_is_ready(context: ZitiContextHandle) -> c_int;
-    
+
     /// Get last error message
     fn ziti_get_last_error() -> *const c_char;
-    
+
     /// Enable/disable encryption
     fn ziti_set_encryption(context: ZitiContextHandle, enabled: c_int) -> c_int;
-    
+
     /// Set connection timeout
     fn ziti_set_timeout(context: ZitiContextHandle, timeout_ms: c_uint) -> c_int;
-    
+
     /// Add trusted certificate
-    fn ziti_add_trusted_cert(
-        context: ZitiContextHandle,
-        cert_path: *const c_char
-    ) -> c_int;
-    
+    fn ziti_add_trusted_cert(context: ZitiContextHandle, cert_path: *const c_char) -> c_int;
+
     /// Enable service hosting
     fn ziti_host_service(
         context: ZitiContextHandle,
         service_name: *const c_char,
         address: *const c_char,
         port: c_uint,
-        callback: ZitiServiceCallback
+        callback: ZitiServiceCallback,
     ) -> c_int;
-    
+
     /// Process events (non-blocking)
     fn ziti_process_events(context: ZitiContextHandle, timeout_ms: c_uint) -> c_int;
 }
@@ -178,17 +176,22 @@ impl ZitiFFI {
     }
 
     /// Initialize OpenZiti with configuration
-    pub fn initialize(&mut self, controller_url: &str, identity_file: &str, log_level: ZitiLogLevel) -> Result<()> {
+    pub fn initialize(
+        &mut self,
+        controller_url: &str,
+        identity_file: &str,
+        log_level: ZitiLogLevel,
+    ) -> Result<()> {
         if self.is_initialized {
             return Ok(());
         }
 
         let controller_url_c = CString::new(controller_url)
             .map_err(|e| anyhow!(format!("Invalid controller URL: {}", e)))?;
-        
+
         let identity_file_c = CString::new(identity_file)
             .map_err(|e| anyhow!(format!("Invalid identity file path: {}", e)))?;
-        
+
         let config_dir_c = CString::new("/tmp/ziti")
             .map_err(|e| anyhow!(format!("Invalid config directory: {}", e)))?;
 
@@ -203,9 +206,10 @@ impl ZitiFFI {
             self.context = ziti_init(&params);
             if self.context.is_null() {
                 let error_msg = self.get_last_error();
-                return Err(anyhow!(
-                    format!("Failed to initialize OpenZiti: {}", error_msg)
-                ));
+                return Err(anyhow!(format!(
+                    "Failed to initialize OpenZiti: {}",
+                    error_msg
+                )));
             }
         }
 
@@ -224,9 +228,10 @@ impl ZitiFFI {
             let result = ziti_shutdown(self.context);
             if result != 0 {
                 let error_msg = self.get_last_error();
-                return Err(anyhow!(
-                    format!("Failed to shutdown OpenZiti: {}", error_msg)
-                ));
+                return Err(anyhow!(format!(
+                    "Failed to shutdown OpenZiti: {}",
+                    error_msg
+                )));
             }
         }
 
@@ -237,11 +242,13 @@ impl ZitiFFI {
     }
 
     /// Connect to a service
-    pub fn connect_to_service(&self, service_name: &str, timeout_ms: u32) -> Result<ZitiConnectionWrapper> {
+    pub fn connect_to_service(
+        &self,
+        service_name: &str,
+        timeout_ms: u32,
+    ) -> Result<ZitiConnectionWrapper> {
         if !self.is_initialized {
-            return Err(anyhow!(
-                "OpenZiti not initialized".to_string()
-            ));
+            return Err(anyhow!("OpenZiti not initialized".to_string()));
         }
 
         let service_name_c = CString::new(service_name)
@@ -255,19 +262,16 @@ impl ZitiFFI {
         };
 
         let mut connection_handle = ptr::null_mut();
-        
+
         unsafe {
-            let result = ziti_connect(
-                self.context,
-                &params,
-                Self::connection_callback
-            );
-            
+            let result = ziti_connect(self.context, &params, Self::connection_callback);
+
             if result != 0 {
                 let error_msg = self.get_last_error();
-                return Err(anyhow!(
-                    format!("Failed to connect to service {}: {}", service_name, error_msg)
-                ));
+                return Err(anyhow!(format!(
+                    "Failed to connect to service {}: {}",
+                    service_name, error_msg
+                )));
             }
         }
 
@@ -275,18 +279,22 @@ impl ZitiFFI {
     }
 
     /// Create a service
-    pub fn create_service(&self, name: &str, address: &str, port: u16, protocol: ZitiProtocolType) -> Result<()> {
+    pub fn create_service(
+        &self,
+        name: &str,
+        address: &str,
+        port: u16,
+        protocol: ZitiProtocolType,
+    ) -> Result<()> {
         if !self.is_initialized {
-            return Err(anyhow!(
-                "OpenZiti not initialized".to_string()
-            ));
+            return Err(anyhow!("OpenZiti not initialized".to_string()));
         }
 
-        let name_c = CString::new(name)
-            .map_err(|e| anyhow!(format!("Invalid service name: {}", e)))?;
-        
-        let address_c = CString::new(address)
-            .map_err(|e| anyhow!(format!("Invalid address: {}", e)))?;
+        let name_c =
+            CString::new(name).map_err(|e| anyhow!(format!("Invalid service name: {}", e)))?;
+
+        let address_c =
+            CString::new(address).map_err(|e| anyhow!(format!("Invalid address: {}", e)))?;
 
         let config = ZitiServiceConfig {
             name: name_c.as_ptr(),
@@ -297,17 +305,14 @@ impl ZitiFFI {
         };
 
         unsafe {
-            let result = ziti_create_service(
-                self.context,
-                &config,
-                Self::service_callback
-            );
-            
+            let result = ziti_create_service(self.context, &config, Self::service_callback);
+
             if result != 0 {
                 let error_msg = self.get_last_error();
-                return Err(anyhow!(
-                    format!("Failed to create service {}: {}", name, error_msg)
-                ));
+                return Err(anyhow!(format!(
+                    "Failed to create service {}: {}",
+                    name, error_msg
+                )));
             }
         }
 
@@ -318,9 +323,7 @@ impl ZitiFFI {
     /// Get network statistics
     pub fn get_network_stats(&self) -> Result<ZitiNetworkStats> {
         if !self.is_initialized {
-            return Err(anyhow!(
-                "OpenZiti not initialized".to_string()
-            ));
+            return Err(anyhow!("OpenZiti not initialized".to_string()));
         }
 
         let mut stats = ZitiNetworkStats {
@@ -337,9 +340,10 @@ impl ZitiFFI {
             let result = ziti_get_stats(self.context, &mut stats);
             if result != 0 {
                 let error_msg = self.get_last_error();
-                return Err(anyhow!(
-                    format!("Failed to get network stats: {}", error_msg)
-                ));
+                return Err(anyhow!(format!(
+                    "Failed to get network stats: {}",
+                    error_msg
+                )));
             }
         }
 
@@ -352,9 +356,7 @@ impl ZitiFFI {
             return false;
         }
 
-        unsafe {
-            ziti_is_ready(self.context) == 1
-        }
+        unsafe { ziti_is_ready(self.context) == 1 }
     }
 
     /// Get OpenZiti version
@@ -364,10 +366,8 @@ impl ZitiFFI {
             if version_ptr.is_null() {
                 return "unknown".to_string();
             }
-            
-            CStr::from_ptr(version_ptr)
-                .to_string_lossy()
-                .to_string()
+
+            CStr::from_ptr(version_ptr).to_string_lossy().to_string()
         }
     }
 
@@ -378,28 +378,22 @@ impl ZitiFFI {
             if error_ptr.is_null() {
                 return "No error".to_string();
             }
-            
-            CStr::from_ptr(error_ptr)
-                .to_string_lossy()
-                .to_string()
+
+            CStr::from_ptr(error_ptr).to_string_lossy().to_string()
         }
     }
 
     /// Process network events
     pub fn process_events(&self, timeout_ms: u32) -> Result<()> {
         if !self.is_initialized {
-            return Err(anyhow!(
-                "OpenZiti not initialized".to_string()
-            ));
+            return Err(anyhow!("OpenZiti not initialized".to_string()));
         }
 
         unsafe {
             let result = ziti_process_events(self.context, timeout_ms);
             if result < 0 {
                 let error_msg = self.get_last_error();
-                return Err(anyhow!(
-                    format!("Failed to process events: {}", error_msg)
-                ));
+                return Err(anyhow!(format!("Failed to process events: {}", error_msg)));
             }
         }
 
@@ -407,7 +401,11 @@ impl ZitiFFI {
     }
 
     /// Connection callback handler
-    extern "C" fn connection_callback(connection: ZitiConnectionHandle, status: c_int, _data: *mut c_void) {
+    extern "C" fn connection_callback(
+        connection: ZitiConnectionHandle,
+        status: c_int,
+        _data: *mut c_void,
+    ) {
         match status {
             0 => tracing::info!("Connection established successfully"),
             _ => tracing::error!("Connection failed with status: {}", status),
@@ -444,9 +442,7 @@ impl ZitiConnectionWrapper {
     /// Send data through the connection
     pub fn send_data(&self, data: &[u8]) -> Result<()> {
         if self.handle.is_null() {
-            return Err(anyhow!(
-                "Invalid connection handle".to_string()
-            ));
+            return Err(anyhow!("Invalid connection handle".to_string()));
         }
 
         unsafe {
@@ -455,13 +451,14 @@ impl ZitiConnectionWrapper {
                 data.as_ptr() as *const c_char,
                 data.len() as c_uint,
                 Self::data_callback,
-                ptr::null_mut()
+                ptr::null_mut(),
             );
-            
+
             if result != 0 {
-                return Err(anyhow!(
-                    format!("Failed to send data: error code {}", result)
-                ));
+                return Err(anyhow!(format!(
+                    "Failed to send data: error code {}",
+                    result
+                )));
             }
         }
 
@@ -471,9 +468,7 @@ impl ZitiConnectionWrapper {
     /// Receive data from the connection
     pub fn receive_data(&self, buffer: &mut [u8]) -> Result<usize> {
         if self.handle.is_null() {
-            return Err(anyhow!(
-                "Invalid connection handle".to_string()
-            ));
+            return Err(anyhow!("Invalid connection handle".to_string()));
         }
 
         unsafe {
@@ -482,21 +477,27 @@ impl ZitiConnectionWrapper {
                 buffer.as_mut_ptr() as *mut c_char,
                 buffer.len() as c_uint,
                 Self::data_callback,
-                ptr::null_mut()
+                ptr::null_mut(),
             );
-            
+
             if result < 0 {
-                return Err(anyhow!(
-                    format!("Failed to receive data: error code {}", result)
-                ));
+                return Err(anyhow!(format!(
+                    "Failed to receive data: error code {}",
+                    result
+                )));
             }
-            
+
             Ok(result as usize)
         }
     }
 
     /// Data callback handler
-    extern "C" fn data_callback(_connection: ZitiConnectionHandle, _data: *const c_char, len: c_uint, _user_data: *mut c_void) {
+    extern "C" fn data_callback(
+        _connection: ZitiConnectionHandle,
+        _data: *const c_char,
+        len: c_uint,
+        _user_data: *mut c_void,
+    ) {
         tracing::debug!("Data transfer completed: {} bytes", len);
     }
 
@@ -509,9 +510,10 @@ impl ZitiConnectionWrapper {
         unsafe {
             let result = ziti_disconnect(self.handle);
             if result != 0 {
-                return Err(anyhow!(
-                    format!("Failed to disconnect: error code {}", result)
-                ));
+                return Err(anyhow!(format!(
+                    "Failed to disconnect: error code {}",
+                    result
+                )));
             }
         }
 

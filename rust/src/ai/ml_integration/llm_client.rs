@@ -1,9 +1,9 @@
 use super::super::AIError;
+use base64::{engine::general_purpose as base64_engine, Engine as _};
+use serde::{Deserialize, Serialize};
 use std::sync::Arc;
 use std::time::Duration;
 use tokio::sync::RwLock;
-use serde::{Deserialize, Serialize};
-use base64::{Engine as _, engine::general_purpose as base64_engine};
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct HybridAIConfig {
@@ -14,7 +14,11 @@ pub struct HybridAIConfig {
 
 impl Default for HybridAIConfig {
     fn default() -> Self {
-        Self { enabled: false, behaviors_enabled: false, llm_enabled: false }
+        Self {
+            enabled: false,
+            behaviors_enabled: false,
+            llm_enabled: false,
+        }
     }
 }
 
@@ -53,7 +57,7 @@ fn parse_ini_sections(contents: &str) -> (HybridAIConfig, LLMConfig) {
             continue;
         }
         if line.starts_with('[') && line.ends_with(']') {
-            current_section = line[1..line.len()-1].to_lowercase();
+            current_section = line[1..line.len() - 1].to_lowercase();
             continue;
         }
         if let Some((key, val)) = line.split_once('=') {
@@ -69,12 +73,28 @@ fn parse_ini_sections(contents: &str) -> (HybridAIConfig, LLMConfig) {
                 "llm" => match key {
                     "endpoint" => llm.endpoint = val.to_string(),
                     "model" => llm.model = val.to_string(),
-                    "timeout" => if let Ok(v) = val.parse() { llm.timeout_seconds = v; },
-                    "max_tokens" => if let Ok(v) = val.parse() { llm.max_tokens = v; },
-                    "temperature" => if let Ok(v) = val.parse() { llm.temperature = v; },
+                    "timeout" => {
+                        if let Ok(v) = val.parse() {
+                            llm.timeout_seconds = v;
+                        }
+                    }
+                    "max_tokens" => {
+                        if let Ok(v) = val.parse() {
+                            llm.max_tokens = v;
+                        }
+                    }
+                    "temperature" => {
+                        if let Ok(v) = val.parse() {
+                            llm.temperature = v;
+                        }
+                    }
                     "provider" => llm.provider = val.to_lowercase(),
                     "api_key" => llm.api_key = val.to_string(),
-                    "context_window" | "num_ctx" => if let Ok(v) = val.parse() { llm.context_window = v; },
+                    "context_window" | "num_ctx" => {
+                        if let Ok(v) = val.parse() {
+                            llm.context_window = v;
+                        }
+                    }
                     _ => {}
                 },
                 _ => {}
@@ -89,8 +109,12 @@ impl HybridAIConfig {
         match read_ini_contents() {
             Some(contents) => {
                 let (ai, _) = parse_ini_sections(&contents);
-                tracing::info!("[HybridAI] enabled={}, behaviors={}, llm={}",
-                    ai.enabled, ai.behaviors_enabled, ai.llm_enabled);
+                tracing::info!(
+                    "[HybridAI] enabled={}, behaviors={}, llm={}",
+                    ai.enabled,
+                    ai.behaviors_enabled,
+                    ai.llm_enabled
+                );
                 ai
             }
             None => {
@@ -118,8 +142,14 @@ impl LLMConfig {
         match read_ini_contents() {
             Some(contents) => {
                 let (_, llm) = parse_ini_sections(&contents);
-                tracing::info!("[LLM] Config: model={}, endpoint={}, timeout={}s, temp={}, ctx={}",
-                    llm.model, llm.endpoint, llm.timeout_seconds, llm.temperature, llm.context_window);
+                tracing::info!(
+                    "[LLM] Config: model={}, endpoint={}, timeout={}s, temp={}, ctx={}",
+                    llm.model,
+                    llm.endpoint,
+                    llm.timeout_seconds,
+                    llm.temperature,
+                    llm.context_window
+                );
                 llm
             }
             None => {
@@ -177,7 +207,9 @@ impl LLMConfig {
         }
 
         if let Some(key) = Self::read_claude_code_credentials() {
-            tracing::info!("[LLM] Auto-detected Claude Code credentials — using Anthropic provider");
+            tracing::info!(
+                "[LLM] Auto-detected Claude Code credentials — using Anthropic provider"
+            );
             self.provider = "anthropic".to_string();
             self.api_key = key;
             self.apply_anthropic_defaults();
@@ -223,7 +255,9 @@ impl LLMConfig {
                 }
                 if let Some(key) = json.get("apiKey").and_then(|v| v.as_str()) {
                     if !key.is_empty() {
-                        tracing::info!("[LLM] Found API key in ~/.claude/.credentials.json (apiKey)");
+                        tracing::info!(
+                            "[LLM] Found API key in ~/.claude/.credentials.json (apiKey)"
+                        );
                         return Some(key.to_string());
                     }
                 }
@@ -246,7 +280,10 @@ impl LLMConfig {
     }
 
     fn apply_anthropic_defaults(&mut self) {
-        if self.model == "llama3.2" || self.model.starts_with("llama") || self.model.starts_with("mistral") {
+        if self.model == "llama3.2"
+            || self.model.starts_with("llama")
+            || self.model.starts_with("mistral")
+        {
             self.model = "claude-sonnet-4-20250514".to_string();
         }
         if self.endpoint == "http://localhost:11434" {
@@ -300,13 +337,20 @@ impl LocalLLMClient {
     pub async fn new(mut config: LLMConfig) -> Result<Arc<Self>, AIError> {
         config.resolve_provider();
 
-        tracing::info!("[LLM] Provider: {}, model: {}, endpoint: {}, ctx: {}",
-            config.provider, config.model, config.endpoint, config.context_window);
+        tracing::info!(
+            "[LLM] Provider: {}, model: {}, endpoint: {}, ctx: {}",
+            config.provider,
+            config.model,
+            config.endpoint,
+            config.context_window
+        );
 
         let http_client = reqwest::Client::builder()
             .timeout(Duration::from_secs(config.timeout_seconds))
             .build()
-            .map_err(|e| AIError::ConfigurationError(format!("Failed to create HTTP client: {}", e)))?;
+            .map_err(|e| {
+                AIError::ConfigurationError(format!("Failed to create HTTP client: {}", e))
+            })?;
 
         let client = Self {
             config,
@@ -325,7 +369,10 @@ impl LocalLLMClient {
                 tracing::warn!("[LLM] Anthropic provider configured but no api_key set");
                 return false;
             }
-            tracing::info!("[LLM] Anthropic provider configured with model={}", self.config.model);
+            tracing::info!(
+                "[LLM] Anthropic provider configured with model={}",
+                self.config.model
+            );
             return true;
         }
         let url = format!("{}/api/tags", self.config.endpoint);
@@ -351,7 +398,8 @@ impl LocalLLMClient {
 
         let url = format!("{}/api/generate", self.config.endpoint);
 
-        let response = self.http_client
+        let response = self
+            .http_client
             .post(&url)
             .json(&request_body)
             .send()
@@ -365,17 +413,14 @@ impl LocalLLMClient {
             )));
         }
 
-        let response_body: serde_json::Value = response.json().await
+        let response_body: serde_json::Value = response
+            .json()
+            .await
             .map_err(|e| AIError::InferenceFailed(format!("Failed to parse response: {}", e)))?;
 
-        let text = response_body["response"]
-            .as_str()
-            .unwrap_or("")
-            .to_string();
+        let text = response_body["response"].as_str().unwrap_or("").to_string();
 
-        let tokens_used = response_body["eval_count"]
-            .as_u64()
-            .unwrap_or(0) as usize;
+        let tokens_used = response_body["eval_count"].as_u64().unwrap_or(0) as usize;
 
         let processing_time_ms = start_time.elapsed().as_millis() as u64;
 
@@ -398,15 +443,27 @@ impl LocalLLMClient {
         self.chat_ollama(messages).await
     }
 
-    pub async fn chat_with_image(&self, system_prompt: &str, user_text: &str, image_data: &[u8], media_type: &str) -> Result<LLMResponse, AIError> {
+    pub async fn chat_with_image(
+        &self,
+        system_prompt: &str,
+        user_text: &str,
+        image_data: &[u8],
+        media_type: &str,
+    ) -> Result<LLMResponse, AIError> {
         if self.config.provider != "anthropic" {
-            return self.chat_with_image_ollama(system_prompt, user_text, image_data, media_type).await;
+            return self
+                .chat_with_image_ollama(system_prompt, user_text, image_data, media_type)
+                .await;
         }
 
         let start_time = std::time::Instant::now();
         let b64 = base64_engine::STANDARD.encode(image_data);
 
-        let effective_max_tokens = if self.config.max_tokens <= 2048 { 8192 } else { self.config.max_tokens };
+        let effective_max_tokens = if self.config.max_tokens <= 2048 {
+            8192
+        } else {
+            self.config.max_tokens
+        };
 
         let request_body = serde_json::json!({
             "model": self.config.model,
@@ -439,7 +496,8 @@ impl LocalLLMClient {
         };
         let url = format!("{}/v1/messages", endpoint);
 
-        let response = self.http_client
+        let response = self
+            .http_client
             .post(&url)
             .header("x-api-key", &self.config.api_key)
             .header("anthropic-version", "2023-06-01")
@@ -452,11 +510,15 @@ impl LocalLLMClient {
         if !response.status().is_success() {
             let status = response.status();
             let body = response.text().await.unwrap_or_default();
-            return Err(AIError::InferenceFailed(format!("Vision API error {}: {}", status, body)));
+            return Err(AIError::InferenceFailed(format!(
+                "Vision API error {}: {}",
+                status, body
+            )));
         }
 
-        let response_body: serde_json::Value = response.json().await
-            .map_err(|e| AIError::InferenceFailed(format!("Failed to parse vision response: {}", e)))?;
+        let response_body: serde_json::Value = response.json().await.map_err(|e| {
+            AIError::InferenceFailed(format!("Failed to parse vision response: {}", e))
+        })?;
 
         let text = response_body["content"]
             .as_array()
@@ -466,14 +528,22 @@ impl LocalLLMClient {
             .to_string();
 
         let input_tokens = response_body["usage"]["input_tokens"].as_u64().unwrap_or(0) as usize;
-        let output_tokens = response_body["usage"]["output_tokens"].as_u64().unwrap_or(0) as usize;
+        let output_tokens = response_body["usage"]["output_tokens"]
+            .as_u64()
+            .unwrap_or(0) as usize;
         let tokens_used = input_tokens + output_tokens;
         let processing_time_ms = start_time.elapsed().as_millis() as u64;
 
         *self.total_requests.write().await += 1;
         *self.total_tokens.write().await += tokens_used;
 
-        tracing::info!("[LLM] Vision response: {}ms, {} tokens (in={}, out={})", processing_time_ms, tokens_used, input_tokens, output_tokens);
+        tracing::info!(
+            "[LLM] Vision response: {}ms, {} tokens (in={}, out={})",
+            processing_time_ms,
+            tokens_used,
+            input_tokens,
+            output_tokens
+        );
 
         Ok(LLMResponse {
             text,
@@ -484,7 +554,13 @@ impl LocalLLMClient {
         })
     }
 
-    async fn chat_with_image_ollama(&self, system_prompt: &str, user_text: &str, image_data: &[u8], _media_type: &str) -> Result<LLMResponse, AIError> {
+    async fn chat_with_image_ollama(
+        &self,
+        system_prompt: &str,
+        user_text: &str,
+        image_data: &[u8],
+        _media_type: &str,
+    ) -> Result<LLMResponse, AIError> {
         let start_time = std::time::Instant::now();
         let b64 = base64_engine::STANDARD.encode(image_data);
 
@@ -503,17 +579,32 @@ impl LocalLLMClient {
         });
 
         let url = format!("{}/api/chat", self.config.endpoint);
-        let response = self.http_client.post(&url).json(&request_body).send().await
-            .map_err(|e| AIError::InferenceFailed(format!("Ollama vision request failed: {}", e)))?;
+        let response = self
+            .http_client
+            .post(&url)
+            .json(&request_body)
+            .send()
+            .await
+            .map_err(|e| {
+                AIError::InferenceFailed(format!("Ollama vision request failed: {}", e))
+            })?;
 
         if !response.status().is_success() {
-            return Err(AIError::InferenceFailed(format!("Ollama vision error: {}", response.status())));
+            return Err(AIError::InferenceFailed(format!(
+                "Ollama vision error: {}",
+                response.status()
+            )));
         }
 
-        let response_body: serde_json::Value = response.json().await
+        let response_body: serde_json::Value = response
+            .json()
+            .await
             .map_err(|e| AIError::InferenceFailed(format!("Parse failed: {}", e)))?;
 
-        let text = response_body["message"]["content"].as_str().unwrap_or("").to_string();
+        let text = response_body["message"]["content"]
+            .as_str()
+            .unwrap_or("")
+            .to_string();
         let tokens_used = response_body["eval_count"].as_u64().unwrap_or(0) as usize;
         let processing_time_ms = start_time.elapsed().as_millis() as u64;
 
@@ -532,11 +623,13 @@ impl LocalLLMClient {
     async fn chat_anthropic(&self, messages: &[ChatMessage]) -> Result<LLMResponse, AIError> {
         let start_time = std::time::Instant::now();
 
-        let system_text: Option<String> = messages.iter()
+        let system_text: Option<String> = messages
+            .iter()
             .find(|m| matches!(m.role, MessageRole::System))
             .map(|m| m.content.clone());
 
-        let api_messages: Vec<serde_json::Value> = messages.iter()
+        let api_messages: Vec<serde_json::Value> = messages
+            .iter()
             .filter(|m| !matches!(m.role, MessageRole::System))
             .map(|msg| {
                 serde_json::json!({
@@ -574,7 +667,8 @@ impl LocalLLMClient {
         };
         let url = format!("{}/v1/messages", endpoint);
 
-        let response = self.http_client
+        let response = self
+            .http_client
             .post(&url)
             .header("x-api-key", &self.config.api_key)
             .header("anthropic-version", "2023-06-01")
@@ -589,12 +683,14 @@ impl LocalLLMClient {
             let body = response.text().await.unwrap_or_default();
             tracing::error!("[LLM] Anthropic API error {}: {}", status, body);
             return Err(AIError::InferenceFailed(format!(
-                "Anthropic API returned {}: {}", status, body
+                "Anthropic API returned {}: {}",
+                status, body
             )));
         }
 
-        let response_body: serde_json::Value = response.json().await
-            .map_err(|e| AIError::InferenceFailed(format!("Failed to parse Anthropic response: {}", e)))?;
+        let response_body: serde_json::Value = response.json().await.map_err(|e| {
+            AIError::InferenceFailed(format!("Failed to parse Anthropic response: {}", e))
+        })?;
 
         let text = response_body["content"]
             .as_array()
@@ -604,15 +700,22 @@ impl LocalLLMClient {
             .to_string();
 
         let input_tokens = response_body["usage"]["input_tokens"].as_u64().unwrap_or(0) as usize;
-        let output_tokens = response_body["usage"]["output_tokens"].as_u64().unwrap_or(0) as usize;
+        let output_tokens = response_body["usage"]["output_tokens"]
+            .as_u64()
+            .unwrap_or(0) as usize;
         let tokens_used = input_tokens + output_tokens;
         let processing_time_ms = start_time.elapsed().as_millis() as u64;
 
         *self.total_requests.write().await += 1;
         *self.total_tokens.write().await += tokens_used;
 
-        tracing::info!("[LLM] Anthropic response: {}ms, {} tokens (in={}, out={})",
-            processing_time_ms, tokens_used, input_tokens, output_tokens);
+        tracing::info!(
+            "[LLM] Anthropic response: {}ms, {} tokens (in={}, out={})",
+            processing_time_ms,
+            tokens_used,
+            input_tokens,
+            output_tokens
+        );
 
         Ok(LLMResponse {
             text,
@@ -626,7 +729,8 @@ impl LocalLLMClient {
     async fn chat_ollama(&self, messages: &[ChatMessage]) -> Result<LLMResponse, AIError> {
         let start_time = std::time::Instant::now();
 
-        let formatted_messages: Vec<serde_json::Value> = messages.iter()
+        let formatted_messages: Vec<serde_json::Value> = messages
+            .iter()
             .map(|msg| {
                 serde_json::json!({
                     "role": match msg.role {
@@ -652,7 +756,8 @@ impl LocalLLMClient {
 
         let url = format!("{}/api/chat", self.config.endpoint);
 
-        let response = self.http_client
+        let response = self
+            .http_client
             .post(&url)
             .json(&request_body)
             .send()
@@ -666,7 +771,9 @@ impl LocalLLMClient {
             )));
         }
 
-        let response_body: serde_json::Value = response.json().await
+        let response_body: serde_json::Value = response
+            .json()
+            .await
             .map_err(|e| AIError::InferenceFailed(format!("Failed to parse response: {}", e)))?;
 
         let text = response_body["message"]["content"]
@@ -674,9 +781,7 @@ impl LocalLLMClient {
             .unwrap_or("")
             .to_string();
 
-        let tokens_used = response_body["eval_count"]
-            .as_u64()
-            .unwrap_or(0) as usize;
+        let tokens_used = response_body["eval_count"].as_u64().unwrap_or(0) as usize;
 
         let processing_time_ms = start_time.elapsed().as_millis() as u64;
 
@@ -692,7 +797,11 @@ impl LocalLLMClient {
         })
     }
 
-    pub async fn generate_with_system(&self, system_prompt: &str, user_prompt: &str) -> Result<LLMResponse, AIError> {
+    pub async fn generate_with_system(
+        &self,
+        system_prompt: &str,
+        user_prompt: &str,
+    ) -> Result<LLMResponse, AIError> {
         let messages = vec![
             ChatMessage {
                 role: MessageRole::System,
@@ -750,7 +859,9 @@ impl LocalLLMClient {
             content
         );
 
-        let response = self.generate_with_system(system_prompt, &user_prompt).await?;
+        let response = self
+            .generate_with_system(system_prompt, &user_prompt)
+            .await?;
 
         Ok(ContentAnalysisResult {
             raw_analysis: response.text,
@@ -774,15 +885,24 @@ impl LocalLLMClient {
             content
         );
 
-        let response = self.generate_with_system(system_prompt, &user_prompt).await?;
+        let response = self
+            .generate_with_system(system_prompt, &user_prompt)
+            .await?;
 
-        let suggestions: Vec<String> = response.text
+        let suggestions: Vec<String> = response
+            .text
             .lines()
             .filter(|line| !line.trim().is_empty())
             .map(|line| {
                 let trimmed = line.trim();
-                if trimmed.starts_with('-') || trimmed.starts_with('*') || trimmed.starts_with(char::is_numeric) {
-                    trimmed.trim_start_matches(|c: char| c == '-' || c == '*' || c == '.' || c.is_numeric() || c.is_whitespace())
+                if trimmed.starts_with('-')
+                    || trimmed.starts_with('*')
+                    || trimmed.starts_with(char::is_numeric)
+                {
+                    trimmed
+                        .trim_start_matches(|c: char| {
+                            c == '-' || c == '*' || c == '.' || c.is_numeric() || c.is_whitespace()
+                        })
                         .to_string()
                 } else {
                     trimmed.to_string()

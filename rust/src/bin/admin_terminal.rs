@@ -1,5 +1,5 @@
 //! OpenSim Next Admin Terminal
-//! 
+//!
 //! Standalone terminal interface for OpenSim Robust-style administrative commands.
 //! Provides an interactive command-line interface that mirrors the classic OpenSim
 //! Robust server console experience with modern REST API integration.
@@ -15,10 +15,10 @@ use tracing_subscriber;
 async fn main() -> Result<()> {
     // Initialize logging
     tracing_subscriber::fmt::init();
-    
+
     // Check for command line arguments
     let args: Vec<String> = env::args().collect();
-    
+
     if args.len() > 1 {
         match args[1].as_str() {
             "--help" | "-h" => {
@@ -48,12 +48,12 @@ async fn main() -> Result<()> {
             }
         }
     }
-    
+
     // Start interactive session
     info!("Starting OpenSim Next Admin Terminal");
-    
+
     let processor = TerminalCommandProcessor::new();
-    
+
     match processor.start_interactive_session().await {
         Ok(_) => {
             info!("Admin terminal session ended normally");
@@ -67,13 +67,14 @@ async fn main() -> Result<()> {
             eprintln!("   - Ensure OpenSim Next server is running");
         }
     }
-    
+
     Ok(())
 }
 
 /// Print usage information
 fn print_usage() {
-    println!(r#"
+    println!(
+        r#"
 🎯 OpenSim Next Admin Terminal - Usage
 =====================================
 
@@ -113,41 +114,49 @@ Available Commands (Interactive Mode):
   - Batch mode is suitable for scripting and automation
   - All operations require valid API key authentication
   - Commands are logged for audit purposes
-"#);
+"#
+    );
 }
 
 /// Test connection to admin API
 async fn test_connection() -> Result<()> {
     println!("🔍 Testing connection to OpenSim Next Admin API...");
-    
+
     let processor = TerminalCommandProcessor::new();
-    
+
     // Try to execute a simple health check command
-    match processor.execute_command(opensim_next::network::terminal_commands::TerminalCommand::Help).await {
+    match processor
+        .execute_command(opensim_next::network::terminal_commands::TerminalCommand::Help)
+        .await
+    {
         Ok(_) => {
             println!("✅ Connection test successful!");
             println!("🌐 Admin API is accessible and responding");
-            
+
             // Try to get actual API health
-            let api_key = env::var("OPENSIM_API_KEY")
-                .unwrap_or_else(|_| "default-key-change-me".to_string());
+            let api_key =
+                env::var("OPENSIM_API_KEY").unwrap_or_else(|_| "default-key-change-me".to_string());
             let api_url = env::var("OPENSIM_ADMIN_API_URL")
                 .unwrap_or_else(|_| "http://localhost:9200".to_string());
-            
-            println!("🔑 Using API Key: {}", if api_key == "default-key-change-me" { 
-                "default-key-change-me (⚠️  change for production)" 
-            } else { 
-                "configured" 
-            });
+
+            println!(
+                "🔑 Using API Key: {}",
+                if api_key == "default-key-change-me" {
+                    "default-key-change-me (⚠️  change for production)"
+                } else {
+                    "configured"
+                }
+            );
             println!("🌐 API URL: {}", api_url);
-            
+
             // Test actual admin API health endpoint
             let client = reqwest::Client::new();
             match client
                 .get(&format!("{}/admin/health", api_url))
                 .header("X-API-Key", &api_key)
                 .send()
-                .await {
+                .await
+            {
                 Ok(response) => {
                     if response.status().is_success() {
                         println!("✅ Admin API health check passed");
@@ -169,7 +178,7 @@ async fn test_connection() -> Result<()> {
             println!("💡 Check your configuration and ensure the server is running");
         }
     }
-    
+
     Ok(())
 }
 
@@ -177,32 +186,30 @@ async fn test_connection() -> Result<()> {
 async fn execute_batch_command(args: &[String]) -> Result<()> {
     let command_line = args.join(" ");
     println!("🚀 Executing batch command: {}", command_line);
-    
+
     let processor = TerminalCommandProcessor::new();
-    
+
     match processor.parse_command(&command_line) {
-        Ok(command) => {
-            match processor.execute_command(command).await {
-                Ok(result) => {
-                    if result.success {
-                        println!("✅ Command executed successfully");
-                        println!("📝 {}", result.message);
-                        if let Some(data) = result.data {
-                            println!("📊 Result:");
-                            println!("{}", serde_json::to_string_pretty(&data)?);
-                        }
-                        std::process::exit(0);
-                    } else {
-                        println!("❌ Command failed: {}", result.message);
-                        std::process::exit(1);
+        Ok(command) => match processor.execute_command(command).await {
+            Ok(result) => {
+                if result.success {
+                    println!("✅ Command executed successfully");
+                    println!("📝 {}", result.message);
+                    if let Some(data) = result.data {
+                        println!("📊 Result:");
+                        println!("{}", serde_json::to_string_pretty(&data)?);
                     }
-                }
-                Err(e) => {
-                    println!("💥 Execution error: {}", e);
+                    std::process::exit(0);
+                } else {
+                    println!("❌ Command failed: {}", result.message);
                     std::process::exit(1);
                 }
             }
-        }
+            Err(e) => {
+                println!("💥 Execution error: {}", e);
+                std::process::exit(1);
+            }
+        },
         Err(e) => {
             println!("💥 Invalid command: {}", e);
             println!("💡 Use 'admin_terminal --help' for usage information");

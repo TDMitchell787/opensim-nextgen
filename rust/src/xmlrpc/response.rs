@@ -1,11 +1,10 @@
-use std::collections::HashMap;
-use uuid::Uuid;
-use chrono::{DateTime, Utc};
-use anyhow::Result;
-use tracing::{debug, info};
+use crate::inventory::{LoginInventoryFolder, LoginInventoryOwner, LoginInventoryResponse};
 use crate::session::LoginSession;
-use crate::inventory::{LoginInventoryResponse, LoginInventoryFolder, LoginInventoryOwner};
-
+use anyhow::Result;
+use chrono::{DateTime, Utc};
+use std::collections::HashMap;
+use tracing::{debug, info};
+use uuid::Uuid;
 
 #[derive(Debug, Clone)]
 pub struct LoginResponse {
@@ -54,7 +53,12 @@ pub struct LoginResponse {
 }
 
 impl LoginResponse {
-    pub fn success(session: &LoginSession, base_url: &str, inventory: &LoginInventoryResponse, seed_capability_url: &str) -> Self {
+    pub fn success(
+        session: &LoginSession,
+        base_url: &str,
+        inventory: &LoginInventoryResponse,
+        seed_capability_url: &str,
+    ) -> Self {
         let now = Utc::now();
 
         Self {
@@ -81,7 +85,8 @@ impl LoginResponse {
             // CRITICAL: region_handle uses METER coordinates (e.g., 256000), not grid coordinates (1000)
             home: format!(
                 "{{'region_handle':[r{},r{}], 'position':[r128,r128,r25], 'look_at':[r0,r1,r0]}}",
-                session.region_x, session.region_y  // session.region_x/y should already be meters
+                session.region_x,
+                session.region_y // session.region_x/y should already be meters
             ),
             message: "Welcome to OpenSim Next!".to_string(),
             seconds_since_epoch: now.timestamp(),
@@ -160,49 +165,49 @@ pub struct XmlRpcResponseGenerator;
 impl XmlRpcResponseGenerator {
     pub fn generate_login_response(response: &LoginResponse) -> Result<String> {
         debug!("Generating XMLRPC login response");
-        
+
         if response.login == "true" {
             Self::generate_success_response(response)
         } else {
             Self::generate_failure_response(response)
         }
     }
-    
+
     fn generate_success_response(response: &LoginResponse) -> Result<String> {
         let mut xml = String::new();
-        
+
         xml.push_str("<?xml version=\"1.0\"?>\n");
         xml.push_str("<methodResponse>\n");
         xml.push_str("  <params>\n");
         xml.push_str("    <param>\n");
         xml.push_str("      <value>\n");
         xml.push_str("        <struct>\n");
-        
+
         // Authentication Status
         xml.push_str("          <member>\n");
         xml.push_str("            <name>login</name>\n");
         xml.push_str("            <value><boolean>1</boolean></value>\n");
         xml.push_str("          </member>\n");
-        
+
         // Agent Identification
         Self::add_string_member(&mut xml, "agent_id", &response.agent_id);
         Self::add_string_member(&mut xml, "real_id", &response.real_id);
         Self::add_string_member(&mut xml, "session_id", &response.session_id);
         Self::add_string_member(&mut xml, "secure_session_id", &response.secure_session_id);
-        
+
         // User Information
         Self::add_string_member(&mut xml, "first_name", &response.first_name);
         Self::add_string_member(&mut xml, "last_name", &response.last_name);
         Self::add_string_member(&mut xml, "agent_access", &response.agent_access);
         Self::add_string_member(&mut xml, "agent_access_max", &response.agent_access_max);
-        
+
         // Connection Details
         Self::add_string_member(&mut xml, "start_location", &response.start_location);
         Self::add_u32_member(&mut xml, "circuit_code", response.circuit_code);
         Self::add_string_member(&mut xml, "sim_ip", &response.sim_ip);
         Self::add_int_member(&mut xml, "sim_port", response.sim_port as i32);
         Self::add_int_member(&mut xml, "http_port", response.http_port as i32);
-        
+
         // Region Information
         // CRITICAL: region_x/region_y must be in METERS (not grid coordinates)
         // OpenSim LLLoginResponse.cs line 535: responseData["region_x"] = (Int32)(RegionX);
@@ -212,14 +217,18 @@ impl XmlRpcResponseGenerator {
         Self::add_int_member(&mut xml, "region_y", response.region_y as i32);
         Self::add_int_member(&mut xml, "region_size_x", response.region_size_x as i32);
         Self::add_int_member(&mut xml, "region_size_y", response.region_size_y as i32);
-        
+
         // Avatar Initial State
         Self::add_string_member(&mut xml, "look_at", &response.look_at);
         Self::add_string_member(&mut xml, "seed_capability", &response.seed_capability);
         Self::add_string_member(&mut xml, "home", &response.home);
         Self::add_string_member(&mut xml, "message", &response.message);
-        Self::add_int_member(&mut xml, "seconds_since_epoch", response.seconds_since_epoch as i32);
-        
+        Self::add_int_member(
+            &mut xml,
+            "seconds_since_epoch",
+            response.seconds_since_epoch as i32,
+        );
+
         // Inventory Structure
         Self::add_inventory_array(&mut xml, "inventory-root", &response.inventory_root);
         Self::add_inventory_array(&mut xml, "inventory-skeleton", &response.inventory_skeleton);
@@ -230,7 +239,11 @@ impl XmlRpcResponseGenerator {
 
         // System Configuration
         Self::add_int_member(&mut xml, "max-agent-groups", response.max_agent_groups);
-        Self::add_string_member(&mut xml, "stipend_since_login", &response.stipend_since_login);
+        Self::add_string_member(
+            &mut xml,
+            "stipend_since_login",
+            &response.stipend_since_login,
+        );
 
         // Login Flags Array
         Self::add_login_flags_array(&mut xml, response);
@@ -259,7 +272,11 @@ impl XmlRpcResponseGenerator {
 
         // Library Inventory Arrays
         Self::add_inventory_array(&mut xml, "inventory-skel-lib", &response.inventory_skel_lib);
-        Self::add_inventory_owner_array(&mut xml, "inventory-lib-owner", &response.inventory_lib_owner);
+        Self::add_inventory_owner_array(
+            &mut xml,
+            "inventory-lib-owner",
+            &response.inventory_lib_owner,
+        );
 
         // Gesture and Outfit Arrays
         Self::add_empty_array(&mut xml, "gestures");
@@ -282,56 +299,65 @@ impl XmlRpcResponseGenerator {
 
         Ok(xml)
     }
-    
+
     fn generate_failure_response(response: &LoginResponse) -> Result<String> {
         let mut xml = String::new();
-        
+
         xml.push_str("<?xml version=\"1.0\"?>\n");
         xml.push_str("<methodResponse>\n");
         xml.push_str("  <params>\n");
         xml.push_str("    <param>\n");
         xml.push_str("      <value>\n");
         xml.push_str("        <struct>\n");
-        
+
         xml.push_str("          <member>\n");
         xml.push_str("            <name>login</name>\n");
         xml.push_str("            <value><string>false</string></value>\n");
         xml.push_str("          </member>\n");
-        
+
         xml.push_str("          <member>\n");
         xml.push_str("            <name>reason</name>\n");
         xml.push_str("            <value><string>key</string></value>\n");
         xml.push_str("          </member>\n");
-        
+
         Self::add_string_member(&mut xml, "message", &response.message);
-        
+
         xml.push_str("        </struct>\n");
         xml.push_str("      </value>\n");
         xml.push_str("    </param>\n");
         xml.push_str("  </params>\n");
         xml.push_str("</methodResponse>\n");
-        
+
         Ok(xml)
     }
-    
+
     fn add_string_member(xml: &mut String, name: &str, value: &str) {
         xml.push_str(&format!("          <member>\n"));
         xml.push_str(&format!("            <name>{}</name>\n", name));
-        xml.push_str(&format!("            <value><string>{}</string></value>\n", Self::escape_xml(value)));
+        xml.push_str(&format!(
+            "            <value><string>{}</string></value>\n",
+            Self::escape_xml(value)
+        ));
         xml.push_str("          </member>\n");
     }
-    
+
     fn add_int_member(xml: &mut String, name: &str, value: i32) {
         xml.push_str(&format!("          <member>\n"));
         xml.push_str(&format!("            <name>{}</name>\n", name));
-        xml.push_str(&format!("            <value><int>{}</int></value>\n", value));
+        xml.push_str(&format!(
+            "            <value><int>{}</int></value>\n",
+            value
+        ));
         xml.push_str("          </member>\n");
     }
 
     fn add_u32_member(xml: &mut String, name: &str, value: u32) {
         xml.push_str(&format!("          <member>\n"));
         xml.push_str(&format!("            <name>{}</name>\n", name));
-        xml.push_str(&format!("            <value><int>{}</int></value>\n", value));
+        xml.push_str(&format!(
+            "            <value><int>{}</int></value>\n",
+            value
+        ));
         xml.push_str("          </member>\n");
     }
 
@@ -341,21 +367,21 @@ impl XmlRpcResponseGenerator {
         xml.push_str("            <value>\n");
         xml.push_str("              <array>\n");
         xml.push_str("                <data>\n");
-        
+
         for folder in folders {
             xml.push_str("                  <value>\n");
             xml.push_str("                    <struct>\n");
-            
+
             Self::add_string_member_indent(xml, "folder_id", &folder.folder_id, 22);
             Self::add_string_member_indent(xml, "parent_id", &folder.parent_id, 22);
             Self::add_string_member_indent(xml, "name", &folder.name, 22);
             Self::add_string_member_indent(xml, "type_default", &folder.type_default, 22);
             Self::add_string_member_indent(xml, "version", &folder.version, 22);
-            
+
             xml.push_str("                    </struct>\n");
             xml.push_str("                  </value>\n");
         }
-        
+
         xml.push_str("                </data>\n");
         xml.push_str("              </array>\n");
         xml.push_str("            </value>\n");
@@ -391,22 +417,29 @@ impl XmlRpcResponseGenerator {
         xml.push_str("            <value>\n");
         xml.push_str("              <array>\n");
         xml.push_str("                <data>\n");
-        
+
         for value in values {
-            xml.push_str(&format!("                  <value><string>{}</string></value>\n", Self::escape_xml(value)));
+            xml.push_str(&format!(
+                "                  <value><string>{}</string></value>\n",
+                Self::escape_xml(value)
+            ));
         }
-        
+
         xml.push_str("                </data>\n");
         xml.push_str("              </array>\n");
         xml.push_str("            </value>\n");
         xml.push_str("          </member>\n");
     }
-    
+
     fn add_string_member_indent(xml: &mut String, name: &str, value: &str, indent: usize) {
         let spaces = " ".repeat(indent);
         xml.push_str(&format!("{}  <member>\n", spaces));
         xml.push_str(&format!("{}    <name>{}</name>\n", spaces, name));
-        xml.push_str(&format!("{}    <value><string>{}</string></value>\n", spaces, Self::escape_xml(value)));
+        xml.push_str(&format!(
+            "{}    <value><string>{}</string></value>\n",
+            spaces,
+            Self::escape_xml(value)
+        ));
         xml.push_str(&format!("{}  </member>\n", spaces));
     }
 
@@ -414,7 +447,10 @@ impl XmlRpcResponseGenerator {
         let spaces = " ".repeat(indent);
         xml.push_str(&format!("{}  <member>\n", spaces));
         xml.push_str(&format!("{}    <name>{}</name>\n", spaces, name));
-        xml.push_str(&format!("{}    <value><i4>{}</i4></value>\n", spaces, value));
+        xml.push_str(&format!(
+            "{}    <value><i4>{}</i4></value>\n",
+            spaces, value
+        ));
         xml.push_str(&format!("{}  </member>\n", spaces));
     }
 
@@ -428,7 +464,12 @@ impl XmlRpcResponseGenerator {
         xml.push_str("                    <struct>\n");
 
         Self::add_string_member_indent(xml, "daylight_savings", &response.dst, 22);
-        Self::add_string_member_indent(xml, "stipend_since_login", &response.stipend_since_login, 22);
+        Self::add_string_member_indent(
+            xml,
+            "stipend_since_login",
+            &response.stipend_since_login,
+            22,
+        );
         Self::add_string_member_indent(xml, "gendered", &response.gendered, 22);
         Self::add_string_member_indent(xml, "ever_logged_in", &response.ever_logged_in, 22);
 
@@ -519,10 +560,10 @@ impl XmlRpcResponseGenerator {
 
     fn escape_xml(s: &str) -> String {
         s.replace('&', "&amp;")
-         .replace('<', "&lt;")
-         .replace('>', "&gt;")
-         .replace('"', "&quot;")
-         .replace('\'', "&apos;")
+            .replace('<', "&lt;")
+            .replace('>', "&gt;")
+            .replace('"', "&quot;")
+            .replace('\'', "&apos;")
     }
 }
 
@@ -540,10 +581,11 @@ mod tests {
             "127.0.0.1".to_string(),
             9000,
         );
-        
+
         let inventory = crate::inventory::LoginInventoryResponse::empty();
         let seed_url = "http://127.0.0.1:9000/cap/test";
-        let response = LoginResponse::success(&session, "http://127.0.0.1:9000", &inventory, seed_url);
+        let response =
+            LoginResponse::success(&session, "http://127.0.0.1:9000", &inventory, seed_url);
         let xml = XmlRpcResponseGenerator::generate_login_response(&response).unwrap();
 
         assert!(xml.contains("<boolean>1</boolean>"));
@@ -552,21 +594,30 @@ mod tests {
         assert!(xml.contains("127.0.0.1"));
         assert!(xml.contains(&session.circuit_code.to_string()));
     }
-    
+
     #[test]
     fn test_failure_response_generation() {
         let response = LoginResponse::failure("key", "Invalid username or password");
         let xml = XmlRpcResponseGenerator::generate_login_response(&response).unwrap();
-        
+
         assert!(xml.contains("<string>false</string>"));
         assert!(xml.contains("Invalid username or password"));
         assert!(xml.contains("<name>reason</name>"));
     }
-    
+
     #[test]
     fn test_xml_escaping() {
-        assert_eq!(XmlRpcResponseGenerator::escape_xml("test&data"), "test&amp;data");
-        assert_eq!(XmlRpcResponseGenerator::escape_xml("<test>"), "&lt;test&gt;");
-        assert_eq!(XmlRpcResponseGenerator::escape_xml("\"quoted\""), "&quot;quoted&quot;");
+        assert_eq!(
+            XmlRpcResponseGenerator::escape_xml("test&data"),
+            "test&amp;data"
+        );
+        assert_eq!(
+            XmlRpcResponseGenerator::escape_xml("<test>"),
+            "&lt;test&gt;"
+        );
+        assert_eq!(
+            XmlRpcResponseGenerator::escape_xml("\"quoted\""),
+            "&quot;quoted&quot;"
+        );
     }
 }

@@ -1,4 +1,4 @@
-use serde::{Serialize, Deserialize};
+use serde::{Deserialize, Serialize};
 
 #[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
 pub enum PostEffect {
@@ -21,7 +21,10 @@ impl PostEffect {
     pub fn from_name(name: &str) -> Option<Self> {
         match name.to_lowercase().as_str() {
             "vignette" => Some(PostEffect::Vignette { strength: 0.6 }),
-            "bloom" => Some(PostEffect::Bloom { threshold: 0.8, radius: 5 }),
+            "bloom" => Some(PostEffect::Bloom {
+                threshold: 0.8,
+                radius: 5,
+            }),
             "letterbox" | "cinematic" => Some(PostEffect::Letterbox { ratio: 2.39 }),
             "film_grain" | "grain" => Some(PostEffect::FilmGrain { intensity: 0.08 }),
             "warm" | "color_grade_warm" | "golden" => Some(PostEffect::ColorGradeWarm),
@@ -30,9 +33,17 @@ impl PostEffect {
             "aces" | "tone_map_aces" => Some(PostEffect::ToneMapAces),
             "reinhard" | "tone_map_reinhard" => Some(PostEffect::ToneMapReinhard),
             "sharpen" | "sharp" => Some(PostEffect::Sharpen { strength: 0.5 }),
-            "chromatic" | "chromatic_aberration" | "ca" => Some(PostEffect::ChromaticAberration { offset: 3.0 }),
-            "fog" | "depth_fog" => Some(PostEffect::DepthFog { density: 0.02, color: [0.7, 0.75, 0.85] }),
-            "tilt_shift" | "miniature" => Some(PostEffect::TiltShift { focus_y: 0.5, blur_radius: 3.0 }),
+            "chromatic" | "chromatic_aberration" | "ca" => {
+                Some(PostEffect::ChromaticAberration { offset: 3.0 })
+            }
+            "fog" | "depth_fog" => Some(PostEffect::DepthFog {
+                density: 0.02,
+                color: [0.7, 0.75, 0.85],
+            }),
+            "tilt_shift" | "miniature" => Some(PostEffect::TiltShift {
+                focus_y: 0.5,
+                blur_radius: 3.0,
+            }),
             _ => None,
         }
     }
@@ -41,7 +52,9 @@ impl PostEffect {
 pub fn apply_effect(pixels: &mut Vec<u8>, effect: &PostEffect, width: u32, height: u32) {
     match effect {
         PostEffect::Vignette { strength } => apply_vignette(pixels, width, height, *strength),
-        PostEffect::Bloom { threshold, radius } => apply_bloom(pixels, width, height, *threshold, *radius),
+        PostEffect::Bloom { threshold, radius } => {
+            apply_bloom(pixels, width, height, *threshold, *radius)
+        }
         PostEffect::Letterbox { ratio } => apply_letterbox(pixels, width, height, *ratio),
         PostEffect::FilmGrain { intensity } => apply_film_grain(pixels, width, height, *intensity),
         PostEffect::ColorGradeWarm => apply_color_grade_warm(pixels, width, height),
@@ -50,9 +63,16 @@ pub fn apply_effect(pixels: &mut Vec<u8>, effect: &PostEffect, width: u32, heigh
         PostEffect::ToneMapAces => apply_tone_map_aces(pixels, width, height),
         PostEffect::ToneMapReinhard => apply_tone_map_reinhard(pixels, width, height),
         PostEffect::Sharpen { strength } => apply_sharpen(pixels, width, height, *strength),
-        PostEffect::ChromaticAberration { offset } => apply_chromatic_aberration(pixels, width, height, *offset),
-        PostEffect::DepthFog { density, color } => apply_depth_fog(pixels, width, height, *density, *color),
-        PostEffect::TiltShift { focus_y, blur_radius } => apply_tilt_shift(pixels, width, height, *focus_y, *blur_radius),
+        PostEffect::ChromaticAberration { offset } => {
+            apply_chromatic_aberration(pixels, width, height, *offset)
+        }
+        PostEffect::DepthFog { density, color } => {
+            apply_depth_fog(pixels, width, height, *density, *color)
+        }
+        PostEffect::TiltShift {
+            focus_y,
+            blur_radius,
+        } => apply_tilt_shift(pixels, width, height, *focus_y, *blur_radius),
     }
 }
 
@@ -108,12 +128,16 @@ fn apply_bloom(pixels: &mut [u8], width: u32, height: u32, threshold: f32, radiu
         kernel[i] = (-x * x / (2.0 * sigma * sigma)).exp();
         sum += kernel[i];
     }
-    for k in &mut kernel { *k /= sum; }
+    for k in &mut kernel {
+        *k /= sum;
+    }
 
     let mut temp = vec![0.0f32; w * h * 3];
     for y in 0..h {
         for x in 0..w {
-            let mut r = 0.0f32; let mut g = 0.0f32; let mut b = 0.0f32;
+            let mut r = 0.0f32;
+            let mut g = 0.0f32;
+            let mut b = 0.0f32;
             for k in 0..kernel_size {
                 let sx = (x as i32 + k as i32 - radius as i32).clamp(0, w as i32 - 1) as usize;
                 let bidx = (y * w + sx) * 3;
@@ -131,7 +155,9 @@ fn apply_bloom(pixels: &mut [u8], width: u32, height: u32, threshold: f32, radiu
     let mut blurred = vec![0.0f32; w * h * 3];
     for y in 0..h {
         for x in 0..w {
-            let mut r = 0.0f32; let mut g = 0.0f32; let mut b = 0.0f32;
+            let mut r = 0.0f32;
+            let mut g = 0.0f32;
+            let mut b = 0.0f32;
             for k in 0..kernel_size {
                 let sy = (y as i32 + k as i32 - radius as i32).clamp(0, h as i32 - 1) as usize;
                 let tidx = (sy * w + x) * 3;
@@ -151,8 +177,10 @@ fn apply_bloom(pixels: &mut [u8], width: u32, height: u32, threshold: f32, radiu
             let idx = (y * w + x) * 4;
             let bidx = (y * w + x) * 3;
             pixels[idx] = ((pixels[idx] as f32 / 255.0 + blurred[bidx]).min(1.0) * 255.0) as u8;
-            pixels[idx + 1] = ((pixels[idx + 1] as f32 / 255.0 + blurred[bidx + 1]).min(1.0) * 255.0) as u8;
-            pixels[idx + 2] = ((pixels[idx + 2] as f32 / 255.0 + blurred[bidx + 2]).min(1.0) * 255.0) as u8;
+            pixels[idx + 1] =
+                ((pixels[idx + 1] as f32 / 255.0 + blurred[bidx + 1]).min(1.0) * 255.0) as u8;
+            pixels[idx + 2] =
+                ((pixels[idx + 2] as f32 / 255.0 + blurred[bidx + 2]).min(1.0) * 255.0) as u8;
         }
     }
 }
@@ -272,11 +300,10 @@ fn apply_sharpen(pixels: &mut [u8], width: u32, height: u32, strength: f32) {
                 let idx = |px: usize, py: usize| (py * w + px) * 4 + c;
 
                 let center = original[idx(x, y)] as f32;
-                let neighbors =
-                    original[idx(x - 1, y)] as f32 +
-                    original[idx(x + 1, y)] as f32 +
-                    original[idx(x, y - 1)] as f32 +
-                    original[idx(x, y + 1)] as f32;
+                let neighbors = original[idx(x - 1, y)] as f32
+                    + original[idx(x + 1, y)] as f32
+                    + original[idx(x, y - 1)] as f32
+                    + original[idx(x, y + 1)] as f32;
 
                 let detail = center - neighbors * 0.25;
                 let sharpened = center + detail * strength;
@@ -339,7 +366,9 @@ fn apply_tilt_shift(pixels: &mut [u8], width: u32, height: u32, focus_y: f32, bl
         let blur_amount = (dist_from_focus * blur_radius * 2.0).min(blur_radius);
         let kernel_half = blur_amount.ceil() as i32;
 
-        if kernel_half <= 0 { continue; }
+        if kernel_half <= 0 {
+            continue;
+        }
 
         for x in 0..w {
             let mut r = 0.0f32;
@@ -404,8 +433,10 @@ mod tests {
         apply_vignette(&mut pixels, 64, 48, 0.6);
 
         assert!(pixels[0] < corner_before, "Corner should be darker");
-        assert!((pixels[center_idx] as i32 - center_before as i32).abs() < 20,
-            "Center should be relatively unchanged");
+        assert!(
+            (pixels[center_idx] as i32 - center_before as i32).abs() < 20,
+            "Center should be relatively unchanged"
+        );
     }
 
     #[test]
@@ -426,7 +457,9 @@ mod tests {
 
         let mut diffs = 0;
         for i in 0..pixels.len() {
-            if pixels[i] != original[i] { diffs += 1; }
+            if pixels[i] != original[i] {
+                diffs += 1;
+            }
         }
         assert!(diffs > 0, "Film grain should modify pixels");
     }
@@ -461,11 +494,26 @@ mod tests {
     #[test]
     fn test_all_effects_parse() {
         let names = [
-            "vignette", "bloom", "letterbox", "grain", "warm", "cool", "noir",
-            "aces", "reinhard", "sharpen", "chromatic", "fog", "tilt_shift",
+            "vignette",
+            "bloom",
+            "letterbox",
+            "grain",
+            "warm",
+            "cool",
+            "noir",
+            "aces",
+            "reinhard",
+            "sharpen",
+            "chromatic",
+            "fog",
+            "tilt_shift",
         ];
         for name in &names {
-            assert!(PostEffect::from_name(name).is_some(), "Effect '{}' should parse", name);
+            assert!(
+                PostEffect::from_name(name).is_some(),
+                "Effect '{}' should parse",
+                name
+            );
         }
     }
 
@@ -484,7 +532,9 @@ mod tests {
 
         let mut diffs = 0;
         for i in 0..pixels.len() {
-            if pixels[i] != original[i] { diffs += 1; }
+            if pixels[i] != original[i] {
+                diffs += 1;
+            }
         }
         assert!(diffs > 0, "CA should shift channels at edges");
     }

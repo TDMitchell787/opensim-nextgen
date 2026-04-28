@@ -1,7 +1,7 @@
 use anyhow::Result;
-use tracing::{info, warn, debug};
-use uuid::Uuid;
 use sqlx::PgPool;
+use tracing::{debug, info, warn};
+use uuid::Uuid;
 
 const ASSET_SHAPE: &str = "66c41e39-38f9-f75a-024e-585989bfab73";
 const ASSET_SKIN: &str = "77c41e39-38f9-f75a-024e-585989bbabbb";
@@ -21,7 +21,10 @@ const INV_TYPE_WEARABLE: i32 = 18;
 const DEFAULT_VISUAL_PARAMS: &str = "33,61,85,23,58,127,63,85,63,42,0,85,63,36,85,95,153,63,34,0,63,109,88,132,63,136,81,85,103,136,127,0,150,150,150,127,0,0,0,0,0,127,0,0,255,127,114,127,99,63,127,140,127,127,0,0,0,191,0,104,0,0,0,0,0,0,0,0,0,145,216,133,0,127,0,127,170,0,0,127,127,109,85,127,127,63,85,42,150,150,150,150,150,150,150,25,150,150,150,0,127,0,0,144,85,127,132,127,85,0,127,127,127,127,127,127,59,127,85,127,127,106,47,79,127,127,204,2,141,66,0,0,127,127,0,0,0,0,127,0,159,0,0,178,127,36,85,131,127,127,127,153,95,0,140,75,27,127,127,0,150,150,198,0,0,63,30,127,165,209,198,127,127,153,204,51,51,255,255,255,204,0,255,150,150,150,150,150,150,150,150,150,150,0,150,150,150,150,150,0,127,127,150,150,150,150,150,150,150,150,0,0,150,51,132,150,150,150";
 
 pub async fn create_default_user_inventory(pool: &PgPool, user_id: Uuid) -> Result<()> {
-    info!("Creating default inventory and appearance for user {}", user_id);
+    info!(
+        "Creating default inventory and appearance for user {}",
+        user_id
+    );
 
     let created_timestamp = chrono::Utc::now().timestamp() as i32;
     let user_str = user_id.to_string();
@@ -85,12 +88,60 @@ pub async fn create_default_user_inventory(pool: &PgPool, user_id: Uuid) -> Resu
     let item_pants_id = Uuid::new_v4();
 
     let wearables: Vec<(Uuid, &str, Uuid, &str, i32, i32, i32)> = vec![
-        (item_shape_id, ASSET_SHAPE, body_parts_folder_id, "Default Shape", ASSET_TYPE_BODYPART, INV_TYPE_WEARABLE, 0),
-        (item_skin_id, ASSET_SKIN, body_parts_folder_id, "Default Skin", ASSET_TYPE_BODYPART, INV_TYPE_WEARABLE, 1),
-        (item_hair_id, ASSET_HAIR, body_parts_folder_id, "Default Hair", ASSET_TYPE_BODYPART, INV_TYPE_WEARABLE, 2),
-        (item_eyes_id, ASSET_EYES, body_parts_folder_id, "Default Eyes", ASSET_TYPE_BODYPART, INV_TYPE_WEARABLE, 3),
-        (item_shirt_id, ASSET_SHIRT, clothing_folder_id, "Default Shirt", ASSET_TYPE_CLOTHING, INV_TYPE_WEARABLE, 4),
-        (item_pants_id, ASSET_PANTS, clothing_folder_id, "Default Pants", ASSET_TYPE_CLOTHING, INV_TYPE_WEARABLE, 5),
+        (
+            item_shape_id,
+            ASSET_SHAPE,
+            body_parts_folder_id,
+            "Default Shape",
+            ASSET_TYPE_BODYPART,
+            INV_TYPE_WEARABLE,
+            0,
+        ),
+        (
+            item_skin_id,
+            ASSET_SKIN,
+            body_parts_folder_id,
+            "Default Skin",
+            ASSET_TYPE_BODYPART,
+            INV_TYPE_WEARABLE,
+            1,
+        ),
+        (
+            item_hair_id,
+            ASSET_HAIR,
+            body_parts_folder_id,
+            "Default Hair",
+            ASSET_TYPE_BODYPART,
+            INV_TYPE_WEARABLE,
+            2,
+        ),
+        (
+            item_eyes_id,
+            ASSET_EYES,
+            body_parts_folder_id,
+            "Default Eyes",
+            ASSET_TYPE_BODYPART,
+            INV_TYPE_WEARABLE,
+            3,
+        ),
+        (
+            item_shirt_id,
+            ASSET_SHIRT,
+            clothing_folder_id,
+            "Default Shirt",
+            ASSET_TYPE_CLOTHING,
+            INV_TYPE_WEARABLE,
+            4,
+        ),
+        (
+            item_pants_id,
+            ASSET_PANTS,
+            clothing_folder_id,
+            "Default Pants",
+            ASSET_TYPE_CLOTHING,
+            INV_TYPE_WEARABLE,
+            5,
+        ),
     ];
 
     let item_query = r#"
@@ -229,27 +280,31 @@ pub async fn create_default_user_inventory(pool: &PgPool, user_id: Uuid) -> Resu
 }
 
 pub async fn ensure_user_has_inventory(pool: &PgPool, user_id: Uuid) -> Result<bool> {
-    let row: Option<(i64,)> = sqlx::query_as(
-        "SELECT COUNT(*) FROM inventoryfolders WHERE agentid = $1::uuid"
-    )
-    .bind(user_id.to_string())
-    .fetch_optional(pool)
-    .await?;
+    let row: Option<(i64,)> =
+        sqlx::query_as("SELECT COUNT(*) FROM inventoryfolders WHERE agentid = $1::uuid")
+            .bind(user_id.to_string())
+            .fetch_optional(pool)
+            .await?;
 
     let folder_count = row.map(|(c,)| c).unwrap_or(0);
 
     if folder_count == 0 {
-        info!("User {} has no inventory folders — creating defaults", user_id);
+        info!(
+            "User {} has no inventory folders — creating defaults",
+            user_id
+        );
         create_default_user_inventory(pool, user_id).await?;
         return Ok(true);
     }
 
     let mut changed = false;
 
-    changed |= ensure_missing_system_folders(pool, user_id).await.unwrap_or(false);
+    changed |= ensure_missing_system_folders(pool, user_id)
+        .await
+        .unwrap_or(false);
 
     let bp_row: Option<(i64,)> = sqlx::query_as(
-        "SELECT COUNT(*) FROM inventoryitems WHERE avatarid = $1::uuid AND assettype = 13"
+        "SELECT COUNT(*) FROM inventoryitems WHERE avatarid = $1::uuid AND assettype = 13",
     )
     .bind(user_id.to_string())
     .fetch_optional(pool)
@@ -264,7 +319,7 @@ pub async fn ensure_user_has_inventory(pool: &PgPool, user_id: Uuid) -> Result<b
     }
 
     let suitcase_row: Option<(i64,)> = sqlx::query_as(
-        "SELECT COUNT(*) FROM inventoryfolders WHERE agentid = $1::uuid AND type = 100"
+        "SELECT COUNT(*) FROM inventoryfolders WHERE agentid = $1::uuid AND type = 100",
     )
     .bind(user_id.to_string())
     .fetch_optional(pool)
@@ -299,7 +354,7 @@ async fn ensure_missing_system_folders(pool: &PgPool, user_id: Uuid) -> Result<b
     let user_str = user_id.to_string();
 
     let root_row: Option<(String,)> = sqlx::query_as(
-        "SELECT folderid::text FROM inventoryfolders WHERE agentid = $1::uuid AND type = 8 LIMIT 1"
+        "SELECT folderid::text FROM inventoryfolders WHERE agentid = $1::uuid AND type = 8 LIMIT 1",
     )
     .bind(&user_str)
     .fetch_optional(pool)
@@ -311,15 +366,14 @@ async fn ensure_missing_system_folders(pool: &PgPool, user_id: Uuid) -> Result<b
     };
 
     use sqlx::Row;
-    let existing_types: Vec<i32> = sqlx::query(
-        "SELECT DISTINCT type FROM inventoryfolders WHERE agentid = $1::uuid"
-    )
-    .bind(&user_str)
-    .fetch_all(pool)
-    .await?
-    .iter()
-    .filter_map(|row| row.try_get::<i32, _>("type").ok())
-    .collect();
+    let existing_types: Vec<i32> =
+        sqlx::query("SELECT DISTINCT type FROM inventoryfolders WHERE agentid = $1::uuid")
+            .bind(&user_str)
+            .fetch_all(pool)
+            .await?
+            .iter()
+            .filter_map(|row| row.try_get::<i32, _>("type").ok())
+            .collect();
 
     let required_folders: Vec<(&str, i32)> = vec![
         ("Textures", 0),
@@ -370,7 +424,10 @@ async fn ensure_missing_system_folders(pool: &PgPool, user_id: Uuid) -> Result<b
     }
 
     if created > 0 {
-        info!("Created {} missing system folders for user {}", created, user_id);
+        info!(
+            "Created {} missing system folders for user {}",
+            created, user_id
+        );
     }
 
     Ok(created > 0)
@@ -393,7 +450,7 @@ async fn create_default_bodyparts_only(pool: &PgPool, user_id: Uuid) -> Result<(
     };
 
     let clothing_folder: Option<(String,)> = sqlx::query_as(
-        "SELECT folderid::text FROM inventoryfolders WHERE agentid = $1::uuid AND type = 5 LIMIT 1"
+        "SELECT folderid::text FROM inventoryfolders WHERE agentid = $1::uuid AND type = 5 LIMIT 1",
     )
     .bind(&user_str)
     .fetch_optional(pool)
@@ -437,12 +494,54 @@ async fn create_default_bodyparts_only(pool: &PgPool, user_id: Uuid) -> Result<(
     "#;
 
     let items: Vec<(Uuid, &str, Uuid, &str, i32, i32)> = vec![
-        (item_shape_id, ASSET_SHAPE, body_parts_folder_id, "Default Shape", ASSET_TYPE_BODYPART, 0),
-        (item_skin_id, ASSET_SKIN, body_parts_folder_id, "Default Skin", ASSET_TYPE_BODYPART, 1),
-        (item_hair_id, ASSET_HAIR, body_parts_folder_id, "Default Hair", ASSET_TYPE_BODYPART, 2),
-        (item_eyes_id, ASSET_EYES, body_parts_folder_id, "Default Eyes", ASSET_TYPE_BODYPART, 3),
-        (item_shirt_id, ASSET_SHIRT, clothing_folder_id, "Default Shirt", ASSET_TYPE_CLOTHING, 4),
-        (item_pants_id, ASSET_PANTS, clothing_folder_id, "Default Pants", ASSET_TYPE_CLOTHING, 5),
+        (
+            item_shape_id,
+            ASSET_SHAPE,
+            body_parts_folder_id,
+            "Default Shape",
+            ASSET_TYPE_BODYPART,
+            0,
+        ),
+        (
+            item_skin_id,
+            ASSET_SKIN,
+            body_parts_folder_id,
+            "Default Skin",
+            ASSET_TYPE_BODYPART,
+            1,
+        ),
+        (
+            item_hair_id,
+            ASSET_HAIR,
+            body_parts_folder_id,
+            "Default Hair",
+            ASSET_TYPE_BODYPART,
+            2,
+        ),
+        (
+            item_eyes_id,
+            ASSET_EYES,
+            body_parts_folder_id,
+            "Default Eyes",
+            ASSET_TYPE_BODYPART,
+            3,
+        ),
+        (
+            item_shirt_id,
+            ASSET_SHIRT,
+            clothing_folder_id,
+            "Default Shirt",
+            ASSET_TYPE_CLOTHING,
+            4,
+        ),
+        (
+            item_pants_id,
+            ASSET_PANTS,
+            clothing_folder_id,
+            "Default Pants",
+            ASSET_TYPE_CLOTHING,
+            5,
+        ),
     ];
 
     for (item_id, asset_uuid, folder_id, name, asset_type, wearable_type) in &items {
@@ -530,6 +629,9 @@ async fn create_default_bodyparts_only(pool: &PgPool, user_id: Uuid) -> Result<(
             .await;
     }
 
-    info!("Created default body parts, clothing, COF links, and appearance for user {}", user_id);
+    info!(
+        "Created default body parts, clothing, COF links, and appearance for user {}",
+        user_id
+    );
     Ok(())
 }

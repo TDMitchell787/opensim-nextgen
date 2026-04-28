@@ -1,14 +1,14 @@
 //! Cryptographic Manager for Dark Services
-//! 
+//!
 //! Provides encryption, decryption, key management, and cryptographic operations
 //! for secure asset transfers and zero trust networking.
 
-use std::collections::HashMap;
-use std::sync::Arc;
 use anyhow::{anyhow, Result};
 use bytes::Bytes;
-use rand::{RngCore, rngs::OsRng as RandOsRng};
+use rand::{rngs::OsRng as RandOsRng, RngCore};
 use serde::{Deserialize, Serialize};
+use std::collections::HashMap;
+use std::sync::Arc;
 use tokio::sync::RwLock;
 use tracing::{debug, error, info};
 use uuid::Uuid;
@@ -111,32 +111,32 @@ impl CryptoManager {
             active_keys: Arc::new(RwLock::new(HashMap::new())),
         }
     }
-    
+
     /// Generate a new cryptographic key
     pub fn generate_key(&self, length: usize) -> Result<Vec<u8>> {
         let mut key = vec![0u8; length];
         RandOsRng.fill_bytes(&mut key);
         Ok(key)
     }
-    
+
     /// Generate a secure random nonce
     pub fn generate_nonce(&self) -> Result<Vec<u8>> {
         let cipher = Aes256Gcm::generate_key(&mut AeadOsRng);
         let nonce = Aes256Gcm::generate_nonce(&mut AeadOsRng);
         Ok(nonce.to_vec())
     }
-    
+
     /// Create a new crypto key with metadata
     pub async fn create_key(&self, algorithm: EncryptionAlgorithm) -> Result<Uuid> {
         let key_id = Uuid::new_v4();
         let key_length = match algorithm {
-            EncryptionAlgorithm::Aes256Gcm => 32, // 256 bits
+            EncryptionAlgorithm::Aes256Gcm => 32,        // 256 bits
             EncryptionAlgorithm::ChaCha20Poly1305 => 32, // 256 bits
         };
-        
+
         let key_data = self.generate_key(key_length)?;
         let salt = self.generate_key(self.config.salt_length)?;
-        
+
         let crypto_key = CryptoKey {
             key_id,
             algorithm,
@@ -144,67 +144,75 @@ impl CryptoManager {
             salt,
             created_at: std::time::SystemTime::now(),
             expires_at: if self.config.max_key_age_hours > 0 {
-                Some(std::time::SystemTime::now() + 
-                     std::time::Duration::from_secs(self.config.max_key_age_hours * 3600))
+                Some(
+                    std::time::SystemTime::now()
+                        + std::time::Duration::from_secs(self.config.max_key_age_hours * 3600),
+                )
             } else {
                 None
             },
             usage_count: 0,
             max_usage: None,
         };
-        
+
         let mut keys = self.active_keys.write().await;
         keys.insert(key_id, crypto_key);
-        
+
         info!("Created new crypto key: {}", key_id);
         Ok(key_id)
     }
-    
+
     /// Encrypt data using AES-256-GCM
     pub fn encrypt_data(&self, data: &Bytes, key: &[u8]) -> Result<Bytes> {
         if key.len() != 32 {
-            return Err(anyhow!("Invalid key length for AES-256: expected 32 bytes, got {}", key.len()));
+            return Err(anyhow!(
+                "Invalid key length for AES-256: expected 32 bytes, got {}",
+                key.len()
+            ));
         }
-        
+
         let key = Key::<Aes256Gcm>::from_slice(key);
         let cipher = Aes256Gcm::new(key);
         let nonce = Aes256Gcm::generate_nonce(&mut AeadOsRng);
-        
+
         let ciphertext = cipher
             .encrypt(&nonce, data.as_ref())
             .map_err(|e| anyhow!("Encryption failed: {}", e))?;
-        
+
         // Prepend nonce to ciphertext for simplicity
         let mut result = nonce.to_vec();
         result.extend_from_slice(&ciphertext);
-        
+
         Ok(Bytes::from(result))
     }
-    
+
     /// Decrypt data using AES-256-GCM
     pub fn decrypt_data(&self, encrypted_data: &Bytes, key: &[u8]) -> Result<Bytes> {
         if key.len() != 32 {
-            return Err(anyhow!("Invalid key length for AES-256: expected 32 bytes, got {}", key.len()));
+            return Err(anyhow!(
+                "Invalid key length for AES-256: expected 32 bytes, got {}",
+                key.len()
+            ));
         }
-        
+
         if encrypted_data.len() < 12 {
             return Err(anyhow!("Invalid encrypted data: too short"));
         }
-        
+
         // Extract nonce and ciphertext
         let (nonce_bytes, ciphertext) = encrypted_data.split_at(12);
         let nonce = Nonce::from_slice(nonce_bytes);
-        
+
         let key = Key::<Aes256Gcm>::from_slice(key);
         let cipher = Aes256Gcm::new(key);
-        
+
         let plaintext = cipher
             .decrypt(nonce, ciphertext)
             .map_err(|e| anyhow!("Decryption failed: {}", e))?;
-        
+
         Ok(Bytes::from(plaintext))
     }
-    
+
     /// Encrypt data with a managed key
     pub async fn encrypt_with_key(&self, data: &Bytes, key_id: &Uuid) -> Result<EncryptedData> {
         let key = {
@@ -213,16 +221,16 @@ impl CryptoManager {
                 .ok_or_else(|| anyhow!("Key not found: {}", key_id))?
                 .clone()
         };
-        
+
         let nonce = self.generate_nonce()?;
-        
+
         match key.algorithm {
             EncryptionAlgorithm::Aes256Gcm => {
                 let encrypted_bytes = self.encrypt_data(data, &key.key_data)?;
-                
+
                 // Split nonce and ciphertext (nonce is first 12 bytes)
                 let (nonce_part, ciphertext_part) = encrypted_bytes.split_at(12);
-                
+
                 Ok(EncryptedData {
                     algorithm: key.algorithm,
                     key_id: *key_id,
@@ -236,9 +244,10 @@ impl CryptoManager {
                 // TODO: Implement proper ChaCha20Poly1305
                 let cipher = Aes256Gcm::new(Key::<Aes256Gcm>::from_slice(&key.key_data));
                 let nonce = Aes256Gcm::generate_nonce(&mut AeadOsRng);
-                let ciphertext = cipher.encrypt(&nonce, data.as_ref())
+                let ciphertext = cipher
+                    .encrypt(&nonce, data.as_ref())
                     .map_err(|e| anyhow::anyhow!("Encryption failed: {:?}", e))?;
-                
+
                 Ok(EncryptedData {
                     algorithm: key.algorithm.clone(),
                     key_id: *key_id,
@@ -249,7 +258,7 @@ impl CryptoManager {
             }
         }
     }
-    
+
     /// Decrypt data with a managed key
     pub async fn decrypt_with_key(&self, encrypted_data: &EncryptedData) -> Result<Bytes> {
         let key = {
@@ -258,13 +267,13 @@ impl CryptoManager {
                 .ok_or_else(|| anyhow!("Key not found: {}", encrypted_data.key_id))?
                 .clone()
         };
-        
+
         match encrypted_data.algorithm {
             EncryptionAlgorithm::Aes256Gcm => {
                 // Reconstruct the full encrypted data (nonce + ciphertext)
                 let mut full_data = encrypted_data.nonce.clone();
                 full_data.extend_from_slice(&encrypted_data.ciphertext);
-                
+
                 self.decrypt_data(&Bytes::from(full_data), &key.key_data)
             }
             EncryptionAlgorithm::ChaCha20Poly1305 => {
@@ -273,34 +282,35 @@ impl CryptoManager {
                 let cipher = Aes256Gcm::new(Key::<Aes256Gcm>::from_slice(&key.key_data));
                 let nonce = &encrypted_data.nonce[..12]; // First 12 bytes
                 let nonce = aes_gcm::Nonce::from_slice(nonce);
-                let plaintext = cipher.decrypt(nonce, encrypted_data.ciphertext.as_ref())
+                let plaintext = cipher
+                    .decrypt(nonce, encrypted_data.ciphertext.as_ref())
                     .map_err(|e| anyhow::anyhow!("Decryption failed: {:?}", e))?;
                 Ok(Bytes::from(plaintext))
             }
         }
     }
-    
+
     /// Derive key from password using PBKDF2
     pub fn derive_key_from_password(&self, params: KeyDerivationParams) -> Result<Vec<u8>> {
         let mut key = vec![0u8; params.key_length];
-        
+
         pbkdf2_hmac::<Sha256>(
             params.password.as_bytes(),
             &params.salt,
             params.iterations,
             &mut key,
         );
-        
+
         Ok(key)
     }
-    
+
     /// Generate a secure salt
     pub fn generate_salt(&self) -> Vec<u8> {
         let mut salt = vec![0u8; self.config.salt_length];
         RandOsRng.fill_bytes(&mut salt);
         salt
     }
-    
+
     /// Hash data using SHA-256
     pub fn hash_data(&self, data: &[u8]) -> String {
         use sha2::Digest;
@@ -308,37 +318,38 @@ impl CryptoManager {
         hasher.update(data);
         format!("{:x}", hasher.finalize())
     }
-    
+
     /// Verify data integrity using hash
     pub fn verify_hash(&self, data: &[u8], expected_hash: &str) -> bool {
         let actual_hash = self.hash_data(data);
         actual_hash == expected_hash
     }
-    
+
     /// Get key information
     pub async fn get_key_info(&self, key_id: &Uuid) -> Option<CryptoKey> {
         let keys = self.active_keys.read().await;
         keys.get(key_id).cloned()
     }
-    
+
     /// List all active keys
     pub async fn list_keys(&self) -> Vec<Uuid> {
         let keys = self.active_keys.read().await;
         keys.keys().cloned().collect()
     }
-    
+
     /// Rotate a key (create new key and deprecate old one)
     pub async fn rotate_key(&self, old_key_id: &Uuid) -> Result<Uuid> {
         let algorithm = {
             let keys = self.active_keys.read().await;
             keys.get(old_key_id)
                 .ok_or_else(|| anyhow!("Key not found: {}", old_key_id))?
-                .algorithm.clone()
+                .algorithm
+                .clone()
         };
-        
+
         // Create new key
         let new_key_id = self.create_key(algorithm).await?;
-        
+
         // Mark old key as expired
         {
             let mut keys = self.active_keys.write().await;
@@ -346,16 +357,16 @@ impl CryptoManager {
                 old_key.expires_at = Some(std::time::SystemTime::now());
             }
         }
-        
+
         info!("Rotated key {} -> {}", old_key_id, new_key_id);
         Ok(new_key_id)
     }
-    
+
     /// Remove expired keys
     pub async fn cleanup_expired_keys(&self) -> Result<usize> {
         let now = std::time::SystemTime::now();
         let mut removed_count = 0;
-        
+
         let mut keys = self.active_keys.write().await;
         keys.retain(|key_id, key| {
             if let Some(expires_at) = key.expires_at {
@@ -367,36 +378,35 @@ impl CryptoManager {
             }
             true
         });
-        
+
         if removed_count > 0 {
             info!("Cleaned up {} expired keys", removed_count);
         }
-        
+
         Ok(removed_count)
     }
-    
+
     /// Start automatic key rotation
     pub async fn start_key_rotation(&self) -> Result<()> {
         if !self.key_rotation_enabled {
             return Ok(());
         }
-        
+
         let keys = self.active_keys.clone();
-        let rotation_interval = std::time::Duration::from_secs(
-            self.config.key_rotation_interval_hours * 3600
-        );
-        
+        let rotation_interval =
+            std::time::Duration::from_secs(self.config.key_rotation_interval_hours * 3600);
+
         tokio::spawn(async move {
             let mut interval = tokio::time::interval(rotation_interval);
-            
+
             loop {
                 interval.tick().await;
-                
+
                 // Find keys that need rotation
                 let keys_to_rotate: Vec<Uuid> = {
                     let keys_lock = keys.read().await;
                     let now = std::time::SystemTime::now();
-                    
+
                     keys_lock
                         .iter()
                         .filter(|(_, key)| {
@@ -405,10 +415,9 @@ impl CryptoManager {
                                 let lifetime = expires_at
                                     .duration_since(key.created_at)
                                     .unwrap_or_default();
-                                let elapsed = now
-                                    .duration_since(key.created_at)
-                                    .unwrap_or_default();
-                                
+                                let elapsed =
+                                    now.duration_since(key.created_at).unwrap_or_default();
+
                                 elapsed > lifetime * 3 / 4
                             } else {
                                 false
@@ -417,7 +426,7 @@ impl CryptoManager {
                         .map(|(key_id, _)| *key_id)
                         .collect()
                 };
-                
+
                 // Rotate keys that need it
                 for key_id in keys_to_rotate {
                     info!("Auto-rotating key: {}", key_id);
@@ -426,32 +435,34 @@ impl CryptoManager {
                 }
             }
         });
-        
-        info!("Started automatic key rotation (interval: {} hours)", 
-              self.config.key_rotation_interval_hours);
+
+        info!(
+            "Started automatic key rotation (interval: {} hours)",
+            self.config.key_rotation_interval_hours
+        );
         Ok(())
     }
-    
+
     /// Generate a secure random UUID for session IDs
     pub fn generate_secure_uuid(&self) -> Uuid {
         Uuid::new_v4()
     }
-    
+
     /// Create a digital signature (simplified implementation)
     pub fn sign_data(&self, data: &[u8], key: &[u8]) -> Result<Vec<u8>> {
         // This is a simplified HMAC-based signature
         // In production, you'd use proper digital signature algorithms like Ed25519
         use hmac::{Hmac, Mac};
-        
+
         type HmacSha256 = Hmac<Sha256>;
-        
+
         let mut mac = <HmacSha256 as hmac::Mac>::new_from_slice(key)
             .map_err(|e| anyhow!("Invalid key for signing: {}", e))?;
         mac.update(data);
-        
+
         Ok(mac.finalize().into_bytes().to_vec())
     }
-    
+
     /// Verify a digital signature
     pub fn verify_signature(&self, data: &[u8], signature: &[u8], key: &[u8]) -> Result<bool> {
         let expected_signature = self.sign_data(data, key)?;
@@ -462,12 +473,13 @@ impl CryptoManager {
 /// Utility functions for cryptographic operations
 pub mod crypto_utils {
     use super::*;
-    
+
     /// Generate a secure password
     pub fn generate_secure_password(length: usize) -> String {
         use rand::Rng;
-        const CHARSET: &[u8] = b"ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789!@#$%^&*";
-        
+        const CHARSET: &[u8] =
+            b"ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789!@#$%^&*";
+
         let mut rng = RandOsRng;
         let password: String = (0..length)
             .map(|_| {
@@ -475,36 +487,36 @@ pub mod crypto_utils {
                 CHARSET[idx] as char
             })
             .collect();
-        
+
         password
     }
-    
+
     /// Constant-time comparison for security-sensitive operations
     pub fn constant_time_eq(a: &[u8], b: &[u8]) -> bool {
         if a.len() != b.len() {
             return false;
         }
-        
+
         let mut result = 0u8;
         for (x, y) in a.iter().zip(b.iter()) {
             result |= x ^ y;
         }
-        
+
         result == 0
     }
-    
+
     /// Secure memory clearing (best effort)
     pub fn secure_clear(data: &mut [u8]) {
-        use std::sync::atomic::{AtomicUsize, Ordering};
         use std::ptr::write_volatile;
-        
+        use std::sync::atomic::{AtomicUsize, Ordering};
+
         // Use volatile writes to prevent compiler optimization
         for byte in data.iter_mut() {
             unsafe {
                 write_volatile(byte, 0);
             }
         }
-        
+
         // Memory barrier to prevent reordering
         static BARRIER: AtomicUsize = AtomicUsize::new(0);
         BARRIER.store(data.len(), Ordering::SeqCst);

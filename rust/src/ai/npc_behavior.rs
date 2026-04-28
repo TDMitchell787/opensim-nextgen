@@ -2,15 +2,15 @@
 // Advanced NPC AI with realistic behavior simulation and social networks
 // Using ELEGANT ARCHIVE SOLUTION methodology
 
-use crate::monitoring::metrics::MetricsCollector;
+use super::{AIError, NPCBehaviorPlan, NPCContext};
 use crate::database::DatabaseManager;
-use super::{AIError, NPCContext, NPCBehaviorPlan};
-use std::sync::Arc;
-use std::collections::HashMap;
-use tokio::sync::RwLock;
-use serde::{Deserialize, Serialize};
-use uuid::Uuid;
+use crate::monitoring::metrics::MetricsCollector;
 use chrono::{DateTime, Utc};
+use serde::{Deserialize, Serialize};
+use std::collections::HashMap;
+use std::sync::Arc;
+use tokio::sync::RwLock;
+use uuid::Uuid;
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct NPCProfile {
@@ -29,13 +29,13 @@ pub struct NPCProfile {
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct NPCPersonality {
-    pub friendliness: f32,      // 0.0 to 1.0
-    pub curiosity: f32,         // 0.0 to 1.0
-    pub helpfulness: f32,       // 0.0 to 1.0
-    pub sociability: f32,       // 0.0 to 1.0
-    pub assertiveness: f32,     // 0.0 to 1.0
-    pub intelligence: f32,      // 0.0 to 1.0
-    pub creativity: f32,        // 0.0 to 1.0
+    pub friendliness: f32,  // 0.0 to 1.0
+    pub curiosity: f32,     // 0.0 to 1.0
+    pub helpfulness: f32,   // 0.0 to 1.0
+    pub sociability: f32,   // 0.0 to 1.0
+    pub assertiveness: f32, // 0.0 to 1.0
+    pub intelligence: f32,  // 0.0 to 1.0
+    pub creativity: f32,    // 0.0 to 1.0
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
@@ -44,7 +44,7 @@ pub enum NPCRole {
     Guard,
     Guide,
     Entertainer,
-    Crafts, 
+    Crafts,
     Teacher,
     Questgiver,
     Citizen,
@@ -104,9 +104,9 @@ pub enum GoalType {
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct Relationship {
     pub relationship_type: RelationshipType,
-    pub strength: f32,        // -1.0 to 1.0 (negative = dislike, positive = like)
-    pub familiarity: f32,     // 0.0 to 1.0
-    pub trust: f32,           // 0.0 to 1.0
+    pub strength: f32,    // -1.0 to 1.0 (negative = dislike, positive = like)
+    pub familiarity: f32, // 0.0 to 1.0
+    pub trust: f32,       // 0.0 to 1.0
     pub last_interaction: DateTime<Utc>,
     pub interaction_count: u32,
 }
@@ -126,7 +126,7 @@ pub enum RelationshipType {
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct ScheduledActivity {
     pub activity: Activity,
-    pub start_time: String,    // Time of day (e.g., "09:00")
+    pub start_time: String, // Time of day (e.g., "09:00")
     pub duration_minutes: u32,
     pub location: Option<String>,
     pub priority: f32,
@@ -220,7 +220,11 @@ impl NPCBehaviorEngine {
         Ok(Arc::new(engine))
     }
 
-    pub async fn generate_behavior(&self, npc_id: Uuid, context: &NPCContext) -> Result<NPCBehaviorPlan, AIError> {
+    pub async fn generate_behavior(
+        &self,
+        npc_id: Uuid,
+        context: &NPCContext,
+    ) -> Result<NPCBehaviorPlan, AIError> {
         let start_time = std::time::Instant::now();
 
         // Get NPC profile
@@ -233,13 +237,16 @@ impl NPCBehaviorEngine {
         let behavior_plan = self.generate_contextual_behavior(&profile, context).await?;
 
         // Update NPC memory with new experiences
-        self.update_npc_memory(&mut profile, context, &behavior_plan).await?;
+        self.update_npc_memory(&mut profile, context, &behavior_plan)
+            .await?;
 
         // Save updated profile
         self.update_npc_profile(npc_id, profile).await?;
 
         let processing_time = start_time.elapsed().as_millis() as u64;
-        self.metrics.record_npc_behavior_generation(npc_id, processing_time).await;
+        self.metrics
+            .record_npc_behavior_generation(npc_id, processing_time)
+            .await;
 
         Ok(behavior_plan)
     }
@@ -251,7 +258,7 @@ impl NPCBehaviorEngine {
 
     async fn get_or_create_npc_profile(&self, npc_id: Uuid) -> Result<NPCProfile, AIError> {
         let profiles = self.npc_profiles.read().await;
-        
+
         if let Some(profile) = profiles.get(&npc_id) {
             Ok(profile.clone())
         } else {
@@ -261,8 +268,8 @@ impl NPCBehaviorEngine {
     }
 
     async fn create_new_npc_profile(&self, npc_id: Uuid) -> Result<NPCProfile, AIError> {
-        use rand::{Rng, SeedableRng};
         use rand::rngs::StdRng;
+        use rand::{Rng, SeedableRng};
         let mut rng = StdRng::from_entropy();
 
         // Generate random but realistic personality
@@ -341,7 +348,11 @@ impl NPCBehaviorEngine {
         }
     }
 
-    async fn generate_initial_goals(&self, personality: &NPCPersonality, role: &NPCRole) -> Result<Vec<Goal>, AIError> {
+    async fn generate_initial_goals(
+        &self,
+        personality: &NPCPersonality,
+        role: &NPCRole,
+    ) -> Result<Vec<Goal>, AIError> {
         let mut goals = Vec::new();
 
         // Role-based goals
@@ -354,7 +365,7 @@ impl NPCBehaviorEngine {
                     deadline: None,
                     description: "Sell goods to customers".to_string(),
                 });
-            },
+            }
             NPCRole::Guide => {
                 goals.push(Goal {
                     goal_type: GoalType::Social,
@@ -363,7 +374,7 @@ impl NPCBehaviorEngine {
                     deadline: None,
                     description: "Help visitors navigate the area".to_string(),
                 });
-            },
+            }
             NPCRole::Scholar => {
                 goals.push(Goal {
                     goal_type: GoalType::Learning,
@@ -372,7 +383,7 @@ impl NPCBehaviorEngine {
                     deadline: None,
                     description: "Research and learn new knowledge".to_string(),
                 });
-            },
+            }
             _ => {
                 goals.push(Goal {
                     goal_type: GoalType::Social,
@@ -418,7 +429,10 @@ impl NPCBehaviorEngine {
         }
     }
 
-    async fn generate_activity_schedule(&self, role: &NPCRole) -> Result<Vec<ScheduledActivity>, AIError> {
+    async fn generate_activity_schedule(
+        &self,
+        role: &NPCRole,
+    ) -> Result<Vec<ScheduledActivity>, AIError> {
         let mut schedule = Vec::new();
 
         match role {
@@ -430,7 +444,7 @@ impl NPCBehaviorEngine {
                     location: Some("Market Square".to_string()),
                     priority: 0.9,
                 });
-            },
+            }
             NPCRole::Guard => {
                 schedule.push(ScheduledActivity {
                     activity: Activity::Patrolling,
@@ -439,7 +453,7 @@ impl NPCBehaviorEngine {
                     location: Some("City Gates".to_string()),
                     priority: 0.8,
                 });
-            },
+            }
             _ => {
                 schedule.push(ScheduledActivity {
                     activity: Activity::Socializing,
@@ -454,12 +468,19 @@ impl NPCBehaviorEngine {
         Ok(schedule)
     }
 
-    async fn update_npc_perception(&self, profile: &mut NPCProfile, context: &NPCContext) -> Result<(), AIError> {
+    async fn update_npc_perception(
+        &self,
+        profile: &mut NPCProfile,
+        context: &NPCContext,
+    ) -> Result<(), AIError> {
         // Update location memory
         if let Some(count) = profile.memory.locations_visited.get_mut(&context.location) {
             *count += 1;
         } else {
-            profile.memory.locations_visited.insert(context.location.clone(), 1);
+            profile
+                .memory
+                .locations_visited
+                .insert(context.location.clone(), 1);
         }
 
         // Update people met
@@ -467,24 +488,38 @@ impl NPCBehaviorEngine {
             if let Some(person_memory) = profile.memory.people_met.get_mut(&avatar_id) {
                 person_memory.last_seen = Utc::now();
             } else {
-                profile.memory.people_met.insert(avatar_id, PersonMemory {
-                    first_met: Utc::now(),
-                    last_seen: Utc::now(),
-                    positive_interactions: 0,
-                    negative_interactions: 0,
-                    notable_events: Vec::new(),
-                });
+                profile.memory.people_met.insert(
+                    avatar_id,
+                    PersonMemory {
+                        first_met: Utc::now(),
+                        last_seen: Utc::now(),
+                        positive_interactions: 0,
+                        negative_interactions: 0,
+                        notable_events: Vec::new(),
+                    },
+                );
             }
         }
 
         Ok(())
     }
 
-    async fn generate_contextual_behavior(&self, profile: &NPCProfile, context: &NPCContext) -> Result<NPCBehaviorPlan, AIError> {
-        self.behavior_tree_processor.process_behavior(profile, context).await
+    async fn generate_contextual_behavior(
+        &self,
+        profile: &NPCProfile,
+        context: &NPCContext,
+    ) -> Result<NPCBehaviorPlan, AIError> {
+        self.behavior_tree_processor
+            .process_behavior(profile, context)
+            .await
     }
 
-    async fn update_npc_memory(&self, profile: &mut NPCProfile, context: &NPCContext, behavior_plan: &NPCBehaviorPlan) -> Result<(), AIError> {
+    async fn update_npc_memory(
+        &self,
+        profile: &mut NPCProfile,
+        context: &NPCContext,
+        behavior_plan: &NPCBehaviorPlan,
+    ) -> Result<(), AIError> {
         // Create memory item for this interaction
         let memory_item = MemoryItem {
             event_type: "behavior_generation".to_string(),
@@ -498,8 +533,12 @@ impl NPCBehaviorEngine {
         profile.memory.short_term.push(memory_item);
 
         // Manage memory retention
-        let retention_cutoff = Utc::now() - chrono::Duration::days(self.config.memory_retention_days as i64);
-        profile.memory.short_term.retain(|m| m.timestamp > retention_cutoff);
+        let retention_cutoff =
+            Utc::now() - chrono::Duration::days(self.config.memory_retention_days as i64);
+        profile
+            .memory
+            .short_term
+            .retain(|m| m.timestamp > retention_cutoff);
 
         Ok(())
     }
@@ -525,14 +564,13 @@ impl NPCBehaviorEngine {
     }
 
     pub async fn start_behavior_updates(self: Arc<Self>) {
-        
         tokio::spawn({
             let engine = self.clone();
             async move {
-                let mut interval = tokio::time::interval(
-                    tokio::time::Duration::from_secs(engine.config.behavior_update_interval_seconds)
-                );
-                
+                let mut interval = tokio::time::interval(tokio::time::Duration::from_secs(
+                    engine.config.behavior_update_interval_seconds,
+                ));
+
                 loop {
                     interval.tick().await;
                     if let Err(e) = engine.update_all_npc_behaviors().await {
@@ -577,7 +615,11 @@ impl BehaviorTreeProcessor {
         Ok(Self)
     }
 
-    async fn process_behavior(&self, profile: &NPCProfile, context: &NPCContext) -> Result<NPCBehaviorPlan, AIError> {
+    async fn process_behavior(
+        &self,
+        profile: &NPCProfile,
+        context: &NPCContext,
+    ) -> Result<NPCBehaviorPlan, AIError> {
         // Simplified behavior tree processing
         let primary_action = match profile.role {
             NPCRole::Merchant => "Greet potential customers".to_string(),

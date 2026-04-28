@@ -4,14 +4,14 @@
 //! Features real-time network analytics, security monitoring, performance analysis, and
 //! business intelligence integration for enterprise-grade zero trust networks.
 
-use std::collections::{HashMap, VecDeque};
-use std::time::{Duration, Instant, SystemTime};
-use std::sync::{Arc, RwLock};
+use super::config::ZitiConfig;
+use anyhow::{anyhow, Result};
 use serde::{Deserialize, Serialize};
+use std::collections::{HashMap, VecDeque};
+use std::sync::{Arc, RwLock};
+use std::time::{Duration, Instant, SystemTime};
 use tokio::time;
 use uuid::Uuid;
-use anyhow::{Result, anyhow};
-use super::config::ZitiConfig;
 
 /// Network connection analytics data
 #[derive(Clone, Debug, Serialize, Deserialize)]
@@ -89,16 +89,16 @@ pub enum AlertSeverity {
 /// Advanced monitoring system for OpenZiti networks
 pub struct ZitiAdvancedMonitoring {
     config: ZitiConfig,
-    
+
     // Core metrics storage
     connection_metrics: Arc<RwLock<HashMap<String, ConnectionMetrics>>>,
     security_analytics: Arc<RwLock<HashMap<String, SecurityAnalytics>>>,
     performance_history: Arc<RwLock<VecDeque<PerformanceMetrics>>>,
-    
+
     // Analytics engines
     network_analytics: Arc<RwLock<NetworkAnalytics>>,
     alert_rules: Arc<RwLock<HashMap<Uuid, AlertRule>>>,
-    
+
     // System state
     is_initialized: bool,
     monitoring_interval: Duration,
@@ -152,9 +152,9 @@ impl ZitiAdvancedMonitoring {
             let mut interval_timer = time::interval(interval);
             loop {
                 interval_timer.tick().await;
-                if let Err(e) = Self::process_analytics(
-                    &analytics, &connections, &security, &performance
-                ).await {
+                if let Err(e) =
+                    Self::process_analytics(&analytics, &connections, &security, &performance).await
+                {
                     tracing::error!("Analytics processing error: {}", e);
                 }
             }
@@ -171,10 +171,10 @@ impl ZitiAdvancedMonitoring {
 
     /// Record new connection with comprehensive metrics
     pub async fn record_connection(
-        &mut self, 
+        &mut self,
         connection_id: &str,
         service_name: &str,
-        identity_name: &str
+        identity_name: &str,
     ) -> Result<()> {
         let metrics = ConnectionMetrics {
             connection_id: connection_id.to_string(),
@@ -190,8 +190,11 @@ impl ZitiAdvancedMonitoring {
             error_count: 0,
         };
 
-        self.connection_metrics.write().unwrap().insert(connection_id.to_string(), metrics);
-        
+        self.connection_metrics
+            .write()
+            .unwrap()
+            .insert(connection_id.to_string(), metrics);
+
         // Update network analytics
         {
             let mut analytics = self.network_analytics.write().unwrap();
@@ -199,13 +202,22 @@ impl ZitiAdvancedMonitoring {
             analytics.active_connections += 1;
         }
 
-        tracing::debug!("Recorded new connection: {} for service: {}", connection_id, service_name);
+        tracing::debug!(
+            "Recorded new connection: {} for service: {}",
+            connection_id,
+            service_name
+        );
         Ok(())
     }
 
     /// Record connection closure with analytics
     pub async fn record_connection_closed(&mut self, connection_id: &str) -> Result<()> {
-        if let Some(metrics) = self.connection_metrics.write().unwrap().remove(connection_id) {
+        if let Some(metrics) = self
+            .connection_metrics
+            .write()
+            .unwrap()
+            .remove(connection_id)
+        {
             // Update network analytics
             {
                 let mut analytics = self.network_analytics.write().unwrap();
@@ -223,15 +235,20 @@ impl ZitiAdvancedMonitoring {
 
     /// Record data transmission with latency tracking
     pub async fn record_data_sent(
-        &mut self, 
-        connection_id: &str, 
+        &mut self,
+        connection_id: &str,
         bytes: usize,
-        latency: Option<Duration>
+        latency: Option<Duration>,
     ) -> Result<()> {
-        if let Some(metrics) = self.connection_metrics.write().unwrap().get_mut(connection_id) {
+        if let Some(metrics) = self
+            .connection_metrics
+            .write()
+            .unwrap()
+            .get_mut(connection_id)
+        {
             metrics.bytes_sent += bytes as u64;
             metrics.last_activity = SystemTime::now();
-            
+
             if let Some(lat) = latency {
                 metrics.latency_samples.push_back(lat);
                 // Keep only recent samples for performance
@@ -245,15 +262,20 @@ impl ZitiAdvancedMonitoring {
 
     /// Record data reception with analytics
     pub async fn record_data_received(
-        &mut self, 
-        connection_id: &str, 
+        &mut self,
+        connection_id: &str,
         bytes: usize,
-        latency: Option<Duration>
+        latency: Option<Duration>,
     ) -> Result<()> {
-        if let Some(metrics) = self.connection_metrics.write().unwrap().get_mut(connection_id) {
+        if let Some(metrics) = self
+            .connection_metrics
+            .write()
+            .unwrap()
+            .get_mut(connection_id)
+        {
             metrics.bytes_received += bytes as u64;
             metrics.last_activity = SystemTime::now();
-            
+
             if let Some(lat) = latency {
                 metrics.latency_samples.push_back(lat);
                 if metrics.latency_samples.len() > 100 {
@@ -269,7 +291,7 @@ impl ZitiAdvancedMonitoring {
         &mut self,
         identity_id: &str,
         event_type: &str,
-        severity: AlertSeverity
+        severity: AlertSeverity,
     ) -> Result<()> {
         {
             let mut analytics = self.network_analytics.write().unwrap();
@@ -278,8 +300,9 @@ impl ZitiAdvancedMonitoring {
 
         // Update security analytics
         let mut security_map = self.security_analytics.write().unwrap();
-        let security_analytics = security_map.entry(identity_id.to_string()).or_insert_with(|| {
-            SecurityAnalytics {
+        let security_analytics = security_map
+            .entry(identity_id.to_string())
+            .or_insert_with(|| SecurityAnalytics {
                 identity_id: identity_id.to_string(),
                 threat_score: 0.0,
                 anomaly_score: 0.0,
@@ -287,13 +310,14 @@ impl ZitiAdvancedMonitoring {
                 last_violation: None,
                 connection_patterns: Vec::new(),
                 suspicious_activities: Vec::new(),
-            }
-        });
+            });
 
         security_analytics.violation_count += 1;
         security_analytics.last_violation = Some(SystemTime::now());
-        security_analytics.suspicious_activities.push(event_type.to_string());
-        
+        security_analytics
+            .suspicious_activities
+            .push(event_type.to_string());
+
         // Calculate threat score based on severity
         let threat_increase = match severity {
             AlertSeverity::Critical => 25.0,
@@ -302,10 +326,15 @@ impl ZitiAdvancedMonitoring {
             AlertSeverity::Low => 5.0,
             AlertSeverity::Info => 0.0,
         };
-        
-        security_analytics.threat_score = (security_analytics.threat_score + threat_increase).min(100.0);
 
-        tracing::warn!("Security event recorded: {} for identity: {}", event_type, identity_id);
+        security_analytics.threat_score =
+            (security_analytics.threat_score + threat_increase).min(100.0);
+
+        tracing::warn!(
+            "Security event recorded: {} for identity: {}",
+            event_type,
+            identity_id
+        );
         Ok(())
     }
 
@@ -315,8 +344,16 @@ impl ZitiAdvancedMonitoring {
     }
 
     /// Get security analytics for specific identity
-    pub async fn get_security_analytics(&self, identity_id: &str) -> Result<Option<SecurityAnalytics>> {
-        Ok(self.security_analytics.read().unwrap().get(identity_id).cloned())
+    pub async fn get_security_analytics(
+        &self,
+        identity_id: &str,
+    ) -> Result<Option<SecurityAnalytics>> {
+        Ok(self
+            .security_analytics
+            .read()
+            .unwrap()
+            .get(identity_id)
+            .cloned())
     }
 
     /// Get performance metrics
@@ -335,7 +372,7 @@ impl ZitiAdvancedMonitoring {
         name: String,
         condition: String,
         threshold: f64,
-        severity: AlertSeverity
+        severity: AlertSeverity,
     ) -> Result<Uuid> {
         let id = Uuid::new_v4();
         let rule = AlertRule {
@@ -359,22 +396,25 @@ impl ZitiAdvancedMonitoring {
             "High Connection Count".to_string(),
             "active_connections > threshold".to_string(),
             1000.0,
-            AlertSeverity::High
-        ).await?;
+            AlertSeverity::High,
+        )
+        .await?;
 
         self.create_alert_rule(
             "High Latency".to_string(),
             "average_latency > threshold".to_string(),
             1000.0, // 1 second in milliseconds
-            AlertSeverity::Medium
-        ).await?;
+            AlertSeverity::Medium,
+        )
+        .await?;
 
         self.create_alert_rule(
             "Security Threat Detected".to_string(),
             "threat_score > threshold".to_string(),
             75.0,
-            AlertSeverity::Critical
-        ).await?;
+            AlertSeverity::Critical,
+        )
+        .await?;
 
         Ok(())
     }
@@ -384,7 +424,7 @@ impl ZitiAdvancedMonitoring {
         analytics: &Arc<RwLock<NetworkAnalytics>>,
         connections: &Arc<RwLock<HashMap<String, ConnectionMetrics>>>,
         security: &Arc<RwLock<HashMap<String, SecurityAnalytics>>>,
-        performance: &Arc<RwLock<VecDeque<PerformanceMetrics>>>
+        performance: &Arc<RwLock<VecDeque<PerformanceMetrics>>>,
     ) -> Result<()> {
         let connections_map = connections.read().unwrap();
         let security_map = security.read().unwrap();
@@ -401,11 +441,12 @@ impl ZitiAdvancedMonitoring {
                 peak_latency = peak_latency.max(latency);
                 sample_count += 1;
             }
-            
-            let connection_duration = metrics.last_activity
+
+            let connection_duration = metrics
+                .last_activity
                 .duration_since(metrics.started_at)
                 .unwrap_or(Duration::from_secs(1));
-            
+
             let total_bytes = metrics.bytes_sent + metrics.bytes_received;
             total_throughput += total_bytes as f64 / connection_duration.as_secs_f64();
         }
@@ -417,26 +458,32 @@ impl ZitiAdvancedMonitoring {
         };
 
         // Calculate performance score
-        let latency_score = (1000.0 - average_latency.as_millis() as f64).max(0.0).min(100.0);
-        let security_score = 100.0 - security_map.values()
-            .map(|s| s.threat_score)
-            .fold(0.0, f64::max);
-        
+        let latency_score = (1000.0 - average_latency.as_millis() as f64)
+            .max(0.0)
+            .min(100.0);
+        let security_score = 100.0
+            - security_map
+                .values()
+                .map(|s| s.threat_score)
+                .fold(0.0, f64::max);
+
         let performance_score = (latency_score + security_score) / 2.0;
 
         // Update analytics
         {
             let mut analytics = analytics.write().unwrap();
-            analytics.services_count = connections_map.values()
+            analytics.services_count = connections_map
+                .values()
                 .map(|c| c.service_name.as_str())
                 .collect::<std::collections::HashSet<_>>()
                 .len() as u32;
-            
-            analytics.identities_count = connections_map.values()
+
+            analytics.identities_count = connections_map
+                .values()
                 .map(|c| c.identity_name.as_str())
                 .collect::<std::collections::HashSet<_>>()
                 .len() as u32;
-            
+
             analytics.performance_score = performance_score;
         }
 
@@ -453,9 +500,10 @@ impl ZitiAdvancedMonitoring {
         {
             let mut perf_history = performance.write().unwrap();
             perf_history.push_back(perf_metrics);
-            
+
             // Keep only recent history
-            while perf_history.len() > 288 { // 24 hours at 5-minute intervals
+            while perf_history.len() > 288 {
+                // 24 hours at 5-minute intervals
                 perf_history.pop_front();
             }
         }
@@ -474,15 +522,30 @@ impl ZitiAdvancedMonitoring {
     pub async fn get_statistics(&self) -> Result<HashMap<String, u64>> {
         let analytics = self.network_analytics.read().unwrap();
         let mut stats = HashMap::new();
-        
+
         stats.insert("total_connections".to_string(), analytics.total_connections);
-        stats.insert("active_connections".to_string(), analytics.active_connections);
-        stats.insert("total_data_transferred".to_string(), analytics.total_data_transferred);
-        stats.insert("services_count".to_string(), analytics.services_count as u64);
-        stats.insert("identities_count".to_string(), analytics.identities_count as u64);
+        stats.insert(
+            "active_connections".to_string(),
+            analytics.active_connections,
+        );
+        stats.insert(
+            "total_data_transferred".to_string(),
+            analytics.total_data_transferred,
+        );
+        stats.insert(
+            "services_count".to_string(),
+            analytics.services_count as u64,
+        );
+        stats.insert(
+            "identities_count".to_string(),
+            analytics.identities_count as u64,
+        );
         stats.insert("security_events".to_string(), analytics.security_events);
-        stats.insert("performance_score".to_string(), analytics.performance_score as u64);
-        
+        stats.insert(
+            "performance_score".to_string(),
+            analytics.performance_score as u64,
+        );
+
         Ok(stats)
     }
 }

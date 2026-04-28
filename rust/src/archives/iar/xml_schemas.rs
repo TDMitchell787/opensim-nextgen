@@ -84,7 +84,11 @@ pub struct IarInventoryItemXml {
     pub group_permissions: u32,
     #[serde(rename = "GroupID", default)]
     pub group_id: String,
-    #[serde(rename = "GroupOwned", default, deserialize_with = "deserialize_bool_string")]
+    #[serde(
+        rename = "GroupOwned",
+        default,
+        deserialize_with = "deserialize_bool_string"
+    )]
     pub group_owned: bool,
     #[serde(rename = "SalePrice", default)]
     pub sale_price: i32,
@@ -129,12 +133,7 @@ pub fn create_archive_xml(major_version: u32, minor_version: u32) -> String {
 }
 
 /// Create folder metadata XML
-pub fn create_folder_xml(
-    name: &str,
-    id: &Uuid,
-    folder_type: i32,
-    owner_id: &Uuid,
-) -> String {
+pub fn create_folder_xml(name: &str, id: &Uuid, folder_type: i32, owner_id: &Uuid) -> String {
     format!(
         r#"<?xml version="1.0" encoding="utf-8"?>
 <folder>

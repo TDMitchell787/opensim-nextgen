@@ -3,9 +3,9 @@
 
 use super::*;
 use axum::{
-    extract::{Path, State, Query},
-    response::Json,
+    extract::{Path, Query, State},
     http::StatusCode,
+    response::Json,
 };
 use serde_json::{json, Value};
 use std::collections::HashMap;
@@ -39,30 +39,42 @@ pub async fn handle_event_queue_get(
     State(state): State<CapabilityHandlerState>,
     Query(params): Query<HashMap<String, String>>,
 ) -> Result<Json<Value>, StatusCode> {
-    debug!("EventQueueGet request for agent: {} cap: {}", agent_id, cap_id);
-    
+    debug!(
+        "EventQueueGet request for agent: {} cap: {}",
+        agent_id, cap_id
+    );
+
     // Parse agent ID
     let agent_uuid = Uuid::parse_str(&agent_id).map_err(|_| StatusCode::BAD_REQUEST)?;
-    
+
     // Validate agent has this capability
     {
-        let manager = state.capabilities_manager.lock().map_err(|_| StatusCode::INTERNAL_SERVER_ERROR)?;
+        let manager = state
+            .capabilities_manager
+            .lock()
+            .map_err(|_| StatusCode::INTERNAL_SERVER_ERROR)?;
         if manager.get_agent_capabilities(&agent_uuid).is_none() {
             return Err(StatusCode::NOT_FOUND);
         }
     }
-    
+
     // Get acknowledge parameter for message cleanup
-    let ack = params.get("ack").and_then(|s| s.parse::<u64>().ok()).unwrap_or(0);
-    
+    let ack = params
+        .get("ack")
+        .and_then(|s| s.parse::<u64>().ok())
+        .unwrap_or(0);
+
     // For now, return empty event queue response
     // In a full implementation, this would maintain a message queue per agent
     let response = json!({
         "id": 1,
         "events": []
     });
-    
-    debug!("EventQueueGet response for agent {}: empty queue", agent_uuid);
+
+    debug!(
+        "EventQueueGet response for agent {}: empty queue",
+        agent_uuid
+    );
     Ok(Json(response))
 }
 
@@ -72,18 +84,24 @@ pub async fn handle_simulator_features(
     Path((agent_id, cap_id)): Path<(String, String)>,
     State(state): State<CapabilityHandlerState>,
 ) -> Result<Json<Value>, StatusCode> {
-    debug!("SimulatorFeatures request for agent: {} cap: {}", agent_id, cap_id);
-    
+    debug!(
+        "SimulatorFeatures request for agent: {} cap: {}",
+        agent_id, cap_id
+    );
+
     let agent_uuid = Uuid::parse_str(&agent_id).map_err(|_| StatusCode::BAD_REQUEST)?;
-    
+
     // Validate agent capability
     {
-        let manager = state.capabilities_manager.lock().map_err(|_| StatusCode::INTERNAL_SERVER_ERROR)?;
+        let manager = state
+            .capabilities_manager
+            .lock()
+            .map_err(|_| StatusCode::INTERNAL_SERVER_ERROR)?;
         if manager.get_agent_capabilities(&agent_uuid).is_none() {
             return Err(StatusCode::NOT_FOUND);
         }
     }
-    
+
     // Return simulator features
     let features = json!({
         "AvatarSkeleton": true,
@@ -126,8 +144,12 @@ pub async fn handle_simulator_features(
             "whisper-range": 10
         }
     });
-    
-    debug!("SimulatorFeatures response for agent {}: {} features", agent_uuid, features.as_object().unwrap().len());
+
+    debug!(
+        "SimulatorFeatures response for agent {}: {} features",
+        agent_uuid,
+        features.as_object().unwrap().len()
+    );
     Ok(Json(features))
 }
 
@@ -139,20 +161,23 @@ pub async fn handle_get_texture(
     Query(params): Query<HashMap<String, String>>,
 ) -> Result<Json<Value>, StatusCode> {
     debug!("GetTexture request for agent: {} cap: {}", agent_id, cap_id);
-    
+
     let agent_uuid = Uuid::parse_str(&agent_id).map_err(|_| StatusCode::BAD_REQUEST)?;
-    
+
     // Validate agent capability
     {
-        let manager = state.capabilities_manager.lock().map_err(|_| StatusCode::INTERNAL_SERVER_ERROR)?;
+        let manager = state
+            .capabilities_manager
+            .lock()
+            .map_err(|_| StatusCode::INTERNAL_SERVER_ERROR)?;
         if manager.get_agent_capabilities(&agent_uuid).is_none() {
             return Err(StatusCode::NOT_FOUND);
         }
     }
-    
+
     // Get texture_id parameter
     let texture_id = params.get("texture_id").ok_or(StatusCode::BAD_REQUEST)?;
-    
+
     // For now, return a placeholder response
     // In a full implementation, this would fetch the actual texture data
     let response = json!({
@@ -160,8 +185,11 @@ pub async fn handle_get_texture(
         "status": "not_found",
         "message": "Texture not implemented yet"
     });
-    
-    debug!("GetTexture response for agent {}: texture {}", agent_uuid, texture_id);
+
+    debug!(
+        "GetTexture response for agent {}: texture {}",
+        agent_uuid, texture_id
+    );
     Ok(Json(response))
 }
 
@@ -172,25 +200,34 @@ pub async fn handle_update_agent_information(
     State(state): State<CapabilityHandlerState>,
     Json(body): Json<Value>,
 ) -> Result<Json<Value>, StatusCode> {
-    debug!("UpdateAgentInformation request for agent: {} cap: {}", agent_id, cap_id);
-    
+    debug!(
+        "UpdateAgentInformation request for agent: {} cap: {}",
+        agent_id, cap_id
+    );
+
     let agent_uuid = Uuid::parse_str(&agent_id).map_err(|_| StatusCode::BAD_REQUEST)?;
-    
+
     // Validate agent capability
     {
-        let manager = state.capabilities_manager.lock().map_err(|_| StatusCode::INTERNAL_SERVER_ERROR)?;
+        let manager = state
+            .capabilities_manager
+            .lock()
+            .map_err(|_| StatusCode::INTERNAL_SERVER_ERROR)?;
         if manager.get_agent_capabilities(&agent_uuid).is_none() {
             return Err(StatusCode::NOT_FOUND);
         }
     }
-    
+
     // For now, just acknowledge the update
     let response = json!({
         "success": true,
         "message": "Agent information updated"
     });
-    
-    debug!("UpdateAgentInformation response for agent {}: success", agent_uuid);
+
+    debug!(
+        "UpdateAgentInformation response for agent {}: success",
+        agent_uuid
+    );
     Ok(Json(response))
 }
 
@@ -201,18 +238,24 @@ pub async fn handle_web_fetch_inventory_descendants(
     State(state): State<CapabilityHandlerState>,
     Json(body): Json<Value>,
 ) -> Result<Json<Value>, StatusCode> {
-    debug!("WebFetchInventoryDescendents request for agent: {} cap: {}", agent_id, cap_id);
-    
+    debug!(
+        "WebFetchInventoryDescendents request for agent: {} cap: {}",
+        agent_id, cap_id
+    );
+
     let agent_uuid = Uuid::parse_str(&agent_id).map_err(|_| StatusCode::BAD_REQUEST)?;
-    
+
     // Validate agent capability
     {
-        let manager = state.capabilities_manager.lock().map_err(|_| StatusCode::INTERNAL_SERVER_ERROR)?;
+        let manager = state
+            .capabilities_manager
+            .lock()
+            .map_err(|_| StatusCode::INTERNAL_SERVER_ERROR)?;
         if manager.get_agent_capabilities(&agent_uuid).is_none() {
             return Err(StatusCode::NOT_FOUND);
         }
     }
-    
+
     // For now, return empty inventory
     // In a full implementation, this would fetch actual inventory data
     let response = json!({
@@ -220,8 +263,11 @@ pub async fn handle_web_fetch_inventory_descendants(
         "items": [],
         "bad_folders": []
     });
-    
-    debug!("WebFetchInventoryDescendents response for agent {}: empty", agent_uuid);
+
+    debug!(
+        "WebFetchInventoryDescendents response for agent {}: empty",
+        agent_uuid
+    );
     Ok(Json(response))
 }
 
@@ -232,18 +278,24 @@ pub async fn handle_agent_preferences(
     State(state): State<CapabilityHandlerState>,
     Json(body): Json<Value>,
 ) -> Result<Json<Value>, StatusCode> {
-    debug!("AgentPreferences request for agent: {} cap: {}", agent_id, cap_id);
-    
+    debug!(
+        "AgentPreferences request for agent: {} cap: {}",
+        agent_id, cap_id
+    );
+
     let agent_uuid = Uuid::parse_str(&agent_id).map_err(|_| StatusCode::BAD_REQUEST)?;
-    
+
     // Validate agent capability
     {
-        let manager = state.capabilities_manager.lock().map_err(|_| StatusCode::INTERNAL_SERVER_ERROR)?;
+        let manager = state
+            .capabilities_manager
+            .lock()
+            .map_err(|_| StatusCode::INTERNAL_SERVER_ERROR)?;
         if manager.get_agent_capabilities(&agent_uuid).is_none() {
             return Err(StatusCode::NOT_FOUND);
         }
     }
-    
+
     // Return default preferences
     let response = json!({
         "default_object_perm_masks": {
@@ -258,8 +310,11 @@ pub async fn handle_agent_preferences(
         "away_message": "",
         "email": ""
     });
-    
-    debug!("AgentPreferences response for agent {}: defaults", agent_uuid);
+
+    debug!(
+        "AgentPreferences response for agent {}: defaults",
+        agent_uuid
+    );
     Ok(Json(response))
 }
 
@@ -268,18 +323,24 @@ pub async fn handle_generic_capability(
     Path((agent_id, cap_id)): Path<(String, String)>,
     State(state): State<CapabilityHandlerState>,
 ) -> Result<Json<Value>, StatusCode> {
-    debug!("Generic capability request for agent: {} cap: {}", agent_id, cap_id);
-    
+    debug!(
+        "Generic capability request for agent: {} cap: {}",
+        agent_id, cap_id
+    );
+
     let agent_uuid = Uuid::parse_str(&agent_id).map_err(|_| StatusCode::BAD_REQUEST)?;
-    
+
     // Validate agent capability
     {
-        let manager = state.capabilities_manager.lock().map_err(|_| StatusCode::INTERNAL_SERVER_ERROR)?;
+        let manager = state
+            .capabilities_manager
+            .lock()
+            .map_err(|_| StatusCode::INTERNAL_SERVER_ERROR)?;
         if manager.get_agent_capabilities(&agent_uuid).is_none() {
             return Err(StatusCode::NOT_FOUND);
         }
     }
-    
+
     // Return generic success response
     let response = json!({
         "success": true,
@@ -287,8 +348,11 @@ pub async fn handle_generic_capability(
         "agent_id": agent_id,
         "capability_id": cap_id
     });
-    
-    debug!("Generic capability response for agent {}: acknowledged", agent_uuid);
+
+    debug!(
+        "Generic capability response for agent {}: acknowledged",
+        agent_uuid
+    );
     Ok(Json(response))
 }
 
@@ -367,35 +431,36 @@ mod tests {
     #[test]
     fn test_capability_routes() {
         let routes = get_capability_routes();
-        
+
         assert!(!routes.is_empty());
         assert!(routes.iter().any(|r| r.name == "seed_capability"));
         assert!(routes.iter().any(|r| r.name == "EventQueueGet"));
         assert!(routes.iter().any(|r| r.name == "SimulatorFeatures"));
     }
-    
+
     #[test]
     fn test_capability_handler_state() {
         let state = create_test_state();
-        
+
         assert_eq!(state.base_url, "http://test.com");
-        
+
         // Test that we can lock the capabilities manager
         let _manager = state.capabilities_manager.lock().unwrap();
     }
-    
+
     #[tokio::test]
     async fn test_invalid_agent_id_handling() {
         let state = create_test_state();
-        
+
         // Test with invalid UUID
         let params = HashMap::new();
         let result = handle_event_queue_get(
             Path(("invalid-uuid".to_string(), "cap-id".to_string())),
             State(state),
             Query(params),
-        ).await;
-        
+        )
+        .await;
+
         assert!(result.is_err());
         assert_eq!(result.unwrap_err(), StatusCode::BAD_REQUEST);
     }

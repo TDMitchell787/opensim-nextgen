@@ -54,7 +54,8 @@ impl Default for PermissionsConfig {
 
 pub struct PermissionsModule {
     config: PermissionsConfig,
-    scene_objects: Option<Arc<RwLock<std::collections::HashMap<u32, crate::udp::server::SceneObject>>>>,
+    scene_objects:
+        Option<Arc<RwLock<std::collections::HashMap<u32, crate::udp::server::SceneObject>>>>,
 }
 
 impl PermissionsModule {
@@ -65,12 +66,7 @@ impl PermissionsModule {
         }
     }
 
-    fn check_permission(
-        &self,
-        agent_id: &Uuid,
-        target_id: &Uuid,
-        action: PermissionType,
-    ) -> bool {
+    fn check_permission(&self, agent_id: &Uuid, target_id: &Uuid, action: PermissionType) -> bool {
         if self.config.bypass_permissions {
             return true;
         }
@@ -101,9 +97,7 @@ impl PermissionsModule {
             | PermissionType::DeleteObject
             | PermissionType::MoveObject
             | PermissionType::CopyObject
-            | PermissionType::TakeObject => {
-                self.is_object_owner(agent_id, target_id)
-            }
+            | PermissionType::TakeObject => self.is_object_owner(agent_id, target_id),
 
             PermissionType::RunScript => true,
         }
@@ -129,8 +123,7 @@ impl IPermissionsModule for PermissionsModule {
 
     fn is_god(&self, agent_id: &Uuid) -> bool {
         self.config.god_users.contains(agent_id)
-            || (self.config.allow_grid_gods
-                && self.config.region_owner.as_ref() == Some(agent_id))
+            || (self.config.allow_grid_gods && self.config.region_owner.as_ref() == Some(agent_id))
     }
 
     fn is_estate_manager(&self, agent_id: &Uuid) -> bool {
@@ -209,8 +202,10 @@ impl RegionModule for PermissionsModule {
             200,
         );
 
-        scene.service_registry.write().register::<PermissionsModule>(
-            Arc::new(PermissionsModule {
+        scene
+            .service_registry
+            .write()
+            .register::<PermissionsModule>(Arc::new(PermissionsModule {
                 config: PermissionsConfig {
                     bypass_permissions: self.config.bypass_permissions,
                     god_users: self.config.god_users.clone(),
@@ -219,10 +214,12 @@ impl RegionModule for PermissionsModule {
                     allow_grid_gods: self.config.allow_grid_gods,
                 },
                 scene_objects: self.scene_objects.clone(),
-            }),
-        );
+            }));
 
-        info!("[PERMISSIONS MODULE] Added to region '{}'", scene.region_name);
+        info!(
+            "[PERMISSIONS MODULE] Added to region '{}'",
+            scene.region_name
+        );
         Ok(())
     }
 
@@ -270,11 +267,7 @@ impl PermissionCheckHandler {
 
 #[async_trait]
 impl EventHandler for PermissionCheckHandler {
-    async fn handle_event(
-        &self,
-        event: &SceneEvent,
-        _scene: &SceneContext,
-    ) -> Result<()> {
+    async fn handle_event(&self, event: &SceneEvent, _scene: &SceneContext) -> Result<()> {
         if let SceneEvent::OnPermissionCheck {
             agent_id,
             target_id,
@@ -307,8 +300,7 @@ impl EventHandler for PermissionCheckHandler {
                 PermissionAction::RezObject
                 | PermissionAction::ModifyTerrain
                 | PermissionAction::SetHome => {
-                    self.region_owner.as_ref() == Some(agent_id)
-                        || self.is_estate_manager(agent_id)
+                    self.region_owner.as_ref() == Some(agent_id) || self.is_estate_manager(agent_id)
                 }
                 PermissionAction::EditObject
                 | PermissionAction::DeleteObject

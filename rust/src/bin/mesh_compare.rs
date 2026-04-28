@@ -1,6 +1,6 @@
 use anyhow::Result;
-use sqlx::Row;
 use flate2::read::ZlibDecoder;
+use sqlx::Row;
 use std::io::Read;
 
 #[tokio::main]
@@ -32,7 +32,12 @@ async fn main() -> Result<()> {
         let create_time: i32 = row.get("create_time");
 
         println!("━━━ {} ━━━", id);
-        println!("  Name: {}  |  Size: {} bytes  |  Created: {}", name, data.len(), create_time);
+        println!(
+            "  Name: {}  |  Size: {} bytes  |  Created: {}",
+            name,
+            data.len(),
+            create_time
+        );
 
         if data.is_empty() {
             println!("  EMPTY ASSET DATA\n");
@@ -49,11 +54,18 @@ async fn main() -> Result<()> {
                 }
 
                 for (sec_name, sec_offset, sec_size) in &sections {
-                    if *sec_size == 0 { continue; }
+                    if *sec_size == 0 {
+                        continue;
+                    }
                     let abs_start = header_size + *sec_offset as usize;
                     let abs_end = abs_start + *sec_size as usize;
                     if abs_end > data.len() {
-                        println!("    {} OVERFLOW: need {} bytes but asset is {} bytes", sec_name, abs_end, data.len());
+                        println!(
+                            "    {} OVERFLOW: need {} bytes but asset is {} bytes",
+                            sec_name,
+                            abs_end,
+                            data.len()
+                        );
                         continue;
                     }
                     let section_data = &data[abs_start..abs_end];
@@ -61,25 +73,43 @@ async fn main() -> Result<()> {
                     if sec_name.contains("lod") {
                         match zlib_decompress(section_data) {
                             Ok(decompressed) => {
-                                println!("    {} decompressed: {} → {} bytes", sec_name, sec_size, decompressed.len());
-                                println!("    {} first 64 bytes: {:02x?}", sec_name, &decompressed[..decompressed.len().min(64)]);
+                                println!(
+                                    "    {} decompressed: {} → {} bytes",
+                                    sec_name,
+                                    sec_size,
+                                    decompressed.len()
+                                );
+                                println!(
+                                    "    {} first 64 bytes: {:02x?}",
+                                    sec_name,
+                                    &decompressed[..decompressed.len().min(64)]
+                                );
 
                                 let face_count = count_llsd_array_items(&decompressed);
                                 println!("    {} face count: {}", sec_name, face_count);
 
                                 if !decompressed.is_empty() {
                                     let first_byte = decompressed[0];
-                                    println!("    {} top-level LLSD type: '{}' (0x{:02x}) {}",
-                                        sec_name, first_byte as char, first_byte,
+                                    println!(
+                                        "    {} top-level LLSD type: '{}' (0x{:02x}) {}",
+                                        sec_name,
+                                        first_byte as char,
+                                        first_byte,
                                         match first_byte {
                                             b'[' => "= Array (CORRECT)",
                                             b'{' => "= Map (WRONG — should be Array)",
-                                            _ => "= UNKNOWN (WRONG)"
-                                        });
+                                            _ => "= UNKNOWN (WRONG)",
+                                        }
+                                    );
                                 }
                             }
                             Err(e) => {
-                                println!("    {} zlib FAILED: {} (first 8 bytes: {:02x?})", sec_name, e, &section_data[..section_data.len().min(8)]);
+                                println!(
+                                    "    {} zlib FAILED: {} (first 8 bytes: {:02x?})",
+                                    sec_name,
+                                    e,
+                                    &section_data[..section_data.len().min(8)]
+                                );
                             }
                         }
                     }
@@ -130,7 +160,11 @@ fn parse_mesh_header_raw(data: &[u8]) -> Result<(usize, Vec<(String, i32, i32)>)
     }
 
     if pos >= data.len() || data[pos] != b'{' {
-        anyhow::bail!("Expected LLSD Map start '{{' at byte {}, got 0x{:02x}", pos, data.get(pos).unwrap_or(&0));
+        anyhow::bail!(
+            "Expected LLSD Map start '{{' at byte {}, got 0x{:02x}",
+            pos,
+            data.get(pos).unwrap_or(&0)
+        );
     }
 
     let header_start = pos;
@@ -138,7 +172,15 @@ fn parse_mesh_header_raw(data: &[u8]) -> Result<(usize, Vec<(String, i32, i32)>)
     let header_size = header_start + bytes_consumed;
 
     let mut sections = Vec::new();
-    let section_names = ["high_lod", "medium_lod", "low_lod", "lowest_lod", "physics_convex", "physics_mesh", "skin"];
+    let section_names = [
+        "high_lod",
+        "medium_lod",
+        "low_lod",
+        "lowest_lod",
+        "physics_convex",
+        "physics_mesh",
+        "skin",
+    ];
 
     for name in section_names {
         if let Some(sub_map) = map_entries.get(name) {
@@ -151,7 +193,12 @@ fn parse_mesh_header_raw(data: &[u8]) -> Result<(usize, Vec<(String, i32, i32)>)
     Ok((header_size, sections))
 }
 
-fn parse_llsd_map_raw(data: &[u8]) -> Result<(std::collections::HashMap<String, std::collections::HashMap<String, i32>>, usize)> {
+fn parse_llsd_map_raw(
+    data: &[u8],
+) -> Result<(
+    std::collections::HashMap<String, std::collections::HashMap<String, i32>>,
+    usize,
+)> {
     use std::collections::HashMap;
 
     if data.is_empty() || data[0] != b'{' {
@@ -163,33 +210,54 @@ fn parse_llsd_map_raw(data: &[u8]) -> Result<(std::collections::HashMap<String, 
     let mut result: HashMap<String, HashMap<String, i32>> = HashMap::new();
 
     for _ in 0..count {
-        if pos >= data.len() { break; }
+        if pos >= data.len() {
+            break;
+        }
 
         if data[pos] != b'k' {
-            anyhow::bail!("Expected key marker 'k' at pos {}, got 0x{:02x}", pos, data[pos]);
+            anyhow::bail!(
+                "Expected key marker 'k' at pos {}, got 0x{:02x}",
+                pos,
+                data[pos]
+            );
         }
         pos += 1;
-        let key_len = u32::from_be_bytes([data[pos], data[pos+1], data[pos+2], data[pos+3]]) as usize;
+        let key_len =
+            u32::from_be_bytes([data[pos], data[pos + 1], data[pos + 2], data[pos + 3]]) as usize;
         pos += 4;
-        let key = std::str::from_utf8(&data[pos..pos+key_len])?.to_string();
+        let key = std::str::from_utf8(&data[pos..pos + key_len])?.to_string();
         pos += key_len;
 
         if pos < data.len() && data[pos] == b'{' {
-            let sub_count = u32::from_be_bytes([data[pos+1], data[pos+2], data[pos+3], data[pos+4]]) as usize;
+            let sub_count =
+                u32::from_be_bytes([data[pos + 1], data[pos + 2], data[pos + 3], data[pos + 4]])
+                    as usize;
             pos += 5;
             let mut sub_map = HashMap::new();
             for _ in 0..sub_count {
-                if pos >= data.len() { break; }
+                if pos >= data.len() {
+                    break;
+                }
                 if data[pos] == b'k' {
                     pos += 1;
-                    let sk_len = u32::from_be_bytes([data[pos], data[pos+1], data[pos+2], data[pos+3]]) as usize;
+                    let sk_len = u32::from_be_bytes([
+                        data[pos],
+                        data[pos + 1],
+                        data[pos + 2],
+                        data[pos + 3],
+                    ]) as usize;
                     pos += 4;
-                    let sk = std::str::from_utf8(&data[pos..pos+sk_len])?.to_string();
+                    let sk = std::str::from_utf8(&data[pos..pos + sk_len])?.to_string();
                     pos += sk_len;
 
                     if pos < data.len() && data[pos] == b'i' {
                         pos += 1;
-                        let val = i32::from_be_bytes([data[pos], data[pos+1], data[pos+2], data[pos+3]]);
+                        let val = i32::from_be_bytes([
+                            data[pos],
+                            data[pos + 1],
+                            data[pos + 2],
+                            data[pos + 3],
+                        ]);
                         pos += 4;
                         sub_map.insert(sk, val);
                     } else {
@@ -200,7 +268,9 @@ fn parse_llsd_map_raw(data: &[u8]) -> Result<(std::collections::HashMap<String, 
                     break;
                 }
             }
-            if pos < data.len() && data[pos] == b'}' { pos += 1; }
+            if pos < data.len() && data[pos] == b'}' {
+                pos += 1;
+            }
             result.insert(key, sub_map);
         } else {
             let (_, skipped) = skip_llsd_value(&data[pos..])?;
@@ -209,7 +279,9 @@ fn parse_llsd_map_raw(data: &[u8]) -> Result<(std::collections::HashMap<String, 
         }
     }
 
-    if pos < data.len() && data[pos] == b'}' { pos += 1; }
+    if pos < data.len() && data[pos] == b'}' {
+        pos += 1;
+    }
 
     Ok((result, pos))
 }
@@ -238,16 +310,25 @@ fn skip_llsd_value(data: &[u8]) -> Result<(u8, usize)> {
             let count = u32::from_be_bytes([data[1], data[2], data[3], data[4]]) as usize;
             let mut pos = 5;
             for _ in 0..count {
-                if pos >= data.len() { break; }
+                if pos >= data.len() {
+                    break;
+                }
                 if data[pos] == b'k' {
                     pos += 1;
-                    let kl = u32::from_be_bytes([data[pos], data[pos+1], data[pos+2], data[pos+3]]) as usize;
+                    let kl = u32::from_be_bytes([
+                        data[pos],
+                        data[pos + 1],
+                        data[pos + 2],
+                        data[pos + 3],
+                    ]) as usize;
                     pos += 4 + kl;
                 }
                 let (_, s) = skip_llsd_value(&data[pos..])?;
                 pos += s;
             }
-            if pos < data.len() && data[pos] == b'}' { pos += 1; }
+            if pos < data.len() && data[pos] == b'}' {
+                pos += 1;
+            }
             Ok((tag, pos))
         }
         b'[' => {
@@ -257,7 +338,9 @@ fn skip_llsd_value(data: &[u8]) -> Result<(u8, usize)> {
                 let (_, s) = skip_llsd_value(&data[pos..])?;
                 pos += s;
             }
-            if pos < data.len() && data[pos] == b']' { pos += 1; }
+            if pos < data.len() && data[pos] == b']' {
+                pos += 1;
+            }
             Ok((tag, pos))
         }
         _ => {

@@ -1,4 +1,4 @@
-use serde::{Serialize, Deserialize};
+use serde::{Deserialize, Serialize};
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct CameraRig {
@@ -186,7 +186,10 @@ fn concentric_disk_sample(u: f32, v: f32) -> (f32, f32) {
     let (r, theta) = if sx.abs() > sy.abs() {
         (sx, std::f32::consts::FRAC_PI_4 * (sy / sx))
     } else {
-        (sy, std::f32::consts::FRAC_PI_2 - std::f32::consts::FRAC_PI_4 * (sx / sy))
+        (
+            sy,
+            std::f32::consts::FRAC_PI_2 - std::f32::consts::FRAC_PI_4 * (sx / sy),
+        )
     };
 
     (r * theta.cos(), r * theta.sin())
@@ -325,7 +328,11 @@ mod tests {
         assert_eq!(cam.focal_length_mm, 50.0);
         assert_eq!(cam.sensor_width_mm, 36.0);
         let fov = cam.fov_horizontal_deg();
-        assert!((fov - 39.6).abs() < 1.0, "50mm on 36mm sensor should be ~39.6° FOV, got {}", fov);
+        assert!(
+            (fov - 39.6).abs() < 1.0,
+            "50mm on 36mm sensor should be ~39.6° FOV, got {}",
+            fov
+        );
     }
 
     #[test]
@@ -333,7 +340,11 @@ mod tests {
         let mut cam = CameraRig::default();
         CameraPreset::Wide.apply(&mut cam);
         let fov = cam.fov_horizontal_deg();
-        assert!(fov > 70.0 && fov < 90.0, "24mm should give ~73° FOV, got {}", fov);
+        assert!(
+            fov > 70.0 && fov < 90.0,
+            "24mm should give ~73° FOV, got {}",
+            fov
+        );
     }
 
     #[test]
@@ -341,7 +352,11 @@ mod tests {
         let mut cam = CameraRig::default();
         CameraPreset::Telephoto.apply(&mut cam);
         let fov = cam.fov_horizontal_deg();
-        assert!(fov > 8.0 && fov < 14.0, "200mm should give ~10° FOV, got {}", fov);
+        assert!(
+            fov > 8.0 && fov < 14.0,
+            "200mm should give ~10° FOV, got {}",
+            fov
+        );
     }
 
     #[test]
@@ -350,7 +365,11 @@ mod tests {
         let ray = cam.generate_ray(0.5, 0.5, 16.0 / 9.0);
         let fwd = cam.forward();
         let d = dot(ray.direction, fwd);
-        assert!(d > 0.99, "Center ray should be aligned with forward, dot={}", d);
+        assert!(
+            d > 0.99,
+            "Center ray should be aligned with forward, dot={}",
+            d
+        );
     }
 
     #[test]
@@ -363,7 +382,11 @@ mod tests {
         assert!(near > 0.0 && near < cam.focus_distance, "near={}", near);
         assert!(far > cam.focus_distance, "far={}", far);
         let dof_range = far - near;
-        assert!(dof_range < 2.0, "f/1.8 at 3m should have <2m DoF range, got {}", dof_range);
+        assert!(
+            dof_range < 2.0,
+            "f/1.8 at 3m should have <2m DoF range, got {}",
+            dof_range
+        );
     }
 
     #[test]
@@ -376,8 +399,21 @@ mod tests {
 
     #[test]
     fn test_presets_all() {
-        for name in &["wide", "normal", "portrait", "telephoto", "macro", "cinematic", "drone", "security"] {
-            assert!(CameraPreset::from_name(name).is_some(), "Preset '{}' should parse", name);
+        for name in &[
+            "wide",
+            "normal",
+            "portrait",
+            "telephoto",
+            "macro",
+            "cinematic",
+            "drone",
+            "security",
+        ] {
+            assert!(
+                CameraPreset::from_name(name).is_some(),
+                "Preset '{}' should parse",
+                name
+            );
         }
     }
 

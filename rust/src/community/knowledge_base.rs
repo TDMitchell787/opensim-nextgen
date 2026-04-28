@@ -11,9 +11,9 @@ use super::{CommunityConfig, ComponentHealth};
 use anyhow::Result;
 use serde::{Deserialize, Serialize};
 use std::collections::HashMap;
+use std::sync::Arc;
 use std::time::{SystemTime, UNIX_EPOCH};
 use tokio::sync::RwLock;
-use std::sync::Arc;
 
 /// Knowledge base main structure
 pub struct KnowledgeBase {
@@ -50,10 +50,10 @@ impl KnowledgeBase {
 
         // Create default categories and articles
         self.create_default_structure().await?;
-        
+
         // Initialize search index
         self.search_index.write().await.initialize().await?;
-        
+
         // Initialize analytics
         self.analytics.write().await.initialize().await?;
 
@@ -65,7 +65,7 @@ impl KnowledgeBase {
     async fn create_default_structure(&self) -> Result<()> {
         // Create categories
         self.create_default_categories().await?;
-        
+
         // Create initial articles
         self.create_default_articles().await?;
 
@@ -76,77 +76,95 @@ impl KnowledgeBase {
     async fn create_default_categories(&self) -> Result<()> {
         let mut categories = self.categories.write().await;
 
-        categories.insert("getting-started".to_string(), KBCategory {
-            id: "getting-started".to_string(),
-            name: "Getting Started".to_string(),
-            description: "Essential guides for new users".to_string(),
-            icon: "🚀".to_string(),
-            sort_order: 1,
-            article_count: 0,
-            parent_id: None,
-            subcategories: Vec::new(),
-            created_at: get_current_timestamp(),
-        });
+        categories.insert(
+            "getting-started".to_string(),
+            KBCategory {
+                id: "getting-started".to_string(),
+                name: "Getting Started".to_string(),
+                description: "Essential guides for new users".to_string(),
+                icon: "🚀".to_string(),
+                sort_order: 1,
+                article_count: 0,
+                parent_id: None,
+                subcategories: Vec::new(),
+                created_at: get_current_timestamp(),
+            },
+        );
 
-        categories.insert("api-reference".to_string(), KBCategory {
-            id: "api-reference".to_string(),
-            name: "API Reference".to_string(),
-            description: "Complete API documentation".to_string(),
-            icon: "📚".to_string(),
-            sort_order: 2,
-            article_count: 0,
-            parent_id: None,
-            subcategories: Vec::new(),
-            created_at: get_current_timestamp(),
-        });
+        categories.insert(
+            "api-reference".to_string(),
+            KBCategory {
+                id: "api-reference".to_string(),
+                name: "API Reference".to_string(),
+                description: "Complete API documentation".to_string(),
+                icon: "📚".to_string(),
+                sort_order: 2,
+                article_count: 0,
+                parent_id: None,
+                subcategories: Vec::new(),
+                created_at: get_current_timestamp(),
+            },
+        );
 
-        categories.insert("tutorials".to_string(), KBCategory {
-            id: "tutorials".to_string(),
-            name: "Tutorials".to_string(),
-            description: "Step-by-step tutorials and guides".to_string(),
-            icon: "🎓".to_string(),
-            sort_order: 3,
-            article_count: 0,
-            parent_id: None,
-            subcategories: Vec::new(),
-            created_at: get_current_timestamp(),
-        });
+        categories.insert(
+            "tutorials".to_string(),
+            KBCategory {
+                id: "tutorials".to_string(),
+                name: "Tutorials".to_string(),
+                description: "Step-by-step tutorials and guides".to_string(),
+                icon: "🎓".to_string(),
+                sort_order: 3,
+                article_count: 0,
+                parent_id: None,
+                subcategories: Vec::new(),
+                created_at: get_current_timestamp(),
+            },
+        );
 
-        categories.insert("troubleshooting".to_string(), KBCategory {
-            id: "troubleshooting".to_string(),
-            name: "Troubleshooting".to_string(),
-            description: "Common issues and solutions".to_string(),
-            icon: "🔧".to_string(),
-            sort_order: 4,
-            article_count: 0,
-            parent_id: None,
-            subcategories: Vec::new(),
-            created_at: get_current_timestamp(),
-        });
+        categories.insert(
+            "troubleshooting".to_string(),
+            KBCategory {
+                id: "troubleshooting".to_string(),
+                name: "Troubleshooting".to_string(),
+                description: "Common issues and solutions".to_string(),
+                icon: "🔧".to_string(),
+                sort_order: 4,
+                article_count: 0,
+                parent_id: None,
+                subcategories: Vec::new(),
+                created_at: get_current_timestamp(),
+            },
+        );
 
-        categories.insert("best-practices".to_string(), KBCategory {
-            id: "best-practices".to_string(),
-            name: "Best Practices".to_string(),
-            description: "Recommended patterns and practices".to_string(),
-            icon: "⭐".to_string(),
-            sort_order: 5,
-            article_count: 0,
-            parent_id: None,
-            subcategories: Vec::new(),
-            created_at: get_current_timestamp(),
-        });
+        categories.insert(
+            "best-practices".to_string(),
+            KBCategory {
+                id: "best-practices".to_string(),
+                name: "Best Practices".to_string(),
+                description: "Recommended patterns and practices".to_string(),
+                icon: "⭐".to_string(),
+                sort_order: 5,
+                article_count: 0,
+                parent_id: None,
+                subcategories: Vec::new(),
+                created_at: get_current_timestamp(),
+            },
+        );
 
-        categories.insert("faq".to_string(), KBCategory {
-            id: "faq".to_string(),
-            name: "FAQ".to_string(),
-            description: "Frequently asked questions".to_string(),
-            icon: "❓".to_string(),
-            sort_order: 6,
-            article_count: 0,
-            parent_id: None,
-            subcategories: Vec::new(),
-            created_at: get_current_timestamp(),
-        });
+        categories.insert(
+            "faq".to_string(),
+            KBCategory {
+                id: "faq".to_string(),
+                name: "FAQ".to_string(),
+                description: "Frequently asked questions".to_string(),
+                icon: "❓".to_string(),
+                sort_order: 6,
+                article_count: 0,
+                parent_id: None,
+                subcategories: Vec::new(),
+                created_at: get_current_timestamp(),
+            },
+        );
 
         Ok(())
     }
@@ -156,91 +174,122 @@ impl KnowledgeBase {
         let mut articles = self.articles.write().await;
 
         // Getting Started articles
-        articles.insert("quick-start".to_string(), Article {
-            id: "quick-start".to_string(),
-            title: "Quick Start Guide".to_string(),
-            summary: "Get up and running with OpenSim in 5 minutes".to_string(),
-            content: self.generate_quick_start_content(),
-            category_id: "getting-started".to_string(),
-            author_id: "system".to_string(),
-            author_name: "OpenSim Team".to_string(),
-            status: ArticleStatus::Published,
-            version: 1,
-            created_at: get_current_timestamp(),
-            updated_at: get_current_timestamp(),
-            published_at: Some(get_current_timestamp()),
-            view_count: 0,
-            like_count: 0,
-            tags: vec!["installation".to_string(), "setup".to_string(), "beginner".to_string()],
-            related_articles: Vec::new(),
-            attachments: Vec::new(),
-            change_log: Vec::new(),
-        });
+        articles.insert(
+            "quick-start".to_string(),
+            Article {
+                id: "quick-start".to_string(),
+                title: "Quick Start Guide".to_string(),
+                summary: "Get up and running with OpenSim in 5 minutes".to_string(),
+                content: self.generate_quick_start_content(),
+                category_id: "getting-started".to_string(),
+                author_id: "system".to_string(),
+                author_name: "OpenSim Team".to_string(),
+                status: ArticleStatus::Published,
+                version: 1,
+                created_at: get_current_timestamp(),
+                updated_at: get_current_timestamp(),
+                published_at: Some(get_current_timestamp()),
+                view_count: 0,
+                like_count: 0,
+                tags: vec![
+                    "installation".to_string(),
+                    "setup".to_string(),
+                    "beginner".to_string(),
+                ],
+                related_articles: Vec::new(),
+                attachments: Vec::new(),
+                change_log: Vec::new(),
+            },
+        );
 
-        articles.insert("system-requirements".to_string(), Article {
-            id: "system-requirements".to_string(),
-            title: "System Requirements".to_string(),
-            summary: "Hardware and software requirements for OpenSim".to_string(),
-            content: self.generate_system_requirements_content(),
-            category_id: "getting-started".to_string(),
-            author_id: "system".to_string(),
-            author_name: "OpenSim Team".to_string(),
-            status: ArticleStatus::Published,
-            version: 1,
-            created_at: get_current_timestamp(),
-            updated_at: get_current_timestamp(),
-            published_at: Some(get_current_timestamp()),
-            view_count: 0,
-            like_count: 0,
-            tags: vec!["requirements".to_string(), "hardware".to_string(), "system".to_string()],
-            related_articles: vec!["quick-start".to_string()],
-            attachments: Vec::new(),
-            change_log: Vec::new(),
-        });
+        articles.insert(
+            "system-requirements".to_string(),
+            Article {
+                id: "system-requirements".to_string(),
+                title: "System Requirements".to_string(),
+                summary: "Hardware and software requirements for OpenSim".to_string(),
+                content: self.generate_system_requirements_content(),
+                category_id: "getting-started".to_string(),
+                author_id: "system".to_string(),
+                author_name: "OpenSim Team".to_string(),
+                status: ArticleStatus::Published,
+                version: 1,
+                created_at: get_current_timestamp(),
+                updated_at: get_current_timestamp(),
+                published_at: Some(get_current_timestamp()),
+                view_count: 0,
+                like_count: 0,
+                tags: vec![
+                    "requirements".to_string(),
+                    "hardware".to_string(),
+                    "system".to_string(),
+                ],
+                related_articles: vec!["quick-start".to_string()],
+                attachments: Vec::new(),
+                change_log: Vec::new(),
+            },
+        );
 
         // FAQ articles
-        articles.insert("common-questions".to_string(), Article {
-            id: "common-questions".to_string(),
-            title: "Common Questions".to_string(),
-            summary: "Answers to the most frequently asked questions".to_string(),
-            content: self.generate_faq_content(),
-            category_id: "faq".to_string(),
-            author_id: "system".to_string(),
-            author_name: "OpenSim Team".to_string(),
-            status: ArticleStatus::Published,
-            version: 1,
-            created_at: get_current_timestamp(),
-            updated_at: get_current_timestamp(),
-            published_at: Some(get_current_timestamp()),
-            view_count: 0,
-            like_count: 0,
-            tags: vec!["faq".to_string(), "questions".to_string(), "help".to_string()],
-            related_articles: Vec::new(),
-            attachments: Vec::new(),
-            change_log: Vec::new(),
-        });
+        articles.insert(
+            "common-questions".to_string(),
+            Article {
+                id: "common-questions".to_string(),
+                title: "Common Questions".to_string(),
+                summary: "Answers to the most frequently asked questions".to_string(),
+                content: self.generate_faq_content(),
+                category_id: "faq".to_string(),
+                author_id: "system".to_string(),
+                author_name: "OpenSim Team".to_string(),
+                status: ArticleStatus::Published,
+                version: 1,
+                created_at: get_current_timestamp(),
+                updated_at: get_current_timestamp(),
+                published_at: Some(get_current_timestamp()),
+                view_count: 0,
+                like_count: 0,
+                tags: vec![
+                    "faq".to_string(),
+                    "questions".to_string(),
+                    "help".to_string(),
+                ],
+                related_articles: Vec::new(),
+                attachments: Vec::new(),
+                change_log: Vec::new(),
+            },
+        );
 
         // Troubleshooting articles
-        articles.insert("installation-issues".to_string(), Article {
-            id: "installation-issues".to_string(),
-            title: "Installation Issues".to_string(),
-            summary: "Common installation problems and solutions".to_string(),
-            content: self.generate_troubleshooting_content(),
-            category_id: "troubleshooting".to_string(),
-            author_id: "system".to_string(),
-            author_name: "OpenSim Team".to_string(),
-            status: ArticleStatus::Published,
-            version: 1,
-            created_at: get_current_timestamp(),
-            updated_at: get_current_timestamp(),
-            published_at: Some(get_current_timestamp()),
-            view_count: 0,
-            like_count: 0,
-            tags: vec!["installation".to_string(), "troubleshooting".to_string(), "issues".to_string()],
-            related_articles: vec!["quick-start".to_string(), "system-requirements".to_string()],
-            attachments: Vec::new(),
-            change_log: Vec::new(),
-        });
+        articles.insert(
+            "installation-issues".to_string(),
+            Article {
+                id: "installation-issues".to_string(),
+                title: "Installation Issues".to_string(),
+                summary: "Common installation problems and solutions".to_string(),
+                content: self.generate_troubleshooting_content(),
+                category_id: "troubleshooting".to_string(),
+                author_id: "system".to_string(),
+                author_name: "OpenSim Team".to_string(),
+                status: ArticleStatus::Published,
+                version: 1,
+                created_at: get_current_timestamp(),
+                updated_at: get_current_timestamp(),
+                published_at: Some(get_current_timestamp()),
+                view_count: 0,
+                like_count: 0,
+                tags: vec![
+                    "installation".to_string(),
+                    "troubleshooting".to_string(),
+                    "issues".to_string(),
+                ],
+                related_articles: vec![
+                    "quick-start".to_string(),
+                    "system-requirements".to_string(),
+                ],
+                attachments: Vec::new(),
+                change_log: Vec::new(),
+            },
+        );
 
         // Update category article counts
         self.update_category_counts().await?;
@@ -298,14 +347,26 @@ impl KnowledgeBase {
         };
 
         // Add the article
-        self.articles.write().await.insert(article_id.clone(), article.clone());
+        self.articles
+            .write()
+            .await
+            .insert(article_id.clone(), article.clone());
 
         // Update search index
-        self.search_index.write().await.add_article(&article).await?;
+        self.search_index
+            .write()
+            .await
+            .add_article(&article)
+            .await?;
 
         // Update category count if published
         if article.status == ArticleStatus::Published {
-            if let Some(category) = self.categories.write().await.get_mut(&article_data.category_id) {
+            if let Some(category) = self
+                .categories
+                .write()
+                .await
+                .get_mut(&article_data.category_id)
+            {
                 category.article_count += 1;
             }
         }
@@ -325,10 +386,11 @@ impl KnowledgeBase {
         let analytics = self.analytics.read().await;
 
         let total_articles = articles.len() as u64;
-        let published_articles = articles.values()
+        let published_articles = articles
+            .values()
             .filter(|a| a.status == ArticleStatus::Published)
             .count() as u64;
-        
+
         let total_views = articles.values().map(|a| a.view_count).sum();
         let total_likes = articles.values().map(|a| a.like_count).sum();
 
@@ -346,14 +408,14 @@ impl KnowledgeBase {
     /// Get knowledge base health status
     pub async fn health_check(&self) -> Result<ComponentHealth> {
         let start_time = SystemTime::now();
-        
+
         // Test all components
         let _articles_count = self.articles.read().await.len();
         let _categories_count = self.categories.read().await.len();
         let _search_healthy = self.search_index.read().await.is_healthy();
-        
+
         let response_time = start_time.elapsed().unwrap().as_millis() as u64;
-        
+
         Ok(ComponentHealth {
             status: "healthy".to_string(),
             response_time_ms: response_time,
@@ -494,7 +556,8 @@ opensim run
 - More RAM allows for larger worlds and more concurrent users
 - Network latency affects real-time features
 - Load balancing recommended for production deployments
-"#.to_string()
+"#
+        .to_string()
     }
 
     fn generate_faq_content(&self) -> String {

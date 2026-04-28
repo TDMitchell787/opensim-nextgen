@@ -1,15 +1,15 @@
 //! Health checking for OpenSim
-//! 
+//!
 //! Monitors system components and provides health status information.
 
+use anyhow::Result;
 use std::{
     collections::HashMap,
     sync::Arc,
     time::{Duration, Instant},
 };
-use anyhow::Result;
 use tokio::sync::RwLock;
-use tracing::{debug, warn, error};
+use tracing::{debug, error, warn};
 
 use super::HealthStatus;
 
@@ -68,7 +68,10 @@ impl HealthChecker {
             check_fn,
         };
 
-        self.health_checks.write().await.insert(name.to_string(), health_check);
+        self.health_checks
+            .write()
+            .await
+            .insert(name.to_string(), health_check);
         debug!("Added health check for component: {}", name);
         Ok(())
     }
@@ -114,7 +117,10 @@ impl HealthChecker {
         *self.overall_status.write().await = overall_status.clone();
         *self.last_check.write().await = now;
 
-        debug!("Health checks completed, overall status: {:?}", overall_status);
+        debug!(
+            "Health checks completed, overall status: {:?}",
+            overall_status
+        );
         Ok(())
     }
 
@@ -162,14 +168,17 @@ impl HealthChecker {
     /// Force a health check for a specific component
     pub async fn force_health_check(&self, component_name: &str) -> Result<()> {
         let mut checks = self.health_checks.write().await;
-        
+
         if let Some(check) = checks.get_mut(component_name) {
             match (check.check_fn)() {
                 Ok(status) => {
                     check.status = status;
                     check.error_message = None;
                     check.last_check = Instant::now();
-                    debug!("Forced health check for {}: {:?}", component_name, check.status);
+                    debug!(
+                        "Forced health check for {}: {:?}",
+                        component_name, check.status
+                    );
                 }
                 Err(e) => {
                     check.status = HealthStatus::Unhealthy;
@@ -216,7 +225,10 @@ impl Default for HealthChecker {
         match Self::new() {
             Ok(checker) => checker,
             Err(e) => {
-                tracing::error!("Failed to create HealthChecker: {}. Using fallback configuration.", e);
+                tracing::error!(
+                    "Failed to create HealthChecker: {}. Using fallback configuration.",
+                    e
+                );
                 // Create a basic health checker that always reports degraded status
                 HealthChecker {
                     health_checks: Arc::new(RwLock::new(std::collections::HashMap::new())),
@@ -226,4 +238,4 @@ impl Default for HealthChecker {
             }
         }
     }
-} 
+}

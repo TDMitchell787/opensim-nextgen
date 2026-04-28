@@ -1,16 +1,16 @@
 //! Avatar Behavior System for OpenSim Next
-//! 
+//!
 //! Provides advanced avatar behavior management including animations,
 //! gestures, auto-behaviors, and expressions.
 
 use super::*;
+use rand;
 use std::collections::HashMap;
 use std::sync::Arc;
-use tokio::sync::{RwLock, mpsc};
+use tokio::sync::{mpsc, RwLock};
 use tokio::time::{interval, Duration, Instant};
-use tracing::{debug, info, error};
+use tracing::{debug, error, info};
 use uuid::Uuid;
-use rand;
 
 /// Avatar behavior management system
 #[derive(Debug)]
@@ -225,20 +225,21 @@ impl BehaviorSystem {
         let behaviors_clone = active_behaviors.clone();
         let animations_clone = animation_library.clone();
         let gestures_clone = gesture_library.clone();
-        
+
         tokio::spawn(async move {
             Self::behavior_processor(
                 &mut receiver,
                 behaviors_clone,
                 animations_clone,
                 gestures_clone,
-            ).await;
+            )
+            .await;
         });
 
         // Spawn auto-trigger processing task
         let behaviors_clone2 = active_behaviors.clone();
         let sender_clone = sender.clone();
-        
+
         tokio::spawn(async move {
             Self::auto_trigger_processor(behaviors_clone2, sender_clone).await;
         });
@@ -361,40 +362,42 @@ impl BehaviorSystem {
         avatar_id: Uuid,
         animation: AnimationState,
     ) -> AvatarResult<()> {
-        debug!("Starting animation for avatar {}: {}", avatar_id, animation.name);
+        debug!(
+            "Starting animation for avatar {}: {}",
+            avatar_id, animation.name
+        );
 
         let command = BehaviorCommand::StartAnimation {
             avatar_id,
             animation,
         };
 
-        self.behavior_sender.send(command).map_err(|_| {
-            AvatarError::SystemError {
+        self.behavior_sender
+            .send(command)
+            .map_err(|_| AvatarError::SystemError {
                 message: "Failed to send animation command".to_string(),
-            }
-        })?;
+            })?;
 
         Ok(())
     }
 
     /// Stop animation
-    pub async fn stop_animation(
-        &self,
-        avatar_id: Uuid,
-        animation_id: Uuid,
-    ) -> AvatarResult<()> {
-        debug!("Stopping animation for avatar {}: {}", avatar_id, animation_id);
+    pub async fn stop_animation(&self, avatar_id: Uuid, animation_id: Uuid) -> AvatarResult<()> {
+        debug!(
+            "Stopping animation for avatar {}: {}",
+            avatar_id, animation_id
+        );
 
         let command = BehaviorCommand::StopAnimation {
             avatar_id,
             animation_id,
         };
 
-        self.behavior_sender.send(command).map_err(|_| {
-            AvatarError::SystemError {
+        self.behavior_sender
+            .send(command)
+            .map_err(|_| AvatarError::SystemError {
                 message: "Failed to send stop animation command".to_string(),
-            }
-        })?;
+            })?;
 
         Ok(())
     }
@@ -406,7 +409,10 @@ impl BehaviorSystem {
         gesture_id: Uuid,
         trigger_text: Option<String>,
     ) -> AvatarResult<()> {
-        debug!("Triggering gesture for avatar {}: {}", avatar_id, gesture_id);
+        debug!(
+            "Triggering gesture for avatar {}: {}",
+            avatar_id, gesture_id
+        );
 
         let command = BehaviorCommand::TriggerGesture {
             avatar_id,
@@ -414,11 +420,11 @@ impl BehaviorSystem {
             trigger_text,
         };
 
-        self.behavior_sender.send(command).map_err(|_| {
-            AvatarError::SystemError {
+        self.behavior_sender
+            .send(command)
+            .map_err(|_| AvatarError::SystemError {
                 message: "Failed to send gesture command".to_string(),
-            }
-        })?;
+            })?;
 
         Ok(())
     }
@@ -429,18 +435,21 @@ impl BehaviorSystem {
         avatar_id: Uuid,
         expression: FacialExpression,
     ) -> AvatarResult<()> {
-        debug!("Updating expression for avatar {}: {}", avatar_id, expression.name);
+        debug!(
+            "Updating expression for avatar {}: {}",
+            avatar_id, expression.name
+        );
 
         let command = BehaviorCommand::UpdateExpression {
             avatar_id,
             expression,
         };
 
-        self.behavior_sender.send(command).map_err(|_| {
-            AvatarError::SystemError {
+        self.behavior_sender
+            .send(command)
+            .map_err(|_| AvatarError::SystemError {
                 message: "Failed to send expression command".to_string(),
-            }
-        })?;
+            })?;
 
         Ok(())
     }
@@ -463,16 +472,13 @@ impl BehaviorSystem {
             current_activity: ActivityType::Idle, // This would be determined by activity detection
         };
 
-        let command = BehaviorCommand::UpdateContext {
-            avatar_id,
-            context,
-        };
+        let command = BehaviorCommand::UpdateContext { avatar_id, context };
 
-        self.behavior_sender.send(command).map_err(|_| {
-            AvatarError::SystemError {
+        self.behavior_sender
+            .send(command)
+            .map_err(|_| AvatarError::SystemError {
                 message: "Failed to send context update command".to_string(),
-            }
-        })?;
+            })?;
 
         Ok(())
     }
@@ -480,21 +486,25 @@ impl BehaviorSystem {
     /// Get active animations for avatar
     pub async fn get_active_animations(&self, avatar_id: Uuid) -> Vec<AnimationState> {
         let behaviors = self.active_behaviors.read().await;
-        
+
         if let Some(state) = behaviors.get(&avatar_id) {
-            state.active_animations.values().map(|anim| {
-                AnimationState {
+            state
+                .active_animations
+                .values()
+                .map(|anim| AnimationState {
                     animation_id: anim.animation_id,
                     name: format!("Animation_{}", anim.animation_id),
                     priority: anim.priority,
                     loop_animation: anim.loop_animation,
                     start_time: chrono::DateTime::from_timestamp(
-                        anim.start_time.elapsed().as_secs() as i64, 0
-                    ).unwrap_or_default(),
+                        anim.start_time.elapsed().as_secs() as i64,
+                        0,
+                    )
+                    .unwrap_or_default(),
                     duration: anim.duration.map(|d| d.as_secs_f32()),
                     blend_weight: anim.blend_weight,
-                }
-            }).collect()
+                })
+                .collect()
         } else {
             Vec::new()
         }
@@ -522,16 +532,37 @@ impl BehaviorSystem {
     ) {
         while let Some(command) = receiver.recv().await {
             match command {
-                BehaviorCommand::StartAnimation { avatar_id, animation } => {
-                    Self::process_start_animation(avatar_id, animation, &behaviors, &animations).await;
+                BehaviorCommand::StartAnimation {
+                    avatar_id,
+                    animation,
+                } => {
+                    Self::process_start_animation(avatar_id, animation, &behaviors, &animations)
+                        .await;
                 }
-                BehaviorCommand::StopAnimation { avatar_id, animation_id } => {
+                BehaviorCommand::StopAnimation {
+                    avatar_id,
+                    animation_id,
+                } => {
                     Self::process_stop_animation(avatar_id, animation_id, &behaviors).await;
                 }
-                BehaviorCommand::TriggerGesture { avatar_id, gesture_id, trigger_text } => {
-                    Self::process_trigger_gesture(avatar_id, gesture_id, trigger_text, &behaviors, &gestures).await;
+                BehaviorCommand::TriggerGesture {
+                    avatar_id,
+                    gesture_id,
+                    trigger_text,
+                } => {
+                    Self::process_trigger_gesture(
+                        avatar_id,
+                        gesture_id,
+                        trigger_text,
+                        &behaviors,
+                        &gestures,
+                    )
+                    .await;
                 }
-                BehaviorCommand::UpdateExpression { avatar_id, expression } => {
+                BehaviorCommand::UpdateExpression {
+                    avatar_id,
+                    expression,
+                } => {
                     Self::process_update_expression(avatar_id, expression, &behaviors).await;
                 }
                 BehaviorCommand::UpdateContext { avatar_id, context } => {
@@ -562,7 +593,9 @@ impl BehaviorSystem {
                 current_frame: 0.0,
             };
 
-            state.active_animations.insert(animation.animation_id, active_anim);
+            state
+                .active_animations
+                .insert(animation.animation_id, active_anim);
             state.last_activity = Instant::now();
         }
     }
@@ -645,7 +678,7 @@ impl BehaviorSystem {
         let mut behaviors_guard = behaviors.write().await;
         if let Some(state) = behaviors_guard.get_mut(&avatar_id) {
             let now = Instant::now();
-            
+
             for auto_behavior in &mut state.auto_behaviors {
                 if !auto_behavior.enabled {
                     continue;
@@ -661,15 +694,20 @@ impl BehaviorSystem {
                 // Check trigger condition
                 let should_trigger = match &auto_behavior.trigger {
                     BehaviorTrigger::Idle { duration_seconds } => {
-                        now.duration_since(state.last_activity) 
+                        now.duration_since(state.last_activity)
                             >= Duration::from_secs_f32(*duration_seconds)
                     }
                     BehaviorTrigger::Movement { movement_type } => {
                         state.behavior_context.current_movement == *movement_type
                     }
-                    BehaviorTrigger::Random { probability, interval_seconds } => {
+                    BehaviorTrigger::Random {
+                        probability,
+                        interval_seconds,
+                    } => {
                         if let Some(last) = auto_behavior.last_triggered {
-                            if now.duration_since(last) >= Duration::from_secs_f32(*interval_seconds) {
+                            if now.duration_since(last)
+                                >= Duration::from_secs_f32(*interval_seconds)
+                            {
                                 rand::random::<f32>() < *probability
                             } else {
                                 false
@@ -684,7 +722,10 @@ impl BehaviorSystem {
                 if should_trigger {
                     auto_behavior.last_triggered = Some(now);
                     // Execute actions (simplified implementation)
-                    info!("Auto behavior triggered for avatar {}: {:?}", avatar_id, auto_behavior.behavior_id);
+                    info!(
+                        "Auto behavior triggered for avatar {}: {:?}",
+                        avatar_id, auto_behavior.behavior_id
+                    );
                 }
             }
         }
@@ -695,10 +736,10 @@ impl BehaviorSystem {
         sender: mpsc::UnboundedSender<BehaviorCommand>,
     ) {
         let mut interval = interval(Duration::from_secs(1));
-        
+
         loop {
             interval.tick().await;
-            
+
             let avatar_ids: Vec<Uuid> = {
                 let behaviors_guard = behaviors.read().await;
                 behaviors_guard.keys().cloned().collect()
@@ -707,23 +748,30 @@ impl BehaviorSystem {
             for avatar_id in avatar_ids {
                 let command = BehaviorCommand::ProcessAutoTriggers { avatar_id };
                 if sender.send(command).is_err() {
-                    error!("Failed to send auto trigger command for avatar {}", avatar_id);
+                    error!(
+                        "Failed to send auto trigger command for avatar {}",
+                        avatar_id
+                    );
                 }
             }
         }
     }
 
-    fn create_auto_behavior_instances(&self, auto_behaviors: &[AutoBehavior]) -> Vec<AutoBehaviorInstance> {
-        auto_behaviors.iter().map(|behavior| {
-            AutoBehaviorInstance {
+    fn create_auto_behavior_instances(
+        &self,
+        auto_behaviors: &[AutoBehavior],
+    ) -> Vec<AutoBehaviorInstance> {
+        auto_behaviors
+            .iter()
+            .map(|behavior| AutoBehaviorInstance {
                 behavior_id: behavior.behavior_id,
                 trigger: behavior.trigger_condition.clone(),
                 actions: behavior.actions.clone(),
                 last_triggered: None,
                 cooldown: Duration::from_secs_f32(behavior.cooldown_seconds),
                 enabled: behavior.enabled,
-            }
-        }).collect()
+            })
+            .collect()
     }
 }
 

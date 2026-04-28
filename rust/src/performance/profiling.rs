@@ -1,14 +1,14 @@
 //! Performance profiling and analysis tools
 
+use anyhow::{anyhow, Result};
+use serde::{Deserialize, Serialize};
 use std::{
     collections::HashMap,
     sync::Arc,
     time::{Duration, Instant},
 };
-use anyhow::{anyhow, Result};
-use serde::{Deserialize, Serialize};
 use tokio::sync::RwLock;
-use tracing::{info, warn, error, debug};
+use tracing::{debug, error, info, warn};
 
 use super::metrics::MetricsRegistry;
 
@@ -124,7 +124,10 @@ impl Profiler {
         let span_id = format!("{}:{}", name, uuid::Uuid::new_v4());
         let start_time = Instant::now();
 
-        self.active_spans.write().await.insert(span_id.clone(), start_time);
+        self.active_spans
+            .write()
+            .await
+            .insert(span_id.clone(), start_time);
 
         Ok(ProfileSpan {
             id: span_id,
@@ -142,7 +145,7 @@ impl Profiler {
         }
 
         let mut samples = self.samples.write().await;
-        
+
         // Enforce sample limit
         if samples.len() >= self.config.max_samples {
             // Remove oldest 10% of samples
@@ -151,7 +154,7 @@ impl Profiler {
         }
 
         samples.push(sample);
-        
+
         Ok(())
     }
 
@@ -171,12 +174,8 @@ impl Profiler {
     pub async fn get_samples(&self, limit: Option<usize>) -> Result<Vec<ProfileSample>> {
         let samples = self.samples.read().await;
         let limit = limit.unwrap_or(1000);
-        
-        Ok(samples.iter()
-            .rev()
-            .take(limit)
-            .cloned()
-            .collect())
+
+        Ok(samples.iter().rev().take(limit).cloned().collect())
     }
 
     /// Generate a flame graph representation
@@ -206,7 +205,7 @@ impl Profiler {
     pub async fn export_data(&self) -> Result<ProfilingExport> {
         let stats = self.get_stats().await?;
         let samples = self.get_samples(Some(10000)).await?; // Last 10k samples
-        
+
         Ok(ProfilingExport {
             stats,
             recent_samples: samples,
@@ -220,37 +219,45 @@ impl Profiler {
         self.samples.write().await.clear();
         self.aggregated_stats.write().await.clear();
         self.active_spans.write().await.clear();
-        
+
         info!("Cleared all profiling data");
         Ok(())
     }
 
     async fn register_profiling_metrics(&self) -> Result<()> {
         let labels = HashMap::new();
-        
-        self.metrics_registry.register_gauge(
-            "profiler_active_samples",
-            "Number of active profiling samples",
-            labels.clone()
-        ).await?;
-        
-        self.metrics_registry.register_gauge(
-            "profiler_active_spans",
-            "Number of active profiling spans",
-            labels.clone()
-        ).await?;
-        
-        self.metrics_registry.register_counter(
-            "profiler_samples_total",
-            "Total number of profiling samples recorded",
-            labels.clone()
-        ).await?;
-        
-        self.metrics_registry.register_histogram(
-            "profiler_sample_duration_ms",
-            "Duration of profiled operations in milliseconds",
-            labels.clone()
-        ).await?;
+
+        self.metrics_registry
+            .register_gauge(
+                "profiler_active_samples",
+                "Number of active profiling samples",
+                labels.clone(),
+            )
+            .await?;
+
+        self.metrics_registry
+            .register_gauge(
+                "profiler_active_spans",
+                "Number of active profiling spans",
+                labels.clone(),
+            )
+            .await?;
+
+        self.metrics_registry
+            .register_counter(
+                "profiler_samples_total",
+                "Total number of profiling samples recorded",
+                labels.clone(),
+            )
+            .await?;
+
+        self.metrics_registry
+            .register_histogram(
+                "profiler_sample_duration_ms",
+                "Duration of profiled operations in milliseconds",
+                labels.clone(),
+            )
+            .await?;
 
         Ok(())
     }
@@ -263,10 +270,10 @@ impl Profiler {
 
         tokio::spawn(async move {
             let mut interval_timer = tokio::time::interval(interval);
-            
+
             loop {
                 interval_timer.tick().await;
-                
+
                 if let Err(e) = Self::aggregate_samples(&samples, &stats, &metrics).await {
                     error!("Failed to aggregate profiling samples: {}", e);
                 }
@@ -280,14 +287,17 @@ impl Profiler {
 
         tokio::spawn(async move {
             let mut interval_timer = tokio::time::interval(interval);
-            
+
             loop {
                 interval_timer.tick().await;
-                
+
                 match profiler.export_data().await {
                     Ok(export) => {
-                        debug!("Exported profiling data: {} stats, {} samples", 
-                               export.stats.len(), export.recent_samples.len());
+                        debug!(
+                            "Exported profiling data: {} stats, {} samples",
+                            export.stats.len(),
+                            export.recent_samples.len()
+                        );
                     }
                     Err(e) => {
                         error!("Failed to export profiling data: {}", e);
@@ -304,20 +314,25 @@ impl Profiler {
     ) -> Result<()> {
         let samples_guard = samples.read().await;
         let mut stats_guard = stats.write().await;
-        
+
         // Update metrics
-        let _ = metrics.set_gauge("profiler_active_samples", samples_guard.len() as f64).await;
-        
+        let _ = metrics
+            .set_gauge("profiler_active_samples", samples_guard.len() as f64)
+            .await;
+
         // Group samples by function name
         let mut function_samples: HashMap<String, Vec<&ProfileSample>> = HashMap::new();
         for sample in samples_guard.iter() {
-            function_samples.entry(sample.name.clone()).or_default().push(sample);
+            function_samples
+                .entry(sample.name.clone())
+                .or_default()
+                .push(sample);
         }
 
         // Aggregate statistics for each function
         for (function_name, samples) in function_samples {
             let durations: Vec<u64> = samples.iter().map(|s| s.duration_ns).collect();
-            
+
             if durations.is_empty() {
                 continue;
             }
@@ -331,14 +346,23 @@ impl Profiler {
             // Calculate percentiles
             let mut sorted_durations = durations.clone();
             sorted_durations.sort_unstable();
-            
+
             let p50_idx = (sorted_durations.len() as f64 * 0.5) as usize;
             let p95_idx = (sorted_durations.len() as f64 * 0.95) as usize;
             let p99_idx = (sorted_durations.len() as f64 * 0.99) as usize;
-            
-            let p50_duration = sorted_durations.get(p50_idx).copied().unwrap_or(avg_duration);
-            let p95_duration = sorted_durations.get(p95_idx).copied().unwrap_or(max_duration);
-            let p99_duration = sorted_durations.get(p99_idx).copied().unwrap_or(max_duration);
+
+            let p50_duration = sorted_durations
+                .get(p50_idx)
+                .copied()
+                .unwrap_or(avg_duration);
+            let p95_duration = sorted_durations
+                .get(p95_idx)
+                .copied()
+                .unwrap_or(max_duration);
+            let p99_duration = sorted_durations
+                .get(p99_idx)
+                .copied()
+                .unwrap_or(max_duration);
 
             // Calculate samples per second (simplified)
             let samples_per_second = total_calls as f64 / 60.0; // Approximate over last minute
@@ -361,7 +385,9 @@ impl Profiler {
 
             // Record in metrics
             let duration_ms = avg_duration as f64 / 1_000_000.0;
-            let _ = metrics.observe_histogram("profiler_sample_duration_ms", duration_ms).await;
+            let _ = metrics
+                .observe_histogram("profiler_sample_duration_ms", duration_ms)
+                .await;
         }
 
         Ok(())
@@ -409,7 +435,7 @@ impl ProfileSpan {
     /// End the span and record the duration
     pub async fn end(self) -> Result<Duration> {
         let duration = self.start_time.elapsed();
-        
+
         if let Some(profiler) = &self.profiler {
             // Remove from active spans
             profiler.active_spans.write().await.remove(&self.id);
@@ -426,9 +452,12 @@ impl ProfileSpan {
             };
 
             profiler.record_sample(sample).await?;
-            
+
             // Update metrics
-            let _ = profiler.metrics_registry.increment_counter("profiler_samples_total", 1.0).await;
+            let _ = profiler
+                .metrics_registry
+                .increment_counter("profiler_samples_total", 1.0)
+                .await;
         }
 
         Ok(duration)
@@ -516,7 +545,7 @@ mod tests {
 
         let stats = profiler.get_function_stats("test_function").await?;
         assert!(stats.is_some());
-        
+
         let stats = stats.unwrap();
         assert_eq!(stats.total_calls, 1);
         assert!(stats.avg_duration_ns > 0);

@@ -1,52 +1,52 @@
 //! Advanced Analytics & Business Intelligence Platform
-//! 
+//!
 //! Comprehensive analytics, reporting, and business intelligence system
 //! for enterprise virtual world operations and management.
 
-use uuid::Uuid;
-use chrono::{DateTime, Utc};
-use serde::{Serialize, Deserialize};
-use std::collections::HashMap;
 use crate::database::DatabaseManager;
 use crate::monitoring::MetricsCollector;
-use std::sync::Arc;
 use anyhow::Result;
+use chrono::{DateTime, Utc};
+use serde::{Deserialize, Serialize};
+use std::collections::HashMap;
+use std::sync::Arc;
+use uuid::Uuid;
 
-pub mod data_collection;
 pub mod business_intelligence;
+pub mod dashboard;
+pub mod data_collection;
+pub mod export;
 pub mod predictive_analytics;
 pub mod reporting;
-pub mod dashboard;
-pub mod export;
 
-pub use data_collection::*;
 pub use business_intelligence::*;
+pub use dashboard::*;
+pub use data_collection::*;
+pub use export::*;
 pub use predictive_analytics::*;
 pub use reporting::*;
-pub use dashboard::*;
-pub use export::*;
 
 /// Analytics system errors
 #[derive(Debug, thiserror::Error)]
 pub enum AnalyticsError {
     #[error("Data collection failed: {reason}")]
     DataCollectionFailed { reason: String },
-    
+
     #[error("Analytics processing failed: {reason}")]
     ProcessingFailed { reason: String },
-    
+
     #[error("Report generation failed: {reason}")]
     ReportGenerationFailed { reason: String },
-    
+
     #[error("Export failed: {reason}")]
     ExportFailed { reason: String },
-    
+
     #[error("Database error: {0}")]
     DatabaseError(#[from] sqlx::Error),
-    
+
     #[error("Configuration error: {reason}")]
     ConfigurationError { reason: String },
-    
+
     #[error("Prediction failed: {reason}")]
     PredictionFailed { reason: String },
 }
@@ -317,7 +317,10 @@ pub enum TimePeriod {
     Monthly,
     Quarterly,
     Yearly,
-    Custom { start: DateTime<Utc>, end: DateTime<Utc> },
+    Custom {
+        start: DateTime<Utc>,
+        end: DateTime<Utc>,
+    },
 }
 
 /// Historical KPI value
@@ -335,37 +338,19 @@ impl AnalyticsManager {
         metrics_collector: Arc<MetricsCollector>,
         config: AnalyticsConfig,
     ) -> AnalyticsResult<Self> {
-        let data_collector = DataCollector::new(
-            database.clone(),
-            metrics_collector.clone(),
-            config.clone(),
-        )?;
-        
-        let bi_engine = BusinessIntelligenceEngine::new(
-            database.clone(),
-            config.clone(),
-        )?;
-        
-        let predictive_engine = PredictiveAnalyticsEngine::new(
-            database.clone(),
-            config.clone(),
-        )?;
-        
-        let reporting_engine = ReportingEngine::new(
-            database.clone(),
-            config.clone(),
-        )?;
-        
-        let dashboard_manager = DashboardManager::new(
-            database.clone(),
-            config.clone(),
-        )?;
-        
-        let export_manager = ExportManager::new(
-            database.clone(),
-            config.clone(),
-        )?;
-        
+        let data_collector =
+            DataCollector::new(database.clone(), metrics_collector.clone(), config.clone())?;
+
+        let bi_engine = BusinessIntelligenceEngine::new(database.clone(), config.clone())?;
+
+        let predictive_engine = PredictiveAnalyticsEngine::new(database.clone(), config.clone())?;
+
+        let reporting_engine = ReportingEngine::new(database.clone(), config.clone())?;
+
+        let dashboard_manager = DashboardManager::new(database.clone(), config.clone())?;
+
+        let export_manager = ExportManager::new(database.clone(), config.clone())?;
+
         Ok(Self {
             database,
             metrics_collector,
@@ -378,76 +363,89 @@ impl AnalyticsManager {
             config,
         })
     }
-    
+
     /// Initialize the analytics system
     pub async fn initialize(&self) -> AnalyticsResult<()> {
         // Initialize data collection
         self.data_collector.initialize().await?;
-        
+
         // Initialize business intelligence engine
         self.bi_engine.initialize().await?;
-        
+
         // Initialize predictive analytics
         if self.config.predictive_analytics_enabled {
             self.predictive_engine.initialize().await?;
         }
-        
+
         // Initialize reporting engine
         self.reporting_engine.initialize().await?;
-        
+
         // Initialize dashboard manager
         self.dashboard_manager.initialize().await?;
-        
+
         // Initialize export manager
         self.export_manager.initialize().await?;
-        
+
         Ok(())
     }
-    
+
     /// Collect analytics data point
     pub async fn collect_data_point(&self, data_point: AnalyticsDataPoint) -> AnalyticsResult<()> {
         self.data_collector.collect_data_point(data_point).await
     }
-    
+
     /// Process real-time event
     pub async fn process_real_time_event(&self, event: RealTimeEvent) -> AnalyticsResult<()> {
         self.data_collector.process_real_time_event(event).await
     }
-    
+
     /// Generate business intelligence insights
-    pub async fn generate_insights(&self, time_period: TimePeriod) -> AnalyticsResult<Vec<AnalyticsInsight>> {
+    pub async fn generate_insights(
+        &self,
+        time_period: TimePeriod,
+    ) -> AnalyticsResult<Vec<AnalyticsInsight>> {
         self.bi_engine.generate_insights(time_period).await
     }
-    
+
     /// Get business KPIs
-    pub async fn get_business_kpis(&self, category: Option<KPICategory>) -> AnalyticsResult<Vec<BusinessKPI>> {
+    pub async fn get_business_kpis(
+        &self,
+        category: Option<KPICategory>,
+    ) -> AnalyticsResult<Vec<BusinessKPI>> {
         self.bi_engine.get_business_kpis(category).await
     }
-    
+
     /// Generate predictive forecast
     pub async fn generate_forecast(
         &self,
         metric_name: String,
         forecast_period: TimePeriod,
     ) -> AnalyticsResult<PredictiveForecast> {
-        self.predictive_engine.generate_forecast(metric_name, forecast_period).await
+        self.predictive_engine
+            .generate_forecast(metric_name, forecast_period)
+            .await
     }
-    
+
     /// Generate analytics report
     pub async fn generate_report(&self, report_request: ReportRequest) -> AnalyticsResult<Report> {
         self.reporting_engine.generate_report(report_request).await
     }
-    
+
     /// Get dashboard data
     pub async fn get_dashboard_data(&self, dashboard_id: Uuid) -> AnalyticsResult<DashboardData> {
-        self.dashboard_manager.get_dashboard_data(dashboard_id).await
+        self.dashboard_manager
+            .get_dashboard_data(dashboard_id)
+            .await
     }
-    
+
     /// Export analytics data
-    pub async fn export_data(&self, export_request: ExportRequest) -> AnalyticsResult<ExportResult> {
+    pub async fn export_data(
+        &self,
+        export_request: ExportRequest,
+    ) -> AnalyticsResult<ExportResult> {
         self.export_manager.export_data(export_request).await
     }
-    
+
     /// Get analytics system health
     pub async fn get_system_health(&self) -> AnalyticsSystemHealth {
         AnalyticsSystemHealth {

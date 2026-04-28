@@ -10,8 +10,8 @@ use async_trait::async_trait;
 use std::sync::Arc;
 use tracing::{debug, info, warn};
 
-use crate::services::traits::{AssetServiceTrait, AssetBase, AssetMetadata};
 use crate::database::multi_backend::DatabaseConnection;
+use crate::services::traits::{AssetBase, AssetMetadata, AssetServiceTrait};
 
 pub struct LocalAssetService {
     connection: Arc<DatabaseConnection>,
@@ -43,7 +43,7 @@ impl AssetServiceTrait for LocalAssetService {
                    creator_id, asset_flags, created_at
             FROM assets
             WHERE id = $1
-            "#
+            "#,
         )
         .bind(id)
         .fetch_optional(pool)
@@ -67,7 +67,7 @@ impl AssetServiceTrait for LocalAssetService {
                    creator_id, asset_flags, created_at
             FROM assets
             WHERE id = $1
-            "#
+            "#,
         )
         .bind(id)
         .fetch_optional(pool)
@@ -85,13 +85,11 @@ impl AssetServiceTrait for LocalAssetService {
         debug!("Getting asset data: {}", id);
 
         let pool = self.get_pg_pool()?;
-        let row: Option<(Vec<u8>,)> = sqlx::query_as(
-            "SELECT data FROM assets WHERE id = $1"
-        )
-        .bind(id)
-        .fetch_optional(pool)
-        .await
-        .map_err(|e| anyhow!("Failed to get asset data: {}", e))?;
+        let row: Option<(Vec<u8>,)> = sqlx::query_as("SELECT data FROM assets WHERE id = $1")
+            .bind(id)
+            .fetch_optional(pool)
+            .await
+            .map_err(|e| anyhow!("Failed to get asset data: {}", e))?;
 
         Ok(row.map(|(data,)| data))
     }
@@ -112,7 +110,7 @@ impl AssetServiceTrait for LocalAssetService {
                 description = EXCLUDED.description,
                 data = EXCLUDED.data,
                 asset_flags = EXCLUDED.asset_flags
-            "#
+            "#,
         )
         .bind(&asset.id)
         .bind(&asset.name)
@@ -147,13 +145,11 @@ impl AssetServiceTrait for LocalAssetService {
         debug!("Checking if asset exists: {}", id);
 
         let pool = self.get_pg_pool()?;
-        let result: Option<(i32,)> = sqlx::query_as(
-            "SELECT 1 FROM assets WHERE id = $1 LIMIT 1"
-        )
-        .bind(id)
-        .fetch_optional(pool)
-        .await
-        .map_err(|e| anyhow!("Failed to check asset existence: {}", e))?;
+        let result: Option<(i32,)> = sqlx::query_as("SELECT 1 FROM assets WHERE id = $1 LIMIT 1")
+            .bind(id)
+            .fetch_optional(pool)
+            .await
+            .map_err(|e| anyhow!("Failed to check asset existence: {}", e))?;
         Ok(result.is_some())
     }
 }
@@ -176,8 +172,8 @@ impl LocalAssetService {
     }
 
     fn row_to_asset_metadata(&self, row: &sqlx::postgres::PgRow) -> Result<AssetMetadata> {
-        use sqlx::Row;
         use chrono::{DateTime, Utc};
+        use sqlx::Row;
 
         let created_at: DateTime<Utc> = row.try_get("created_at").unwrap_or_else(|_| Utc::now());
 

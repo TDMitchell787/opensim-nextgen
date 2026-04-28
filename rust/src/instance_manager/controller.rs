@@ -13,8 +13,8 @@ use tracing::{debug, error, info, warn};
 
 use super::registry::InstanceRegistry;
 use super::types::{
-    BatchResult, BatchStatus, CommandResult, ConsoleEntry, ConsoleOutputType,
-    InstanceCommand, InstanceStatus, RegionControlAction, UserManagementAction,
+    BatchResult, BatchStatus, CommandResult, ConsoleEntry, ConsoleOutputType, InstanceCommand,
+    InstanceStatus, RegionControlAction, UserManagementAction,
 };
 
 /// Controller for executing commands on instances
@@ -49,9 +49,8 @@ pub enum ControllerEvent {
 impl InstanceController {
     /// Create a new instance controller
     pub fn new(registry: Arc<InstanceRegistry>) -> Self {
-        let command_timeout = Duration::from_millis(
-            registry.controller_config().command_timeout_ms
-        );
+        let command_timeout =
+            Duration::from_millis(registry.controller_config().command_timeout_ms);
 
         let http_client = Client::builder()
             .timeout(command_timeout)
@@ -79,7 +78,8 @@ impl InstanceController {
         instance_id: &str,
         command: InstanceCommand,
     ) -> Result<CommandResult> {
-        let config = self.registry
+        let config = self
+            .registry
             .get_instance_config(instance_id)
             .await
             .ok_or_else(|| anyhow!("Instance not found: {}", instance_id))?;
@@ -92,7 +92,10 @@ impl InstanceController {
             command: command_name.clone(),
         });
 
-        info!("Executing command {:?} on instance {}", command, instance_id);
+        info!(
+            "Executing command {:?} on instance {}",
+            command, instance_id
+        );
 
         let result = match command {
             InstanceCommand::GetStatus => self.get_status(&config).await,
@@ -174,7 +177,8 @@ impl InstanceController {
         instance_id: &str,
         command: &str,
     ) -> Result<CommandResult> {
-        let config = self.registry
+        let config = self
+            .registry
             .get_instance_config(instance_id)
             .await
             .ok_or_else(|| anyhow!("Instance not found: {}", instance_id))?;
@@ -183,7 +187,8 @@ impl InstanceController {
 
         let url = format!("{}/api/system/command", config.admin_url());
 
-        let response = self.http_client
+        let response = self
+            .http_client
             .post(&url)
             .header("Authorization", format!("Bearer {}", config.get_api_key()))
             .json(&serde_json::json!({ "command": command }))
@@ -198,19 +203,21 @@ impl InstanceController {
             )));
         }
 
-        let body: serde_json::Value = response.json().await
+        let body: serde_json::Value = response
+            .json()
+            .await
             .map_err(|e| anyhow!("Failed to parse console response: {}", e))?;
 
-        let output = body.get("output")
-            .and_then(|v| v.as_str())
-            .unwrap_or("");
+        let output = body.get("output").and_then(|v| v.as_str()).unwrap_or("");
 
-        let _ = self.event_tx.send(ControllerEvent::ConsoleOutput(ConsoleEntry {
-            instance_id: instance_id.to_string(),
-            content: output.to_string(),
-            output_type: ConsoleOutputType::Stdout,
-            timestamp: chrono::Utc::now(),
-        }));
+        let _ = self
+            .event_tx
+            .send(ControllerEvent::ConsoleOutput(ConsoleEntry {
+                instance_id: instance_id.to_string(),
+                content: output.to_string(),
+                output_type: ConsoleOutputType::Stdout,
+                timestamp: chrono::Utc::now(),
+            }));
 
         Ok(CommandResult::success_with_data(
             "Console command executed",
@@ -224,7 +231,8 @@ impl InstanceController {
         instance_id: &str,
         action: UserManagementAction,
     ) -> Result<CommandResult> {
-        let config = self.registry
+        let config = self
+            .registry
             .get_instance_config(instance_id)
             .await
             .ok_or_else(|| anyhow!("Instance not found: {}", instance_id))?;
@@ -244,28 +252,41 @@ impl InstanceController {
             UserManagementAction::Create { user } => {
                 ("POST", "/admin/users".to_string(), Some(user.clone()))
             }
-            UserManagementAction::Update { user_id, updates } => {
-                ("PUT", format!("/admin/users/{}", user_id), Some(updates.clone()))
-            }
+            UserManagementAction::Update { user_id, updates } => (
+                "PUT",
+                format!("/admin/users/{}", user_id),
+                Some(updates.clone()),
+            ),
             UserManagementAction::Delete { user_id } => {
                 ("DELETE", format!("/admin/users/{}", user_id), None)
             }
-            UserManagementAction::ResetPassword { user_id, new_password } => {
-                ("PUT", format!("/admin/users/{}/password", user_id),
-                 Some(serde_json::json!({ "password": new_password })))
-            }
-            UserManagementAction::SetLevel { user_id, level } => {
-                ("PUT", format!("/admin/users/{}/level", user_id),
-                 Some(serde_json::json!({ "level": level })))
-            }
-            UserManagementAction::Kick { user_id, reason } => {
-                ("POST", format!("/admin/users/{}/kick", user_id),
-                 Some(serde_json::json!({ "reason": reason })))
-            }
-            UserManagementAction::Ban { user_id, reason, duration_hours } => {
-                ("POST", format!("/admin/users/{}/ban", user_id),
-                 Some(serde_json::json!({ "reason": reason, "duration_hours": duration_hours })))
-            }
+            UserManagementAction::ResetPassword {
+                user_id,
+                new_password,
+            } => (
+                "PUT",
+                format!("/admin/users/{}/password", user_id),
+                Some(serde_json::json!({ "password": new_password })),
+            ),
+            UserManagementAction::SetLevel { user_id, level } => (
+                "PUT",
+                format!("/admin/users/{}/level", user_id),
+                Some(serde_json::json!({ "level": level })),
+            ),
+            UserManagementAction::Kick { user_id, reason } => (
+                "POST",
+                format!("/admin/users/{}/kick", user_id),
+                Some(serde_json::json!({ "reason": reason })),
+            ),
+            UserManagementAction::Ban {
+                user_id,
+                reason,
+                duration_hours,
+            } => (
+                "POST",
+                format!("/admin/users/{}/ban", user_id),
+                Some(serde_json::json!({ "reason": reason, "duration_hours": duration_hours })),
+            ),
         };
 
         let url = format!("{}{}", config.admin_url(), endpoint);
@@ -284,7 +305,9 @@ impl InstanceController {
             request = request.json(&body);
         }
 
-        let response = request.send().await
+        let response = request
+            .send()
+            .await
             .map_err(|e| anyhow!("User management request failed: {}", e))?;
 
         if !response.status().is_success() {
@@ -296,7 +319,10 @@ impl InstanceController {
 
         let data: serde_json::Value = response.json().await.unwrap_or(serde_json::Value::Null);
 
-        Ok(CommandResult::success_with_data("User action completed", data))
+        Ok(CommandResult::success_with_data(
+            "User action completed",
+            data,
+        ))
     }
 
     /// Execute a region control action
@@ -305,15 +331,14 @@ impl InstanceController {
         instance_id: &str,
         action: RegionControlAction,
     ) -> Result<CommandResult> {
-        let config = self.registry
+        let config = self
+            .registry
             .get_instance_config(instance_id)
             .await
             .ok_or_else(|| anyhow!("Instance not found: {}", instance_id))?;
 
         let (method, endpoint, body) = match &action {
-            RegionControlAction::List => {
-                ("GET", "/admin/regions".to_string(), None)
-            }
+            RegionControlAction::List => ("GET", "/admin/regions".to_string(), None),
             RegionControlAction::Get { region_id } => {
                 ("GET", format!("/admin/regions/{}", region_id), None)
             }
@@ -323,24 +348,38 @@ impl InstanceController {
             RegionControlAction::Stop { region_id } => {
                 ("POST", format!("/admin/regions/{}/stop", region_id), None)
             }
-            RegionControlAction::Restart { region_id } => {
-                ("POST", format!("/admin/regions/{}/restart", region_id), None)
-            }
+            RegionControlAction::Restart { region_id } => (
+                "POST",
+                format!("/admin/regions/{}/restart", region_id),
+                None,
+            ),
             RegionControlAction::Backup { region_id } => {
                 ("POST", format!("/admin/regions/{}/backup", region_id), None)
             }
-            RegionControlAction::LoadOar { region_id, oar_path } => {
-                ("POST", format!("/admin/regions/{}/load-oar", region_id),
-                 Some(serde_json::json!({ "oar_path": oar_path })))
-            }
-            RegionControlAction::SaveOar { region_id, oar_path } => {
-                ("POST", format!("/admin/regions/{}/save-oar", region_id),
-                 Some(serde_json::json!({ "oar_path": oar_path })))
-            }
-            RegionControlAction::TeleportAll { region_id, target_region } => {
-                ("POST", format!("/admin/regions/{}/teleport-all", region_id),
-                 Some(serde_json::json!({ "target_region": target_region })))
-            }
+            RegionControlAction::LoadOar {
+                region_id,
+                oar_path,
+            } => (
+                "POST",
+                format!("/admin/regions/{}/load-oar", region_id),
+                Some(serde_json::json!({ "oar_path": oar_path })),
+            ),
+            RegionControlAction::SaveOar {
+                region_id,
+                oar_path,
+            } => (
+                "POST",
+                format!("/admin/regions/{}/save-oar", region_id),
+                Some(serde_json::json!({ "oar_path": oar_path })),
+            ),
+            RegionControlAction::TeleportAll {
+                region_id,
+                target_region,
+            } => (
+                "POST",
+                format!("/admin/regions/{}/teleport-all", region_id),
+                Some(serde_json::json!({ "target_region": target_region })),
+            ),
         };
 
         let url = format!("{}{}", config.admin_url(), endpoint);
@@ -357,7 +396,9 @@ impl InstanceController {
             request = request.json(&body);
         }
 
-        let response = request.send().await
+        let response = request
+            .send()
+            .await
             .map_err(|e| anyhow!("Region control request failed: {}", e))?;
 
         if !response.status().is_success() {
@@ -369,54 +410,84 @@ impl InstanceController {
 
         let data: serde_json::Value = response.json().await.unwrap_or(serde_json::Value::Null);
 
-        Ok(CommandResult::success_with_data("Region action completed", data))
+        Ok(CommandResult::success_with_data(
+            "Region action completed",
+            data,
+        ))
     }
 
     // Private helper methods
 
-    async fn get_status(&self, config: &super::config_loader::InstanceConfig) -> Result<CommandResult> {
+    async fn get_status(
+        &self,
+        config: &super::config_loader::InstanceConfig,
+    ) -> Result<CommandResult> {
         let url = format!("{}/api/status", config.admin_url());
 
-        let response = self.http_client
+        let response = self
+            .http_client
             .get(&url)
             .header("Authorization", format!("Bearer {}", config.get_api_key()))
             .send()
             .await?;
 
         if !response.status().is_success() {
-            return Ok(CommandResult::failure(format!("Status check failed: {}", response.status())));
+            return Ok(CommandResult::failure(format!(
+                "Status check failed: {}",
+                response.status()
+            )));
         }
 
         let data: serde_json::Value = response.json().await?;
         Ok(CommandResult::success_with_data("Status retrieved", data))
     }
 
-    async fn get_metrics(&self, config: &super::config_loader::InstanceConfig) -> Result<CommandResult> {
+    async fn get_metrics(
+        &self,
+        config: &super::config_loader::InstanceConfig,
+    ) -> Result<CommandResult> {
         let url = format!("{}/metrics", config.metrics_url());
 
-        let response = self.http_client
+        let response = self
+            .http_client
             .get(&url)
             .header("api_key", config.get_api_key())
             .send()
             .await?;
 
         if !response.status().is_success() {
-            return Ok(CommandResult::failure(format!("Metrics fetch failed: {}", response.status())));
+            return Ok(CommandResult::failure(format!(
+                "Metrics fetch failed: {}",
+                response.status()
+            )));
         }
 
         let text = response.text().await?;
-        Ok(CommandResult::success_with_data("Metrics retrieved", serde_json::json!({ "metrics": text })))
+        Ok(CommandResult::success_with_data(
+            "Metrics retrieved",
+            serde_json::json!({ "metrics": text }),
+        ))
     }
 
-    async fn start_instance(&self, config: &super::config_loader::InstanceConfig) -> Result<CommandResult> {
+    async fn start_instance(
+        &self,
+        config: &super::config_loader::InstanceConfig,
+    ) -> Result<CommandResult> {
         warn!("Start command requires external process management - not directly supported");
-        Ok(CommandResult::failure("Start command requires external process manager (systemd, docker, etc.)"))
+        Ok(CommandResult::failure(
+            "Start command requires external process manager (systemd, docker, etc.)",
+        ))
     }
 
-    async fn stop_instance(&self, config: &super::config_loader::InstanceConfig, graceful: bool) -> Result<CommandResult> {
+    async fn stop_instance(
+        &self,
+        config: &super::config_loader::InstanceConfig,
+        graceful: bool,
+    ) -> Result<CommandResult> {
         let url = format!("{}/api/system/shutdown", config.admin_url());
 
-        let response = self.http_client
+        let response = self
+            .http_client
             .post(&url)
             .header("Authorization", format!("Bearer {}", config.get_api_key()))
             .json(&serde_json::json!({ "graceful": graceful }))
@@ -424,17 +495,30 @@ impl InstanceController {
             .await?;
 
         if response.status().is_success() {
-            self.registry.update_status(&config.id, InstanceStatus::Stopping).await?;
-            Ok(CommandResult::success(if graceful { "Graceful shutdown initiated" } else { "Shutdown initiated" }))
+            self.registry
+                .update_status(&config.id, InstanceStatus::Stopping)
+                .await?;
+            Ok(CommandResult::success(if graceful {
+                "Graceful shutdown initiated"
+            } else {
+                "Shutdown initiated"
+            }))
         } else {
-            Ok(CommandResult::failure(format!("Shutdown failed: {}", response.status())))
+            Ok(CommandResult::failure(format!(
+                "Shutdown failed: {}",
+                response.status()
+            )))
         }
     }
 
-    async fn force_shutdown(&self, config: &super::config_loader::InstanceConfig) -> Result<CommandResult> {
+    async fn force_shutdown(
+        &self,
+        config: &super::config_loader::InstanceConfig,
+    ) -> Result<CommandResult> {
         let url = format!("{}/api/system/shutdown", config.admin_url());
 
-        let response = self.http_client
+        let response = self
+            .http_client
             .post(&url)
             .header("Authorization", format!("Bearer {}", config.get_api_key()))
             .json(&serde_json::json!({ "graceful": false, "force": true }))
@@ -442,34 +526,52 @@ impl InstanceController {
             .await?;
 
         if response.status().is_success() {
-            self.registry.update_status(&config.id, InstanceStatus::Stopping).await?;
+            self.registry
+                .update_status(&config.id, InstanceStatus::Stopping)
+                .await?;
             Ok(CommandResult::success("Force shutdown initiated"))
         } else {
-            Ok(CommandResult::failure(format!("Force shutdown failed: {}", response.status())))
+            Ok(CommandResult::failure(format!(
+                "Force shutdown failed: {}",
+                response.status()
+            )))
         }
     }
 
-    async fn restart_instance(&self, config: &super::config_loader::InstanceConfig) -> Result<CommandResult> {
+    async fn restart_instance(
+        &self,
+        config: &super::config_loader::InstanceConfig,
+    ) -> Result<CommandResult> {
         let url = format!("{}/api/system/restart", config.admin_url());
 
-        let response = self.http_client
+        let response = self
+            .http_client
             .post(&url)
             .header("Authorization", format!("Bearer {}", config.get_api_key()))
             .send()
             .await?;
 
         if response.status().is_success() {
-            self.registry.update_status(&config.id, InstanceStatus::Starting).await?;
+            self.registry
+                .update_status(&config.id, InstanceStatus::Starting)
+                .await?;
             Ok(CommandResult::success("Restart initiated"))
         } else {
-            Ok(CommandResult::failure(format!("Restart failed: {}", response.status())))
+            Ok(CommandResult::failure(format!(
+                "Restart failed: {}",
+                response.status()
+            )))
         }
     }
 
-    async fn reload_config(&self, config: &super::config_loader::InstanceConfig) -> Result<CommandResult> {
+    async fn reload_config(
+        &self,
+        config: &super::config_loader::InstanceConfig,
+    ) -> Result<CommandResult> {
         let url = format!("{}/api/config/reload", config.admin_url());
 
-        let response = self.http_client
+        let response = self
+            .http_client
             .post(&url)
             .header("Authorization", format!("Bearer {}", config.get_api_key()))
             .send()
@@ -478,14 +580,21 @@ impl InstanceController {
         if response.status().is_success() {
             Ok(CommandResult::success("Configuration reloaded"))
         } else {
-            Ok(CommandResult::failure(format!("Config reload failed: {}", response.status())))
+            Ok(CommandResult::failure(format!(
+                "Config reload failed: {}",
+                response.status()
+            )))
         }
     }
 
-    async fn backup_instance(&self, config: &super::config_loader::InstanceConfig) -> Result<CommandResult> {
+    async fn backup_instance(
+        &self,
+        config: &super::config_loader::InstanceConfig,
+    ) -> Result<CommandResult> {
         let url = format!("{}/api/system/backup", config.admin_url());
 
-        let response = self.http_client
+        let response = self
+            .http_client
             .post(&url)
             .header("Authorization", format!("Bearer {}", config.get_api_key()))
             .send()
@@ -495,14 +604,21 @@ impl InstanceController {
             let data: serde_json::Value = response.json().await?;
             Ok(CommandResult::success_with_data("Backup created", data))
         } else {
-            Ok(CommandResult::failure(format!("Backup failed: {}", response.status())))
+            Ok(CommandResult::failure(format!(
+                "Backup failed: {}",
+                response.status()
+            )))
         }
     }
 
-    async fn get_logs(&self, config: &super::config_loader::InstanceConfig) -> Result<CommandResult> {
+    async fn get_logs(
+        &self,
+        config: &super::config_loader::InstanceConfig,
+    ) -> Result<CommandResult> {
         let url = format!("{}/api/logs?limit=100", config.admin_url());
 
-        let response = self.http_client
+        let response = self
+            .http_client
             .get(&url)
             .header("Authorization", format!("Bearer {}", config.get_api_key()))
             .send()
@@ -512,7 +628,10 @@ impl InstanceController {
             let data: serde_json::Value = response.json().await?;
             Ok(CommandResult::success_with_data("Logs retrieved", data))
         } else {
-            Ok(CommandResult::failure(format!("Get logs failed: {}", response.status())))
+            Ok(CommandResult::failure(format!(
+                "Get logs failed: {}",
+                response.status()
+            )))
         }
     }
 }

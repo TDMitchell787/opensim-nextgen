@@ -1,7 +1,7 @@
-use std::collections::HashMap;
 use serde::{Deserialize, Serialize};
+use std::collections::HashMap;
 use thiserror::Error;
-use tracing::{info, warn, error, debug};
+use tracing::{debug, error, info, warn};
 
 /// Message template manager for LLUDP messages
 /// Implements critical Second Life messages based on Cool Viewer's reliable patterns
@@ -175,7 +175,10 @@ impl MessageTemplateManager {
         self.add_agent_throttle();
         self.add_enable_simulator();
 
-        info!("Loaded {} critical LLUDP message templates", self.templates.len());
+        info!(
+            "Loaded {} critical LLUDP message templates",
+            self.templates.len()
+        );
     }
 
     /// Add UseCircuitCode message (Critical for login)
@@ -188,29 +191,27 @@ impl MessageTemplateManager {
             encoding: MessageEncoding::Unencoded,
             zerocoded: false,
             deprecated: false,
-            blocks: vec![
-                MessageBlock {
-                    name: "CircuitCode".to_string(),
-                    block_type: BlockType::Single,
-                    fields: vec![
-                        MessageField {
-                            name: "Code".to_string(),
-                            field_type: FieldType::U32,
-                            size: None,
-                        },
-                        MessageField {
-                            name: "SessionID".to_string(),
-                            field_type: FieldType::LLUUID,
-                            size: None,
-                        },
-                        MessageField {
-                            name: "ID".to_string(),
-                            field_type: FieldType::LLUUID,
-                            size: None,
-                        },
-                    ],
-                },
-            ],
+            blocks: vec![MessageBlock {
+                name: "CircuitCode".to_string(),
+                block_type: BlockType::Single,
+                fields: vec![
+                    MessageField {
+                        name: "Code".to_string(),
+                        field_type: FieldType::U32,
+                        size: None,
+                    },
+                    MessageField {
+                        name: "SessionID".to_string(),
+                        field_type: FieldType::LLUUID,
+                        size: None,
+                    },
+                    MessageField {
+                        name: "ID".to_string(),
+                        field_type: FieldType::LLUUID,
+                        size: None,
+                    },
+                ],
+            }],
         };
         self.add_template(template);
     }
@@ -225,19 +226,15 @@ impl MessageTemplateManager {
             encoding: MessageEncoding::Unencoded,
             zerocoded: false,
             deprecated: false,
-            blocks: vec![
-                MessageBlock {
-                    name: "Packets".to_string(),
-                    block_type: BlockType::Variable,
-                    fields: vec![
-                        MessageField {
-                            name: "ID".to_string(),
-                            field_type: FieldType::U32,
-                            size: None,
-                        },
-                    ],
-                },
-            ],
+            blocks: vec![MessageBlock {
+                name: "Packets".to_string(),
+                block_type: BlockType::Variable,
+                fields: vec![MessageField {
+                    name: "ID".to_string(),
+                    field_type: FieldType::U32,
+                    size: None,
+                }],
+            }],
         };
         self.add_template(template);
     }
@@ -252,24 +249,22 @@ impl MessageTemplateManager {
             encoding: MessageEncoding::Unencoded,
             zerocoded: false,
             deprecated: false,
-            blocks: vec![
-                MessageBlock {
-                    name: "PingID".to_string(),
-                    block_type: BlockType::Single,
-                    fields: vec![
-                        MessageField {
-                            name: "PingID".to_string(),
-                            field_type: FieldType::U8,
-                            size: None,
-                        },
-                        MessageField {
-                            name: "OldestUnacked".to_string(),
-                            field_type: FieldType::U32,
-                            size: None,
-                        },
-                    ],
-                },
-            ],
+            blocks: vec![MessageBlock {
+                name: "PingID".to_string(),
+                block_type: BlockType::Single,
+                fields: vec![
+                    MessageField {
+                        name: "PingID".to_string(),
+                        field_type: FieldType::U8,
+                        size: None,
+                    },
+                    MessageField {
+                        name: "OldestUnacked".to_string(),
+                        field_type: FieldType::U32,
+                        size: None,
+                    },
+                ],
+            }],
         };
         self.add_template(template);
     }
@@ -284,19 +279,15 @@ impl MessageTemplateManager {
             encoding: MessageEncoding::Unencoded,
             zerocoded: false,
             deprecated: false,
-            blocks: vec![
-                MessageBlock {
+            blocks: vec![MessageBlock {
+                name: "PingID".to_string(),
+                block_type: BlockType::Single,
+                fields: vec![MessageField {
                     name: "PingID".to_string(),
-                    block_type: BlockType::Single,
-                    fields: vec![
-                        MessageField {
-                            name: "PingID".to_string(),
-                            field_type: FieldType::U8,
-                            size: None,
-                        },
-                    ],
-                },
-            ],
+                    field_type: FieldType::U8,
+                    size: None,
+                }],
+            }],
         };
         self.add_template(template);
     }
@@ -311,74 +302,72 @@ impl MessageTemplateManager {
             encoding: MessageEncoding::Zerocoded,
             zerocoded: true,
             deprecated: false,
-            blocks: vec![
-                MessageBlock {
-                    name: "AgentData".to_string(),
-                    block_type: BlockType::Single,
-                    fields: vec![
-                        MessageField {
-                            name: "AgentID".to_string(),
-                            field_type: FieldType::LLUUID,
-                            size: None,
-                        },
-                        MessageField {
-                            name: "SessionID".to_string(),
-                            field_type: FieldType::LLUUID,
-                            size: None,
-                        },
-                        MessageField {
-                            name: "BodyRotation".to_string(),
-                            field_type: FieldType::LLQuaternion,
-                            size: None,
-                        },
-                        MessageField {
-                            name: "HeadRotation".to_string(),
-                            field_type: FieldType::LLQuaternion,
-                            size: None,
-                        },
-                        MessageField {
-                            name: "State".to_string(),
-                            field_type: FieldType::U8,
-                            size: None,
-                        },
-                        MessageField {
-                            name: "CameraCenter".to_string(),
-                            field_type: FieldType::LLVector3,
-                            size: None,
-                        },
-                        MessageField {
-                            name: "CameraAtAxis".to_string(),
-                            field_type: FieldType::LLVector3,
-                            size: None,
-                        },
-                        MessageField {
-                            name: "CameraLeftAxis".to_string(),
-                            field_type: FieldType::LLVector3,
-                            size: None,
-                        },
-                        MessageField {
-                            name: "CameraUpAxis".to_string(),
-                            field_type: FieldType::LLVector3,
-                            size: None,
-                        },
-                        MessageField {
-                            name: "Far".to_string(),
-                            field_type: FieldType::F32,
-                            size: None,
-                        },
-                        MessageField {
-                            name: "ControlFlags".to_string(),
-                            field_type: FieldType::U32,
-                            size: None,
-                        },
-                        MessageField {
-                            name: "Flags".to_string(),
-                            field_type: FieldType::U8,
-                            size: None,
-                        },
-                    ],
-                },
-            ],
+            blocks: vec![MessageBlock {
+                name: "AgentData".to_string(),
+                block_type: BlockType::Single,
+                fields: vec![
+                    MessageField {
+                        name: "AgentID".to_string(),
+                        field_type: FieldType::LLUUID,
+                        size: None,
+                    },
+                    MessageField {
+                        name: "SessionID".to_string(),
+                        field_type: FieldType::LLUUID,
+                        size: None,
+                    },
+                    MessageField {
+                        name: "BodyRotation".to_string(),
+                        field_type: FieldType::LLQuaternion,
+                        size: None,
+                    },
+                    MessageField {
+                        name: "HeadRotation".to_string(),
+                        field_type: FieldType::LLQuaternion,
+                        size: None,
+                    },
+                    MessageField {
+                        name: "State".to_string(),
+                        field_type: FieldType::U8,
+                        size: None,
+                    },
+                    MessageField {
+                        name: "CameraCenter".to_string(),
+                        field_type: FieldType::LLVector3,
+                        size: None,
+                    },
+                    MessageField {
+                        name: "CameraAtAxis".to_string(),
+                        field_type: FieldType::LLVector3,
+                        size: None,
+                    },
+                    MessageField {
+                        name: "CameraLeftAxis".to_string(),
+                        field_type: FieldType::LLVector3,
+                        size: None,
+                    },
+                    MessageField {
+                        name: "CameraUpAxis".to_string(),
+                        field_type: FieldType::LLVector3,
+                        size: None,
+                    },
+                    MessageField {
+                        name: "Far".to_string(),
+                        field_type: FieldType::F32,
+                        size: None,
+                    },
+                    MessageField {
+                        name: "ControlFlags".to_string(),
+                        field_type: FieldType::U32,
+                        size: None,
+                    },
+                    MessageField {
+                        name: "Flags".to_string(),
+                        field_type: FieldType::U8,
+                        size: None,
+                    },
+                ],
+            }],
         };
         self.add_template(template);
     }
@@ -393,49 +382,47 @@ impl MessageTemplateManager {
             encoding: MessageEncoding::Zerocoded,
             zerocoded: true,
             deprecated: false,
-            blocks: vec![
-                MessageBlock {
-                    name: "AgentData".to_string(),
-                    block_type: BlockType::Single,
-                    fields: vec![
-                        MessageField {
-                            name: "AgentID".to_string(),
-                            field_type: FieldType::LLUUID,
-                            size: None,
-                        },
-                        MessageField {
-                            name: "FirstName".to_string(),
-                            field_type: FieldType::Variable(1),
-                            size: None,
-                        },
-                        MessageField {
-                            name: "LastName".to_string(),
-                            field_type: FieldType::Variable(1),
-                            size: None,
-                        },
-                        MessageField {
-                            name: "GroupTitle".to_string(),
-                            field_type: FieldType::Variable(1),
-                            size: None,
-                        },
-                        MessageField {
-                            name: "ActiveGroupID".to_string(),
-                            field_type: FieldType::LLUUID,
-                            size: None,
-                        },
-                        MessageField {
-                            name: "GroupPowers".to_string(),
-                            field_type: FieldType::U64,
-                            size: None,
-                        },
-                        MessageField {
-                            name: "GroupName".to_string(),
-                            field_type: FieldType::Variable(1),
-                            size: None,
-                        },
-                    ],
-                },
-            ],
+            blocks: vec![MessageBlock {
+                name: "AgentData".to_string(),
+                block_type: BlockType::Single,
+                fields: vec![
+                    MessageField {
+                        name: "AgentID".to_string(),
+                        field_type: FieldType::LLUUID,
+                        size: None,
+                    },
+                    MessageField {
+                        name: "FirstName".to_string(),
+                        field_type: FieldType::Variable(1),
+                        size: None,
+                    },
+                    MessageField {
+                        name: "LastName".to_string(),
+                        field_type: FieldType::Variable(1),
+                        size: None,
+                    },
+                    MessageField {
+                        name: "GroupTitle".to_string(),
+                        field_type: FieldType::Variable(1),
+                        size: None,
+                    },
+                    MessageField {
+                        name: "ActiveGroupID".to_string(),
+                        field_type: FieldType::LLUUID,
+                        size: None,
+                    },
+                    MessageField {
+                        name: "GroupPowers".to_string(),
+                        field_type: FieldType::U64,
+                        size: None,
+                    },
+                    MessageField {
+                        name: "GroupName".to_string(),
+                        field_type: FieldType::Variable(1),
+                        size: None,
+                    },
+                ],
+            }],
         };
         self.add_template(template);
     }
@@ -580,13 +567,11 @@ impl MessageTemplateManager {
                 MessageBlock {
                     name: "RegionInfo2".to_string(),
                     block_type: BlockType::Single,
-                    fields: vec![
-                        MessageField {
-                            name: "RegionID".to_string(),
-                            field_type: FieldType::LLUUID,
-                            size: None,
-                        },
-                    ],
+                    fields: vec![MessageField {
+                        name: "RegionID".to_string(),
+                        field_type: FieldType::LLUUID,
+                        size: None,
+                    }],
                 },
             ],
         };
@@ -649,13 +634,11 @@ impl MessageTemplateManager {
                 MessageBlock {
                     name: "SimData".to_string(),
                     block_type: BlockType::Single,
-                    fields: vec![
-                        MessageField {
-                            name: "ChannelVersion".to_string(),
-                            field_type: FieldType::Variable(2),
-                            size: None,
-                        },
-                    ],
+                    fields: vec![MessageField {
+                        name: "ChannelVersion".to_string(),
+                        field_type: FieldType::Variable(2),
+                        size: None,
+                    }],
                 },
             ],
         };
@@ -672,24 +655,22 @@ impl MessageTemplateManager {
             encoding: MessageEncoding::Unencoded,
             zerocoded: false,
             deprecated: false,
-            blocks: vec![
-                MessageBlock {
-                    name: "AgentData".to_string(),
-                    block_type: BlockType::Single,
-                    fields: vec![
-                        MessageField {
-                            name: "AgentID".to_string(),
-                            field_type: FieldType::LLUUID,
-                            size: None,
-                        },
-                        MessageField {
-                            name: "LocationID".to_string(),
-                            field_type: FieldType::U32,
-                            size: None,
-                        },
-                    ],
-                },
-            ],
+            blocks: vec![MessageBlock {
+                name: "AgentData".to_string(),
+                block_type: BlockType::Single,
+                fields: vec![
+                    MessageField {
+                        name: "AgentID".to_string(),
+                        field_type: FieldType::LLUUID,
+                        size: None,
+                    },
+                    MessageField {
+                        name: "LocationID".to_string(),
+                        field_type: FieldType::U32,
+                        size: None,
+                    },
+                ],
+            }],
         };
         self.add_template(template);
     }
@@ -703,24 +684,22 @@ impl MessageTemplateManager {
             encoding: MessageEncoding::Unencoded,
             zerocoded: false,
             deprecated: false,
-            blocks: vec![
-                MessageBlock {
-                    name: "AgentData".to_string(),
-                    block_type: BlockType::Single,
-                    fields: vec![
-                        MessageField {
-                            name: "AgentID".to_string(),
-                            field_type: FieldType::LLUUID,
-                            size: None,
-                        },
-                        MessageField {
-                            name: "SessionID".to_string(),
-                            field_type: FieldType::LLUUID,
-                            size: None,
-                        },
-                    ],
-                },
-            ],
+            blocks: vec![MessageBlock {
+                name: "AgentData".to_string(),
+                block_type: BlockType::Single,
+                fields: vec![
+                    MessageField {
+                        name: "AgentID".to_string(),
+                        field_type: FieldType::LLUUID,
+                        size: None,
+                    },
+                    MessageField {
+                        name: "SessionID".to_string(),
+                        field_type: FieldType::LLUUID,
+                        size: None,
+                    },
+                ],
+            }],
         };
         self.add_template(template);
     }
@@ -786,29 +765,27 @@ impl MessageTemplateManager {
             encoding: MessageEncoding::Zerocoded,
             zerocoded: true,
             deprecated: false,
-            blocks: vec![
-                MessageBlock {
-                    name: "SimulatorInfo".to_string(),
-                    block_type: BlockType::Single,
-                    fields: vec![
-                        MessageField {
-                            name: "Handle".to_string(),
-                            field_type: FieldType::U64,
-                            size: None,
-                        },
-                        MessageField {
-                            name: "IP".to_string(),
-                            field_type: FieldType::IPAddr,
-                            size: None,
-                        },
-                        MessageField {
-                            name: "Port".to_string(),
-                            field_type: FieldType::IPPort,
-                            size: None,
-                        },
-                    ],
-                },
-            ],
+            blocks: vec![MessageBlock {
+                name: "SimulatorInfo".to_string(),
+                block_type: BlockType::Single,
+                fields: vec![
+                    MessageField {
+                        name: "Handle".to_string(),
+                        field_type: FieldType::U64,
+                        size: None,
+                    },
+                    MessageField {
+                        name: "IP".to_string(),
+                        field_type: FieldType::IPAddr,
+                        size: None,
+                    },
+                    MessageField {
+                        name: "Port".to_string(),
+                        field_type: FieldType::IPPort,
+                        size: None,
+                    },
+                ],
+            }],
         };
         self.add_template(template);
     }
@@ -821,10 +798,10 @@ impl MessageTemplateManager {
 
         // Store in templates map
         self.templates.insert(name.clone(), template);
-        
+
         // Store in message numbers map
         self.message_numbers.insert(number, name.clone());
-        
+
         // Store in frequency map
         self.frequency_templates
             .entry(frequency)
@@ -834,36 +811,51 @@ impl MessageTemplateManager {
 
     /// Get template by name
     pub fn get_template(&self, name: &str) -> Result<&MessageTemplate, MessageTemplateError> {
-        self.templates.get(name).ok_or_else(|| MessageTemplateError::NotFound(name.to_string()))
+        self.templates
+            .get(name)
+            .ok_or_else(|| MessageTemplateError::NotFound(name.to_string()))
     }
 
     /// Get template by message number
-    pub fn get_template_by_number(&self, number: u32) -> Result<&MessageTemplate, MessageTemplateError> {
-        let name = self.message_numbers.get(&number)
+    pub fn get_template_by_number(
+        &self,
+        number: u32,
+    ) -> Result<&MessageTemplate, MessageTemplateError> {
+        let name = self
+            .message_numbers
+            .get(&number)
             .ok_or_else(|| MessageTemplateError::InvalidNumber(number))?;
         self.get_template(name)
     }
 
     /// Get all templates for a frequency
-    pub fn get_templates_by_frequency(&self, frequency: &MessageFrequency) -> Vec<&MessageTemplate> {
-        self.frequency_templates.get(frequency)
-            .map(|names| names.iter()
-                .filter_map(|name| self.templates.get(name))
-                .collect())
+    pub fn get_templates_by_frequency(
+        &self,
+        frequency: &MessageFrequency,
+    ) -> Vec<&MessageTemplate> {
+        self.frequency_templates
+            .get(frequency)
+            .map(|names| {
+                names
+                    .iter()
+                    .filter_map(|name| self.templates.get(name))
+                    .collect()
+            })
             .unwrap_or_default()
     }
 
     /// Check if message is critical for login
     pub fn is_critical_message(&self, name: &str) -> bool {
-        matches!(name, 
-            "UseCircuitCode" | 
-            "PacketAck" | 
-            "StartPingCheck" | 
-            "CompletePingCheck" | 
-            "AgentUpdate" | 
-            "AgentMovementComplete" |
-            "RegionHandshake" |
-            "LoginComplete"
+        matches!(
+            name,
+            "UseCircuitCode"
+                | "PacketAck"
+                | "StartPingCheck"
+                | "CompletePingCheck"
+                | "AgentUpdate"
+                | "AgentMovementComplete"
+                | "RegionHandshake"
+                | "LoginComplete"
         )
     }
 
@@ -874,8 +866,8 @@ impl MessageTemplateManager {
             FieldType::U16 | FieldType::S16 | FieldType::IPPort => Some(2),
             FieldType::U32 | FieldType::S32 | FieldType::F32 | FieldType::IPAddr => Some(4),
             FieldType::U64 | FieldType::S64 | FieldType::F64 => Some(8),
-            FieldType::LLVector3 => Some(12), // 3 floats
-            FieldType::LLVector3d => Some(24), // 3 doubles
+            FieldType::LLVector3 => Some(12),    // 3 floats
+            FieldType::LLVector3d => Some(24),   // 3 doubles
             FieldType::LLQuaternion => Some(16), // 4 floats
             FieldType::LLUUID => Some(16),
             FieldType::Variable(_) | FieldType::Fixed(0) => None, // Variable size
@@ -886,7 +878,7 @@ impl MessageTemplateManager {
     /// Validate message structure
     pub fn validate_message(&self, name: &str, data: &[u8]) -> Result<(), MessageTemplateError> {
         let template = self.get_template(name)?;
-        
+
         // Basic validation - check if we have minimum required data
         let mut expected_size = 0;
         for block in &template.blocks {
@@ -923,9 +915,9 @@ impl MessageTemplateManager {
     /// Get statistics
     pub fn get_statistics(&self) -> MessageTemplateStatistics {
         let mut stats = MessageTemplateStatistics::default();
-        
+
         stats.total_templates = self.templates.len();
-        
+
         for template in self.templates.values() {
             match template.frequency {
                 MessageFrequency::Fixed => stats.fixed_frequency += 1,
@@ -933,20 +925,20 @@ impl MessageTemplateManager {
                 MessageFrequency::Medium => stats.medium_frequency += 1,
                 MessageFrequency::High => stats.high_frequency += 1,
             }
-            
+
             if template.trust == MessageTrust::Trusted {
                 stats.trusted_messages += 1;
             }
-            
+
             if template.zerocoded {
                 stats.zerocoded_messages += 1;
             }
-            
+
             if self.is_critical_message(&template.name) {
                 stats.critical_messages += 1;
             }
         }
-        
+
         stats
     }
 }

@@ -1,6 +1,6 @@
 use serde::{Deserialize, Serialize};
 use std::path::{Path, PathBuf};
-use tracing::{info, warn, debug};
+use tracing::{debug, info, warn};
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct RunningInstanceInfo {
@@ -47,7 +47,11 @@ fn discovery_filename(mode: &str) -> &str {
     }
 }
 
-pub fn write_discovery_file(instance_dir: &Path, mode: &str, info: &RunningInstanceInfo) -> std::io::Result<()> {
+pub fn write_discovery_file(
+    instance_dir: &Path,
+    mode: &str,
+    info: &RunningInstanceInfo,
+) -> std::io::Result<()> {
     let filename = discovery_filename(mode);
     let target = instance_dir.join(filename);
     let tmp = instance_dir.join(format!(".running-{}.tmp", std::process::id()));
@@ -67,7 +71,11 @@ pub fn remove_discovery_file(instance_dir: &Path, mode: &str) {
     let target = instance_dir.join(filename);
     if target.exists() {
         if let Err(e) = std::fs::remove_file(&target) {
-            warn!("Failed to remove discovery file {}: {}", target.display(), e);
+            warn!(
+                "Failed to remove discovery file {}: {}",
+                target.display(),
+                e
+            );
         } else {
             info!("Discovery file removed: {}", target.display());
         }
@@ -93,7 +101,11 @@ pub fn cleanup_stale_discovery_file(path: &Path) -> bool {
     };
 
     if !is_pid_alive(info.pid) {
-        info!("Cleaning stale discovery file {} (PID {} dead)", path.display(), info.pid);
+        info!(
+            "Cleaning stale discovery file {} (PID {} dead)",
+            path.display(),
+            info.pid
+        );
         let _ = std::fs::remove_file(path);
         return true;
     }
@@ -106,7 +118,11 @@ pub fn scan_all_running_instances(instances_base_dir: &Path) -> Vec<RunningInsta
     let entries = match std::fs::read_dir(instances_base_dir) {
         Ok(e) => e,
         Err(e) => {
-            debug!("Cannot read instances dir {}: {}", instances_base_dir.display(), e);
+            debug!(
+                "Cannot read instances dir {}: {}",
+                instances_base_dir.display(),
+                e
+            );
             return results;
         }
     };
@@ -143,7 +159,11 @@ pub fn scan_all_running_instances(instances_base_dir: &Path) -> Vec<RunningInsta
     results
 }
 
-pub fn find_available_controller_port(instances_base_dir: &Path, range_start: u16, range_end: u16) -> u16 {
+pub fn find_available_controller_port(
+    instances_base_dir: &Path,
+    range_start: u16,
+    range_end: u16,
+) -> u16 {
     let running = scan_all_running_instances(instances_base_dir);
     let claimed: std::collections::HashSet<u16> = running
         .iter()

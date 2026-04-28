@@ -111,8 +111,12 @@ fn compute_domain_3d(verts: &[[f32; 3]]) -> ([f32; 3], [f32; 3]) {
     let mut max = [f32::MIN; 3];
     for v in verts {
         for i in 0..3 {
-            if v[i] < min[i] { min[i] = v[i]; }
-            if v[i] > max[i] { max[i] = v[i]; }
+            if v[i] < min[i] {
+                min[i] = v[i];
+            }
+            if v[i] > max[i] {
+                max[i] = v[i];
+            }
         }
     }
     for i in 0..3 {
@@ -129,8 +133,12 @@ fn compute_domain_2d(coords: &[[f32; 2]]) -> ([f32; 2], [f32; 2]) {
     let mut max = [f32::MIN; 2];
     for c in coords {
         for i in 0..2 {
-            if c[i] < min[i] { min[i] = c[i]; }
-            if c[i] > max[i] { max[i] = c[i]; }
+            if c[i] < min[i] {
+                min[i] = c[i];
+            }
+            if c[i] > max[i] {
+                max[i] = c[i];
+            }
         }
     }
     for i in 0..2 {
@@ -181,29 +189,41 @@ fn indices_to_u16_bytes(indices: &[u32]) -> Vec<u8> {
 
 fn make_domain_3d_llsd(min: &[f32; 3], max: &[f32; 3]) -> LlsdBinValue {
     LlsdBinValue::Map(vec![
-        ("Min".into(), LlsdBinValue::Array(vec![
-            LlsdBinValue::Real(min[0] as f64),
-            LlsdBinValue::Real(min[1] as f64),
-            LlsdBinValue::Real(min[2] as f64),
-        ])),
-        ("Max".into(), LlsdBinValue::Array(vec![
-            LlsdBinValue::Real(max[0] as f64),
-            LlsdBinValue::Real(max[1] as f64),
-            LlsdBinValue::Real(max[2] as f64),
-        ])),
+        (
+            "Min".into(),
+            LlsdBinValue::Array(vec![
+                LlsdBinValue::Real(min[0] as f64),
+                LlsdBinValue::Real(min[1] as f64),
+                LlsdBinValue::Real(min[2] as f64),
+            ]),
+        ),
+        (
+            "Max".into(),
+            LlsdBinValue::Array(vec![
+                LlsdBinValue::Real(max[0] as f64),
+                LlsdBinValue::Real(max[1] as f64),
+                LlsdBinValue::Real(max[2] as f64),
+            ]),
+        ),
     ])
 }
 
 fn make_domain_2d_llsd(min: &[f32; 2], max: &[f32; 2]) -> LlsdBinValue {
     LlsdBinValue::Map(vec![
-        ("Min".into(), LlsdBinValue::Array(vec![
-            LlsdBinValue::Real(min[0] as f64),
-            LlsdBinValue::Real(min[1] as f64),
-        ])),
-        ("Max".into(), LlsdBinValue::Array(vec![
-            LlsdBinValue::Real(max[0] as f64),
-            LlsdBinValue::Real(max[1] as f64),
-        ])),
+        (
+            "Min".into(),
+            LlsdBinValue::Array(vec![
+                LlsdBinValue::Real(min[0] as f64),
+                LlsdBinValue::Real(min[1] as f64),
+            ]),
+        ),
+        (
+            "Max".into(),
+            LlsdBinValue::Array(vec![
+                LlsdBinValue::Real(max[0] as f64),
+                LlsdBinValue::Real(max[1] as f64),
+            ]),
+        ),
     ])
 }
 
@@ -216,7 +236,11 @@ fn encode_face_llsd(face: &MeshFace) -> Result<LlsdBinValue> {
     }
     for &idx in &face.indices {
         if idx as usize >= face.positions.len() {
-            bail!("Index {} out of range (vertex count: {})", idx, face.positions.len());
+            bail!(
+                "Index {} out of range (vertex count: {})",
+                idx,
+                face.positions.len()
+            );
         }
     }
 
@@ -233,8 +257,11 @@ fn encode_face_llsd(face: &MeshFace) -> Result<LlsdBinValue> {
     let norm_bytes = if face.normals.len() == face.positions.len() {
         quantize_vec3_to_bytes(&face.normals, &norm_min, &norm_max)
     } else {
-        tracing::warn!("[MESH_ENCODE] Normals mismatch: {} normals vs {} positions — using defaults",
-            face.normals.len(), face.positions.len());
+        tracing::warn!(
+            "[MESH_ENCODE] Normals mismatch: {} normals vs {} positions — using defaults",
+            face.normals.len(),
+            face.positions.len()
+        );
         let default_normals: Vec<[f32; 3]> = vec![[0.0, 1.0, 0.0]; face.positions.len()];
         quantize_vec3_to_bytes(&default_normals, &norm_min, &norm_max)
     };
@@ -244,8 +271,11 @@ fn encode_face_llsd(face: &MeshFace) -> Result<LlsdBinValue> {
     let tc_bytes = if face.tex_coords.len() == face.positions.len() {
         quantize_vec2_to_bytes(&face.tex_coords, &tc_min, &tc_max)
     } else {
-        tracing::warn!("[MESH_ENCODE] TexCoords mismatch: {} uvs vs {} positions — using defaults",
-            face.tex_coords.len(), face.positions.len());
+        tracing::warn!(
+            "[MESH_ENCODE] TexCoords mismatch: {} uvs vs {} positions — using defaults",
+            face.tex_coords.len(),
+            face.positions.len()
+        );
         let default_uvs: Vec<[f32; 2]> = vec![[0.0, 0.0]; face.positions.len()];
         quantize_vec2_to_bytes(&default_uvs, &tc_min, &tc_max)
     };
@@ -253,10 +283,16 @@ fn encode_face_llsd(face: &MeshFace) -> Result<LlsdBinValue> {
 
     let mut entries = Vec::new();
     entries.push(("Position".into(), LlsdBinValue::Binary(pos_bytes)));
-    entries.push(("PositionDomain".into(), make_domain_3d_llsd(&pos_min, &pos_max)));
+    entries.push((
+        "PositionDomain".into(),
+        make_domain_3d_llsd(&pos_min, &pos_max),
+    ));
     entries.push(("Normal".into(), LlsdBinValue::Binary(norm_bytes)));
     entries.push(("TexCoord0".into(), LlsdBinValue::Binary(tc_bytes)));
-    entries.push(("TexCoord0Domain".into(), make_domain_2d_llsd(&tc_min, &tc_max)));
+    entries.push((
+        "TexCoord0Domain".into(),
+        make_domain_2d_llsd(&tc_min, &tc_max),
+    ));
     entries.push(("TriangleList".into(), LlsdBinValue::Binary(idx_bytes)));
 
     if let Some(weights_data) = encode_face_weights(face) {
@@ -288,15 +324,23 @@ fn encode_skin_block(skin: &MeshSkinInfo) -> Result<Vec<u8>> {
         inv_bind_arr.push(LlsdBinValue::Array(vals));
     }
 
-    let bind_shape: Vec<LlsdBinValue> = skin.bind_shape_matrix.iter()
+    let bind_shape: Vec<LlsdBinValue> = skin
+        .bind_shape_matrix
+        .iter()
         .map(|&v| LlsdBinValue::Real(v as f64))
         .collect();
 
     let entries = vec![
         ("joint_names".into(), LlsdBinValue::Array(joint_names_arr)),
-        ("inverse_bind_matrix".into(), LlsdBinValue::Array(inv_bind_arr)),
+        (
+            "inverse_bind_matrix".into(),
+            LlsdBinValue::Array(inv_bind_arr),
+        ),
         ("bind_shape_matrix".into(), LlsdBinValue::Array(bind_shape)),
-        ("pelvis_offset".into(), LlsdBinValue::Real(skin.pelvis_offset as f64)),
+        (
+            "pelvis_offset".into(),
+            LlsdBinValue::Real(skin.pelvis_offset as f64),
+        ),
     ];
 
     let map = LlsdBinValue::Map(entries);
@@ -312,7 +356,9 @@ fn encode_face_weights(face: &MeshFace) -> Option<Vec<u8>> {
 
     let mut buf = Vec::with_capacity(weights.len() * 10);
     for vw in weights {
-        let mut influences: Vec<(u8, f32)> = vw.influences.iter()
+        let mut influences: Vec<(u8, f32)> = vw
+            .influences
+            .iter()
             .map(|ji| (ji.joint_index, ji.weight))
             .collect();
         influences.sort_by(|a, b| b.1.partial_cmp(&a.1).unwrap_or(std::cmp::Ordering::Equal));
@@ -372,8 +418,14 @@ fn encode_physics_convex(geometry: &MeshGeometry) -> Result<Vec<u8>> {
         ("Min".into(), LlsdBinValue::Binary(min_binary)),
         ("Max".into(), LlsdBinValue::Binary(max_binary)),
         ("HullList".into(), LlsdBinValue::Binary(vec![8u8])),
-        ("Positions".into(), LlsdBinValue::Binary(positions_bytes.clone())),
-        ("BoundingVerts".into(), LlsdBinValue::Binary(positions_bytes)),
+        (
+            "Positions".into(),
+            LlsdBinValue::Binary(positions_bytes.clone()),
+        ),
+        (
+            "BoundingVerts".into(),
+            LlsdBinValue::Binary(positions_bytes),
+        ),
     ];
 
     let map = LlsdBinValue::Map(entries);
@@ -388,7 +440,11 @@ fn merge_faces_to_limit(faces: &[MeshFace], max_faces: usize) -> Vec<MeshFace> {
         return faces.to_vec();
     }
 
-    tracing::info!("[MESH_ENCODE] Merging {} faces down to {} (SL max)", faces.len(), max_faces);
+    tracing::info!(
+        "[MESH_ENCODE] Merging {} faces down to {} (SL max)",
+        faces.len(),
+        max_faces
+    );
 
     let mut merged: Vec<MeshFace> = Vec::with_capacity(max_faces);
     for _ in 0..max_faces {
@@ -408,7 +464,9 @@ fn merge_faces_to_limit(faces: &[MeshFace], max_faces: usize) -> Vec<MeshFace> {
 
         merged[target].positions.extend_from_slice(&face.positions);
         merged[target].normals.extend_from_slice(&face.normals);
-        merged[target].tex_coords.extend_from_slice(&face.tex_coords);
+        merged[target]
+            .tex_coords
+            .extend_from_slice(&face.tex_coords);
 
         for &idx in &face.indices {
             merged[target].indices.push(base_vert + idx);
@@ -424,12 +482,18 @@ fn merge_faces_to_limit(faces: &[MeshFace], max_faces: usize) -> Vec<MeshFace> {
 
     for face in &merged {
         if face.positions.len() > 65535 {
-            tracing::warn!("[MESH_ENCODE] Merged face has {} verts (>65535) — will be split", face.positions.len());
+            tracing::warn!(
+                "[MESH_ENCODE] Merged face has {} verts (>65535) — will be split",
+                face.positions.len()
+            );
         }
     }
 
-    tracing::info!("[MESH_ENCODE] After merge: {} faces, verts per face: {:?}",
-        merged.len(), merged.iter().map(|f| f.positions.len()).collect::<Vec<_>>());
+    tracing::info!(
+        "[MESH_ENCODE] After merge: {} faces, verts per face: {:?}",
+        merged.len(),
+        merged.iter().map(|f| f.positions.len()).collect::<Vec<_>>()
+    );
 
     merged
 }
@@ -458,7 +522,8 @@ fn split_oversized_face(face: &MeshFace) -> Vec<MeshFace> {
         let i1 = face.indices[t * 3 + 1] as usize;
         let i2 = face.indices[t * 3 + 2] as usize;
 
-        let needed = [i0, i1, i2].iter()
+        let needed = [i0, i1, i2]
+            .iter()
             .filter(|&&idx| !vert_map.contains_key(&(idx as u32)))
             .count();
 
@@ -514,7 +579,11 @@ pub fn encode_mesh_asset(geometry: &MeshGeometry) -> Result<Vec<u8>> {
             bail!("Face {} has no positions", i);
         }
         if face.positions.len() > 65535 {
-            bail!("Face {} has {} vertices (max 65535)", i, face.positions.len());
+            bail!(
+                "Face {} has {} vertices (max 65535)",
+                i,
+                face.positions.len()
+            );
         }
     }
 
@@ -536,40 +605,58 @@ pub fn encode_mesh_asset(geometry: &MeshGeometry) -> Result<Vec<u8>> {
     let skin_size = skin_data.as_ref().map(|d| d.len() as i32).unwrap_or(0);
 
     let mut header_entries = vec![
-        ("high_lod".into(), LlsdBinValue::Map(vec![
-            ("offset".into(), LlsdBinValue::Integer(lod_offset)),
-            ("size".into(), LlsdBinValue::Integer(lod_size)),
-        ])),
-        ("medium_lod".into(), LlsdBinValue::Map(vec![
-            ("offset".into(), LlsdBinValue::Integer(lod_offset)),
-            ("size".into(), LlsdBinValue::Integer(lod_size)),
-        ])),
-        ("low_lod".into(), LlsdBinValue::Map(vec![
-            ("offset".into(), LlsdBinValue::Integer(lod_offset)),
-            ("size".into(), LlsdBinValue::Integer(lod_size)),
-        ])),
-        ("lowest_lod".into(), LlsdBinValue::Map(vec![
-            ("offset".into(), LlsdBinValue::Integer(lod_offset)),
-            ("size".into(), LlsdBinValue::Integer(lod_size)),
-        ])),
-        ("physics_convex".into(), LlsdBinValue::Map(vec![
-            ("offset".into(), LlsdBinValue::Integer(phys_offset)),
-            ("size".into(), LlsdBinValue::Integer(phys_size)),
-        ])),
+        (
+            "high_lod".into(),
+            LlsdBinValue::Map(vec![
+                ("offset".into(), LlsdBinValue::Integer(lod_offset)),
+                ("size".into(), LlsdBinValue::Integer(lod_size)),
+            ]),
+        ),
+        (
+            "medium_lod".into(),
+            LlsdBinValue::Map(vec![
+                ("offset".into(), LlsdBinValue::Integer(lod_offset)),
+                ("size".into(), LlsdBinValue::Integer(lod_size)),
+            ]),
+        ),
+        (
+            "low_lod".into(),
+            LlsdBinValue::Map(vec![
+                ("offset".into(), LlsdBinValue::Integer(lod_offset)),
+                ("size".into(), LlsdBinValue::Integer(lod_size)),
+            ]),
+        ),
+        (
+            "lowest_lod".into(),
+            LlsdBinValue::Map(vec![
+                ("offset".into(), LlsdBinValue::Integer(lod_offset)),
+                ("size".into(), LlsdBinValue::Integer(lod_size)),
+            ]),
+        ),
+        (
+            "physics_convex".into(),
+            LlsdBinValue::Map(vec![
+                ("offset".into(), LlsdBinValue::Integer(phys_offset)),
+                ("size".into(), LlsdBinValue::Integer(phys_size)),
+            ]),
+        ),
     ];
 
     if skin_data.is_some() {
-        header_entries.push(("skin".into(), LlsdBinValue::Map(vec![
-            ("offset".into(), LlsdBinValue::Integer(skin_offset)),
-            ("size".into(), LlsdBinValue::Integer(skin_size)),
-        ])));
+        header_entries.push((
+            "skin".into(),
+            LlsdBinValue::Map(vec![
+                ("offset".into(), LlsdBinValue::Integer(skin_offset)),
+                ("size".into(), LlsdBinValue::Integer(skin_size)),
+            ]),
+        ));
     }
 
     let header = LlsdBinValue::Map(header_entries);
     let header_bytes = serialize_llsd(&header);
 
     let mut result = Vec::with_capacity(
-        header_bytes.len() + lod_data.len() + physics_data.len() + skin_size as usize
+        header_bytes.len() + lod_data.len() + physics_data.len() + skin_size as usize,
     );
     result.extend_from_slice(&header_bytes);
     result.extend_from_slice(&lod_data);
@@ -590,8 +677,12 @@ pub struct MultiLodGeometry {
 }
 
 pub fn encode_mesh_asset_multi_lod(lods: &MultiLodGeometry) -> Result<Vec<u8>> {
-    for (name, geom) in [("high", &lods.high), ("medium", &lods.medium),
-                          ("low", &lods.low), ("lowest", &lods.lowest)] {
+    for (name, geom) in [
+        ("high", &lods.high),
+        ("medium", &lods.medium),
+        ("low", &lods.low),
+        ("lowest", &lods.lowest),
+    ] {
         if geom.faces.is_empty() {
             bail!("{} LOD has no faces", name);
         }
@@ -600,7 +691,12 @@ pub fn encode_mesh_asset_multi_lod(lods: &MultiLodGeometry) -> Result<Vec<u8>> {
                 bail!("{} LOD face {} has no positions", name, i);
             }
             if face.positions.len() > 65535 {
-                bail!("{} LOD face {} has {} vertices (max 65535)", name, i, face.positions.len());
+                bail!(
+                    "{} LOD face {} has {} vertices (max 65535)",
+                    name,
+                    i,
+                    face.positions.len()
+                );
             }
         }
     }
@@ -642,40 +738,63 @@ pub fn encode_mesh_asset_multi_lod(lods: &MultiLodGeometry) -> Result<Vec<u8>> {
     let skin_size = skin_data.as_ref().map(|d| d.len() as i32).unwrap_or(0);
 
     let mut header_entries = vec![
-        ("high_lod".into(), LlsdBinValue::Map(vec![
-            ("offset".into(), LlsdBinValue::Integer(high_offset)),
-            ("size".into(), LlsdBinValue::Integer(high_size)),
-        ])),
-        ("medium_lod".into(), LlsdBinValue::Map(vec![
-            ("offset".into(), LlsdBinValue::Integer(medium_offset)),
-            ("size".into(), LlsdBinValue::Integer(medium_size)),
-        ])),
-        ("low_lod".into(), LlsdBinValue::Map(vec![
-            ("offset".into(), LlsdBinValue::Integer(low_offset)),
-            ("size".into(), LlsdBinValue::Integer(low_size)),
-        ])),
-        ("lowest_lod".into(), LlsdBinValue::Map(vec![
-            ("offset".into(), LlsdBinValue::Integer(lowest_offset)),
-            ("size".into(), LlsdBinValue::Integer(lowest_size)),
-        ])),
-        ("physics_convex".into(), LlsdBinValue::Map(vec![
-            ("offset".into(), LlsdBinValue::Integer(phys_offset)),
-            ("size".into(), LlsdBinValue::Integer(phys_size)),
-        ])),
+        (
+            "high_lod".into(),
+            LlsdBinValue::Map(vec![
+                ("offset".into(), LlsdBinValue::Integer(high_offset)),
+                ("size".into(), LlsdBinValue::Integer(high_size)),
+            ]),
+        ),
+        (
+            "medium_lod".into(),
+            LlsdBinValue::Map(vec![
+                ("offset".into(), LlsdBinValue::Integer(medium_offset)),
+                ("size".into(), LlsdBinValue::Integer(medium_size)),
+            ]),
+        ),
+        (
+            "low_lod".into(),
+            LlsdBinValue::Map(vec![
+                ("offset".into(), LlsdBinValue::Integer(low_offset)),
+                ("size".into(), LlsdBinValue::Integer(low_size)),
+            ]),
+        ),
+        (
+            "lowest_lod".into(),
+            LlsdBinValue::Map(vec![
+                ("offset".into(), LlsdBinValue::Integer(lowest_offset)),
+                ("size".into(), LlsdBinValue::Integer(lowest_size)),
+            ]),
+        ),
+        (
+            "physics_convex".into(),
+            LlsdBinValue::Map(vec![
+                ("offset".into(), LlsdBinValue::Integer(phys_offset)),
+                ("size".into(), LlsdBinValue::Integer(phys_size)),
+            ]),
+        ),
     ];
 
     if skin_data.is_some() {
-        header_entries.push(("skin".into(), LlsdBinValue::Map(vec![
-            ("offset".into(), LlsdBinValue::Integer(skin_offset)),
-            ("size".into(), LlsdBinValue::Integer(skin_size)),
-        ])));
+        header_entries.push((
+            "skin".into(),
+            LlsdBinValue::Map(vec![
+                ("offset".into(), LlsdBinValue::Integer(skin_offset)),
+                ("size".into(), LlsdBinValue::Integer(skin_size)),
+            ]),
+        ));
     }
 
     let header = LlsdBinValue::Map(header_entries);
     let header_bytes = serialize_llsd(&header);
 
-    let total_size = header_bytes.len() + high_data.len() + medium_data.len()
-        + low_data.len() + lowest_data.len() + physics_data.len() + skin_size as usize;
+    let total_size = header_bytes.len()
+        + high_data.len()
+        + medium_data.len()
+        + low_data.len()
+        + lowest_data.len()
+        + physics_data.len()
+        + skin_size as usize;
     let mut result = Vec::with_capacity(total_size);
     result.extend_from_slice(&header_bytes);
     result.extend_from_slice(&high_data);
@@ -705,27 +824,48 @@ pub fn generate_box_mesh(width: f32, height: f32, depth: f32) -> MeshGeometry {
     let hh = height / 2.0;
     let hd = depth / 2.0;
     let positions = vec![
-        [-hw, -hh, -hd], [ hw, -hh, -hd], [ hw,  hh, -hd], [-hw,  hh, -hd],
-        [-hw, -hh,  hd], [ hw, -hh,  hd], [ hw,  hh,  hd], [-hw,  hh,  hd],
+        [-hw, -hh, -hd],
+        [hw, -hh, -hd],
+        [hw, hh, -hd],
+        [-hw, hh, -hd],
+        [-hw, -hh, hd],
+        [hw, -hh, hd],
+        [hw, hh, hd],
+        [-hw, hh, hd],
     ];
     let normals = vec![
-        [0.0, 0.0, -1.0], [0.0, 0.0, -1.0], [0.0, 0.0, -1.0], [0.0, 0.0, -1.0],
-        [0.0, 0.0,  1.0], [0.0, 0.0,  1.0], [0.0, 0.0,  1.0], [0.0, 0.0,  1.0],
+        [0.0, 0.0, -1.0],
+        [0.0, 0.0, -1.0],
+        [0.0, 0.0, -1.0],
+        [0.0, 0.0, -1.0],
+        [0.0, 0.0, 1.0],
+        [0.0, 0.0, 1.0],
+        [0.0, 0.0, 1.0],
+        [0.0, 0.0, 1.0],
     ];
     let tex_coords = vec![
-        [0.0, 0.0], [1.0, 0.0], [1.0, 1.0], [0.0, 1.0],
-        [0.0, 0.0], [1.0, 0.0], [1.0, 1.0], [0.0, 1.0],
+        [0.0, 0.0],
+        [1.0, 0.0],
+        [1.0, 1.0],
+        [0.0, 1.0],
+        [0.0, 0.0],
+        [1.0, 0.0],
+        [1.0, 1.0],
+        [0.0, 1.0],
     ];
     let indices = vec![
-        0, 1, 2, 0, 2, 3,
-        4, 6, 5, 4, 7, 6,
-        0, 4, 5, 0, 5, 1,
-        2, 6, 7, 2, 7, 3,
-        0, 3, 7, 0, 7, 4,
+        0, 1, 2, 0, 2, 3, 4, 6, 5, 4, 7, 6, 0, 4, 5, 0, 5, 1, 2, 6, 7, 2, 7, 3, 0, 3, 7, 0, 7, 4,
         1, 5, 6, 1, 6, 2,
     ];
     MeshGeometry {
-        faces: vec![MeshFace { positions, normals, tex_coords, indices, joint_weights: None, original_position_indices: None }],
+        faces: vec![MeshFace {
+            positions,
+            normals,
+            tex_coords,
+            indices,
+            joint_weights: None,
+            original_position_indices: None,
+        }],
         skin_info: None,
     }
 }
@@ -747,17 +887,17 @@ pub fn generate_cylinder_mesh(radius: f32, height: f32, segments: u32) -> MeshGe
         positions.extend_from_slice(&[
             [c0 * radius, s0 * radius, -hh],
             [c1 * radius, s1 * radius, -hh],
-            [c1 * radius, s1 * radius,  hh],
-            [c0 * radius, s0 * radius,  hh],
+            [c1 * radius, s1 * radius, hh],
+            [c0 * radius, s0 * radius, hh],
         ]);
         let nx = (c0 + c1) / 2.0;
         let ny = (s0 + s1) / 2.0;
         let nl = (nx * nx + ny * ny).sqrt().max(1e-6);
-        normals.extend_from_slice(&[[nx/nl, ny/nl, 0.0]; 4]);
+        normals.extend_from_slice(&[[nx / nl, ny / nl, 0.0]; 4]);
         let u0 = i as f32 / seg as f32;
         let u1 = (i + 1) as f32 / seg as f32;
         tex_coords.extend_from_slice(&[[u0, 0.0], [u1, 0.0], [u1, 1.0], [u0, 1.0]]);
-        indices.extend_from_slice(&[base, base+1, base+2, base, base+2, base+3]);
+        indices.extend_from_slice(&[base, base + 1, base + 2, base, base + 2, base + 3]);
     }
 
     let cap_base = positions.len() as u32;
@@ -789,7 +929,14 @@ pub fn generate_cylinder_mesh(radius: f32, height: f32, segments: u32) -> MeshGe
     }
 
     MeshGeometry {
-        faces: vec![MeshFace { positions, normals, tex_coords, indices, joint_weights: None, original_position_indices: None }],
+        faces: vec![MeshFace {
+            positions,
+            normals,
+            tex_coords,
+            indices,
+            joint_weights: None,
+            original_position_indices: None,
+        }],
         skin_info: None,
     }
 }
@@ -828,12 +975,24 @@ pub fn generate_sphere_mesh(radius: f32, lat_segments: u32, lon_segments: u32) -
     }
 
     MeshGeometry {
-        faces: vec![MeshFace { positions, normals, tex_coords, indices, joint_weights: None, original_position_indices: None }],
+        faces: vec![MeshFace {
+            positions,
+            normals,
+            tex_coords,
+            indices,
+            joint_weights: None,
+            original_position_indices: None,
+        }],
         skin_info: None,
     }
 }
 
-pub fn generate_torus_mesh(major_radius: f32, minor_radius: f32, ring_segments: u32, tube_segments: u32) -> MeshGeometry {
+pub fn generate_torus_mesh(
+    major_radius: f32,
+    minor_radius: f32,
+    ring_segments: u32,
+    tube_segments: u32,
+) -> MeshGeometry {
     let rings = ring_segments.max(6);
     let tubes = tube_segments.max(6);
     let mut positions = Vec::new();
@@ -867,7 +1026,14 @@ pub fn generate_torus_mesh(major_radius: f32, minor_radius: f32, ring_segments: 
     }
 
     MeshGeometry {
-        faces: vec![MeshFace { positions, normals, tex_coords, indices, joint_weights: None, original_position_indices: None }],
+        faces: vec![MeshFace {
+            positions,
+            normals,
+            tex_coords,
+            indices,
+            joint_weights: None,
+            original_position_indices: None,
+        }],
         skin_info: None,
     }
 }
@@ -879,28 +1045,49 @@ mod tests {
 
     fn make_unit_cube() -> MeshGeometry {
         let positions = vec![
-            [-0.5, -0.5, -0.5], [ 0.5, -0.5, -0.5], [ 0.5,  0.5, -0.5], [-0.5,  0.5, -0.5],
-            [-0.5, -0.5,  0.5], [ 0.5, -0.5,  0.5], [ 0.5,  0.5,  0.5], [-0.5,  0.5,  0.5],
+            [-0.5, -0.5, -0.5],
+            [0.5, -0.5, -0.5],
+            [0.5, 0.5, -0.5],
+            [-0.5, 0.5, -0.5],
+            [-0.5, -0.5, 0.5],
+            [0.5, -0.5, 0.5],
+            [0.5, 0.5, 0.5],
+            [-0.5, 0.5, 0.5],
         ];
         let normals = vec![
-            [0.0, 0.0, -1.0], [0.0, 0.0, -1.0], [0.0, 0.0, -1.0], [0.0, 0.0, -1.0],
-            [0.0, 0.0,  1.0], [0.0, 0.0,  1.0], [0.0, 0.0,  1.0], [0.0, 0.0,  1.0],
+            [0.0, 0.0, -1.0],
+            [0.0, 0.0, -1.0],
+            [0.0, 0.0, -1.0],
+            [0.0, 0.0, -1.0],
+            [0.0, 0.0, 1.0],
+            [0.0, 0.0, 1.0],
+            [0.0, 0.0, 1.0],
+            [0.0, 0.0, 1.0],
         ];
         let tex_coords = vec![
-            [0.0, 0.0], [1.0, 0.0], [1.0, 1.0], [0.0, 1.0],
-            [0.0, 0.0], [1.0, 0.0], [1.0, 1.0], [0.0, 1.0],
+            [0.0, 0.0],
+            [1.0, 0.0],
+            [1.0, 1.0],
+            [0.0, 1.0],
+            [0.0, 0.0],
+            [1.0, 0.0],
+            [1.0, 1.0],
+            [0.0, 1.0],
         ];
         let indices = vec![
-            0, 1, 2, 0, 2, 3,
-            4, 6, 5, 4, 7, 6,
-            0, 4, 5, 0, 5, 1,
-            2, 6, 7, 2, 7, 3,
-            0, 3, 7, 0, 7, 4,
-            1, 5, 6, 1, 6, 2,
+            0, 1, 2, 0, 2, 3, 4, 6, 5, 4, 7, 6, 0, 4, 5, 0, 5, 1, 2, 6, 7, 2, 7, 3, 0, 3, 7, 0, 7,
+            4, 1, 5, 6, 1, 6, 2,
         ];
 
         MeshGeometry {
-            faces: vec![MeshFace { positions, normals, tex_coords, indices, joint_weights: None, original_position_indices: None }],
+            faces: vec![MeshFace {
+                positions,
+                normals,
+                tex_coords,
+                indices,
+                joint_weights: None,
+                original_position_indices: None,
+            }],
             skin_info: None,
         }
     }
@@ -919,7 +1106,11 @@ mod tests {
         let verts = vec![[1.0, 2.0, 3.0], [1.0, 2.0, 3.0]];
         let (min, max) = compute_domain_3d(&verts);
         for i in 0..3 {
-            assert!((max[i] - min[i]) >= 0.9, "Domain not expanded for axis {}", i);
+            assert!(
+                (max[i] - min[i]) >= 0.9,
+                "Domain not expanded for axis {}",
+                i
+            );
         }
     }
 
@@ -947,8 +1138,12 @@ mod tests {
 
         for v in &convex.hulls[0] {
             for i in 0..3 {
-                assert!(v[i] >= -0.6 && v[i] <= 0.6,
-                    "vertex component {} out of range: {}", i, v[i]);
+                assert!(
+                    v[i] >= -0.6 && v[i] <= 0.6,
+                    "vertex component {} out of range: {}",
+                    i,
+                    v[i]
+                );
             }
         }
     }
@@ -963,7 +1158,10 @@ mod tests {
 
     #[test]
     fn test_empty_geometry_error() {
-        let geom = MeshGeometry { faces: vec![], skin_info: None };
+        let geom = MeshGeometry {
+            faces: vec![],
+            skin_info: None,
+        };
         assert!(encode_mesh_asset(&geom).is_err());
     }
 
@@ -985,7 +1183,10 @@ mod tests {
             joint_weights: None,
             original_position_indices: None,
         };
-        let geom = MeshGeometry { faces: vec![face1, face2], skin_info: None };
+        let geom = MeshGeometry {
+            faces: vec![face1, face2],
+            skin_info: None,
+        };
         let blob = encode_mesh_asset(&geom).expect("multi-face encode failed");
         let header = parser::parse_mesh_header(&blob).expect("multi-face header parse failed");
         assert!(header.high_lod.is_some());
@@ -1031,7 +1232,10 @@ mod tests {
             joint_weights: None,
             original_position_indices: None,
         };
-        let small_geom = MeshGeometry { faces: vec![small_face], skin_info: None };
+        let small_geom = MeshGeometry {
+            faces: vec![small_face],
+            skin_info: None,
+        };
 
         let lods = MultiLodGeometry {
             high: geom.clone(),
@@ -1049,9 +1253,7 @@ mod tests {
 
     #[test]
     fn test_llsd_binary_serialization() {
-        let val = LlsdBinValue::Map(vec![
-            ("key".into(), LlsdBinValue::Integer(42)),
-        ]);
+        let val = LlsdBinValue::Map(vec![("key".into(), LlsdBinValue::Integer(42))]);
         let bytes = serialize_llsd(&val);
         assert_eq!(bytes[0], b'{');
         let count = u32::from_be_bytes([bytes[1], bytes[2], bytes[3], bytes[4]]);

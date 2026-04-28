@@ -57,14 +57,30 @@ impl Default for ControllerConfig {
     }
 }
 
-fn default_discovery_mode() -> String { "config".to_string() }
-fn default_health_check_interval() -> u64 { 5000 }
-fn default_heartbeat_timeout() -> u64 { 15000 }
-fn default_reconnect_delay() -> u64 { 3000 }
-fn default_max_reconnect_attempts() -> u32 { 5 }
-fn default_command_timeout() -> u64 { 30000 }
-fn default_controller_port() -> u16 { 9300 }
-fn default_instances_base_dir() -> String { "./Instances".to_string() }
+fn default_discovery_mode() -> String {
+    "config".to_string()
+}
+fn default_health_check_interval() -> u64 {
+    5000
+}
+fn default_heartbeat_timeout() -> u64 {
+    15000
+}
+fn default_reconnect_delay() -> u64 {
+    3000
+}
+fn default_max_reconnect_attempts() -> u32 {
+    5
+}
+fn default_command_timeout() -> u64 {
+    30000
+}
+fn default_controller_port() -> u16 {
+    9300
+}
+fn default_instances_base_dir() -> String {
+    "./Instances".to_string()
+}
 
 /// Configuration for a single instance
 #[derive(Debug, Clone, Serialize, Deserialize)]
@@ -97,12 +113,24 @@ pub struct InstanceConfig {
     pub tls: TlsConfig,
 }
 
-fn default_websocket_port() -> u16 { 9001 }
-fn default_admin_port() -> u16 { 9200 }
-fn default_metrics_port() -> u16 { 9100 }
-fn default_http_port() -> u16 { 9000 }
-fn default_udp_port() -> u16 { 9000 }
-fn default_auto_connect() -> bool { true }
+fn default_websocket_port() -> u16 {
+    9001
+}
+fn default_admin_port() -> u16 {
+    9200
+}
+fn default_metrics_port() -> u16 {
+    9100
+}
+fn default_http_port() -> u16 {
+    9000
+}
+fn default_udp_port() -> u16 {
+    9000
+}
+fn default_auto_connect() -> bool {
+    true
+}
 
 /// Authentication configuration for an instance
 #[derive(Debug, Clone, Default, Serialize, Deserialize)]
@@ -122,7 +150,9 @@ pub struct TlsConfig {
     pub verify_host: bool,
 }
 
-fn default_verify_host() -> bool { true }
+fn default_verify_host() -> bool {
+    true
+}
 
 impl InstanceConfig {
     /// Get the WebSocket URL for this instance
@@ -156,13 +186,19 @@ impl InstanceConfig {
 
     /// Get API key, checking environment variable override first
     pub fn get_api_key(&self) -> String {
-        let env_key = format!("OPENSIM_INSTANCE_{}_API_KEY", self.id.to_uppercase().replace('-', "_"));
+        let env_key = format!(
+            "OPENSIM_INSTANCE_{}_API_KEY",
+            self.id.to_uppercase().replace('-', "_")
+        );
         std::env::var(&env_key).unwrap_or_else(|_| self.api_key.clone())
     }
 
     /// Get host, checking environment variable override first
     pub fn get_host(&self) -> String {
-        let env_key = format!("OPENSIM_INSTANCE_{}_HOST", self.id.to_uppercase().replace('-', "_"));
+        let env_key = format!(
+            "OPENSIM_INSTANCE_{}_HOST",
+            self.id.to_uppercase().replace('-', "_")
+        );
         std::env::var(&env_key).unwrap_or_else(|_| self.host.clone())
     }
 }
@@ -174,7 +210,10 @@ pub fn load_instances_config<P: AsRef<Path>>(path: P) -> Result<InstancesConfig>
     info!("Loading instances configuration from: {}", path.display());
 
     if !path.exists() {
-        return Err(anyhow!("Instances configuration file not found: {}", path.display()));
+        return Err(anyhow!(
+            "Instances configuration file not found: {}",
+            path.display()
+        ));
     }
 
     let content = std::fs::read_to_string(path)
@@ -197,7 +236,11 @@ pub fn load_instances_config<P: AsRef<Path>>(path: P) -> Result<InstancesConfig>
             instance.name,
             instance.id,
             instance.host,
-            if instance.auto_connect { "auto-connect" } else { "manual" }
+            if instance.auto_connect {
+                "auto-connect"
+            } else {
+                "manual"
+            }
         );
     }
 
@@ -243,7 +286,10 @@ fn validate_config(config: &InstancesConfig) -> Result<()> {
         }
 
         if instance.api_key.is_empty() {
-            return Err(anyhow!("Instance '{}' api_key cannot be empty", instance.id));
+            return Err(anyhow!(
+                "Instance '{}' api_key cannot be empty",
+                instance.id
+            ));
         }
 
         if !ids.insert(&instance.id) {

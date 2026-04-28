@@ -13,9 +13,7 @@ use tokio::time::interval;
 use tracing::{debug, error, info, warn};
 
 use super::registry::InstanceRegistry;
-use super::types::{
-    ComponentHealth, HealthState, HealthStatus, InstanceMetrics, InstanceStatus,
-};
+use super::types::{ComponentHealth, HealthState, HealthStatus, InstanceMetrics, InstanceStatus};
 
 /// Health checker for monitoring instance health
 pub struct HealthChecker {
@@ -29,7 +27,9 @@ pub struct HealthChecker {
 /// Events emitted by the health checker
 #[derive(Debug, Clone)]
 pub enum HealthEvent {
-    HealthCheckStarted { instance_id: String },
+    HealthCheckStarted {
+        instance_id: String,
+    },
     HealthCheckCompleted {
         instance_id: String,
         status: HealthStatus,
@@ -40,7 +40,10 @@ pub enum HealthEvent {
         old_state: HealthState,
         new_state: HealthState,
     },
-    InstanceUnreachable { instance_id: String, error: String },
+    InstanceUnreachable {
+        instance_id: String,
+        error: String,
+    },
     MetricsUpdated {
         instance_id: String,
         metrics: InstanceMetrics,
@@ -95,7 +98,10 @@ impl HealthChecker {
     pub async fn check_all_instances(&self) {
         let instance_ids = self.registry.get_instance_ids().await;
 
-        debug!("Running health checks for {} instance(s)", instance_ids.len());
+        debug!(
+            "Running health checks for {} instance(s)",
+            instance_ids.len()
+        );
 
         for instance_id in instance_ids {
             if let Err(e) = self.check_instance(&instance_id).await {
@@ -114,7 +120,8 @@ impl HealthChecker {
             }
         };
 
-        let current_health = self.registry
+        let current_health = self
+            .registry
             .get_instance(instance_id)
             .await
             .and_then(|i| i.health)
@@ -159,7 +166,10 @@ impl HealthChecker {
                     },
                 );
 
-                self.registry.update_status(instance_id, InstanceStatus::Error).await.ok();
+                self.registry
+                    .update_status(instance_id, InstanceStatus::Error)
+                    .await
+                    .ok();
 
                 HealthState::Unhealthy
             }
@@ -173,7 +183,10 @@ impl HealthChecker {
                     metrics: metrics.clone(),
                 });
 
-                self.registry.update_metrics(instance_id, metrics).await.ok();
+                self.registry
+                    .update_metrics(instance_id, metrics)
+                    .await
+                    .ok();
 
                 components.insert(
                     "metrics".to_string(),
@@ -196,7 +209,10 @@ impl HealthChecker {
             response_time_ms: duration_ms,
         };
 
-        self.registry.update_health(instance_id, health_status.clone()).await.ok();
+        self.registry
+            .update_health(instance_id, health_status.clone())
+            .await
+            .ok();
 
         // Emit health changed event if state changed
         if current_health != overall_state {
@@ -208,14 +224,20 @@ impl HealthChecker {
 
             match overall_state {
                 HealthState::Healthy => {
-                    self.registry.update_status(instance_id, InstanceStatus::Running).await.ok();
+                    self.registry
+                        .update_status(instance_id, InstanceStatus::Running)
+                        .await
+                        .ok();
                 }
                 HealthState::Degraded => {
                     warn!("Instance {} health degraded", instance_id);
                 }
                 HealthState::Unhealthy => {
                     warn!("Instance {} is unhealthy", instance_id);
-                    self.registry.update_status(instance_id, InstanceStatus::Error).await.ok();
+                    self.registry
+                        .update_status(instance_id, InstanceStatus::Error)
+                        .await
+                        .ok();
                 }
                 HealthState::Unknown => {}
             }
@@ -237,7 +259,8 @@ impl HealthChecker {
     ) -> Result<HealthState> {
         let url = format!("{}/health", config.admin_url());
 
-        let response = self.http_client
+        let response = self
+            .http_client
             .get(&url)
             .timeout(self.timeout)
             .send()
@@ -247,7 +270,8 @@ impl HealthChecker {
             let body: serde_json::Value = response.json().await.unwrap_or(serde_json::json!({}));
 
             // Parse health status from response
-            let status = body.get("status")
+            let status = body
+                .get("status")
                 .and_then(|v| v.as_str())
                 .unwrap_or("healthy");
 
@@ -269,7 +293,8 @@ impl HealthChecker {
     ) -> Result<InstanceMetrics> {
         let url = format!("{}/api/stats", config.admin_url());
 
-        let response = self.http_client
+        let response = self
+            .http_client
             .get(&url)
             .header("Authorization", format!("Bearer {}", config.get_api_key()))
             .timeout(self.timeout)
@@ -283,27 +308,63 @@ impl HealthChecker {
         let body: serde_json::Value = response.json().await?;
 
         Ok(InstanceMetrics {
-            cpu_usage: body.get("cpu_usage").and_then(|v| v.as_f64()).unwrap_or(0.0),
-            memory_usage_mb: body.get("memory_usage_mb").and_then(|v| v.as_u64()).unwrap_or(0),
-            memory_total_mb: body.get("memory_total_mb").and_then(|v| v.as_u64()).unwrap_or(0),
-            active_users: body.get("active_users").and_then(|v| v.as_u64()).unwrap_or(0) as u32,
-            active_regions: body.get("active_regions").and_then(|v| v.as_u64()).unwrap_or(0) as u32,
-            network_tx_bytes: body.get("network_tx_bytes").and_then(|v| v.as_u64()).unwrap_or(0),
-            network_rx_bytes: body.get("network_rx_bytes").and_then(|v| v.as_u64()).unwrap_or(0),
-            db_connections: body.get("db_connections").and_then(|v| v.as_u64()).unwrap_or(0) as u32,
-            websocket_connections: body.get("websocket_connections").and_then(|v| v.as_u64()).unwrap_or(0) as u32,
-            request_rate_per_sec: body.get("request_rate_per_sec").and_then(|v| v.as_f64()).unwrap_or(0.0),
-            error_rate_per_sec: body.get("error_rate_per_sec").and_then(|v| v.as_f64()).unwrap_or(0.0),
-            uptime_seconds: body.get("uptime_seconds").and_then(|v| v.as_u64()).unwrap_or(0),
+            cpu_usage: body
+                .get("cpu_usage")
+                .and_then(|v| v.as_f64())
+                .unwrap_or(0.0),
+            memory_usage_mb: body
+                .get("memory_usage_mb")
+                .and_then(|v| v.as_u64())
+                .unwrap_or(0),
+            memory_total_mb: body
+                .get("memory_total_mb")
+                .and_then(|v| v.as_u64())
+                .unwrap_or(0),
+            active_users: body
+                .get("active_users")
+                .and_then(|v| v.as_u64())
+                .unwrap_or(0) as u32,
+            active_regions: body
+                .get("active_regions")
+                .and_then(|v| v.as_u64())
+                .unwrap_or(0) as u32,
+            network_tx_bytes: body
+                .get("network_tx_bytes")
+                .and_then(|v| v.as_u64())
+                .unwrap_or(0),
+            network_rx_bytes: body
+                .get("network_rx_bytes")
+                .and_then(|v| v.as_u64())
+                .unwrap_or(0),
+            db_connections: body
+                .get("db_connections")
+                .and_then(|v| v.as_u64())
+                .unwrap_or(0) as u32,
+            websocket_connections: body
+                .get("websocket_connections")
+                .and_then(|v| v.as_u64())
+                .unwrap_or(0) as u32,
+            request_rate_per_sec: body
+                .get("request_rate_per_sec")
+                .and_then(|v| v.as_f64())
+                .unwrap_or(0.0),
+            error_rate_per_sec: body
+                .get("error_rate_per_sec")
+                .and_then(|v| v.as_f64())
+                .unwrap_or(0.0),
+            uptime_seconds: body
+                .get("uptime_seconds")
+                .and_then(|v| v.as_u64())
+                .unwrap_or(0),
         })
     }
 }
 
 #[cfg(test)]
 mod tests {
-    use super::*;
     use super::super::config_loader::{ControllerConfig, InstanceConfig, InstancesConfig};
     use super::super::types::Environment;
+    use super::*;
 
     fn create_test_registry() -> Arc<InstanceRegistry> {
         let config = InstancesConfig {

@@ -1,15 +1,15 @@
 //! Microservices architecture support for distributed OpenSim deployment
 
-use std::{
-    collections::HashMap,
-    sync::Arc,
-    time::{Duration, Instant},
-    fmt,
-};
 use anyhow::{anyhow, Result};
 use serde::{Deserialize, Serialize};
+use std::{
+    collections::HashMap,
+    fmt,
+    sync::Arc,
+    time::{Duration, Instant},
+};
 use tokio::sync::RwLock;
-use tracing::{info, warn, error, debug};
+use tracing::{debug, error, info, warn};
 use uuid::Uuid;
 
 /// Custom error type for circuit breaker compatibility
@@ -43,7 +43,7 @@ impl From<anyhow::Error> for ServiceError {
     fn from(err: anyhow::Error) -> Self {
         // Try to categorize the error based on its message for better circuit breaker logic
         let error_msg = err.to_string().to_lowercase();
-        
+
         if error_msg.contains("timeout") || error_msg.contains("deadline") {
             ServiceError::Timeout(err.to_string())
         } else if error_msg.contains("network") || error_msg.contains("connection") {
@@ -58,19 +58,18 @@ impl From<anyhow::Error> for ServiceError {
     }
 }
 
-
 /// Service types in the OpenSim microservices architecture
 #[derive(Debug, Clone, Serialize, Deserialize, PartialEq, Hash, Eq)]
 pub enum ServiceType {
-    Gateway,       // API Gateway and load balancer
-    RegionServer,  // Region simulation service
-    AssetService,  // Asset storage and management
-    UserService,   // User accounts and authentication
-    InventoryService, // User inventory management
-    GridService,   // Grid-wide coordination
-    MessagingService, // Chat and messaging
-    DatabaseService, // Database access layer
-    CacheService,  // Distributed caching
+    Gateway,           // API Gateway and load balancer
+    RegionServer,      // Region simulation service
+    AssetService,      // Asset storage and management
+    UserService,       // User accounts and authentication
+    InventoryService,  // User inventory management
+    GridService,       // Grid-wide coordination
+    MessagingService,  // Chat and messaging
+    DatabaseService,   // Database access layer
+    CacheService,      // Distributed caching
     MonitoringService, // Metrics and monitoring
 }
 
@@ -136,7 +135,8 @@ pub trait ServiceDiscovery: Send + Sync {
     async fn discover_services(&self, service_type: ServiceType) -> Result<Vec<ServiceInstance>>;
     async fn get_service(&self, service_id: &str) -> Result<Option<ServiceInstance>>;
     async fn update_health(&self, service_id: &str, health: ServiceHealth) -> Result<()>;
-    async fn get_healthy_services(&self, service_type: ServiceType) -> Result<Vec<ServiceInstance>>;
+    async fn get_healthy_services(&self, service_type: ServiceType)
+        -> Result<Vec<ServiceInstance>>;
 }
 
 /// In-memory service registry implementation
@@ -156,34 +156,40 @@ impl InMemoryServiceRegistry {
     /// Start health monitoring for registered services
     pub async fn start_health_monitoring(&self) -> Result<()> {
         let services = self.services.clone();
-        
+
         tokio::spawn(async move {
             let mut interval = tokio::time::interval(Duration::from_secs(30));
-            
+
             loop {
                 interval.tick().await;
-                
+
                 let mut services_guard = services.write().await;
                 let now = chrono::Utc::now();
-                
+
                 for (service_id, service) in services_guard.iter_mut() {
                     let last_heartbeat_age = now.signed_duration_since(service.last_heartbeat);
-                    
+
                     if last_heartbeat_age > chrono::Duration::seconds(60) {
                         if service.health_status == ServiceHealth::Healthy {
                             service.health_status = ServiceHealth::Degraded;
-                            warn!("Service {} marked as degraded due to missing heartbeat", service_id);
+                            warn!(
+                                "Service {} marked as degraded due to missing heartbeat",
+                                service_id
+                            );
                         }
                     }
-                    
+
                     if last_heartbeat_age > chrono::Duration::seconds(120) {
                         service.health_status = ServiceHealth::Unhealthy;
-                        warn!("Service {} marked as unhealthy due to missing heartbeat", service_id);
+                        warn!(
+                            "Service {} marked as unhealthy due to missing heartbeat",
+                            service_id
+                        );
                     }
                 }
             }
         });
-        
+
         Ok(())
     }
 
@@ -204,50 +210,62 @@ impl InMemoryServiceRegistry {
 #[async_trait::async_trait]
 impl ServiceDiscovery for InMemoryServiceRegistry {
     async fn register_service(&self, instance: ServiceInstance) -> Result<()> {
-        info!("Registering service: {} ({})", instance.id, instance.service_type);
-        
+        info!(
+            "Registering service: {} ({})",
+            instance.id, instance.service_type
+        );
+
         let service_id = instance.id.clone();
         let service_type = instance.service_type.clone();
-        
+
         // Add to services map
-        self.services.write().await.insert(service_id.clone(), instance);
-        
+        self.services
+            .write()
+            .await
+            .insert(service_id.clone(), instance);
+
         // Add to service type index
         let mut service_types = self.service_types.write().await;
-        service_types.entry(service_type).or_default().push(service_id);
-        
+        service_types
+            .entry(service_type)
+            .or_default()
+            .push(service_id);
+
         Ok(())
     }
 
     async fn unregister_service(&self, service_id: &str) -> Result<()> {
         info!("Unregistering service: {}", service_id);
-        
+
         let mut services = self.services.write().await;
         let mut service_types = self.service_types.write().await;
-        
+
         if let Some(service) = services.remove(service_id) {
             // Remove from service type index
             if let Some(type_list) = service_types.get_mut(&service.service_type) {
                 type_list.retain(|id| id != service_id);
             }
         }
-        
+
         Ok(())
     }
 
     async fn discover_services(&self, service_type: ServiceType) -> Result<Vec<ServiceInstance>> {
         let services = self.services.read().await;
         let service_types = self.service_types.read().await;
-        
-        let service_ids = service_types.get(&service_type).map(|v| v.as_slice()).unwrap_or(&[]);
+
+        let service_ids = service_types
+            .get(&service_type)
+            .map(|v| v.as_slice())
+            .unwrap_or(&[]);
         let mut instances = Vec::new();
-        
+
         for service_id in service_ids {
             if let Some(instance) = services.get(service_id) {
                 instances.push(instance.clone());
             }
         }
-        
+
         Ok(instances)
     }
 
@@ -265,9 +283,13 @@ impl ServiceDiscovery for InMemoryServiceRegistry {
         Ok(())
     }
 
-    async fn get_healthy_services(&self, service_type: ServiceType) -> Result<Vec<ServiceInstance>> {
+    async fn get_healthy_services(
+        &self,
+        service_type: ServiceType,
+    ) -> Result<Vec<ServiceInstance>> {
         let all_services = self.discover_services(service_type).await?;
-        Ok(all_services.into_iter()
+        Ok(all_services
+            .into_iter()
             .filter(|s| s.health_status == ServiceHealth::Healthy)
             .collect())
     }
@@ -286,7 +308,7 @@ impl ServiceClient {
             .timeout(Duration::from_secs(30))
             .build()
             .expect("Failed to create HTTP client");
-        
+
         Self {
             service_discovery,
             client,
@@ -301,22 +323,28 @@ impl ServiceClient {
     {
         let service = self.find_healthy_service(service_type).await?;
         let url = format!("http://{}:{}{}", service.address, service.port, path);
-        
+
         debug!("Making GET request to: {}", url);
-        
-        let response = self.client
+
+        let response = self
+            .client
             .get(&url)
             .timeout(self.timeout)
             .send()
             .await
             .map_err(|e| anyhow!("HTTP request failed: {}", e))?;
-        
+
         if response.status().is_success() {
-            let data = response.json::<T>().await
+            let data = response
+                .json::<T>()
+                .await
                 .map_err(|e| anyhow!("Failed to parse response: {}", e))?;
             Ok(data)
         } else {
-            Err(anyhow!("HTTP request failed with status: {}", response.status()))
+            Err(anyhow!(
+                "HTTP request failed with status: {}",
+                response.status()
+            ))
         }
     }
 
@@ -328,33 +356,45 @@ impl ServiceClient {
     {
         let service = self.find_healthy_service(service_type).await?;
         let url = format!("http://{}:{}{}", service.address, service.port, path);
-        
+
         debug!("Making POST request to: {}", url);
-        
-        let response = self.client
+
+        let response = self
+            .client
             .post(&url)
             .json(body)
             .timeout(self.timeout)
             .send()
             .await
             .map_err(|e| anyhow!("HTTP request failed: {}", e))?;
-        
+
         if response.status().is_success() {
-            let data = response.json::<U>().await
+            let data = response
+                .json::<U>()
+                .await
                 .map_err(|e| anyhow!("Failed to parse response: {}", e))?;
             Ok(data)
         } else {
-            Err(anyhow!("HTTP request failed with status: {}", response.status()))
+            Err(anyhow!(
+                "HTTP request failed with status: {}",
+                response.status()
+            ))
         }
     }
 
     async fn find_healthy_service(&self, service_type: ServiceType) -> Result<ServiceInstance> {
-        let services = self.service_discovery.get_healthy_services(service_type.clone()).await?;
-        
+        let services = self
+            .service_discovery
+            .get_healthy_services(service_type.clone())
+            .await?;
+
         if services.is_empty() {
-            return Err(anyhow!("No healthy services found for type: {:?}", service_type));
+            return Err(anyhow!(
+                "No healthy services found for type: {:?}",
+                service_type
+            ));
         }
-        
+
         // Simple round-robin selection
         let index = rand::random::<usize>() % services.len();
         Ok(services[index].clone())
@@ -398,7 +438,9 @@ impl CircuitBreaker {
     {
         // Check if circuit breaker should allow the call
         if !self.should_allow_call().await {
-            return Err(ServiceError::CircuitBreaker("Circuit breaker is open".to_string()));
+            return Err(ServiceError::CircuitBreaker(
+                "Circuit breaker is open".to_string(),
+            ));
         }
 
         match f.await {
@@ -422,7 +464,9 @@ impl CircuitBreaker {
     {
         // Check if circuit breaker should allow the call
         if !self.should_allow_call().await {
-            return Err(E::from(ServiceError::CircuitBreaker("Circuit breaker is open".to_string())));
+            return Err(E::from(ServiceError::CircuitBreaker(
+                "Circuit breaker is open".to_string(),
+            )));
         }
 
         match f.await {
@@ -439,7 +483,7 @@ impl CircuitBreaker {
 
     async fn should_allow_call(&self) -> bool {
         let state = self.state.read().await.clone();
-        
+
         match state {
             CircuitBreakerState::Closed => true,
             CircuitBreakerState::Open => {
@@ -461,7 +505,7 @@ impl CircuitBreaker {
 
     async fn on_success(&self) {
         let mut state = self.state.write().await;
-        
+
         match *state {
             CircuitBreakerState::HalfOpen => {
                 *state = CircuitBreakerState::Closed;
@@ -475,10 +519,10 @@ impl CircuitBreaker {
     async fn on_failure(&self) {
         let mut failure_count = self.failure_count.write().await;
         let mut state = self.state.write().await;
-        
+
         *failure_count += 1;
         *self.last_failure_time.write().await = Some(Instant::now());
-        
+
         if *failure_count >= self.failure_threshold {
             *state = CircuitBreakerState::Open;
             warn!("Circuit breaker opened after {} failures", failure_count);
@@ -497,7 +541,7 @@ pub struct ServiceMesh {
 impl ServiceMesh {
     pub fn new(service_discovery: Arc<dyn ServiceDiscovery>) -> Self {
         let service_client = ServiceClient::new(service_discovery.clone());
-        
+
         Self {
             service_discovery,
             service_client,
@@ -523,37 +567,58 @@ impl ServiceMesh {
         T: serde::Serialize,
         U: serde::de::DeserializeOwned,
     {
-        let circuit_breaker = self.get_or_create_circuit_breaker(service_type.clone()).await;
-        
+        let circuit_breaker = self
+            .get_or_create_circuit_breaker(service_type.clone())
+            .await;
+
         // Execute with circuit breaker using ServiceError for std::error::Error compatibility
-        let result: Result<U, ServiceError> = circuit_breaker.execute(async {
-            let service_result: Result<U, ServiceError> = match method.to_uppercase().as_str() {
-                "GET" => self.service_client.get(service_type.clone(), path).await
-                    .map_err(ServiceError::from),
-                "POST" => {
-                    if let Some(body) = body {
-                        self.service_client.post(service_type.clone(), path, body).await
-                            .map_err(ServiceError::from)
-                    } else {
-                        Err(ServiceError::Request("POST request requires body".to_string()))
+        let result: Result<U, ServiceError> = circuit_breaker
+            .execute(async {
+                let service_result: Result<U, ServiceError> = match method.to_uppercase().as_str() {
+                    "GET" => self
+                        .service_client
+                        .get(service_type.clone(), path)
+                        .await
+                        .map_err(ServiceError::from),
+                    "POST" => {
+                        if let Some(body) = body {
+                            self.service_client
+                                .post(service_type.clone(), path, body)
+                                .await
+                                .map_err(ServiceError::from)
+                        } else {
+                            Err(ServiceError::Request(
+                                "POST request requires body".to_string(),
+                            ))
+                        }
                     }
-                }
-                _ => Err(ServiceError::Request(format!("Unsupported HTTP method: {}", method))),
-            };
-            service_result
-        }).await;
-        
+                    _ => Err(ServiceError::Request(format!(
+                        "Unsupported HTTP method: {}",
+                        method
+                    ))),
+                };
+                service_result
+            })
+            .await;
+
         // Convert back to anyhow::Error for consistent API
         result.map_err(anyhow::Error::from)
     }
 
     /// Get service health status
-    pub async fn get_service_health(&self, service_type: ServiceType) -> Result<ServiceHealthSummary> {
-        let all_services = self.service_discovery.discover_services(service_type).await?;
-        let healthy_services = all_services.iter()
+    pub async fn get_service_health(
+        &self,
+        service_type: ServiceType,
+    ) -> Result<ServiceHealthSummary> {
+        let all_services = self
+            .service_discovery
+            .discover_services(service_type)
+            .await?;
+        let healthy_services = all_services
+            .iter()
             .filter(|s| s.health_status == ServiceHealth::Healthy)
             .count();
-        
+
         Ok(ServiceHealthSummary {
             total_instances: all_services.len(),
             healthy_instances: healthy_services,
@@ -570,9 +635,13 @@ impl ServiceMesh {
 
     /// Deploy a new service
     pub async fn deploy_service(&self, deployment: ServiceDeployment) -> Result<String> {
-        info!("Deploying service: {} version {}", deployment.service_type, deployment.version);
-        
-        let service_id = format!("{}_{}_{}",
+        info!(
+            "Deploying service: {} version {}",
+            deployment.service_type, deployment.version
+        );
+
+        let service_id = format!(
+            "{}_{}_{}",
             format!("{:?}", deployment.service_type).to_lowercase(),
             deployment.version.replace('.', "_"),
             Uuid::new_v4()
@@ -594,21 +663,21 @@ impl ServiceMesh {
         };
 
         self.service_discovery.register_service(instance).await?;
-        
+
         // In a real implementation, this would start the actual service process
-        
+
         info!("Service deployed successfully: {}", service_id);
         Ok(service_id)
     }
 
     async fn get_or_create_circuit_breaker(&self, service_type: ServiceType) -> CircuitBreaker {
         let mut circuit_breakers = self.circuit_breakers.write().await;
-        
+
         if !circuit_breakers.contains_key(&service_type) {
             let circuit_breaker = CircuitBreaker::new(5, Duration::from_secs(60));
             circuit_breakers.insert(service_type.clone(), circuit_breaker);
         }
-        
+
         circuit_breakers.get(&service_type).unwrap().clone()
     }
 }
@@ -638,11 +707,11 @@ impl LoadBalancer for RoundRobinLoadBalancer {
         if services.is_empty() {
             return None;
         }
-        
+
         let mut counter = self.counter.write().await;
         let index = *counter % services.len();
         *counter = (*counter + 1) % services.len();
-        
+
         Some(services[index].clone())
     }
 }
@@ -676,7 +745,7 @@ mod tests {
     #[tokio::test]
     async fn test_service_registry() -> Result<()> {
         let registry = InMemoryServiceRegistry::new();
-        
+
         let instance = ServiceInstance {
             id: "test-service-1".to_string(),
             service_type: ServiceType::RegionServer,
@@ -696,33 +765,39 @@ mod tests {
             started_at: chrono::Utc::now(),
             last_heartbeat: chrono::Utc::now(),
         };
-        
+
         registry.register_service(instance.clone()).await?;
-        
-        let discovered = registry.discover_services(ServiceType::RegionServer).await?;
+
+        let discovered = registry
+            .discover_services(ServiceType::RegionServer)
+            .await?;
         assert_eq!(discovered.len(), 1);
         assert_eq!(discovered[0].id, "test-service-1");
-        
+
         Ok(())
     }
 
     #[tokio::test]
     async fn test_circuit_breaker() -> Result<()> {
         let circuit_breaker = CircuitBreaker::new(2, Duration::from_millis(100));
-        
+
         // Test successful calls
-        let result = circuit_breaker.execute(async { Ok::<_, ServiceError>(42) }).await;
+        let result = circuit_breaker
+            .execute(async { Ok::<_, ServiceError>(42) })
+            .await;
         assert!(result.is_ok());
-        
+
         // Test failing calls
         for _ in 0..2 {
-            let _ = circuit_breaker.execute(async { Err::<i32, _>(ServiceError::Internal("Test error".to_string())) }).await;
+            let _ = circuit_breaker
+                .execute(async { Err::<i32, _>(ServiceError::Internal("Test error".to_string())) })
+                .await;
         }
-        
+
         // Circuit should be open now
         let state = circuit_breaker.state.read().await.clone();
         assert_eq!(state, CircuitBreakerState::Open);
-        
+
         Ok(())
     }
 
@@ -730,7 +805,7 @@ mod tests {
     async fn test_service_mesh() -> Result<()> {
         let registry = Arc::new(InMemoryServiceRegistry::new());
         let mesh = ServiceMesh::new(registry.clone());
-        
+
         let instance = ServiceInstance {
             id: "test-service-1".to_string(),
             service_type: ServiceType::AssetService,
@@ -750,13 +825,13 @@ mod tests {
             started_at: chrono::Utc::now(),
             last_heartbeat: chrono::Utc::now(),
         };
-        
+
         mesh.register_service(instance).await?;
-        
+
         let health = mesh.get_service_health(ServiceType::AssetService).await?;
         assert_eq!(health.total_instances, 1);
         assert_eq!(health.healthy_instances, 1);
-        
+
         Ok(())
     }
 }

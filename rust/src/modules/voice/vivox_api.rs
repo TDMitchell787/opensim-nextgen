@@ -1,4 +1,4 @@
-use anyhow::{Result, anyhow};
+use anyhow::{anyhow, Result};
 use tracing::{info, warn};
 
 pub struct ChannelConfig {
@@ -56,11 +56,15 @@ impl VivoxApiClient {
         let _lock = self.auth_token.lock().await;
         drop(_lock);
 
-        let resp = self.http_client.get(url)
+        let resp = self
+            .http_client
+            .get(url)
             .send()
             .await
             .map_err(|e| anyhow!("Vivox API call failed: {}", e))?;
-        let body = resp.text().await
+        let body = resp
+            .text()
+            .await
             .map_err(|e| anyhow!("Failed to read Vivox response: {}", e))?;
         if self.dump_xml {
             info!("[VivoxAPI] Response: {}", body);
@@ -78,13 +82,11 @@ impl VivoxApiClient {
     }
 
     fn extract_status(xml: &str) -> String {
-        Self::extract_xml_value(xml, "status")
-            .unwrap_or_else(|| "unknown".to_string())
+        Self::extract_xml_value(xml, "status").unwrap_or_else(|| "unknown".to_string())
     }
 
     fn extract_code(xml: &str) -> String {
-        Self::extract_xml_value(xml, "code")
-            .unwrap_or_else(|| "0".to_string())
+        Self::extract_xml_value(xml, "code").unwrap_or_else(|| "0".to_string())
     }
 
     pub async fn admin_login(&self) -> Result<()> {
@@ -137,7 +139,11 @@ impl VivoxApiClient {
         Ok((status, code))
     }
 
-    pub async fn create_account(&self, user_name: &str, password: &str) -> Result<(String, String)> {
+    pub async fn create_account(
+        &self,
+        user_name: &str,
+        password: &str,
+    ) -> Result<(String, String)> {
         let auth = self.auth_token.lock().await;
         let url = format!(
             "{}?username={}&pwd={}&auth_token={}",
@@ -166,7 +172,10 @@ impl VivoxApiClient {
         let body = self.vivox_call(&url).await?;
         let status = Self::extract_status(&body);
         if status.to_lowercase() != "ok" {
-            warn!("[VivoxAPI] Password change failed for {}: {}", user_name, status);
+            warn!(
+                "[VivoxAPI] Password change failed for {}: {}",
+                user_name, status
+            );
         }
         Ok(())
     }

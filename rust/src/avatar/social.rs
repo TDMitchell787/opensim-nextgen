@@ -1,5 +1,5 @@
 //! Avatar Social Features for OpenSim Next
-//! 
+//!
 //! Provides social networking features for avatars including friends,
 //! groups, achievements, and social interactions.
 
@@ -95,13 +95,12 @@ impl AvatarSocialFeatures {
         }
 
         // Check if friendship already exists
-        let existing = sqlx::query(
-            "SELECT id FROM avatar_friends WHERE avatar_id = $1 AND friend_id = $2"
-        )
-        .bind(avatar_id.to_string())
-        .bind(friend_id.to_string())
-        .fetch_optional(self.database.legacy_pool()?)
-        .await?;
+        let existing =
+            sqlx::query("SELECT id FROM avatar_friends WHERE avatar_id = $1 AND friend_id = $2")
+                .bind(avatar_id.to_string())
+                .bind(friend_id.to_string())
+                .fetch_optional(self.database.legacy_pool()?)
+                .await?;
 
         if existing.is_some() {
             return Err(AvatarError::InvalidData {
@@ -114,7 +113,7 @@ impl AvatarSocialFeatures {
             r#"
             INSERT INTO avatar_friends (id, avatar_id, friend_id, friend_name, created_at)
             VALUES (gen_random_uuid(), $1, $2, $3, NOW())
-            "#
+            "#,
         )
         .bind(avatar_id.to_string())
         .bind(friend_id.to_string())
@@ -128,15 +127,17 @@ impl AvatarSocialFeatures {
 
     /// Remove friend relationship
     pub async fn remove_friend(&self, avatar_id: Uuid, friend_id: Uuid) -> AvatarResult<()> {
-        info!("Removing friend relationship: {} -> {}", avatar_id, friend_id);
+        info!(
+            "Removing friend relationship: {} -> {}",
+            avatar_id, friend_id
+        );
 
-        let result = sqlx::query(
-            "DELETE FROM avatar_friends WHERE avatar_id = $1 AND friend_id = $2"
-        )
-        .bind(avatar_id.to_string())
-        .bind(friend_id.to_string())
-        .execute(self.database.legacy_pool()?)
-        .await?;
+        let result =
+            sqlx::query("DELETE FROM avatar_friends WHERE avatar_id = $1 AND friend_id = $2")
+                .bind(avatar_id.to_string())
+                .bind(friend_id.to_string())
+                .execute(self.database.legacy_pool()?)
+                .await?;
 
         if result.rows_affected() == 0 {
             return Err(AvatarError::NotFound { id: friend_id });
@@ -158,38 +159,48 @@ impl AvatarSocialFeatures {
             LEFT JOIN enhanced_avatars ea ON af.friend_id = ea.id
             WHERE af.avatar_id = $1
             ORDER BY af.friend_name
-            "#
+            "#,
         )
         .bind(avatar_id.to_string())
         .fetch_all(self.database.legacy_pool()?)
         .await?;
 
-        let friends: Vec<AvatarFriend> = rows.into_iter().map(|row| {
-            let friend_id_str: String = row.try_get("friend_id").unwrap();
-            let created_at_str: String = row.try_get("created_at").unwrap();
-            
-            AvatarFriend {
-                friend_id: Uuid::parse_str(&friend_id_str).unwrap_or_default(),
-                friend_name: row.try_get::<Option<String>, _>("current_name").unwrap()
-                    .unwrap_or_else(|| row.try_get("friend_name").unwrap()),
-                friendship_date: chrono::DateTime::parse_from_rfc3339(&created_at_str).unwrap().with_timezone(&chrono::Utc),
-                online_status: OnlineStatus::Unknown, // Would be populated from session manager
-                last_seen: None, // Would be populated from session data
-            }
-        }).collect();
+        let friends: Vec<AvatarFriend> = rows
+            .into_iter()
+            .map(|row| {
+                let friend_id_str: String = row.try_get("friend_id").unwrap();
+                let created_at_str: String = row.try_get("created_at").unwrap();
 
-        debug!("Retrieved {} friends for avatar {}", friends.len(), avatar_id);
+                AvatarFriend {
+                    friend_id: Uuid::parse_str(&friend_id_str).unwrap_or_default(),
+                    friend_name: row
+                        .try_get::<Option<String>, _>("current_name")
+                        .unwrap()
+                        .unwrap_or_else(|| row.try_get("friend_name").unwrap()),
+                    friendship_date: chrono::DateTime::parse_from_rfc3339(&created_at_str)
+                        .unwrap()
+                        .with_timezone(&chrono::Utc),
+                    online_status: OnlineStatus::Unknown, // Would be populated from session manager
+                    last_seen: None,                      // Would be populated from session data
+                }
+            })
+            .collect();
+
+        debug!(
+            "Retrieved {} friends for avatar {}",
+            friends.len(),
+            avatar_id
+        );
         Ok(friends)
     }
 
     /// Get friend count
     pub async fn get_friend_count(&self, avatar_id: Uuid) -> AvatarResult<i64> {
-        let result = sqlx::query(
-            "SELECT COUNT(*) as count FROM avatar_friends WHERE avatar_id = $1"
-        )
-        .bind(avatar_id.to_string())
-        .fetch_one(self.database.legacy_pool()?)
-        .await?;
+        let result =
+            sqlx::query("SELECT COUNT(*) as count FROM avatar_friends WHERE avatar_id = $1")
+                .bind(avatar_id.to_string())
+                .fetch_one(self.database.legacy_pool()?)
+                .await?;
 
         let count = result.try_get::<i64, _>("count").unwrap_or(0);
         Ok(count)
@@ -197,13 +208,12 @@ impl AvatarSocialFeatures {
 
     /// Check if avatars are friends
     pub async fn are_friends(&self, avatar_id: Uuid, other_id: Uuid) -> AvatarResult<bool> {
-        let result = sqlx::query(
-            "SELECT id FROM avatar_friends WHERE avatar_id = $1 AND friend_id = $2"
-        )
-        .bind(avatar_id.to_string())
-        .bind(other_id.to_string())
-        .fetch_optional(self.database.legacy_pool()?)
-        .await?;
+        let result =
+            sqlx::query("SELECT id FROM avatar_friends WHERE avatar_id = $1 AND friend_id = $2")
+                .bind(avatar_id.to_string())
+                .bind(other_id.to_string())
+                .fetch_optional(self.database.legacy_pool()?)
+                .await?;
 
         Ok(result.is_some())
     }
@@ -214,11 +224,14 @@ impl AvatarSocialFeatures {
         avatar_id: Uuid,
         achievement: Achievement,
     ) -> AvatarResult<()> {
-        info!("Adding achievement to avatar {}: {}", avatar_id, achievement.name);
+        info!(
+            "Adding achievement to avatar {}: {}",
+            avatar_id, achievement.name
+        );
 
         // Check if achievement already exists
         let existing = sqlx::query(
-            "SELECT id FROM avatar_achievements WHERE avatar_id = $1 AND achievement_id = $2"
+            "SELECT id FROM avatar_achievements WHERE avatar_id = $1 AND achievement_id = $2",
         )
         .bind(avatar_id.to_string())
         .bind(achievement.achievement_id.to_string())
@@ -239,7 +252,7 @@ impl AvatarSocialFeatures {
                 id, avatar_id, achievement_id, name, description, 
                 icon_url, earned_at, points, category
             ) VALUES (gen_random_uuid(), $1, $2, $3, $4, $5, $6, $7, $8)
-            "#
+            "#,
         )
         .bind(avatar_id.to_string())
         .bind(achievement.achievement_id.to_string())
@@ -261,7 +274,7 @@ impl AvatarSocialFeatures {
         debug!("Getting achievements for avatar: {}", avatar_id);
 
         let rows = sqlx::query(
-            "SELECT * FROM avatar_achievements WHERE avatar_id = $1 ORDER BY earned_at DESC"
+            "SELECT * FROM avatar_achievements WHERE avatar_id = $1 ORDER BY earned_at DESC",
         )
         .bind(avatar_id.to_string())
         .fetch_all(self.database.legacy_pool()?)
@@ -276,19 +289,25 @@ impl AvatarSocialFeatures {
             // ELEGANT ARCHIVE SOLUTION: Parse UUID and DateTime from strings
             let achievement_id_str: String = row.try_get("achievement_id")?;
             let earned_at_str: String = row.try_get("earned_at")?;
-            
+
             achievements.push(Achievement {
                 achievement_id: Uuid::parse_str(&achievement_id_str).unwrap_or_default(),
                 name: row.try_get("name")?,
                 description: row.try_get("description")?,
                 icon_url: row.try_get("icon_url")?,
-                earned_at: chrono::DateTime::parse_from_rfc3339(&earned_at_str).unwrap().with_timezone(&chrono::Utc),
+                earned_at: chrono::DateTime::parse_from_rfc3339(&earned_at_str)
+                    .unwrap()
+                    .with_timezone(&chrono::Utc),
                 points: row.try_get("points")?,
                 category,
             });
         }
 
-        debug!("Retrieved {} achievements for avatar {}", achievements.len(), avatar_id);
+        debug!(
+            "Retrieved {} achievements for avatar {}",
+            achievements.len(),
+            avatar_id
+        );
         Ok(achievements)
     }
 
@@ -312,7 +331,10 @@ impl AvatarSocialFeatures {
         to_avatar_id: Uuid,
         message: AvatarMessage,
     ) -> AvatarResult<()> {
-        info!("Sending message from {} to {}", from_avatar_id, to_avatar_id);
+        info!(
+            "Sending message from {} to {}",
+            from_avatar_id, to_avatar_id
+        );
 
         let message_json = serde_json::to_string(&message)?;
 
@@ -322,7 +344,7 @@ impl AvatarSocialFeatures {
                 id, from_avatar_id, to_avatar_id, message_type, content, 
                 sent_at, read_at
             ) VALUES (gen_random_uuid(), $1, $2, $3, $4, NOW(), NULL)
-            "#
+            "#,
         )
         .bind(from_avatar_id.to_string())
         .bind(to_avatar_id.to_string())
@@ -345,13 +367,13 @@ impl AvatarSocialFeatures {
         debug!("Getting messages for avatar: {}", avatar_id);
 
         let mut query = "SELECT * FROM avatar_messages WHERE to_avatar_id = $1".to_string();
-        
+
         if unread_only {
             query.push_str(" AND read_at IS NULL");
         }
-        
+
         query.push_str(" ORDER BY sent_at DESC");
-        
+
         if let Some(limit) = limit {
             query.push_str(&format!(" LIMIT {}", limit));
         }
@@ -369,18 +391,20 @@ impl AvatarSocialFeatures {
             messages.push(message);
         }
 
-        debug!("Retrieved {} messages for avatar {}", messages.len(), avatar_id);
+        debug!(
+            "Retrieved {} messages for avatar {}",
+            messages.len(),
+            avatar_id
+        );
         Ok(messages)
     }
 
     /// Mark message as read
     pub async fn mark_message_read(&self, message_id: Uuid) -> AvatarResult<()> {
-        sqlx::query(
-            "UPDATE avatar_messages SET read_at = NOW() WHERE id = $1"
-        )
-        .bind(message_id.to_string())
-        .execute(self.database.legacy_pool()?)
-        .await?;
+        sqlx::query("UPDATE avatar_messages SET read_at = NOW() WHERE id = $1")
+            .bind(message_id.to_string())
+            .execute(self.database.legacy_pool()?)
+            .await?;
 
         Ok(())
     }
@@ -400,20 +424,20 @@ impl AvatarSocialFeatures {
                 created_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
                 UNIQUE(avatar_id, friend_id)
             )
-            "#
+            "#,
         )
         .execute(self.database.legacy_pool()?)
         .await?;
 
         // Create indexes for avatar_friends
         sqlx::query(
-            "CREATE INDEX IF NOT EXISTS idx_avatar_friends_avatar_id ON avatar_friends (avatar_id)"
+            "CREATE INDEX IF NOT EXISTS idx_avatar_friends_avatar_id ON avatar_friends (avatar_id)",
         )
         .execute(self.database.legacy_pool()?)
         .await?;
 
         sqlx::query(
-            "CREATE INDEX IF NOT EXISTS idx_avatar_friends_friend_id ON avatar_friends (friend_id)"
+            "CREATE INDEX IF NOT EXISTS idx_avatar_friends_friend_id ON avatar_friends (friend_id)",
         )
         .execute(self.database.legacy_pool()?)
         .await?;
@@ -433,7 +457,7 @@ impl AvatarSocialFeatures {
                 category TEXT NOT NULL,
                 UNIQUE(avatar_id, achievement_id)
             )
-            "#
+            "#,
         )
         .execute(self.database.legacy_pool()?)
         .await?;
@@ -457,7 +481,7 @@ impl AvatarSocialFeatures {
                 sent_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
                 read_at TIMESTAMPTZ
             )
-            "#
+            "#,
         )
         .execute(self.database.legacy_pool()?)
         .await?;

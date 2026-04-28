@@ -1,10 +1,10 @@
 //! Grid-wide event and messaging system for OpenSim
 
-use std::{collections::HashMap, sync::Arc, time::Duration};
 use anyhow::Result;
 use serde::{Deserialize, Serialize};
-use tokio::sync::{RwLock, broadcast};
-use tracing::{info, warn, error};
+use std::{collections::HashMap, sync::Arc, time::Duration};
+use tokio::sync::{broadcast, RwLock};
+use tracing::{error, info, warn};
 use uuid::Uuid;
 
 use crate::{
@@ -54,11 +54,11 @@ pub struct GridEvent {
     pub source_region: Option<RegionId>,
     pub source_user: Option<Uuid>,
     pub target_regions: Vec<RegionId>, // Empty means broadcast to all
-    pub target_users: Vec<Uuid>, // Empty means all users
+    pub target_users: Vec<Uuid>,       // Empty means all users
     pub payload: LLSDValue,
     pub timestamp: u64,
     pub priority: EventPriority,
-    pub persistent: bool, // Whether to store for offline users
+    pub persistent: bool,    // Whether to store for offline users
     pub expiry: Option<u64>, // When the event expires (for persistent events)
 }
 
@@ -78,8 +78,8 @@ pub struct EventSubscription {
     pub subscriber_id: String,
     pub event_types: Vec<GridEventType>,
     pub regions: Vec<RegionId>, // Empty means all regions
-    pub users: Vec<Uuid>, // Empty means all users
-    pub callback: String, // Endpoint or method to call
+    pub users: Vec<Uuid>,       // Empty means all users
+    pub callback: String,       // Endpoint or method to call
 }
 
 /// Event statistics
@@ -112,7 +112,7 @@ impl GridEventManager {
     /// Create a new grid event manager
     pub fn new(inter_region_manager: Arc<InterRegionManager>) -> Self {
         let (event_tx, _) = broadcast::channel(1000);
-        
+
         Self {
             subscriptions: RwLock::new(HashMap::new()),
             persistent_events: RwLock::new(HashMap::new()),
@@ -168,8 +168,11 @@ impl GridEventManager {
             callback,
         };
 
-        self.subscriptions.write().await.insert(subscriber_id, subscription);
-        
+        self.subscriptions
+            .write()
+            .await
+            .insert(subscriber_id, subscription);
+
         // Update stats
         self.stats.write().await.active_subscriptions = self.subscriptions.read().await.len();
 
@@ -181,7 +184,7 @@ impl GridEventManager {
         info!("Removing event subscription for {}", subscriber_id);
 
         self.subscriptions.write().await.remove(subscriber_id);
-        
+
         // Update stats
         self.stats.write().await.active_subscriptions = self.subscriptions.read().await.len();
 
@@ -190,7 +193,10 @@ impl GridEventManager {
 
     /// Publish a grid event
     pub async fn publish_event(&self, event: GridEvent) -> Result<()> {
-        info!("Publishing grid event: {:?} with ID {}", event.event_type, event.event_id);
+        info!(
+            "Publishing grid event: {:?} with ID {}",
+            event.event_type, event.event_id
+        );
 
         // Add to processing queue
         self.event_queue.write().await.push(event);
@@ -211,15 +217,21 @@ impl GridEventManager {
             source_region: region_id,
             source_user: Some(user_id),
             target_regions: Vec::new(), // Broadcast to all
-            target_users: Vec::new(), // All users
+            target_users: Vec::new(),   // All users
             payload: LLSDValue::Map({
                 let mut map = HashMap::new();
-                map.insert("user_id".to_string(), LLSDValue::String(user_id.to_string()));
+                map.insert(
+                    "user_id".to_string(),
+                    LLSDValue::String(user_id.to_string()),
+                );
                 map.insert("status".to_string(), LLSDValue::String(status.to_string()));
                 if let Some(region) = region_id {
                     map.insert("region_id".to_string(), LLSDValue::Integer(region.0 as i32));
                 }
-                map.insert("timestamp".to_string(), LLSDValue::Integer(self.current_timestamp() as i32));
+                map.insert(
+                    "timestamp".to_string(),
+                    LLSDValue::Integer(self.current_timestamp() as i32),
+                );
                 map
             }),
             timestamp: self.current_timestamp(),
@@ -249,20 +261,35 @@ impl GridEventManager {
             target_users: Vec::new(),
             payload: LLSDValue::Map({
                 let mut map = HashMap::new();
-                map.insert("sender_id".to_string(), LLSDValue::String(sender_id.to_string()));
-                map.insert("message".to_string(), LLSDValue::String(message.to_string()));
+                map.insert(
+                    "sender_id".to_string(),
+                    LLSDValue::String(sender_id.to_string()),
+                );
+                map.insert(
+                    "message".to_string(),
+                    LLSDValue::String(message.to_string()),
+                );
                 map.insert("channel".to_string(), LLSDValue::Integer(channel));
-                map.insert("region_id".to_string(), LLSDValue::Integer(region_id.0 as i32));
-                
+                map.insert(
+                    "region_id".to_string(),
+                    LLSDValue::Integer(region_id.0 as i32),
+                );
+
                 if let Some(pos) = position {
-                    map.insert("position".to_string(), LLSDValue::Array(vec![
-                        LLSDValue::Real(pos.0 as f64),
-                        LLSDValue::Real(pos.1 as f64),
-                        LLSDValue::Real(pos.2 as f64),
-                    ]));
+                    map.insert(
+                        "position".to_string(),
+                        LLSDValue::Array(vec![
+                            LLSDValue::Real(pos.0 as f64),
+                            LLSDValue::Real(pos.1 as f64),
+                            LLSDValue::Real(pos.2 as f64),
+                        ]),
+                    );
                 }
-                
-                map.insert("timestamp".to_string(), LLSDValue::Integer(self.current_timestamp() as i32));
+
+                map.insert(
+                    "timestamp".to_string(),
+                    LLSDValue::Integer(self.current_timestamp() as i32),
+                );
                 map
             }),
             timestamp: self.current_timestamp(),
@@ -292,11 +319,23 @@ impl GridEventManager {
             target_users: vec![from_user, to_user], // Only notify involved users
             payload: LLSDValue::Map({
                 let mut map = HashMap::new();
-                map.insert("from_user".to_string(), LLSDValue::String(from_user.to_string()));
-                map.insert("to_user".to_string(), LLSDValue::String(to_user.to_string()));
+                map.insert(
+                    "from_user".to_string(),
+                    LLSDValue::String(from_user.to_string()),
+                );
+                map.insert(
+                    "to_user".to_string(),
+                    LLSDValue::String(to_user.to_string()),
+                );
                 map.insert("amount".to_string(), LLSDValue::Integer(amount));
-                map.insert("description".to_string(), LLSDValue::String(description.to_string()));
-                map.insert("timestamp".to_string(), LLSDValue::Integer(self.current_timestamp() as i32));
+                map.insert(
+                    "description".to_string(),
+                    LLSDValue::String(description.to_string()),
+                );
+                map.insert(
+                    "timestamp".to_string(),
+                    LLSDValue::Integer(self.current_timestamp() as i32),
+                );
                 map
             }),
             timestamp: self.current_timestamp(),
@@ -316,10 +355,16 @@ impl GridEventManager {
         additional_info: Option<HashMap<String, LLSDValue>>,
     ) -> Result<()> {
         let mut payload = HashMap::new();
-        payload.insert("region_id".to_string(), LLSDValue::Integer(region_id.0 as i32));
+        payload.insert(
+            "region_id".to_string(),
+            LLSDValue::Integer(region_id.0 as i32),
+        );
         payload.insert("status".to_string(), LLSDValue::String(status.to_string()));
-        payload.insert("timestamp".to_string(), LLSDValue::Integer(self.current_timestamp() as i32));
-        
+        payload.insert(
+            "timestamp".to_string(),
+            LLSDValue::Integer(self.current_timestamp() as i32),
+        );
+
         if let Some(info) = additional_info {
             payload.extend(info);
         }
@@ -343,7 +388,9 @@ impl GridEventManager {
 
     /// Get events for a specific user (including persistent events)
     pub async fn get_user_events(&self, user_id: Uuid) -> Vec<GridEvent> {
-        self.persistent_events.read().await
+        self.persistent_events
+            .read()
+            .await
             .get(&user_id)
             .cloned()
             .unwrap_or_default()
@@ -351,7 +398,9 @@ impl GridEventManager {
 
     /// Clear events for a user (when they come online)
     pub async fn clear_user_events(&self, user_id: Uuid) -> usize {
-        self.persistent_events.write().await
+        self.persistent_events
+            .write()
+            .await
             .remove(&user_id)
             .map(|events| events.len())
             .unwrap_or(0)
@@ -365,16 +414,16 @@ impl GridEventManager {
     /// Process events from the queue
     async fn event_processing_loop(&self) {
         let mut interval = tokio::time::interval(Duration::from_millis(50));
-        
+
         loop {
             interval.tick().await;
-            
+
             let events = {
                 let mut queue = self.event_queue.write().await;
                 if queue.is_empty() {
                     continue;
                 }
-                
+
                 // Sort by priority and take up to 20 events
                 queue.sort_by(|a, b| b.priority.cmp(&a.priority));
                 let count = queue.len().min(20);
@@ -392,13 +441,19 @@ impl GridEventManager {
 
     /// Process a single event
     async fn process_event(&self, event: GridEvent) -> Result<()> {
-        info!("Processing event {} of type {:?}", event.event_id, event.event_type);
+        info!(
+            "Processing event {} of type {:?}",
+            event.event_id, event.event_type
+        );
 
         // Update statistics
         {
             let mut stats = self.stats.write().await;
             stats.total_events_sent += 1;
-            *stats.events_by_type.entry(event.event_type.clone()).or_insert(0) += 1;
+            *stats
+                .events_by_type
+                .entry(event.event_type.clone())
+                .or_insert(0) += 1;
         }
 
         // Store persistent events
@@ -430,20 +485,20 @@ impl GridEventManager {
         }
 
         let mut persistent = self.persistent_events.write().await;
-        
+
         for user_id in &event.target_users {
             persistent.entry(*user_id).or_default().push(event.clone());
         }
 
         // Update stats
-        self.stats.write().await.persistent_events_stored = 
+        self.stats.write().await.persistent_events_stored =
             persistent.values().map(|events| events.len()).sum();
     }
 
     /// Notify subscribers about an event
     async fn notify_subscribers(&self, event: &GridEvent) -> Result<()> {
         let subscriptions = self.subscriptions.read().await;
-        
+
         for subscription in subscriptions.values() {
             if self.matches_subscription(event, subscription) {
                 // In a real implementation, this would call the subscriber's callback
@@ -493,25 +548,41 @@ impl GridEventManager {
     async fn send_via_inter_region(&self, event: &GridEvent) -> Result<()> {
         let payload = LLSDValue::Map({
             let mut map = HashMap::new();
-            map.insert("event_id".to_string(), LLSDValue::String(event.event_id.clone()));
-            map.insert("event_type".to_string(), LLSDValue::String(format!("{:?}", event.event_type)));
+            map.insert(
+                "event_id".to_string(),
+                LLSDValue::String(event.event_id.clone()),
+            );
+            map.insert(
+                "event_type".to_string(),
+                LLSDValue::String(format!("{:?}", event.event_type)),
+            );
             map.insert("payload".to_string(), event.payload.clone());
-            map.insert("timestamp".to_string(), LLSDValue::Integer(event.timestamp as i32));
-            map.insert("priority".to_string(), LLSDValue::Integer(event.priority as i32));
+            map.insert(
+                "timestamp".to_string(),
+                LLSDValue::Integer(event.timestamp as i32),
+            );
+            map.insert(
+                "priority".to_string(),
+                LLSDValue::Integer(event.priority as i32),
+            );
             map
         });
 
         if event.target_regions.is_empty() {
             // Broadcast to all regions
-            self.inter_region_manager.broadcast_message(
-                InterRegionMessageType::GridAnnouncement,
-                payload,
-                match event.priority {
-                    EventPriority::Low => MessagePriority::Low,
-                    EventPriority::Normal => MessagePriority::Normal,
-                    EventPriority::High | EventPriority::Critical | EventPriority::Emergency => MessagePriority::High,
-                },
-            ).await?;
+            self.inter_region_manager
+                .broadcast_message(
+                    InterRegionMessageType::GridAnnouncement,
+                    payload,
+                    match event.priority {
+                        EventPriority::Low => MessagePriority::Low,
+                        EventPriority::Normal => MessagePriority::Normal,
+                        EventPriority::High
+                        | EventPriority::Critical
+                        | EventPriority::Emergency => MessagePriority::High,
+                    },
+                )
+                .await?;
         } else {
             // Send to specific regions
             for region_id in &event.target_regions {
@@ -522,11 +593,13 @@ impl GridEventManager {
                     match event.priority {
                         EventPriority::Low => MessagePriority::Low,
                         EventPriority::Normal => MessagePriority::Normal,
-                        EventPriority::High | EventPriority::Critical | EventPriority::Emergency => MessagePriority::High,
+                        EventPriority::High
+                        | EventPriority::Critical
+                        | EventPriority::Emergency => MessagePriority::High,
                     },
                     false,
                 );
-                
+
                 self.inter_region_manager.send_message(message).await?;
             }
         }
@@ -537,14 +610,14 @@ impl GridEventManager {
     /// Clean up expired persistent events
     async fn cleanup_expired_events(&self) {
         let mut interval = tokio::time::interval(Duration::from_secs(3600)); // Every hour
-        
+
         loop {
             interval.tick().await;
-            
+
             let current_time = self.current_timestamp();
             let mut persistent = self.persistent_events.write().await;
             let mut cleaned_count = 0;
-            
+
             for events in persistent.values_mut() {
                 let original_len = events.len();
                 events.retain(|event| {
@@ -556,15 +629,15 @@ impl GridEventManager {
                 });
                 cleaned_count += original_len - events.len();
             }
-            
+
             // Remove empty user entries
             persistent.retain(|_, events| !events.is_empty());
-            
+
             if cleaned_count > 0 {
                 info!("Cleaned up {} expired persistent events", cleaned_count);
-                
+
                 // Update stats
-                self.stats.write().await.persistent_events_stored = 
+                self.stats.write().await.persistent_events_stored =
                     persistent.values().map(|events| events.len()).sum();
             }
         }
@@ -583,7 +656,7 @@ impl GridEventManager {
 impl Clone for GridEventManager {
     fn clone(&self) -> Self {
         let (event_tx, _) = broadcast::channel(1000);
-        
+
         Self {
             subscriptions: RwLock::new(HashMap::new()),
             persistent_events: RwLock::new(HashMap::new()),
@@ -605,10 +678,8 @@ impl Clone for GridEventManager {
 mod tests {
     use super::*;
     use crate::{
-        ffi::physics::PhysicsBridge,
-        state::StateManager,
-        region::RegionManager,
-        network::inter_region::InterRegionManager,
+        ffi::physics::PhysicsBridge, network::inter_region::InterRegionManager,
+        region::RegionManager, state::StateManager,
     };
 
     #[tokio::test]
@@ -617,21 +688,23 @@ mod tests {
         let state_manager = Arc::new(StateManager::new()?);
         let region_manager = Arc::new(RegionManager::new(physics_bridge, state_manager.clone()));
         let inter_region_manager = Arc::new(InterRegionManager::new(region_manager, state_manager));
-        
+
         let grid_event_manager = GridEventManager::new(inter_region_manager);
-        
+
         // Test subscription
-        grid_event_manager.subscribe(
-            "test_subscriber".to_string(),
-            vec![GridEventType::UserStatusChange],
-            vec![RegionId(1)],
-            Vec::new(),
-            "http://localhost:8080/events".to_string(),
-        ).await?;
-        
+        grid_event_manager
+            .subscribe(
+                "test_subscriber".to_string(),
+                vec![GridEventType::UserStatusChange],
+                vec![RegionId(1)],
+                Vec::new(),
+                "http://localhost:8080/events".to_string(),
+            )
+            .await?;
+
         let stats = grid_event_manager.get_stats().await;
         assert_eq!(stats.active_subscriptions, 1);
-        
+
         Ok(())
     }
 
@@ -641,27 +714,27 @@ mod tests {
         let state_manager = Arc::new(StateManager::new()?);
         let region_manager = Arc::new(RegionManager::new(physics_bridge, state_manager.clone()));
         let inter_region_manager = Arc::new(InterRegionManager::new(region_manager, state_manager));
-        
+
         let grid_event_manager = GridEventManager::new(inter_region_manager);
-        
+
         let user_id = Uuid::new_v4();
-        
+
         // Test user status change event
-        grid_event_manager.publish_user_status_change(
-            user_id,
-            "online",
-            Some(RegionId(1)),
-        ).await?;
-        
+        grid_event_manager
+            .publish_user_status_change(user_id, "online", Some(RegionId(1)))
+            .await?;
+
         // Test chat message event
-        grid_event_manager.publish_chat_message(
-            user_id,
-            "Hello, world!",
-            0,
-            RegionId(1),
-            Some((128.0, 128.0, 21.0)),
-        ).await?;
-        
+        grid_event_manager
+            .publish_chat_message(
+                user_id,
+                "Hello, world!",
+                0,
+                RegionId(1),
+                Some((128.0, 128.0, 21.0)),
+            )
+            .await?;
+
         Ok(())
     }
 }

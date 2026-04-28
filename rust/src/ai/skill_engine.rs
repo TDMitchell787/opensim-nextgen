@@ -60,11 +60,20 @@ impl SkillDomain {
 
     pub fn all() -> &'static [SkillDomain] {
         &[
-            Self::Building, Self::Clothing, Self::Scripting,
-            Self::Landscaping, Self::Vehicles, Self::Media,
-            Self::Navigation, Self::Estate, Self::Economy,
-            Self::Social, Self::Animation, Self::Inventory,
-            Self::NpcManagement, Self::Tutorial,
+            Self::Building,
+            Self::Clothing,
+            Self::Scripting,
+            Self::Landscaping,
+            Self::Vehicles,
+            Self::Media,
+            Self::Navigation,
+            Self::Estate,
+            Self::Economy,
+            Self::Social,
+            Self::Animation,
+            Self::Inventory,
+            Self::NpcManagement,
+            Self::Tutorial,
         ]
     }
 }
@@ -218,18 +227,26 @@ impl SkillDef {
             requires_region: self.requires_region,
             requires_agent: self.requires_agent,
             requires_admin: self.requires_admin,
-            params: self.params.iter().map(|p| ParamInfo {
-                name: p.name.to_string(),
-                param_type: format!("{:?}", p.param_type),
-                required: p.required,
-                default_value: p.default_value.map(|v| v.to_string()),
-                description: p.description.to_string(),
-            }).collect(),
-            examples: self.examples.iter().map(|e| SkillExampleInfo {
-                description: e.description.to_string(),
-                input: e.input.to_string(),
-                output: e.output.to_string(),
-            }).collect(),
+            params: self
+                .params
+                .iter()
+                .map(|p| ParamInfo {
+                    name: p.name.to_string(),
+                    param_type: format!("{:?}", p.param_type),
+                    required: p.required,
+                    default_value: p.default_value.map(|v| v.to_string()),
+                    description: p.description.to_string(),
+                })
+                .collect(),
+            examples: self
+                .examples
+                .iter()
+                .map(|e| SkillExampleInfo {
+                    description: e.description.to_string(),
+                    input: e.input.to_string(),
+                    output: e.output.to_string(),
+                })
+                .collect(),
         }
     }
 }
@@ -280,13 +297,21 @@ impl SkillRegistry {
 
     pub fn find(&self, domain: SkillDomain, skill_id: &str) -> Option<&'static SkillDef> {
         let def = self.skills.get(skill_id).copied()?;
-        if def.domain == domain { Some(def) } else { None }
+        if def.domain == domain {
+            Some(def)
+        } else {
+            None
+        }
     }
 
     pub fn list_domain(&self, domain: SkillDomain) -> Vec<&'static SkillDef> {
         self.by_domain
             .get(&domain)
-            .map(|ids| ids.iter().filter_map(|id| self.skills.get(id).copied()).collect())
+            .map(|ids| {
+                ids.iter()
+                    .filter_map(|id| self.skills.get(id).copied())
+                    .collect()
+            })
             .unwrap_or_default()
     }
 
@@ -296,7 +321,8 @@ impl SkillRegistry {
 
     pub fn search(&self, query: &str) -> Vec<&'static SkillDef> {
         let q = query.to_lowercase();
-        self.skills.values()
+        self.skills
+            .values()
             .copied()
             .filter(|s| {
                 s.id.contains(&q)
@@ -319,7 +345,11 @@ impl SkillRegistry {
             by_level[skill.maturity.level() as usize] += 1;
             total_score += skill.maturity.score_weight();
         }
-        let score = if skills.is_empty() { 0 } else { total_score / skills.len() as u32 };
+        let score = if skills.is_empty() {
+            0
+        } else {
+            total_score / skills.len() as u32
+        };
         DomainDashboard {
             domain: domain.id().to_string(),
             display_name: domain.display_name().to_string(),
@@ -332,8 +362,14 @@ impl SkillRegistry {
     pub fn generate_prompt_catalog(&self) -> String {
         let mut out = String::with_capacity(4096);
         out.push_str("\n== SKILL ENGINE CATALOG (auto-generated) ==\n\n");
-        out.push_str(&format!("You have access to {} skills across {} domains via the Skill Engine.\n", self.count(), SkillDomain::all().len()));
-        out.push_str("NEW DOMAINS beyond building/clothing/scripting/landscaping/vehicles/media:\n");
+        out.push_str(&format!(
+            "You have access to {} skills across {} domains via the Skill Engine.\n",
+            self.count(),
+            SkillDomain::all().len()
+        ));
+        out.push_str(
+            "NEW DOMAINS beyond building/clothing/scripting/landscaping/vehicles/media:\n",
+        );
         out.push_str("  Navigation, Estate, Economy, Social, Animation, Inventory, NPC Management, Tutorial\n\n");
         out.push_str("For NEW domain skills, output JSON using osInvokeSkill format:\n");
         out.push_str(r#"{"actions": [{"os_invoke_skill": {"domain": "DOMAIN", "skill_id": "SKILL_ID", "params": {...}}}], "say": "..."}"#);
@@ -341,18 +377,36 @@ impl SkillRegistry {
 
         for domain in SkillDomain::all() {
             let skills = self.list_domain(*domain);
-            if skills.is_empty() { continue; }
+            if skills.is_empty() {
+                continue;
+            }
             let dash = self.domain_dashboard(*domain);
-            out.push_str(&format!("── {} ({} skills, {}% maturity) ──\n", domain.display_name(), skills.len(), dash.score));
+            out.push_str(&format!(
+                "── {} ({} skills, {}% maturity) ──\n",
+                domain.display_name(),
+                skills.len(),
+                dash.score
+            ));
             for skill in &skills {
-                let params_str: String = skill.params.iter()
+                let params_str: String = skill
+                    .params
+                    .iter()
                     .map(|p| {
-                        if p.required { p.name.to_string() } else { format!("[{}]", p.name) }
+                        if p.required {
+                            p.name.to_string()
+                        } else {
+                            format!("[{}]", p.name)
+                        }
                     })
                     .collect::<Vec<_>>()
                     .join(", ");
-                out.push_str(&format!("  {} (L{}) — {} | params: {}\n",
-                    skill.id, skill.maturity.level(), skill.description, params_str));
+                out.push_str(&format!(
+                    "  {} (L{}) — {} | params: {}\n",
+                    skill.id,
+                    skill.maturity.level(),
+                    skill.description,
+                    params_str
+                ));
             }
             out.push('\n');
         }
@@ -365,8 +419,14 @@ impl SkillRegistry {
             .map(|d| self.domain_dashboard(*d))
             .collect();
         let total_skills: usize = domains.iter().map(|d| d.total_skills).sum();
-        let total_score: u32 = if total_skills == 0 { 0 } else {
-            domains.iter().map(|d| d.score as u64 * d.total_skills as u64).sum::<u64>() as u32 / total_skills as u32
+        let total_score: u32 = if total_skills == 0 {
+            0
+        } else {
+            domains
+                .iter()
+                .map(|d| d.score as u64 * d.total_skills as u64)
+                .sum::<u64>() as u32
+                / total_skills as u32
         };
         RegistryDashboard {
             total_skills,
@@ -379,50 +439,93 @@ impl SkillRegistry {
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub enum SkillResult {
-    Ok { message: String },
-    OkWithId { message: String, local_id: u32 },
-    OkWithIds { message: String, local_ids: Vec<u32> },
-    OkWithData { message: String, data: serde_json::Value },
-    NotImplemented { skill_id: String },
-    Error { message: String },
-    Forbidden { message: String },
+    Ok {
+        message: String,
+    },
+    OkWithId {
+        message: String,
+        local_id: u32,
+    },
+    OkWithIds {
+        message: String,
+        local_ids: Vec<u32>,
+    },
+    OkWithData {
+        message: String,
+        data: serde_json::Value,
+    },
+    NotImplemented {
+        skill_id: String,
+    },
+    Error {
+        message: String,
+    },
+    Forbidden {
+        message: String,
+    },
 }
 
 impl SkillResult {
     pub fn ok(message: impl Into<String>) -> Self {
-        Self::Ok { message: message.into() }
+        Self::Ok {
+            message: message.into(),
+        }
     }
 
     pub fn ok_with_id(message: impl Into<String>, local_id: u32) -> Self {
-        Self::OkWithId { message: message.into(), local_id }
+        Self::OkWithId {
+            message: message.into(),
+            local_id,
+        }
     }
 
     pub fn ok_with_ids(message: impl Into<String>, local_ids: Vec<u32>) -> Self {
-        Self::OkWithIds { message: message.into(), local_ids }
+        Self::OkWithIds {
+            message: message.into(),
+            local_ids,
+        }
     }
 
     pub fn ok_with_data(message: impl Into<String>, data: serde_json::Value) -> Self {
-        Self::OkWithData { message: message.into(), data }
+        Self::OkWithData {
+            message: message.into(),
+            data,
+        }
     }
 
     pub fn not_implemented(skill_id: impl Into<String>) -> Self {
-        Self::NotImplemented { skill_id: skill_id.into() }
+        Self::NotImplemented {
+            skill_id: skill_id.into(),
+        }
     }
 
     pub fn error(message: impl Into<String>) -> Self {
-        Self::Error { message: message.into() }
+        Self::Error {
+            message: message.into(),
+        }
     }
 
     pub fn forbidden(message: impl Into<String>) -> Self {
-        Self::Forbidden { message: message.into() }
+        Self::Forbidden {
+            message: message.into(),
+        }
     }
 
     pub fn is_ok(&self) -> bool {
-        matches!(self, Self::Ok { .. } | Self::OkWithId { .. } | Self::OkWithIds { .. } | Self::OkWithData { .. })
+        matches!(
+            self,
+            Self::Ok { .. }
+                | Self::OkWithId { .. }
+                | Self::OkWithIds { .. }
+                | Self::OkWithData { .. }
+        )
     }
 
     pub fn is_error(&self) -> bool {
-        matches!(self, Self::Error { .. } | Self::Forbidden { .. } | Self::NotImplemented { .. })
+        matches!(
+            self,
+            Self::Error { .. } | Self::Forbidden { .. } | Self::NotImplemented { .. }
+        )
     }
 }
 
@@ -468,14 +571,21 @@ mod tests {
     #[test]
     fn test_registry_loads_and_counts() {
         let registry = SkillRegistry::new();
-        assert!(registry.count() > 0, "Registry should have skills registered");
+        assert!(
+            registry.count() > 0,
+            "Registry should have skills registered"
+        );
     }
 
     #[test]
     fn test_registry_building_domain() {
         let registry = SkillRegistry::new();
         let building = registry.list_domain(SkillDomain::Building);
-        assert!(building.len() >= 20, "Building domain should have 20+ skills, got {}", building.len());
+        assert!(
+            building.len() >= 20,
+            "Building domain should have 20+ skills, got {}",
+            building.len()
+        );
     }
 
     #[test]
@@ -499,7 +609,10 @@ mod tests {
     fn test_registry_search() {
         let registry = SkillRegistry::new();
         let results = registry.search("terrain");
-        assert!(results.len() >= 4, "Search 'terrain' should find landscaping skills");
+        assert!(
+            results.len() >= 4,
+            "Search 'terrain' should find landscaping skills"
+        );
     }
 
     #[test]
@@ -520,7 +633,11 @@ mod tests {
         assert!(catalog.contains("rez_box"));
         assert!(catalog.contains("teleport_agent"));
         assert!(catalog.contains("os_invoke_skill"));
-        assert!(catalog.len() > 1000, "Catalog should be substantial, got {} bytes", catalog.len());
+        assert!(
+            catalog.len() > 1000,
+            "Catalog should be substantial, got {} bytes",
+            catalog.len()
+        );
     }
 
     #[test]

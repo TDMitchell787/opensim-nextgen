@@ -1,16 +1,16 @@
 //! Loopback connectors for local server communication
-//! 
+//!
 //! This module provides loopback connectors that enable proper local
 //! communication between OpenSim Next components and external clients.
 
+use anyhow::Result;
+use serde::{Deserialize, Serialize};
+use std::collections::HashMap;
 use std::net::{IpAddr, Ipv4Addr, SocketAddr};
 use std::sync::Arc;
-use std::collections::HashMap;
 use tokio::net::{TcpListener, UdpSocket};
-use tokio::sync::{RwLock, mpsc};
-use anyhow::Result;
-use tracing::{info, warn, error, debug};
-use serde::{Serialize, Deserialize};
+use tokio::sync::{mpsc, RwLock};
+use tracing::{debug, error, info, warn};
 
 /// Loopback connector configuration
 #[derive(Debug, Clone, Serialize, Deserialize)]
@@ -99,7 +99,7 @@ impl LoopbackConnector {
     /// Create a new loopback connector
     pub fn new(config: LoopbackConfig) -> Self {
         let (event_sender, event_receiver) = mpsc::unbounded_channel();
-        
+
         Self {
             config,
             connections: Arc::new(RwLock::new(HashMap::new())),
@@ -135,14 +135,14 @@ impl LoopbackConnector {
     /// Start web service loopback
     async fn start_web_service(&self) -> Result<()> {
         let addr = SocketAddr::new(self.config.interface, 8080);
-        
+
         match TcpListener::bind(addr).await {
             Ok(listener) => {
                 info!("Web service listening on {}", addr);
-                
+
                 let mut listeners = self.listeners.write().await;
                 listeners.insert(ServiceType::Web, listener);
-                
+
                 let connection = ConnectionInfo {
                     service_type: ServiceType::Web,
                     local_addr: addr,
@@ -150,16 +150,23 @@ impl LoopbackConnector {
                     protocol: Protocol::HTTP,
                     status: ConnectionStatus::Listening,
                 };
-                
+
                 let mut connections = self.connections.write().await;
-                connections.entry(ServiceType::Web).or_insert_with(Vec::new).push(connection);
-                
-                let _ = self.event_sender.send(LoopbackEvent::ServiceStarted(ServiceType::Web, addr));
+                connections
+                    .entry(ServiceType::Web)
+                    .or_insert_with(Vec::new)
+                    .push(connection);
+
+                let _ = self
+                    .event_sender
+                    .send(LoopbackEvent::ServiceStarted(ServiceType::Web, addr));
                 Ok(())
             }
             Err(e) => {
                 error!("Failed to bind web service to {}: {}", addr, e);
-                let _ = self.event_sender.send(LoopbackEvent::Error(ServiceType::Web, e.to_string()));
+                let _ = self
+                    .event_sender
+                    .send(LoopbackEvent::Error(ServiceType::Web, e.to_string()));
                 Err(e.into())
             }
         }
@@ -168,14 +175,14 @@ impl LoopbackConnector {
     /// Start WebSocket service loopback
     async fn start_websocket_service(&self) -> Result<()> {
         let addr = SocketAddr::new(self.config.interface, 9001);
-        
+
         match TcpListener::bind(addr).await {
             Ok(listener) => {
                 info!("WebSocket service listening on {}", addr);
-                
+
                 let mut listeners = self.listeners.write().await;
                 listeners.insert(ServiceType::WebSocket, listener);
-                
+
                 let connection = ConnectionInfo {
                     service_type: ServiceType::WebSocket,
                     local_addr: addr,
@@ -183,16 +190,23 @@ impl LoopbackConnector {
                     protocol: Protocol::WebSocket,
                     status: ConnectionStatus::Listening,
                 };
-                
+
                 let mut connections = self.connections.write().await;
-                connections.entry(ServiceType::WebSocket).or_insert_with(Vec::new).push(connection);
-                
-                let _ = self.event_sender.send(LoopbackEvent::ServiceStarted(ServiceType::WebSocket, addr));
+                connections
+                    .entry(ServiceType::WebSocket)
+                    .or_insert_with(Vec::new)
+                    .push(connection);
+
+                let _ = self
+                    .event_sender
+                    .send(LoopbackEvent::ServiceStarted(ServiceType::WebSocket, addr));
                 Ok(())
             }
             Err(e) => {
                 error!("Failed to bind WebSocket service to {}: {}", addr, e);
-                let _ = self.event_sender.send(LoopbackEvent::Error(ServiceType::WebSocket, e.to_string()));
+                let _ = self
+                    .event_sender
+                    .send(LoopbackEvent::Error(ServiceType::WebSocket, e.to_string()));
                 Err(e.into())
             }
         }
@@ -201,14 +215,14 @@ impl LoopbackConnector {
     /// Start API service loopback
     async fn start_api_service(&self) -> Result<()> {
         let addr = SocketAddr::new(self.config.interface, 9100);
-        
+
         match TcpListener::bind(addr).await {
             Ok(listener) => {
                 info!("API service listening on {}", addr);
-                
+
                 let mut listeners = self.listeners.write().await;
                 listeners.insert(ServiceType::API, listener);
-                
+
                 let connection = ConnectionInfo {
                     service_type: ServiceType::API,
                     local_addr: addr,
@@ -216,16 +230,23 @@ impl LoopbackConnector {
                     protocol: Protocol::HTTP,
                     status: ConnectionStatus::Listening,
                 };
-                
+
                 let mut connections = self.connections.write().await;
-                connections.entry(ServiceType::API).or_insert_with(Vec::new).push(connection);
-                
-                let _ = self.event_sender.send(LoopbackEvent::ServiceStarted(ServiceType::API, addr));
+                connections
+                    .entry(ServiceType::API)
+                    .or_insert_with(Vec::new)
+                    .push(connection);
+
+                let _ = self
+                    .event_sender
+                    .send(LoopbackEvent::ServiceStarted(ServiceType::API, addr));
                 Ok(())
             }
             Err(e) => {
                 error!("Failed to bind API service to {}: {}", addr, e);
-                let _ = self.event_sender.send(LoopbackEvent::Error(ServiceType::API, e.to_string()));
+                let _ = self
+                    .event_sender
+                    .send(LoopbackEvent::Error(ServiceType::API, e.to_string()));
                 Err(e.into())
             }
         }
@@ -234,11 +255,11 @@ impl LoopbackConnector {
     /// Start Second Life viewer service loopback
     async fn start_sl_viewer_service(&self) -> Result<()> {
         let addr = SocketAddr::new(self.config.interface, 9000);
-        
+
         match UdpSocket::bind(addr).await {
             Ok(_socket) => {
                 info!("SL Viewer service listening on {} (UDP)", addr);
-                
+
                 let connection = ConnectionInfo {
                     service_type: ServiceType::SLViewer,
                     local_addr: addr,
@@ -246,16 +267,23 @@ impl LoopbackConnector {
                     protocol: Protocol::UDP,
                     status: ConnectionStatus::Listening,
                 };
-                
+
                 let mut connections = self.connections.write().await;
-                connections.entry(ServiceType::SLViewer).or_insert_with(Vec::new).push(connection);
-                
-                let _ = self.event_sender.send(LoopbackEvent::ServiceStarted(ServiceType::SLViewer, addr));
+                connections
+                    .entry(ServiceType::SLViewer)
+                    .or_insert_with(Vec::new)
+                    .push(connection);
+
+                let _ = self
+                    .event_sender
+                    .send(LoopbackEvent::ServiceStarted(ServiceType::SLViewer, addr));
                 Ok(())
             }
             Err(e) => {
                 error!("Failed to bind SL Viewer service to {}: {}", addr, e);
-                let _ = self.event_sender.send(LoopbackEvent::Error(ServiceType::SLViewer, e.to_string()));
+                let _ = self
+                    .event_sender
+                    .send(LoopbackEvent::Error(ServiceType::SLViewer, e.to_string()));
                 Err(e.into())
             }
         }
@@ -264,14 +292,14 @@ impl LoopbackConnector {
     /// Start Hypergrid service loopback
     async fn start_hypergrid_service(&self) -> Result<()> {
         let addr = SocketAddr::new(self.config.interface, 8002);
-        
+
         match TcpListener::bind(addr).await {
             Ok(listener) => {
                 info!("Hypergrid service listening on {}", addr);
-                
+
                 let mut listeners = self.listeners.write().await;
                 listeners.insert(ServiceType::Hypergrid, listener);
-                
+
                 let connection = ConnectionInfo {
                     service_type: ServiceType::Hypergrid,
                     local_addr: addr,
@@ -279,16 +307,23 @@ impl LoopbackConnector {
                     protocol: Protocol::HTTP,
                     status: ConnectionStatus::Listening,
                 };
-                
+
                 let mut connections = self.connections.write().await;
-                connections.entry(ServiceType::Hypergrid).or_insert_with(Vec::new).push(connection);
-                
-                let _ = self.event_sender.send(LoopbackEvent::ServiceStarted(ServiceType::Hypergrid, addr));
+                connections
+                    .entry(ServiceType::Hypergrid)
+                    .or_insert_with(Vec::new)
+                    .push(connection);
+
+                let _ = self
+                    .event_sender
+                    .send(LoopbackEvent::ServiceStarted(ServiceType::Hypergrid, addr));
                 Ok(())
             }
             Err(e) => {
                 error!("Failed to bind Hypergrid service to {}: {}", addr, e);
-                let _ = self.event_sender.send(LoopbackEvent::Error(ServiceType::Hypergrid, e.to_string()));
+                let _ = self
+                    .event_sender
+                    .send(LoopbackEvent::Error(ServiceType::Hypergrid, e.to_string()));
                 Err(e.into())
             }
         }
@@ -299,7 +334,7 @@ impl LoopbackConnector {
         let mut receiver = self.event_receiver.write().await.take();
         if let Some(mut rx) = receiver {
             let connections = self.connections.clone();
-            
+
             tokio::spawn(async move {
                 while let Some(event) = rx.recv().await {
                     match &event {
@@ -316,7 +351,10 @@ impl LoopbackConnector {
                             }
                         }
                         LoopbackEvent::ConnectionEstablished(service_type, addr) => {
-                            debug!("Connection established for {:?} from {}", service_type, addr);
+                            debug!(
+                                "Connection established for {:?} from {}",
+                                service_type, addr
+                            );
                         }
                         LoopbackEvent::ConnectionLost(service_type, addr) => {
                             debug!("Connection lost for {:?} from {}", service_type, addr);
@@ -336,7 +374,10 @@ impl LoopbackConnector {
     }
 
     /// Get connection status for a specific service
-    pub async fn get_service_status(&self, service_type: &ServiceType) -> Option<Vec<ConnectionInfo>> {
+    pub async fn get_service_status(
+        &self,
+        service_type: &ServiceType,
+    ) -> Option<Vec<ConnectionInfo>> {
         let connections = self.connections.read().await;
         connections.get(service_type).cloned()
     }
@@ -344,7 +385,7 @@ impl LoopbackConnector {
     /// Check if all services are healthy
     pub async fn health_check(&self) -> bool {
         let connections = self.connections.read().await;
-        
+
         let required_services = vec![
             ServiceType::Web,
             ServiceType::WebSocket,
@@ -355,7 +396,10 @@ impl LoopbackConnector {
         for service in required_services {
             if let Some(service_connections) = connections.get(&service) {
                 let healthy = service_connections.iter().any(|conn| {
-                    matches!(conn.status, ConnectionStatus::Listening | ConnectionStatus::Connected)
+                    matches!(
+                        conn.status,
+                        ConnectionStatus::Listening | ConnectionStatus::Connected
+                    )
                 });
                 if !healthy {
                     return false;
@@ -380,7 +424,9 @@ impl LoopbackConnector {
             for conn in service_connections.iter_mut() {
                 conn.status = ConnectionStatus::Disconnected;
             }
-            let _ = self.event_sender.send(LoopbackEvent::ServiceStopped(service_type.clone()));
+            let _ = self
+                .event_sender
+                .send(LoopbackEvent::ServiceStopped(service_type.clone()));
         }
 
         info!("All loopback connectors stopped");
@@ -390,7 +436,7 @@ impl LoopbackConnector {
     /// Get loopback connector statistics
     pub async fn get_stats(&self) -> LoopbackStats {
         let connections = self.connections.read().await;
-        
+
         let mut total_connections = 0;
         let mut listening_services = 0;
         let mut active_connections = 0;
@@ -398,7 +444,7 @@ impl LoopbackConnector {
 
         for (_, service_connections) in connections.iter() {
             total_connections += service_connections.len();
-            
+
             for conn in service_connections.iter() {
                 match &conn.status {
                     ConnectionStatus::Listening => listening_services += 1,
@@ -443,18 +489,18 @@ mod tests {
     async fn test_loopback_connector() {
         let config = LoopbackConfig::default();
         let connector = LoopbackConnector::new(config);
-        
+
         // Test starting connectors
         assert!(connector.start().await.is_ok());
-        
+
         // Test health check
         tokio::time::sleep(tokio::time::Duration::from_millis(100)).await;
         assert!(connector.health_check().await);
-        
+
         // Test getting connections
         let connections = connector.get_connections().await;
         assert!(!connections.is_empty());
-        
+
         // Test stopping connectors
         assert!(connector.stop().await.is_ok());
     }
@@ -463,15 +509,15 @@ mod tests {
     async fn test_service_binding() {
         let config = LoopbackConfig::default();
         let connector = LoopbackConnector::new(config);
-        
+
         // Start services
         assert!(connector.start_web_service().await.is_ok());
         assert!(connector.start_api_service().await.is_ok());
-        
+
         // Check connections
         let web_status = connector.get_service_status(&ServiceType::Web).await;
         assert!(web_status.is_some());
-        
+
         let api_status = connector.get_service_status(&ServiceType::API).await;
         assert!(api_status.is_some());
     }

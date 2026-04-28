@@ -1,5 +1,5 @@
 //! Advanced Avatar Manager for OpenSim Next
-//! 
+//!
 //! Provides comprehensive avatar management with advanced appearance,
 //! behavior, persistence, and social features.
 
@@ -56,9 +56,8 @@ impl AdvancedAvatarManager {
         let avatar_id = Uuid::new_v4();
         let now = chrono::Utc::now();
 
-        let appearance = initial_appearance.unwrap_or_else(|| {
-            self.appearance_engine.create_default_appearance()
-        });
+        let appearance = initial_appearance
+            .unwrap_or_else(|| self.appearance_engine.create_default_appearance());
 
         let avatar = EnhancedAvatar {
             id: avatar_id,
@@ -157,10 +156,10 @@ impl AdvancedAvatarManager {
         info!("Updating avatar appearance: {}", avatar_id);
 
         let mut avatar = self.get_avatar(avatar_id).await?;
-        
+
         // Validate appearance
         self.appearance_engine.validate_appearance(&appearance)?;
-        
+
         avatar.appearance = appearance;
         avatar.updated_at = chrono::Utc::now();
 
@@ -183,10 +182,10 @@ impl AdvancedAvatarManager {
         info!("Updating avatar behavior: {}", avatar_id);
 
         let mut avatar = self.get_avatar(avatar_id).await?;
-        
+
         // Validate behavior
         self.behavior_system.validate_behavior(&behavior)?;
-        
+
         avatar.behavior = behavior;
         avatar.updated_at = chrono::Utc::now();
 
@@ -209,10 +208,11 @@ impl AdvancedAvatarManager {
         info!("Updating avatar social profile: {}", avatar_id);
 
         let mut avatar = self.get_avatar(avatar_id).await?;
-        
+
         // Validate social profile
-        self.social_features.validate_social_profile(&social_profile)?;
-        
+        self.social_features
+            .validate_social_profile(&social_profile)?;
+
         avatar.social_profile = social_profile;
         avatar.updated_at = chrono::Utc::now();
 
@@ -231,7 +231,7 @@ impl AdvancedAvatarManager {
         info!("Avatar login: {}", avatar_id);
 
         let mut avatar = self.get_avatar(avatar_id).await?;
-        
+
         // Update login time and visit count
         avatar.persistence_data.last_login = chrono::Utc::now();
         avatar.persistence_data.visit_count += 1;
@@ -247,7 +247,9 @@ impl AdvancedAvatarManager {
         }
 
         // Initialize behavior system for this avatar
-        self.behavior_system.start_avatar_behaviors(avatar_id, &avatar.behavior).await?;
+        self.behavior_system
+            .start_avatar_behaviors(avatar_id, &avatar.behavior)
+            .await?;
 
         info!("Avatar login completed: {}", avatar_id);
         Ok(())
@@ -262,7 +264,8 @@ impl AdvancedAvatarManager {
             active.remove(&avatar_id)
         } {
             // Update session time
-            let session_duration = chrono::Utc::now().signed_duration_since(avatar.persistence_data.last_login);
+            let session_duration =
+                chrono::Utc::now().signed_duration_since(avatar.persistence_data.last_login);
             avatar.persistence_data.session_time = session_duration.num_seconds();
             avatar.persistence_data.total_time += avatar.persistence_data.session_time;
             avatar.updated_at = chrono::Utc::now();
@@ -271,7 +274,9 @@ impl AdvancedAvatarManager {
             self.persistence_layer.update_avatar(&avatar).await?;
 
             // Stop behavior system for this avatar
-            self.behavior_system.stop_avatar_behaviors(avatar_id).await?;
+            self.behavior_system
+                .stop_avatar_behaviors(avatar_id)
+                .await?;
         }
 
         info!("Avatar logout completed: {}", avatar_id);
@@ -339,7 +344,9 @@ impl AdvancedAvatarManager {
             let mut active = self.active_avatars.write().await;
             if active.remove(&avatar_id).is_some() {
                 // Stop behaviors if avatar was active
-                self.behavior_system.stop_avatar_behaviors(avatar_id).await?;
+                self.behavior_system
+                    .stop_avatar_behaviors(avatar_id)
+                    .await?;
             }
         }
 
@@ -359,7 +366,7 @@ impl AdvancedAvatarManager {
     /// Get avatar statistics
     pub async fn get_avatar_statistics(&self, avatar_id: Uuid) -> AvatarResult<AvatarStatistics> {
         let avatar = self.get_avatar(avatar_id).await?;
-        
+
         let stats = AvatarStatistics {
             total_time_online: avatar.persistence_data.total_time,
             visit_count: avatar.persistence_data.visit_count,
@@ -367,7 +374,10 @@ impl AdvancedAvatarManager {
             created_at: avatar.created_at,
             achievements_count: avatar.social_profile.achievements.len() as i64,
             friends_count: self.social_features.get_friend_count(avatar_id).await?,
-            regions_visited: self.persistence_layer.get_regions_visited_count(avatar_id).await?,
+            regions_visited: self
+                .persistence_layer
+                .get_regions_visited_count(avatar_id)
+                .await?,
         };
 
         Ok(stats)
@@ -395,17 +405,20 @@ impl AdvancedAvatarManager {
     /// Cleanup inactive avatars from cache
     pub async fn cleanup_cache(&self) -> Result<()> {
         info!("Cleaning up avatar cache");
-        
+
         let mut cache = self.avatar_cache.write().await;
         let initial_size = cache.len();
-        
+
         // Keep only recently accessed avatars (within last hour)
         let cutoff = chrono::Utc::now() - chrono::Duration::hours(1);
         cache.retain(|_, avatar| avatar.updated_at > cutoff);
-        
+
         let final_size = cache.len();
-        info!("Cache cleanup completed: {} -> {} avatars", initial_size, final_size);
-        
+        info!(
+            "Cache cleanup completed: {} -> {} avatars",
+            initial_size, final_size
+        );
+
         Ok(())
     }
 
@@ -417,8 +430,17 @@ impl AdvancedAvatarManager {
         AvatarSystemHealth {
             active_avatars: active_count as i64,
             cached_avatars: cached_count as i64,
-            total_avatars: self.persistence_layer.get_total_avatar_count().await.unwrap_or(0),
-            system_status: if active_count < 10000 { "healthy" } else { "high_load" }.to_string(),
+            total_avatars: self
+                .persistence_layer
+                .get_total_avatar_count()
+                .await
+                .unwrap_or(0),
+            system_status: if active_count < 10000 {
+                "healthy"
+            } else {
+                "high_load"
+            }
+            .to_string(),
         }
     }
 }

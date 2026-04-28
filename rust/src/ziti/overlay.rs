@@ -3,14 +3,14 @@
 //! Manages the encrypted overlay network for secure communication between
 //! virtual world components including regions, asset servers, and authentication services.
 
+use super::config::ZitiConfig;
+use super::{ZitiConnection, ZitiConnectionStatus, ZitiEncryption, ZitiProtocol};
+use anyhow::{anyhow, Result};
+use serde::{Deserialize, Serialize};
 use std::collections::HashMap;
 use std::sync::Arc;
-use tokio::sync::{RwLock, mpsc};
-use serde::{Deserialize, Serialize};
+use tokio::sync::{mpsc, RwLock};
 use uuid::Uuid;
-use anyhow::{Result, anyhow};
-use super::config::ZitiConfig;
-use super::{ZitiConnection, ZitiProtocol, ZitiEncryption, ZitiConnectionStatus};
 
 /// Encrypted overlay network for secure region communication
 #[derive(Debug, Clone, Serialize, Deserialize)]
@@ -151,7 +151,7 @@ pub struct ZitiOverlayManager {
 impl ZitiOverlayManager {
     pub fn new(config: &ZitiConfig) -> Result<Self> {
         let (tx, rx) = mpsc::unbounded_channel();
-        
+
         let network_topology = OverlayNetworkTopology {
             network_id: Uuid::new_v4().to_string(),
             regions: HashMap::new(),
@@ -186,15 +186,18 @@ impl ZitiOverlayManager {
         // Initialize network topology
         let mut topology = self.network_topology.write().await;
         topology.network_id = format!("overlay_{}", Uuid::new_v4());
-        
+
         // Start message processing loop
         if let Some(mut receiver) = self.message_receiver.take() {
             let topology_clone = self.network_topology.clone();
             let connections_clone = self.active_connections.clone();
-            
+
             tokio::spawn(async move {
                 while let Some(message) = receiver.recv().await {
-                    if let Err(e) = Self::process_overlay_message(message, &topology_clone, &connections_clone).await {
+                    if let Err(e) =
+                        Self::process_overlay_message(message, &topology_clone, &connections_clone)
+                            .await
+                    {
                         tracing::error!("Failed to process overlay message: {}", e);
                     }
                 }
@@ -216,13 +219,15 @@ impl ZitiOverlayManager {
         }
 
         tracing::info!("Connecting to OpenZiti encrypted overlay network");
-        
+
         // Initialize local region endpoint
         let local_region = self.create_local_region_endpoint().await?;
-        
+
         let mut topology = self.network_topology.write().await;
-        topology.regions.insert(local_region.region_id.clone(), local_region);
-        
+        topology
+            .regions
+            .insert(local_region.region_id.clone(), local_region);
+
         self.is_connected = true;
         tracing::info!("Connected to OpenZiti encrypted overlay network");
         Ok(())
@@ -234,23 +239,28 @@ impl ZitiOverlayManager {
         }
 
         tracing::info!("Disconnecting from OpenZiti encrypted overlay network");
-        
+
         // Close all active tunnels
         let mut connections = self.active_connections.write().await;
         connections.clear();
-        
+
         // Clear network topology
         let mut topology = self.network_topology.write().await;
         topology.regions.clear();
         topology.tunnels.clear();
-        
+
         self.is_connected = false;
         tracing::info!("Disconnected from OpenZiti encrypted overlay network");
         Ok(())
     }
 
     /// Register a new region in the overlay network
-    pub async fn register_region(&self, region_id: &str, region_name: &str, endpoint: &str) -> Result<String> {
+    pub async fn register_region(
+        &self,
+        region_id: &str,
+        region_name: &str,
+        endpoint: &str,
+    ) -> Result<String> {
         let region_endpoint = RegionEndpoint {
             region_id: region_id.to_string(),
             region_name: region_name.to_string(),
@@ -266,8 +276,10 @@ impl ZitiOverlayManager {
         };
 
         let mut topology = self.network_topology.write().await;
-        topology.regions.insert(region_id.to_string(), region_endpoint);
-        
+        topology
+            .regions
+            .insert(region_id.to_string(), region_endpoint);
+
         // Auto-create tunnels to other regions if enabled
         if topology.mesh_config.auto_tunnel_creation {
             self.create_tunnels_for_region(region_id).await?;
@@ -278,9 +290,13 @@ impl ZitiOverlayManager {
     }
 
     /// Create encrypted tunnel between two regions
-    pub async fn create_tunnel(&self, source_region: &str, destination_region: &str) -> Result<String> {
+    pub async fn create_tunnel(
+        &self,
+        source_region: &str,
+        destination_region: &str,
+    ) -> Result<String> {
         let tunnel_id = format!("tunnel_{}_{}", source_region, destination_region);
-        
+
         let tunnel = EncryptedTunnel {
             tunnel_id: tunnel_id.clone(),
             source_region: source_region.to_string(),
@@ -298,7 +314,7 @@ impl ZitiOverlayManager {
 
         let mut topology = self.network_topology.write().await;
         topology.tunnels.insert(tunnel_id.clone(), tunnel);
-        
+
         // Update region tunnel lists
         if let Some(source) = topology.regions.get_mut(source_region) {
             source.connected_tunnels.push(tunnel_id.clone());
@@ -307,16 +323,21 @@ impl ZitiOverlayManager {
             destination.connected_tunnels.push(tunnel_id.clone());
         }
 
-        tracing::info!("Created encrypted tunnel {} between {} and {}", tunnel_id, source_region, destination_region);
+        tracing::info!(
+            "Created encrypted tunnel {} between {} and {}",
+            tunnel_id,
+            source_region,
+            destination_region
+        );
         Ok(tunnel_id)
     }
 
     /// Send message through encrypted overlay
     pub async fn send_overlay_message(&self, message: OverlayMessage) -> Result<()> {
         if let Some(sender) = &self.message_sender {
-            sender.send(message).map_err(|_| anyhow!(
-                "Failed to send overlay message".to_string()
-            ))?;
+            sender
+                .send(message)
+                .map_err(|_| anyhow!("Failed to send overlay message".to_string()))?;
         }
         Ok(())
     }
@@ -331,24 +352,32 @@ impl ZitiOverlayManager {
     pub async fn get_tunnel_statistics(&self) -> Result<HashMap<String, TunnelStatistics>> {
         let topology = self.network_topology.read().await;
         let mut stats = HashMap::new();
-        
+
         for (tunnel_id, tunnel) in &topology.tunnels {
-            stats.insert(tunnel_id.clone(), TunnelStatistics {
-                tunnel_id: tunnel_id.clone(),
-                bytes_transferred: tunnel.bytes_transferred,
-                latency_ms: tunnel.latency_ms,
-                status: tunnel.status.clone(),
-                uptime_seconds: std::time::SystemTime::now()
-                    .duration_since(std::time::UNIX_EPOCH)
-                    .unwrap_or_default()
-                    .as_secs() - tunnel.created_at,
-            });
+            stats.insert(
+                tunnel_id.clone(),
+                TunnelStatistics {
+                    tunnel_id: tunnel_id.clone(),
+                    bytes_transferred: tunnel.bytes_transferred,
+                    latency_ms: tunnel.latency_ms,
+                    status: tunnel.status.clone(),
+                    uptime_seconds: std::time::SystemTime::now()
+                        .duration_since(std::time::UNIX_EPOCH)
+                        .unwrap_or_default()
+                        .as_secs()
+                        - tunnel.created_at,
+                },
+            );
         }
-        
+
         Ok(stats)
     }
 
-    pub async fn create_connection(&self, service_name: &str, identity_id: &str) -> Result<ZitiConnection> {
+    pub async fn create_connection(
+        &self,
+        service_name: &str,
+        identity_id: &str,
+    ) -> Result<ZitiConnection> {
         let connection = ZitiConnection {
             connection_id: format!("conn_{}", Uuid::new_v4()),
             service_name: service_name.to_string(),
@@ -372,13 +401,13 @@ impl ZitiOverlayManager {
 
         let mut connections = self.active_connections.write().await;
         connections.insert(connection.connection_id.clone(), connection.clone());
-        
+
         Ok(connection)
     }
 
     pub async fn send_data(&self, connection_id: &str, data: &[u8]) -> Result<usize> {
         let mut connections = self.active_connections.write().await;
-        
+
         if let Some(connection) = connections.get_mut(connection_id) {
             // Update connection statistics
             connection.bytes_sent += data.len() as u64;
@@ -386,20 +415,22 @@ impl ZitiOverlayManager {
                 .duration_since(std::time::UNIX_EPOCH)
                 .unwrap_or_default()
                 .as_secs();
-            
+
             // In a real implementation, this would encrypt and send data through the tunnel
-            tracing::debug!("Sent {} bytes through encrypted tunnel {}", data.len(), connection_id);
+            tracing::debug!(
+                "Sent {} bytes through encrypted tunnel {}",
+                data.len(),
+                connection_id
+            );
             Ok(data.len())
         } else {
-            Err(anyhow!(
-                format!("Connection {} not found", connection_id)
-            ))
+            Err(anyhow!(format!("Connection {} not found", connection_id)))
         }
     }
 
     pub async fn receive_data(&self, connection_id: &str, buffer: &mut [u8]) -> Result<usize> {
         let mut connections = self.active_connections.write().await;
-        
+
         if let Some(connection) = connections.get_mut(connection_id) {
             // In a real implementation, this would receive and decrypt data from the tunnel
             // For now, return no data available
@@ -409,9 +440,7 @@ impl ZitiOverlayManager {
                 .as_secs();
             Ok(0)
         } else {
-            Err(anyhow!(
-                format!("Connection {} not found", connection_id)
-            ))
+            Err(anyhow!(format!("Connection {} not found", connection_id)))
         }
     }
 
@@ -423,7 +452,7 @@ impl ZitiOverlayManager {
     }
 
     // Private helper methods
-    
+
     async fn create_local_region_endpoint(&self) -> Result<RegionEndpoint> {
         Ok(RegionEndpoint {
             region_id: format!("region_{}", Uuid::new_v4()),
@@ -445,14 +474,14 @@ impl ZitiOverlayManager {
             let topology = self.network_topology.read().await;
             topology.regions.keys().cloned().collect()
         };
-        
+
         // Create tunnels to all other regions (full mesh)
         for other_region_id in region_ids {
             if other_region_id != region_id {
                 self.create_tunnel(region_id, &other_region_id).await?;
             }
         }
-        
+
         Ok(())
     }
 
@@ -462,7 +491,9 @@ impl ZitiOverlayManager {
         connections: &Arc<RwLock<HashMap<String, ZitiConnection>>>,
     ) -> Result<()> {
         match message {
-            OverlayMessage::RegionHeartbeat { region_id, status, .. } => {
+            OverlayMessage::RegionHeartbeat {
+                region_id, status, ..
+            } => {
                 let mut topology = topology.write().await;
                 if let Some(region) = topology.regions.get_mut(&region_id) {
                     region.status = status;
@@ -473,12 +504,31 @@ impl ZitiOverlayManager {
                 }
                 tracing::debug!("Processed heartbeat from region {}", region_id);
             }
-            OverlayMessage::AvatarCrossing { avatar_id, source_region, destination_region, .. } => {
-                tracing::info!("Processing avatar crossing: {} from {} to {}", avatar_id, source_region, destination_region);
+            OverlayMessage::AvatarCrossing {
+                avatar_id,
+                source_region,
+                destination_region,
+                ..
+            } => {
+                tracing::info!(
+                    "Processing avatar crossing: {} from {} to {}",
+                    avatar_id,
+                    source_region,
+                    destination_region
+                );
                 // In a real implementation, this would handle avatar state transfer
             }
-            OverlayMessage::ChatBroadcast { message, sender_id, channel, regions } => {
-                tracing::debug!("Broadcasting chat message from {} to {} regions", sender_id, regions.len());
+            OverlayMessage::ChatBroadcast {
+                message,
+                sender_id,
+                channel,
+                regions,
+            } => {
+                tracing::debug!(
+                    "Broadcasting chat message from {} to {} regions",
+                    sender_id,
+                    regions.len()
+                );
                 // In a real implementation, this would forward the message to target regions
             }
             _ => {

@@ -3,13 +3,15 @@
 //! Loads region data from an OAR file into the database.
 
 use anyhow::{anyhow, Context, Result};
-use base64::{Engine as _, engine::general_purpose::STANDARD as BASE64};
+use base64::{engine::general_purpose::STANDARD as BASE64, Engine as _};
 use sqlx::PgPool;
 use std::path::Path;
 use tracing::{debug, info, warn};
 use uuid::Uuid;
 
-use super::xml_schemas::{OarArchiveXml, OarRegionSettings, OarLandData, OarSceneObjectGroup, OarSceneObjectPart};
+use super::xml_schemas::{
+    OarArchiveXml, OarLandData, OarRegionSettings, OarSceneObjectGroup, OarSceneObjectPart,
+};
 use crate::archives::common::{extract_asset_uuid_from_path, paths, LoadStatistics};
 use crate::archives::tar_handler::TarGzReader;
 
@@ -75,11 +77,15 @@ impl OarReader {
         let mut warnings = Vec::new();
         let mut errors = Vec::new();
 
-        info!("Loading OAR from {:?} for region {}", path.as_ref(), options.region_id);
+        info!(
+            "Loading OAR from {:?} for region {}",
+            path.as_ref(),
+            options.region_id
+        );
 
         // Open the archive
-        let archive = TarGzReader::open(path.as_ref())
-            .with_context(|| "Failed to open OAR archive")?;
+        let archive =
+            TarGzReader::open(path.as_ref()).with_context(|| "Failed to open OAR archive")?;
 
         // Parse archive.xml to verify format
         if let Some(archive_xml_data) = archive.get_archive_xml() {
@@ -116,8 +122,10 @@ impl OarReader {
                 }
             }
         }
-        info!("Assets: {} loaded, {} skipped, {} failed",
-            stats.assets_loaded, stats.assets_skipped, stats.assets_failed);
+        info!(
+            "Assets: {} loaded, {} skipped, {} failed",
+            stats.assets_loaded, stats.assets_skipped, stats.assets_failed
+        );
 
         // Process terrain
         if options.load_terrain {
@@ -147,7 +155,10 @@ impl OarReader {
                         info!("Loaded region settings from {}", path);
                         settings_loaded = true;
                     }
-                    Err(e) => warnings.push(format!("Failed to load region settings from {}: {}", path, e)),
+                    Err(e) => warnings.push(format!(
+                        "Failed to load region settings from {}: {}",
+                        path, e
+                    )),
                 }
                 break;
             }
@@ -161,7 +172,10 @@ impl OarReader {
             info!("Processing parcels...");
             for (path, data) in archive.get_entries_with_prefix(paths::LANDDATA_PATH) {
                 if path.ends_with(".xml") {
-                    match self.import_parcel(&options.region_id, data, options.default_user_id.as_ref()).await {
+                    match self
+                        .import_parcel(&options.region_id, data, options.default_user_id.as_ref())
+                        .await
+                    {
                         Ok(_) => stats.parcels_loaded += 1,
                         Err(e) => warnings.push(format!("Failed to load parcel {}: {}", path, e)),
                     }
@@ -254,13 +268,27 @@ impl OarReader {
 
     fn determine_asset_type_from_path(&self, path: &str) -> i32 {
         use crate::archives::common::AssetType;
-        if path.contains("_texture") || path.ends_with(".jp2") { return AssetType::Texture as i32; }
-        if path.contains("_mesh") || path.ends_with(".llmesh") { return AssetType::Mesh as i32; }
-        if path.contains("_sound") { return AssetType::Sound as i32; }
-        if path.contains("_object") { return AssetType::Object as i32; }
-        if path.contains("_notecard") { return AssetType::Notecard as i32; }
-        if path.contains("_script") { return AssetType::LSLText as i32; }
-        if path.contains("_animation") { return AssetType::Animation as i32; }
+        if path.contains("_texture") || path.ends_with(".jp2") {
+            return AssetType::Texture as i32;
+        }
+        if path.contains("_mesh") || path.ends_with(".llmesh") {
+            return AssetType::Mesh as i32;
+        }
+        if path.contains("_sound") {
+            return AssetType::Sound as i32;
+        }
+        if path.contains("_object") {
+            return AssetType::Object as i32;
+        }
+        if path.contains("_notecard") {
+            return AssetType::Notecard as i32;
+        }
+        if path.contains("_script") {
+            return AssetType::LSLText as i32;
+        }
+        if path.contains("_animation") {
+            return AssetType::Animation as i32;
+        }
         AssetType::Unknown as i32
     }
 
@@ -275,11 +303,14 @@ impl OarReader {
             let mut v2d = Vec::with_capacity(8 + data.len());
             v2d.extend_from_slice(&256_i32.to_le_bytes()); // sizeX
             v2d.extend_from_slice(&256_i32.to_le_bytes()); // sizeY
-            v2d.extend_from_slice(data);                    // raw f32 heights
+            v2d.extend_from_slice(data); // raw f32 heights
             terrain_data = v2d;
             revision = 22; // Variable2D
-            info!("[OAR] Converted .r32 terrain ({} bytes) to Variable2D ({} bytes)",
-                  data.len(), terrain_data.len());
+            info!(
+                "[OAR] Converted .r32 terrain ({} bytes) to Variable2D ({} bytes)",
+                data.len(),
+                terrain_data.len()
+            );
         } else {
             // Already in some other format, store as-is with Legacy256
             terrain_data = data.to_vec();
@@ -295,7 +326,7 @@ impl OarReader {
 
         sqlx::query(
             r#"INSERT INTO bakedterrain (regionuuid, heightfield, revision)
-               VALUES ($1, $2, $3)"#
+               VALUES ($1, $2, $3)"#,
         )
         .bind(region_id.to_string())
         .bind(&terrain_data)
@@ -339,20 +370,52 @@ impl OarReader {
                 use_estate_sun = $20,
                 fixed_sun = $21,
                 sun_position = $22
-            WHERE regionuuid = $1"#
+            WHERE regionuuid = $1"#,
         )
         .bind(region_id)
-        .bind(if settings.general.block_terraform { 1i32 } else { 0 })
+        .bind(if settings.general.block_terraform {
+            1i32
+        } else {
+            0
+        })
         .bind(if settings.general.block_fly { 1i32 } else { 0 })
-        .bind(if settings.general.allow_damage { 1i32 } else { 0 })
-        .bind(if settings.general.restrict_pushing { 1i32 } else { 0 })
-        .bind(if settings.general.allow_land_resell { 1i32 } else { 0 })
-        .bind(if settings.general.allow_land_join_divide { 1i32 } else { 0 })
+        .bind(if settings.general.allow_damage {
+            1i32
+        } else {
+            0
+        })
+        .bind(if settings.general.restrict_pushing {
+            1i32
+        } else {
+            0
+        })
+        .bind(if settings.general.allow_land_resell {
+            1i32
+        } else {
+            0
+        })
+        .bind(if settings.general.allow_land_join_divide {
+            1i32
+        } else {
+            0
+        })
         .bind(settings.general.agent_limit)
         .bind(settings.general.object_bonus as f32)
-        .bind(if settings.general.disable_scripts { 1i32 } else { 0 })
-        .bind(if settings.general.disable_collisions { 1i32 } else { 0 })
-        .bind(if settings.general.disable_physics { 1i32 } else { 0 })
+        .bind(if settings.general.disable_scripts {
+            1i32
+        } else {
+            0
+        })
+        .bind(if settings.general.disable_collisions {
+            1i32
+        } else {
+            0
+        })
+        .bind(if settings.general.disable_physics {
+            1i32
+        } else {
+            0
+        })
         .bind(tex1)
         .bind(tex2)
         .bind(tex3)
@@ -360,7 +423,11 @@ impl OarReader {
         .bind(settings.terrain.water_height as f32)
         .bind(settings.terrain.terrain_raise_limit as f32)
         .bind(settings.terrain.terrain_lower_limit as f32)
-        .bind(if settings.terrain.use_estate_sun { 1i32 } else { 0 })
+        .bind(if settings.terrain.use_estate_sun {
+            1i32
+        } else {
+            0
+        })
         .bind(if settings.terrain.fixed_sun { 1i32 } else { 0 })
         .bind(settings.terrain.sun_position as f32)
         .execute(&self.db_pool)
@@ -369,7 +436,12 @@ impl OarReader {
         Ok(())
     }
 
-    async fn import_parcel(&self, region_id: &Uuid, data: &[u8], default_user_id: Option<&Uuid>) -> Result<()> {
+    async fn import_parcel(
+        &self,
+        region_id: &Uuid,
+        data: &[u8],
+        default_user_id: Option<&Uuid>,
+    ) -> Result<()> {
         let xml_str = std::str::from_utf8(data)?;
         let parcel: OarLandData = quick_xml::de::from_str(xml_str)
             .map_err(|e| anyhow!("Failed to parse parcel data: {}", e))?;
@@ -377,12 +449,16 @@ impl OarReader {
         let parcel_uuid = Uuid::parse_str(&parcel.global_id)?;
         let original_owner = Uuid::parse_str(&parcel.owner_id)?;
         let owner_uuid = default_user_id.copied().unwrap_or(original_owner);
-        let group_uuid = parcel.group_id.as_ref()
+        let group_uuid = parcel
+            .group_id
+            .as_ref()
             .and_then(|s| Uuid::parse_str(s).ok())
             .unwrap_or(Uuid::nil());
 
-        let (loc_x, loc_y, loc_z) = parse_vector3(parcel.user_location.as_deref().unwrap_or("<0,0,0>"));
-        let (look_x, look_y, look_z) = parse_vector3(parcel.user_look_at.as_deref().unwrap_or("<0,0,0>"));
+        let (loc_x, loc_y, loc_z) =
+            parse_vector3(parcel.user_location.as_deref().unwrap_or("<0,0,0>"));
+        let (look_x, look_y, look_z) =
+            parse_vector3(parcel.user_look_at.as_deref().unwrap_or("<0,0,0>"));
 
         sqlx::query(
             r#"INSERT INTO land (
@@ -395,7 +471,7 @@ impl OarReader {
             ) VALUES (
                 $1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, $14,
                 $15, $16, $17, $18, $19, $20, $21, $22, $23, $24, $25, $26, $27, $28, $29
-            ) ON CONFLICT (uuid) DO UPDATE SET name = $5"#
+            ) ON CONFLICT (uuid) DO UPDATE SET name = $5"#,
         )
         .bind(parcel_uuid)
         .bind(region_id)
@@ -416,7 +492,12 @@ impl OarReader {
         .bind(parcel.pass_hours)
         .bind(parcel.pass_price)
         .bind(parcel.sale_price)
-        .bind(parcel.snapshot_id.as_deref().and_then(|s| Uuid::parse_str(s).ok()))
+        .bind(
+            parcel
+                .snapshot_id
+                .as_deref()
+                .and_then(|s| Uuid::parse_str(s).ok()),
+        )
         .bind(loc_x)
         .bind(loc_y)
         .bind(loc_z)
@@ -432,20 +513,39 @@ impl OarReader {
         Ok(())
     }
 
-    async fn import_object(&self, region_id: &Uuid, data: &[u8], options: &OarLoadOptions) -> Result<()> {
+    async fn import_object(
+        &self,
+        region_id: &Uuid,
+        data: &[u8],
+        options: &OarLoadOptions,
+    ) -> Result<()> {
         let xml_str = std::str::from_utf8(data)?;
         let object: OarSceneObjectGroup = quick_xml::de::from_str(xml_str)
             .map_err(|e| anyhow!("Failed to parse object: {}", e))?;
 
         let scene_group_id = object.root_uuid();
 
-        self.insert_prim(region_id, &scene_group_id, object.root_part(), 1, options.default_user_id.as_ref()).await?;
+        self.insert_prim(
+            region_id,
+            &scene_group_id,
+            object.root_part(),
+            1,
+            options.default_user_id.as_ref(),
+        )
+        .await?;
         self.insert_primshape(object.root_part()).await?;
 
         if let Some(ref other_parts) = object.other_parts {
             for (i, wrapper) in other_parts.parts.iter().enumerate() {
                 let link_num = (i + 2) as i32;
-                self.insert_prim(region_id, &scene_group_id, &wrapper.part, link_num, options.default_user_id.as_ref()).await?;
+                self.insert_prim(
+                    region_id,
+                    &scene_group_id,
+                    &wrapper.part,
+                    link_num,
+                    options.default_user_id.as_ref(),
+                )
+                .await?;
                 self.insert_primshape(&wrapper.part).await?;
             }
         }
@@ -492,7 +592,7 @@ impl OarReader {
                 $38, $39, $40, $41, $42, $43, $44,
                 $45, $46, $47, $48
             ) ON CONFLICT (uuid) DO UPDATE SET
-                name = $8, objectflags = $13, positionx = $19, positiony = $20, positionz = $21"#
+                name = $8, objectflags = $13, positionx = $19, positiony = $20, positionz = $21"#,
         )
         .bind(prim_uuid)
         .bind(region_id)
@@ -512,9 +612,21 @@ impl OarReader {
         .bind(part.group_mask as i32)
         .bind(part.everyone_mask as i32)
         .bind(part.base_mask as i32)
-        .bind(if link_num == 1 { part.group_position.x } else { part.offset_position.x })
-        .bind(if link_num == 1 { part.group_position.y } else { part.offset_position.y })
-        .bind(if link_num == 1 { part.group_position.z } else { part.offset_position.z })
+        .bind(if link_num == 1 {
+            part.group_position.x
+        } else {
+            part.offset_position.x
+        })
+        .bind(if link_num == 1 {
+            part.group_position.y
+        } else {
+            part.offset_position.y
+        })
+        .bind(if link_num == 1 {
+            part.group_position.z
+        } else {
+            part.offset_position.z
+        })
         .bind(part.group_position.x)
         .bind(part.group_position.y)
         .bind(part.group_position.z)
@@ -579,7 +691,7 @@ impl OarReader {
                 $15, $16, $17, $18, $19, $20,
                 $21, $22, $23, $24, $25, $26, $27, $28
             ) ON CONFLICT (uuid) DO UPDATE SET
-                texture = $25, scalex = $3, scaley = $4, scalez = $5"#
+                texture = $25, scalex = $3, scaley = $4, scalez = $5"#,
         )
         .bind(prim_uuid)
         .bind(shape.profile_curve)
@@ -618,7 +730,8 @@ impl OarReader {
 
 fn parse_vector3(s: &str) -> (f32, f32, f32) {
     let trimmed = s.trim_start_matches('<').trim_end_matches('>');
-    let parts: Vec<f32> = trimmed.split(',')
+    let parts: Vec<f32> = trimmed
+        .split(',')
         .map(|p| p.trim().parse::<f32>().unwrap_or(0.0))
         .collect();
     (

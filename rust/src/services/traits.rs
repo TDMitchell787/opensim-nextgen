@@ -57,16 +57,30 @@ pub trait GridServiceTrait: Send + Sync {
     async fn deregister_region(&self, region_id: Uuid) -> Result<bool>;
 
     /// Get region by UUID
-    async fn get_region_by_uuid(&self, scope_id: Uuid, region_id: Uuid) -> Result<Option<RegionInfo>>;
+    async fn get_region_by_uuid(
+        &self,
+        scope_id: Uuid,
+        region_id: Uuid,
+    ) -> Result<Option<RegionInfo>>;
 
     /// Get region by name
     async fn get_region_by_name(&self, scope_id: Uuid, name: &str) -> Result<Option<RegionInfo>>;
 
     /// Get region by position (grid coordinates)
-    async fn get_region_by_position(&self, scope_id: Uuid, x: u32, y: u32) -> Result<Option<RegionInfo>>;
+    async fn get_region_by_position(
+        &self,
+        scope_id: Uuid,
+        x: u32,
+        y: u32,
+    ) -> Result<Option<RegionInfo>>;
 
     /// Get neighboring regions within range
-    async fn get_neighbours(&self, scope_id: Uuid, region_id: Uuid, range: u32) -> Result<Vec<RegionInfo>>;
+    async fn get_neighbours(
+        &self,
+        scope_id: Uuid,
+        region_id: Uuid,
+        range: u32,
+    ) -> Result<Vec<RegionInfo>>;
 
     /// Get default regions (fallback for login)
     async fn get_default_regions(&self, scope_id: Uuid) -> Result<Vec<RegionInfo>>;
@@ -125,10 +139,19 @@ pub trait UserAccountServiceTrait: Send + Sync {
     async fn get_user_account(&self, scope_id: Uuid, user_id: Uuid) -> Result<Option<UserAccount>>;
 
     /// Get user account by name
-    async fn get_user_account_by_name(&self, scope_id: Uuid, first: &str, last: &str) -> Result<Option<UserAccount>>;
+    async fn get_user_account_by_name(
+        &self,
+        scope_id: Uuid,
+        first: &str,
+        last: &str,
+    ) -> Result<Option<UserAccount>>;
 
     /// Get user account by email
-    async fn get_user_account_by_email(&self, scope_id: Uuid, email: &str) -> Result<Option<UserAccount>>;
+    async fn get_user_account_by_email(
+        &self,
+        scope_id: Uuid,
+        email: &str,
+    ) -> Result<Option<UserAccount>>;
 
     /// Store/update user account
     async fn store_user_account(&self, data: &UserAccount) -> Result<bool>;
@@ -178,7 +201,12 @@ impl Default for UserAccount {
 #[async_trait]
 pub trait AuthenticationServiceTrait: Send + Sync {
     /// Authenticate user with password
-    async fn authenticate(&self, principal_id: Uuid, password: &str, lifetime: i32) -> Result<Option<String>>;
+    async fn authenticate(
+        &self,
+        principal_id: Uuid,
+        password: &str,
+        lifetime: i32,
+    ) -> Result<Option<String>>;
 
     /// Verify authentication token
     async fn verify(&self, principal_id: Uuid, token: &str, lifetime: i32) -> Result<bool>;
@@ -273,7 +301,11 @@ pub trait InventoryServiceTrait: Send + Sync {
     async fn get_root_folder(&self, principal_id: Uuid) -> Result<Option<InventoryFolder>>;
 
     /// Get folder content (items and subfolders)
-    async fn get_folder_content(&self, principal_id: Uuid, folder_id: Uuid) -> Result<InventoryCollection>;
+    async fn get_folder_content(
+        &self,
+        principal_id: Uuid,
+        folder_id: Uuid,
+    ) -> Result<InventoryCollection>;
 
     /// Create folder
     async fn create_folder(&self, folder: &InventoryFolder) -> Result<bool>;
@@ -303,7 +335,12 @@ pub trait InventoryServiceTrait: Send + Sync {
     async fn move_items(&self, principal_id: Uuid, items: &[(Uuid, Uuid)]) -> Result<bool>;
 
     /// Move a folder to a new parent
-    async fn move_folder(&self, principal_id: Uuid, folder_id: Uuid, new_parent_id: Uuid) -> Result<bool>;
+    async fn move_folder(
+        &self,
+        principal_id: Uuid,
+        folder_id: Uuid,
+        new_parent_id: Uuid,
+    ) -> Result<bool>;
 
     /// Purge folder contents (items + subfolders)
     async fn purge_folder(&self, principal_id: Uuid, folder_id: Uuid) -> Result<bool>;
@@ -312,7 +349,11 @@ pub trait InventoryServiceTrait: Send + Sync {
     async fn get_active_gestures(&self, principal_id: Uuid) -> Result<Vec<InventoryItem>>;
 
     /// Get content for multiple folders at once
-    async fn get_multiple_folders_content(&self, principal_id: Uuid, folder_ids: &[Uuid]) -> Result<Vec<InventoryCollection>>;
+    async fn get_multiple_folders_content(
+        &self,
+        principal_id: Uuid,
+        folder_ids: &[Uuid],
+    ) -> Result<Vec<InventoryCollection>>;
 
     /// Get combined current permissions for all items owned by principal with given asset ID
     async fn get_asset_permissions(&self, principal_id: Uuid, asset_id: Uuid) -> Result<i32>;
@@ -371,7 +412,13 @@ pub struct InventoryCollection {
 #[async_trait]
 pub trait PresenceServiceTrait: Send + Sync {
     /// Login agent to region
-    async fn login_agent(&self, user_id: Uuid, session_id: Uuid, secure_session_id: Uuid, region_id: Uuid) -> Result<bool>;
+    async fn login_agent(
+        &self,
+        user_id: Uuid,
+        session_id: Uuid,
+        secure_session_id: Uuid,
+        region_id: Uuid,
+    ) -> Result<bool>;
 
     /// Logout agent
     async fn logout_agent(&self, session_id: Uuid) -> Result<bool>;
@@ -444,7 +491,10 @@ impl GridUserInfo {
         m.insert("LastRegionID".to_string(), self.last_region_id.to_string());
         m.insert("LastPosition".to_string(), self.last_position.clone());
         m.insert("LastLookAt".to_string(), self.last_look_at.clone());
-        m.insert("Online".to_string(), if self.online { "True" } else { "False" }.to_string());
+        m.insert(
+            "Online".to_string(),
+            if self.online { "True" } else { "False" }.to_string(),
+        );
         m.insert("Login".to_string(), self.login.clone());
         m.insert("Logout".to_string(), self.logout.clone());
         m
@@ -454,9 +504,27 @@ impl GridUserInfo {
 #[async_trait]
 pub trait GridUserServiceTrait: Send + Sync {
     async fn logged_in(&self, user_id: &str) -> Result<Option<GridUserInfo>>;
-    async fn logged_out(&self, user_id: &str, region_id: Uuid, position: &str, look_at: &str) -> Result<bool>;
-    async fn set_home(&self, user_id: &str, home_id: Uuid, position: &str, look_at: &str) -> Result<bool>;
-    async fn set_last_position(&self, user_id: &str, region_id: Uuid, position: &str, look_at: &str) -> Result<bool>;
+    async fn logged_out(
+        &self,
+        user_id: &str,
+        region_id: Uuid,
+        position: &str,
+        look_at: &str,
+    ) -> Result<bool>;
+    async fn set_home(
+        &self,
+        user_id: &str,
+        home_id: Uuid,
+        position: &str,
+        look_at: &str,
+    ) -> Result<bool>;
+    async fn set_last_position(
+        &self,
+        user_id: &str,
+        region_id: Uuid,
+        position: &str,
+        look_at: &str,
+    ) -> Result<bool>;
     async fn get_grid_user_info(&self, user_id: &str) -> Result<Option<GridUserInfo>>;
     async fn get_grid_user_infos(&self, user_ids: &[String]) -> Result<Vec<GridUserInfo>>;
 }
@@ -500,10 +568,16 @@ impl AgentPrefs {
         m.insert("AccessPrefs".to_string(), self.access_prefs.clone());
         m.insert("HoverHeight".to_string(), self.hover_height.to_string());
         m.insert("Language".to_string(), self.language.clone());
-        m.insert("LanguageIsPublic".to_string(), if self.language_is_public { "1" } else { "0" }.to_string());
+        m.insert(
+            "LanguageIsPublic".to_string(),
+            if self.language_is_public { "1" } else { "0" }.to_string(),
+        );
         m.insert("PermEveryone".to_string(), self.perm_everyone.to_string());
         m.insert("PermGroup".to_string(), self.perm_group.to_string());
-        m.insert("PermNextOwner".to_string(), self.perm_next_owner.to_string());
+        m.insert(
+            "PermNextOwner".to_string(),
+            self.perm_next_owner.to_string(),
+        );
         m
     }
 }
@@ -523,10 +597,30 @@ pub trait AgentPrefsServiceTrait: Send + Sync {
 #[async_trait]
 pub trait HGFriendsServiceTrait: Send + Sync {
     async fn get_friend_perms(&self, principal_id: Uuid, friend_id: &str) -> Result<i32>;
-    async fn new_friendship(&self, principal_id: Uuid, friend_id: &str, secret: &str, verified: bool) -> Result<bool>;
-    async fn delete_friendship(&self, principal_id: Uuid, friend_id: &str, secret: &str) -> Result<bool>;
-    async fn validate_friendship_offered(&self, principal_id: Uuid, friend_id: &str) -> Result<bool>;
-    async fn status_notification(&self, friends: &[String], user_id: Uuid, online: bool) -> Result<Vec<String>>;
+    async fn new_friendship(
+        &self,
+        principal_id: Uuid,
+        friend_id: &str,
+        secret: &str,
+        verified: bool,
+    ) -> Result<bool>;
+    async fn delete_friendship(
+        &self,
+        principal_id: Uuid,
+        friend_id: &str,
+        secret: &str,
+    ) -> Result<bool>;
+    async fn validate_friendship_offered(
+        &self,
+        principal_id: Uuid,
+        friend_id: &str,
+    ) -> Result<bool>;
+    async fn status_notification(
+        &self,
+        friends: &[String],
+        user_id: Uuid,
+        online: bool,
+    ) -> Result<Vec<String>>;
 }
 
 // ============================================================================
@@ -645,31 +739,73 @@ impl EstateSettings {
         m.insert("EstateID".to_string(), self.estate_id.to_string());
         m.insert("EstateName".to_string(), self.estate_name.clone());
         m.insert("EstateOwner".to_string(), self.estate_owner.clone());
-        m.insert("ParentEstateID".to_string(), self.parent_estate_id.to_string());
-        m.insert("AbuseEmailToEstateOwner".to_string(), self.abuse_email_to_estate_owner.to_string());
+        m.insert(
+            "ParentEstateID".to_string(),
+            self.parent_estate_id.to_string(),
+        );
+        m.insert(
+            "AbuseEmailToEstateOwner".to_string(),
+            self.abuse_email_to_estate_owner.to_string(),
+        );
         m.insert("DenyAnonymous".to_string(), self.deny_anonymous.to_string());
-        m.insert("ResetHomeOnTeleport".to_string(), self.reset_home_on_teleport.to_string());
+        m.insert(
+            "ResetHomeOnTeleport".to_string(),
+            self.reset_home_on_teleport.to_string(),
+        );
         m.insert("FixedSun".to_string(), self.fixed_sun.to_string());
-        m.insert("DenyTransacted".to_string(), self.deny_transacted.to_string());
+        m.insert(
+            "DenyTransacted".to_string(),
+            self.deny_transacted.to_string(),
+        );
         m.insert("BlockDwell".to_string(), self.block_dwell.to_string());
-        m.insert("DenyIdentified".to_string(), self.deny_identified.to_string());
+        m.insert(
+            "DenyIdentified".to_string(),
+            self.deny_identified.to_string(),
+        );
         m.insert("AllowVoice".to_string(), self.allow_voice.to_string());
-        m.insert("UseGlobalTime".to_string(), self.use_global_time.to_string());
-        m.insert("PricePerMeter".to_string(), self.price_per_meter.to_string());
+        m.insert(
+            "UseGlobalTime".to_string(),
+            self.use_global_time.to_string(),
+        );
+        m.insert(
+            "PricePerMeter".to_string(),
+            self.price_per_meter.to_string(),
+        );
         m.insert("TaxFree".to_string(), self.tax_free.to_string());
-        m.insert("AllowDirectTeleport".to_string(), self.allow_direct_teleport.to_string());
-        m.insert("RedirectGridX".to_string(), self.redirect_grid_x.to_string());
-        m.insert("RedirectGridY".to_string(), self.redirect_grid_y.to_string());
+        m.insert(
+            "AllowDirectTeleport".to_string(),
+            self.allow_direct_teleport.to_string(),
+        );
+        m.insert(
+            "RedirectGridX".to_string(),
+            self.redirect_grid_x.to_string(),
+        );
+        m.insert(
+            "RedirectGridY".to_string(),
+            self.redirect_grid_y.to_string(),
+        );
         m.insert("SunPosition".to_string(), self.sun_position.to_string());
-        m.insert("EstateSkipScripts".to_string(), self.estate_skip_scripts.to_string());
-        m.insert("BillableFactor".to_string(), self.billable_factor.to_string());
+        m.insert(
+            "EstateSkipScripts".to_string(),
+            self.estate_skip_scripts.to_string(),
+        );
+        m.insert(
+            "BillableFactor".to_string(),
+            self.billable_factor.to_string(),
+        );
         m.insert("PublicAccess".to_string(), self.public_access.to_string());
         m.insert("AbuseEmail".to_string(), self.abuse_email.clone());
         m.insert("DenyMinors".to_string(), self.deny_minors.to_string());
         m.insert("AllowLandmark".to_string(), self.allow_landmark.to_string());
-        m.insert("AllowParcelChanges".to_string(), self.allow_parcel_changes.to_string());
+        m.insert(
+            "AllowParcelChanges".to_string(),
+            self.allow_parcel_changes.to_string(),
+        );
         m.insert("AllowSetHome".to_string(), self.allow_set_home.to_string());
-        m.insert("AllowEnvironmentOverride".to_string(), self.allow_environment_override.to_string());
+        m.insert(
+            "AllowEnvironmentOverride".to_string(),
+            self.allow_environment_override.to_string(),
+        );
         m.insert("EstateManagers".to_string(), self.estate_managers.join(","));
         m.insert("EstateAccess".to_string(), self.estate_users.join(","));
         m.insert("EstateGroups".to_string(), self.estate_groups.join(","));
@@ -679,7 +815,11 @@ impl EstateSettings {
 
 #[async_trait]
 pub trait EstateServiceTrait: Send + Sync {
-    async fn load_estate_by_region(&self, region_id: &str, create: bool) -> Result<Option<EstateSettings>>;
+    async fn load_estate_by_region(
+        &self,
+        region_id: &str,
+        create: bool,
+    ) -> Result<Option<EstateSettings>>;
     async fn load_estate_by_id(&self, estate_id: i32) -> Result<Option<EstateSettings>>;
     async fn store_estate_settings(&self, settings: &EstateSettings) -> Result<bool>;
     async fn link_region(&self, region_id: &str, estate_id: i32) -> Result<bool>;
@@ -878,11 +1018,7 @@ pub trait UserAgentServiceTrait: Send + Sync {
         online: bool,
     ) -> Result<Vec<Uuid>>;
 
-    async fn is_agent_coming_home(
-        &self,
-        session_id: Uuid,
-        external_name: &str,
-    ) -> Result<bool>;
+    async fn is_agent_coming_home(&self, session_id: Uuid, external_name: &str) -> Result<bool>;
 
     async fn login_agent_to_grid(
         &self,

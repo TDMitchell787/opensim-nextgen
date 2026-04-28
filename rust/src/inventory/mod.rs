@@ -1,12 +1,12 @@
 //! Inventory system for Second Life/OpenSim compatibility
 //! Handles inventory folders, items, and structures required for login responses
 
-use std::collections::HashMap;
-use anyhow::{Result, anyhow};
-use serde::{Deserialize, Serialize};
-use tracing::{info, debug};
-use uuid::Uuid;
+use anyhow::{anyhow, Result};
 use chrono::{DateTime, Utc};
+use serde::{Deserialize, Serialize};
+use std::collections::HashMap;
+use tracing::{debug, info};
+use uuid::Uuid;
 
 pub mod folders;
 pub mod items;
@@ -76,7 +76,7 @@ impl InventoryFolderType {
     pub fn as_string(&self) -> String {
         (*self as u8).to_string()
     }
-    
+
     /// Get the default name for this folder type
     pub fn default_name(&self) -> &'static str {
         match self {
@@ -107,16 +107,32 @@ impl InventoryFolderType {
             Self::Material => "Materials",
         }
     }
-    
+
     /// Check if this folder type should be created by default
     pub fn is_default_folder(&self) -> bool {
-        matches!(self,
-            Self::Root | Self::Texture | Self::Sound | Self::CallingCard |
-            Self::Landmark | Self::Clothing | Self::Object | Self::Notecard |
-            Self::LSLText | Self::BodyPart | Self::Trash | Self::Snapshot |
-            Self::LostAndFound | Self::Animation | Self::Gesture | Self::Favorites |
-            Self::CurrentOutfit | Self::MyOutfits | Self::Settings | Self::Inbox |
-            Self::Material
+        matches!(
+            self,
+            Self::Root
+                | Self::Texture
+                | Self::Sound
+                | Self::CallingCard
+                | Self::Landmark
+                | Self::Clothing
+                | Self::Object
+                | Self::Notecard
+                | Self::LSLText
+                | Self::BodyPart
+                | Self::Trash
+                | Self::Snapshot
+                | Self::LostAndFound
+                | Self::Animation
+                | Self::Gesture
+                | Self::Favorites
+                | Self::CurrentOutfit
+                | Self::MyOutfits
+                | Self::Settings
+                | Self::Inbox
+                | Self::Material
         )
     }
 }
@@ -214,22 +230,27 @@ impl InventoryManager {
             user_inventories: HashMap::new(),
         }
     }
-    
+
     /// Get or create user inventory structure
     pub fn get_user_inventory(&mut self, user_id: Uuid) -> &UserInventory {
-        debug!("🔍 INVENTORY TRACE: get_user_inventory starting for user: {}", user_id);
-        let result = self.user_inventories.entry(user_id)
-            .or_insert_with(|| {
-                debug!("🔍 INVENTORY TRACE: Creating default inventory structure for user: {}", user_id);
-                debug!("🔍 INVENTORY TRACE: About to call UserInventory::create_default");
-                let inventory = UserInventory::create_default(user_id);
-                debug!("🔍 INVENTORY TRACE: UserInventory::create_default completed");
-                inventory
-            });
+        debug!(
+            "🔍 INVENTORY TRACE: get_user_inventory starting for user: {}",
+            user_id
+        );
+        let result = self.user_inventories.entry(user_id).or_insert_with(|| {
+            debug!(
+                "🔍 INVENTORY TRACE: Creating default inventory structure for user: {}",
+                user_id
+            );
+            debug!("🔍 INVENTORY TRACE: About to call UserInventory::create_default");
+            let inventory = UserInventory::create_default(user_id);
+            debug!("🔍 INVENTORY TRACE: UserInventory::create_default completed");
+            inventory
+        });
         debug!("🔍 INVENTORY TRACE: get_user_inventory completed successfully");
         result
     }
-    
+
     /// Get user inventory for login response
     pub fn get_login_inventory(&mut self, user_id: Uuid) -> LoginInventoryResponse {
         debug!("🔍 INVENTORY TRACE: InventoryManager::get_login_inventory starting");
@@ -240,13 +261,13 @@ impl InventoryManager {
         debug!("🔍 INVENTORY TRACE: to_login_response completed successfully");
         result
     }
-    
+
     /// Clear cached inventory for user
     pub fn clear_user_cache(&mut self, user_id: Uuid) {
         self.user_inventories.remove(&user_id);
         debug!("Cleared inventory cache for user: {}", user_id);
     }
-    
+
     /// Get the number of cached inventories
     pub fn cache_size(&self) -> usize {
         self.user_inventories.len()
@@ -293,7 +314,10 @@ impl UserInventory {
         // Create root folder - use database UUID if available (type 8)
         let root_folder = if let Some(ref db_map) = db_folders {
             if let Some(db_info) = db_map.get(&8) {
-                debug!("📦 Phase 85.8: Using database root folder UUID: {}", db_info.folder_id);
+                debug!(
+                    "📦 Phase 85.8: Using database root folder UUID: {}",
+                    db_info.folder_id
+                );
                 InventoryFolder {
                     id: db_info.folder_id,
                     parent_id: None,
@@ -344,8 +368,11 @@ impl UserInventory {
             let folder_type_i64 = folder_type as i64;
             let folder = if let Some(ref db_map) = db_folders {
                 if let Some(db_info) = db_map.get(&folder_type_i64) {
-                    debug!("📦 Phase 85.8: Using database UUID for {} folder: {}",
-                           folder_type.default_name(), db_info.folder_id);
+                    debug!(
+                        "📦 Phase 85.8: Using database UUID for {} folder: {}",
+                        folder_type.default_name(),
+                        db_info.folder_id
+                    );
                     InventoryFolder {
                         id: db_info.folder_id,
                         parent_id: Some(root_id),
@@ -357,8 +384,10 @@ impl UserInventory {
                         updated_at: Utc::now(),
                     }
                 } else {
-                    debug!("📦 Phase 85.8: No database UUID for {} folder, generating new",
-                           folder_type.default_name());
+                    debug!(
+                        "📦 Phase 85.8: No database UUID for {} folder, generating new",
+                        folder_type.default_name()
+                    );
                     InventoryFolder::new_system_folder(user_id, root_id, folder_type)
                 }
             } else {
@@ -381,32 +410,50 @@ impl UserInventory {
             (
                 Uuid::parse_str("66c41e39-38f9-f75a-024e-585989bfaba9").unwrap(),
                 Uuid::parse_str("66c41e39-38f9-f75a-024e-585989bfab73").unwrap(),
-                "Default Shape", InventoryAssetType::Bodypart, 0, bodypart_folder_id,
+                "Default Shape",
+                InventoryAssetType::Bodypart,
+                0,
+                bodypart_folder_id,
             ),
             (
                 Uuid::parse_str("77c41e39-38f9-f75a-024e-585989bfabc9").unwrap(),
                 Uuid::parse_str("77c41e39-38f9-f75a-024e-585989bbabbb").unwrap(),
-                "Default Skin", InventoryAssetType::Bodypart, 1, bodypart_folder_id,
+                "Default Skin",
+                InventoryAssetType::Bodypart,
+                1,
+                bodypart_folder_id,
             ),
             (
                 Uuid::parse_str("d342e6c1-b9d2-11dc-95ff-0800200c9a66").unwrap(),
                 Uuid::parse_str("d342e6c0-b9d2-11dc-95ff-0800200c9a66").unwrap(),
-                "Default Hair", InventoryAssetType::Bodypart, 2, bodypart_folder_id,
+                "Default Hair",
+                InventoryAssetType::Bodypart,
+                2,
+                bodypart_folder_id,
             ),
             (
                 Uuid::parse_str("cdc31054-eed8-4021-994f-4e0c6e861b50").unwrap(),
                 Uuid::parse_str("4bb6fa4d-1cd2-498a-a84c-95c1a0e745a7").unwrap(),
-                "Default Eyes", InventoryAssetType::Bodypart, 3, bodypart_folder_id,
+                "Default Eyes",
+                InventoryAssetType::Bodypart,
+                3,
+                bodypart_folder_id,
             ),
             (
                 Uuid::parse_str("77c41e39-38f9-f75a-0000-585989bf0000").unwrap(),
                 Uuid::parse_str("00000000-38f9-1111-024e-222222111110").unwrap(),
-                "Default Shirt", InventoryAssetType::Clothing, 4, clothing_folder_id,
+                "Default Shirt",
+                InventoryAssetType::Clothing,
+                4,
+                clothing_folder_id,
             ),
             (
                 Uuid::parse_str("77c41e39-38f9-f75a-0000-5859892f1111").unwrap(),
                 Uuid::parse_str("00000000-38f9-1111-024e-222222111120").unwrap(),
-                "Default Pants", InventoryAssetType::Clothing, 5, clothing_folder_id,
+                "Default Pants",
+                InventoryAssetType::Clothing,
+                5,
+                clothing_folder_id,
             ),
         ];
 
@@ -433,12 +480,36 @@ impl UserInventory {
             const COPY_PERMS: u32 = 32768; // PermissionMask.Copy
             let cof_links: [(Uuid, &str, u32); 6] = [
                 // (wearable_item_id, name, wearable_type_flag)
-                (Uuid::parse_str("66c41e39-38f9-f75a-024e-585989bfaba9").unwrap(), "Default Shape", 0),
-                (Uuid::parse_str("77c41e39-38f9-f75a-024e-585989bfabc9").unwrap(), "Default Skin", 1),
-                (Uuid::parse_str("d342e6c1-b9d2-11dc-95ff-0800200c9a66").unwrap(), "Default Hair", 2),
-                (Uuid::parse_str("cdc31054-eed8-4021-994f-4e0c6e861b50").unwrap(), "Default Eyes", 3),
-                (Uuid::parse_str("77c41e39-38f9-f75a-0000-585989bf0000").unwrap(), "Default Shirt", 4),
-                (Uuid::parse_str("77c41e39-38f9-f75a-0000-5859892f1111").unwrap(), "Default Pants", 5),
+                (
+                    Uuid::parse_str("66c41e39-38f9-f75a-024e-585989bfaba9").unwrap(),
+                    "Default Shape",
+                    0,
+                ),
+                (
+                    Uuid::parse_str("77c41e39-38f9-f75a-024e-585989bfabc9").unwrap(),
+                    "Default Skin",
+                    1,
+                ),
+                (
+                    Uuid::parse_str("d342e6c1-b9d2-11dc-95ff-0800200c9a66").unwrap(),
+                    "Default Hair",
+                    2,
+                ),
+                (
+                    Uuid::parse_str("cdc31054-eed8-4021-994f-4e0c6e861b50").unwrap(),
+                    "Default Eyes",
+                    3,
+                ),
+                (
+                    Uuid::parse_str("77c41e39-38f9-f75a-0000-585989bf0000").unwrap(),
+                    "Default Shirt",
+                    4,
+                ),
+                (
+                    Uuid::parse_str("77c41e39-38f9-f75a-0000-5859892f1111").unwrap(),
+                    "Default Pants",
+                    5,
+                ),
             ];
 
             for (wearable_item_id, name, wearable_type) in cof_links {
@@ -474,7 +545,7 @@ impl UserInventory {
             created_at: Utc::now(),
         }
     }
-    
+
     /// Convert to login response format
     pub fn to_login_response(&self) -> LoginInventoryResponse {
         // Get root folder
@@ -484,10 +555,8 @@ impl UserInventory {
         // The viewer's buildParentChildMap() looks up parents in this list.
         // System folders have root as parent, so root MUST be in skeleton.
         // Sort order: system folders first, regular folders, then # folders
-        let mut inventory_skeleton: Vec<LoginInventoryFolder> = self.folders
-            .values()
-            .map(|f| f.to_login_folder())
-            .collect();
+        let mut inventory_skeleton: Vec<LoginInventoryFolder> =
+            self.folders.values().map(|f| f.to_login_folder()).collect();
 
         inventory_skeleton.sort_by(|a, b| {
             let a_type: i32 = a.type_default.parse().unwrap_or(-1);
@@ -496,9 +565,23 @@ impl UserInventory {
             let b_system = b_type >= 0;
             let a_hash = a.name.starts_with('#');
             let b_hash = b.name.starts_with('#');
-            let a_group = if a_system { 0 } else if a_hash { 2 } else { 1 };
-            let b_group = if b_system { 0 } else if b_hash { 2 } else { 1 };
-            a_group.cmp(&b_group).then_with(|| a.name.to_lowercase().cmp(&b.name.to_lowercase()))
+            let a_group = if a_system {
+                0
+            } else if a_hash {
+                2
+            } else {
+                1
+            };
+            let b_group = if b_system {
+                0
+            } else if b_hash {
+                2
+            } else {
+                1
+            };
+            a_group
+                .cmp(&b_group)
+                .then_with(|| a.name.to_lowercase().cmp(&b.name.to_lowercase()))
         });
 
         // Get library inventory from the global library asset manager
@@ -512,27 +595,27 @@ impl UserInventory {
             inventory_lib_owner: library_response.inventory_lib_owner,
         }
     }
-    
+
     /// Add a folder to the inventory
     pub fn add_folder(&mut self, folder: InventoryFolder) {
         self.folders.insert(folder.id, folder);
     }
-    
+
     /// Add an item to the inventory
     pub fn add_item(&mut self, item: InventoryItem) {
         self.items.insert(item.id, item);
     }
-    
+
     /// Get folder by ID
     pub fn get_folder(&self, folder_id: Uuid) -> Option<&InventoryFolder> {
         self.folders.get(&folder_id)
     }
-    
+
     /// Get item by ID
     pub fn get_item(&self, item_id: Uuid) -> Option<&InventoryItem> {
         self.items.get(&item_id)
     }
-    
+
     /// Get all folders in a parent folder
     pub fn get_child_folders(&self, parent_id: Uuid) -> Vec<&InventoryFolder> {
         self.folders
@@ -540,7 +623,7 @@ impl UserInventory {
             .filter(|f| f.parent_id == Some(parent_id))
             .collect()
     }
-    
+
     /// Get all items in a folder
     pub fn get_folder_items(&self, folder_id: Uuid) -> Vec<&InventoryItem> {
         self.items
@@ -560,58 +643,58 @@ mod tests {
         assert_eq!(InventoryFolderType::Texture.as_string(), "0");
         assert_eq!(InventoryFolderType::Object.as_string(), "6");
     }
-    
+
     #[test]
     fn test_default_folder_names() {
         assert_eq!(InventoryFolderType::Root.default_name(), "My Inventory");
         assert_eq!(InventoryFolderType::Texture.default_name(), "Textures");
         assert_eq!(InventoryFolderType::Object.default_name(), "Objects");
     }
-    
+
     #[test]
     fn test_inventory_manager_creation() {
         let manager = InventoryManager::new();
         assert_eq!(manager.cache_size(), 0);
     }
-    
+
     #[test]
     fn test_user_inventory_creation() {
         let user_id = Uuid::new_v4();
         let inventory = UserInventory::create_default(user_id);
-        
+
         assert_eq!(inventory.user_id, user_id);
         assert!(inventory.folders.len() > 1); // Root + system folders
         assert_eq!(inventory.items.len(), 12); // 6 Ruth wearables + 6 COF links
-        
+
         // Check root folder exists
         assert_eq!(inventory.root_folder.folder_type, InventoryFolderType::Root);
         assert_eq!(inventory.root_folder.owner_id, user_id);
     }
-    
+
     #[test]
     fn test_login_inventory_response() {
         let user_id = Uuid::new_v4();
         let inventory = UserInventory::create_default(user_id);
         let response = inventory.to_login_response();
-        
+
         assert_eq!(response.inventory_root.len(), 1);
         assert!(response.inventory_skeleton.len() > 0);
         assert_eq!(response.inventory_lib_root.len(), 0);
     }
-    
+
     #[test]
     fn test_inventory_manager_caching() {
         let mut manager = InventoryManager::new();
         let user_id = Uuid::new_v4();
-        
+
         // First access creates inventory
         let _inventory1 = manager.get_user_inventory(user_id);
         assert_eq!(manager.cache_size(), 1);
-        
+
         // Second access uses cache
         let _inventory2 = manager.get_user_inventory(user_id);
         assert_eq!(manager.cache_size(), 1);
-        
+
         // Clear cache
         manager.clear_user_cache(user_id);
         assert_eq!(manager.cache_size(), 0);

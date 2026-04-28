@@ -14,8 +14,12 @@ pub struct BakedTextureCache {
 impl BakedTextureCache {
     pub fn new(capacity: usize) -> Self {
         Self {
-            cache: RwLock::new(LruCache::new(NonZeroUsize::new(capacity).unwrap_or(NonZeroUsize::new(100).unwrap()))),
-            texture_cache: RwLock::new(LruCache::new(NonZeroUsize::new(capacity * 10).unwrap_or(NonZeroUsize::new(1000).unwrap()))),
+            cache: RwLock::new(LruCache::new(
+                NonZeroUsize::new(capacity).unwrap_or(NonZeroUsize::new(100).unwrap()),
+            )),
+            texture_cache: RwLock::new(LruCache::new(
+                NonZeroUsize::new(capacity * 10).unwrap_or(NonZeroUsize::new(1000).unwrap()),
+            )),
         }
     }
 
@@ -25,7 +29,11 @@ impl BakedTextureCache {
     }
 
     pub fn store(&self, agent_id: Uuid, items: Vec<WearableCacheItem>) {
-        info!("🎨 Storing {} baked textures for agent {}", items.len(), agent_id);
+        info!(
+            "🎨 Storing {} baked textures for agent {}",
+            items.len(),
+            agent_id
+        );
         let mut cache = self.cache.write();
         cache.put(agent_id, items);
     }
@@ -36,7 +44,11 @@ impl BakedTextureCache {
     }
 
     pub fn store_texture(&self, texture_id: Uuid, data: Vec<u8>) {
-        debug!("🎨 Caching baked texture {} ({} bytes)", texture_id, data.len());
+        debug!(
+            "🎨 Caching baked texture {} ({} bytes)",
+            texture_id,
+            data.len()
+        );
         let mut cache = self.texture_cache.write();
         cache.put(texture_id, data);
     }

@@ -101,10 +101,7 @@ impl TerrainPatch {
 
     pub fn with_data(x: i32, y: i32, data: Vec<f32>) -> anyhow::Result<Self> {
         if data.len() != 16 * 16 {
-            anyhow::bail!(
-                "Patch data must be 16x16 (256 floats), got {}",
-                data.len()
-            );
+            anyhow::bail!("Patch data must be 16x16 (256 floats), got {}", data.len());
         }
         Ok(Self { x, y, data })
     }
@@ -240,8 +237,7 @@ impl TerrainCompressor {
 
         for u in 0..16 {
             for n in 0..16 {
-                self.cosine_table16[u * 16 + n] =
-                    ((2.0 * n as f32 + 1.0) * u as f32 * hposz).cos();
+                self.cosine_table16[u * 16 + n] = ((2.0 * n as f32 + 1.0) * u as f32 * hposz).cos();
             }
         }
     }
@@ -295,10 +291,7 @@ impl TerrainCompressor {
 
     pub fn prescan_patch(&self, patch: &[f32]) -> anyhow::Result<PatchHeader> {
         if patch.len() != 16 * 16 {
-            anyhow::bail!(
-                "Patch must be 16x16 (256 floats), got {}",
-                patch.len()
-            );
+            anyhow::bail!("Patch must be 16x16 (256 floats), got {}", patch.len());
         }
 
         let mut zmax = -99999999.0f32;
@@ -446,10 +439,7 @@ impl TerrainCompressor {
         output.pack_bits(header.quant_wbits, 8);
         output.pack_float(header.dc_offset);
         output.pack_bits(header.range, 16);
-        output.pack_bits(
-            header.patch_ids,
-            if header.large_region { 32 } else { 10 },
-        );
+        output.pack_bits(header.patch_ids, if header.large_region { 32 } else { 10 });
 
         wbits as usize
     }
@@ -527,22 +517,30 @@ impl TerrainCompressor {
         // When range ≈ 1.0, all heights are identical - use simplified encoding
         let frange = header.range as f32;
         let rounded_range = (frange * 100.0).round() / 100.0;
-        tracing::debug!("[TERRAIN] Patch ({},{}) range={:.4} rounded={:.2} dc_offset={:.2}",
-            x, y, frange, rounded_range, header.dc_offset);
+        tracing::debug!(
+            "[TERRAIN] Patch ({},{}) range={:.4} rounded={:.2} dc_offset={:.2}",
+            x,
+            y,
+            frange,
+            rounded_range,
+            header.dc_offset
+        );
         if rounded_range == 1.0 {
-            tracing::info!("[TERRAIN] Using FLAT terrain encoding for patch ({},{}) - range={:.4}", x, y, frange);
+            tracing::info!(
+                "[TERRAIN] Using FLAT terrain encoding for patch ({},{}) - range={:.4}",
+                x,
+                y,
+                frange
+            );
             // Flat terrain: QuantWBits=0, DCOffset-0.5, range=1, patchIds, ZERO_EOB
             const ZERO_EOB: i32 = 0x2;
 
-            output.pack_bits(0, 8);                           // QuantWBits = 0
-            output.pack_float(header.dc_offset - 0.5);        // DCOffset - 0.5
-            output.pack_bits(1, 8);                           // Range low byte = 1
-            output.pack_bits(0, 8);                           // Range high byte = 0
-            output.pack_bits(
-                header.patch_ids,
-                if header.large_region { 32 } else { 10 },
-            );                                                // Patch IDs
-            output.pack_bits(ZERO_EOB, 2);                    // End of block
+            output.pack_bits(0, 8); // QuantWBits = 0
+            output.pack_float(header.dc_offset - 0.5); // DCOffset - 0.5
+            output.pack_bits(1, 8); // Range low byte = 1
+            output.pack_bits(0, 8); // Range high byte = 0
+            output.pack_bits(header.patch_ids, if header.large_region { 32 } else { 10 }); // Patch IDs
+            output.pack_bits(ZERO_EOB, 2); // End of block
             return Ok(());
         }
 

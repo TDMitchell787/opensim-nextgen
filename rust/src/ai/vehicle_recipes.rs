@@ -258,20 +258,39 @@ pub fn apply_scale(recipe: &VehicleRecipe, scale_factor: f32) -> (PrimSpec, Vec<
             recipe.root_prim.size[2] * clamped,
         ],
         name: recipe.root_prim.name,
-        sit_pos: recipe.root_prim.sit_pos.map(|p| [p[0] * clamped, p[1] * clamped, p[2] * clamped]),
-        camera_eye: recipe.root_prim.camera_eye.map(|p| [p[0] * clamped, p[1] * clamped, p[2] * clamped]),
-        camera_at: recipe.root_prim.camera_at.map(|p| [p[0] * clamped, p[1] * clamped, p[2] * clamped]),
+        sit_pos: recipe
+            .root_prim
+            .sit_pos
+            .map(|p| [p[0] * clamped, p[1] * clamped, p[2] * clamped]),
+        camera_eye: recipe
+            .root_prim
+            .camera_eye
+            .map(|p| [p[0] * clamped, p[1] * clamped, p[2] * clamped]),
+        camera_at: recipe
+            .root_prim
+            .camera_at
+            .map(|p| [p[0] * clamped, p[1] * clamped, p[2] * clamped]),
     };
-    let children: Vec<ChildPrimSpec> = recipe.children.iter().map(|c| {
-        ChildPrimSpec {
+    let children: Vec<ChildPrimSpec> = recipe
+        .children
+        .iter()
+        .map(|c| ChildPrimSpec {
             shape: c.shape,
-            offset: [c.offset[0] * clamped, c.offset[1] * clamped, c.offset[2] * clamped],
+            offset: [
+                c.offset[0] * clamped,
+                c.offset[1] * clamped,
+                c.offset[2] * clamped,
+            ],
             rotation: c.rotation,
-            size: [c.size[0] * clamped, c.size[1] * clamped, c.size[2] * clamped],
+            size: [
+                c.size[0] * clamped,
+                c.size[1] * clamped,
+                c.size[2] * clamped,
+            ],
             name: c.name,
             script_name: c.script_name,
-        }
-    }).collect();
+        })
+        .collect();
     (root, children)
 }
 
@@ -310,7 +329,11 @@ mod tests {
     fn test_plane_has_child_scripts() {
         let plane = get_recipe("plane").unwrap();
         assert_eq!(plane.children.len(), 8);
-        let scripted: Vec<_> = plane.children.iter().filter(|c| c.script_name.is_some()).collect();
+        let scripted: Vec<_> = plane
+            .children
+            .iter()
+            .filter(|c| c.script_name.is_some())
+            .collect();
         assert_eq!(scripted.len(), 5);
     }
 

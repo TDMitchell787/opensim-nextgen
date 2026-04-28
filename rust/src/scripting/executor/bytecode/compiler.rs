@@ -1,8 +1,8 @@
 use anyhow::{anyhow, Result};
 
-use crate::scripting::lsl_interpreter::{ASTNode, Token};
-use crate::scripting::{LSLValue, LSLVector, LSLRotation};
 use super::opcodes::*;
+use crate::scripting::lsl_interpreter::{ASTNode, Token};
+use crate::scripting::{LSLRotation, LSLValue, LSLVector};
 
 pub struct BytecodeCompiler {
     locals: Vec<Vec<(String, u16)>>,
@@ -37,7 +37,12 @@ impl BytecodeCompiler {
 
         // Second pass: compile global initializers
         for node in statements {
-            if let ASTNode::Variable { var_type, name, value } = node {
+            if let ASTNode::Variable {
+                var_type,
+                name,
+                value,
+            } = node
+            {
                 let global_idx = program.global_initializers.add_global(name);
                 if let Some(init_expr) = value {
                     self.compile_expr(&mut program.global_initializers, init_expr)?;
@@ -45,14 +50,23 @@ impl BytecodeCompiler {
                     let default_val = LSLValue::type_default(var_type);
                     program.global_initializers.emit(OpCode::Push(default_val));
                 }
-                program.global_initializers.emit(OpCode::StoreGlobal(global_idx));
+                program
+                    .global_initializers
+                    .emit(OpCode::StoreGlobal(global_idx));
             }
         }
 
         // Third pass: compile functions
         for node in statements {
-            if let ASTNode::Function { name, return_type, parameters, body } = node {
-                let func = self.compile_function(name, return_type, parameters, body, &program.globals)?;
+            if let ASTNode::Function {
+                name,
+                return_type,
+                parameters,
+                body,
+            } = node
+            {
+                let func =
+                    self.compile_function(name, return_type, parameters, body, &program.globals)?;
                 program.functions.push(func);
             }
         }
@@ -62,8 +76,18 @@ impl BytecodeCompiler {
             if let ASTNode::State { name, body } = node {
                 let mut events = Vec::new();
                 for event_node in body {
-                    if let ASTNode::Event { name: event_name, parameters, body: event_body } = event_node {
-                        let compiled = self.compile_event(event_name, parameters, event_body, &program.globals)?;
+                    if let ASTNode::Event {
+                        name: event_name,
+                        parameters,
+                        body: event_body,
+                    } = event_node
+                    {
+                        let compiled = self.compile_event(
+                            event_name,
+                            parameters,
+                            event_body,
+                            &program.globals,
+                        )?;
                         events.push(compiled);
                     }
                 }
@@ -165,7 +189,11 @@ impl BytecodeCompiler {
                 }
             }
 
-            ASTNode::Variable { var_type, name, value } => {
+            ASTNode::Variable {
+                var_type,
+                name,
+                value,
+            } => {
                 if let Some(init_expr) = value {
                     self.compile_expr(chunk, init_expr)?;
                 } else {
@@ -182,7 +210,11 @@ impl BytecodeCompiler {
                 self.compile_store(chunk, target)?;
             }
 
-            ASTNode::CompoundAssignment { target, operator, value } => {
+            ASTNode::CompoundAssignment {
+                target,
+                operator,
+                value,
+            } => {
                 self.compile_expr(chunk, target)?;
                 self.compile_expr(chunk, value)?;
                 match operator {
@@ -197,7 +229,11 @@ impl BytecodeCompiler {
                 self.compile_store(chunk, target)?;
             }
 
-            ASTNode::BinaryOp { left, operator, right } => {
+            ASTNode::BinaryOp {
+                left,
+                operator,
+                right,
+            } => {
                 // Short-circuit for logical AND/OR
                 match operator {
                     Token::And => {
@@ -236,7 +272,9 @@ impl BytecodeCompiler {
                             Token::BitXor => chunk.emit(OpCode::BitXor),
                             Token::ShiftLeft => chunk.emit(OpCode::Shl),
                             Token::ShiftRight => chunk.emit(OpCode::Shr),
-                            _ => return Err(anyhow!("Unsupported binary operator: {:?}", operator)),
+                            _ => {
+                                return Err(anyhow!("Unsupported binary operator: {:?}", operator))
+                            }
                         };
                     }
                 }
@@ -340,7 +378,11 @@ impl BytecodeCompiler {
                 chunk.emit(OpCode::Call(func_idx));
             }
 
-            ASTNode::If { condition, then_body, else_body } => {
+            ASTNode::If {
+                condition,
+                then_body,
+                else_body,
+            } => {
                 self.compile_expr(chunk, condition)?;
                 let else_jump = chunk.emit(OpCode::JumpIfFalse(0));
                 chunk.emit(OpCode::Pop);
@@ -404,7 +446,12 @@ impl BytecodeCompiler {
                 chunk.emit(OpCode::Pop);
             }
 
-            ASTNode::For { init, condition, increment, body } => {
+            ASTNode::For {
+                init,
+                condition,
+                increment,
+                body,
+            } => {
                 chunk.emit(OpCode::PushFrame);
                 self.begin_scope();
 
@@ -574,22 +621,18 @@ mod tests {
             },
             ASTNode::State {
                 name: "default".to_string(),
-                body: vec![
-                    ASTNode::Event {
-                        name: "state_entry".to_string(),
-                        parameters: vec![],
-                        body: vec![
-                            ASTNode::Assignment {
-                                target: Box::new(ASTNode::Identifier("x".to_string())),
-                                value: Box::new(ASTNode::BinaryOp {
-                                    left: Box::new(ASTNode::Identifier("x".to_string())),
-                                    operator: Token::Plus,
-                                    right: Box::new(ASTNode::Literal(LSLValue::Integer(1))),
-                                }),
-                            },
-                        ],
-                    },
-                ],
+                body: vec![ASTNode::Event {
+                    name: "state_entry".to_string(),
+                    parameters: vec![],
+                    body: vec![ASTNode::Assignment {
+                        target: Box::new(ASTNode::Identifier("x".to_string())),
+                        value: Box::new(ASTNode::BinaryOp {
+                            left: Box::new(ASTNode::Identifier("x".to_string())),
+                            operator: Token::Plus,
+                            right: Box::new(ASTNode::Literal(LSLValue::Integer(1))),
+                        }),
+                    }],
+                }],
             },
         ]);
 
@@ -607,29 +650,23 @@ mod tests {
 
     #[test]
     fn test_compile_while_loop() -> Result<()> {
-        let ast = ASTNode::Program(vec![
-            ASTNode::State {
-                name: "default".to_string(),
-                body: vec![
-                    ASTNode::Event {
-                        name: "state_entry".to_string(),
-                        parameters: vec![],
-                        body: vec![
-                            ASTNode::While {
-                                condition: Box::new(ASTNode::BinaryOp {
-                                    left: Box::new(ASTNode::Identifier("i".to_string())),
-                                    operator: Token::Less,
-                                    right: Box::new(ASTNode::Literal(LSLValue::Integer(5))),
-                                }),
-                                body: vec![
-                                    ASTNode::PostIncrement(Box::new(ASTNode::Identifier("i".to_string()))),
-                                ],
-                            },
-                        ],
-                    },
-                ],
-            },
-        ]);
+        let ast = ASTNode::Program(vec![ASTNode::State {
+            name: "default".to_string(),
+            body: vec![ASTNode::Event {
+                name: "state_entry".to_string(),
+                parameters: vec![],
+                body: vec![ASTNode::While {
+                    condition: Box::new(ASTNode::BinaryOp {
+                        left: Box::new(ASTNode::Identifier("i".to_string())),
+                        operator: Token::Less,
+                        right: Box::new(ASTNode::Literal(LSLValue::Integer(5))),
+                    }),
+                    body: vec![ASTNode::PostIncrement(Box::new(ASTNode::Identifier(
+                        "i".to_string(),
+                    )))],
+                }],
+            }],
+        }]);
 
         let mut compiler = BytecodeCompiler::new();
         let program = compiler.compile_program(&ast)?;

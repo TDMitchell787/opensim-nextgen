@@ -1,4 +1,4 @@
-use bytes::{BytesMut, BufMut};
+use bytes::{BufMut, BytesMut};
 
 pub struct ZeroEncoder {
     dest: BytesMut,
@@ -19,8 +19,8 @@ impl ZeroEncoder {
             // 00 FF = 255 zeros, not 256!
             while self.zero_count > 255 {
                 self.dest.put_u8(0x00);
-                self.dest.put_u8(0xFF);  // 255 zeros
-                self.zero_count -= 255;  // Fixed: was incorrectly -= 256
+                self.dest.put_u8(0xFF); // 255 zeros
+                self.zero_count -= 255; // Fixed: was incorrectly -= 256
             }
             if self.zero_count > 0 {
                 self.dest.put_u8(0x00);
@@ -115,12 +115,13 @@ impl ZeroEncoder {
     pub fn len(&self) -> usize {
         // Calculate how many 00 NN pairs needed for zero_count zeros
         // Each 00 NN can encode up to 255 zeros
-        self.dest.len() + if self.zero_count > 0 {
-            let pairs = (self.zero_count + 254) / 255; // ceiling division
-            2 * pairs
-        } else {
-            0
-        }
+        self.dest.len()
+            + if self.zero_count > 0 {
+                let pairs = (self.zero_count + 254) / 255; // ceiling division
+                2 * pairs
+            } else {
+                0
+            }
     }
 }
 

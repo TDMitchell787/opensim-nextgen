@@ -7,13 +7,13 @@
 
 use anyhow::{anyhow, Result};
 use async_trait::async_trait;
-use base64::{Engine, engine::general_purpose};
+use base64::{engine::general_purpose, Engine};
 use reqwest::Client;
 use std::collections::HashMap;
 use std::time::Duration;
 use tracing::{debug, info, warn};
 
-use crate::services::traits::{AssetServiceTrait, AssetBase, AssetMetadata};
+use crate::services::traits::{AssetBase, AssetMetadata, AssetServiceTrait};
 
 pub struct RemoteAssetService {
     client: Client,
@@ -35,7 +35,11 @@ impl RemoteAssetService {
         }
     }
 
-    async fn send_request(&self, method: &str, params: &HashMap<String, String>) -> Result<HashMap<String, String>> {
+    async fn send_request(
+        &self,
+        method: &str,
+        params: &HashMap<String, String>,
+    ) -> Result<HashMap<String, String>> {
         let url = format!("{}/assets", self.server_uri);
 
         let mut form_data = params.clone();
@@ -43,7 +47,8 @@ impl RemoteAssetService {
 
         debug!("Asset service request: {} to {}", method, url);
 
-        let response = self.client
+        let response = self
+            .client
             .post(&url)
             .form(&form_data)
             .send()
@@ -51,10 +56,15 @@ impl RemoteAssetService {
             .map_err(|e| anyhow!("Asset service request failed: {}", e))?;
 
         if !response.status().is_success() {
-            return Err(anyhow!("Asset service returned status: {}", response.status()));
+            return Err(anyhow!(
+                "Asset service returned status: {}",
+                response.status()
+            ));
         }
 
-        let body = response.text().await
+        let body = response
+            .text()
+            .await
             .map_err(|e| anyhow!("Failed to read asset service response: {}", e))?;
 
         self.parse_response(&body)
@@ -65,7 +75,8 @@ impl RemoteAssetService {
 
         debug!("Asset service GET: {}", url);
 
-        let response = self.client
+        let response = self
+            .client
             .get(&url)
             .send()
             .await
@@ -79,14 +90,17 @@ impl RemoteAssetService {
             return Err(anyhow!("Asset GET returned status: {}", response.status()));
         }
 
-        let bytes = response.bytes().await
+        let bytes = response
+            .bytes()
+            .await
             .map_err(|e| anyhow!("Failed to read asset data: {}", e))?;
 
         Ok(Some(bytes.to_vec()))
     }
 
     fn parse_response(&self, body: &str) -> Result<HashMap<String, String>> {
-        if let Some(xml_result) = crate::services::robust::xml_response::try_parse_xml_to_flat(body) {
+        if let Some(xml_result) = crate::services::robust::xml_response::try_parse_xml_to_flat(body)
+        {
             return Ok(xml_result);
         }
 
@@ -100,38 +114,50 @@ impl RemoteAssetService {
         Ok(result)
     }
 
-    fn params_to_asset_base(&self, params: &HashMap<String, String>, data: Vec<u8>) -> Result<AssetBase> {
+    fn params_to_asset_base(
+        &self,
+        params: &HashMap<String, String>,
+        data: Vec<u8>,
+    ) -> Result<AssetBase> {
         Ok(AssetBase {
-            id: params.get("ID")
+            id: params
+                .get("ID")
                 .or_else(|| params.get("id"))
                 .cloned()
                 .unwrap_or_default(),
-            name: params.get("Name")
+            name: params
+                .get("Name")
                 .or_else(|| params.get("name"))
                 .cloned()
                 .unwrap_or_default(),
-            description: params.get("Description")
+            description: params
+                .get("Description")
                 .or_else(|| params.get("description"))
                 .cloned()
                 .unwrap_or_default(),
-            asset_type: params.get("Type")
+            asset_type: params
+                .get("Type")
                 .or_else(|| params.get("type"))
                 .and_then(|s| s.parse().ok())
                 .unwrap_or(0),
-            local: params.get("Local")
+            local: params
+                .get("Local")
                 .or_else(|| params.get("local"))
                 .map(|s| s == "True" || s == "true" || s == "1")
                 .unwrap_or(false),
-            temporary: params.get("Temporary")
+            temporary: params
+                .get("Temporary")
                 .or_else(|| params.get("temporary"))
                 .map(|s| s == "True" || s == "true" || s == "1")
                 .unwrap_or(false),
             data,
-            creator_id: params.get("CreatorID")
+            creator_id: params
+                .get("CreatorID")
                 .or_else(|| params.get("creator_id"))
                 .cloned()
                 .unwrap_or_default(),
-            flags: params.get("Flags")
+            flags: params
+                .get("Flags")
                 .or_else(|| params.get("flags"))
                 .and_then(|s| s.parse().ok())
                 .unwrap_or(0),
@@ -140,39 +166,48 @@ impl RemoteAssetService {
 
     fn params_to_asset_metadata(&self, params: &HashMap<String, String>) -> Result<AssetMetadata> {
         Ok(AssetMetadata {
-            id: params.get("ID")
+            id: params
+                .get("ID")
                 .or_else(|| params.get("id"))
                 .cloned()
                 .unwrap_or_default(),
-            name: params.get("Name")
+            name: params
+                .get("Name")
                 .or_else(|| params.get("name"))
                 .cloned()
                 .unwrap_or_default(),
-            description: params.get("Description")
+            description: params
+                .get("Description")
                 .or_else(|| params.get("description"))
                 .cloned()
                 .unwrap_or_default(),
-            asset_type: params.get("Type")
+            asset_type: params
+                .get("Type")
                 .or_else(|| params.get("type"))
                 .and_then(|s| s.parse().ok())
                 .unwrap_or(0),
-            local: params.get("Local")
+            local: params
+                .get("Local")
                 .or_else(|| params.get("local"))
                 .map(|s| s == "True" || s == "true" || s == "1")
                 .unwrap_or(false),
-            temporary: params.get("Temporary")
+            temporary: params
+                .get("Temporary")
                 .or_else(|| params.get("temporary"))
                 .map(|s| s == "True" || s == "true" || s == "1")
                 .unwrap_or(false),
-            creator_id: params.get("CreatorID")
+            creator_id: params
+                .get("CreatorID")
                 .or_else(|| params.get("creator_id"))
                 .cloned()
                 .unwrap_or_default(),
-            flags: params.get("Flags")
+            flags: params
+                .get("Flags")
                 .or_else(|| params.get("flags"))
                 .and_then(|s| s.parse().ok())
                 .unwrap_or(0),
-            created_date: params.get("CreatedDate")
+            created_date: params
+                .get("CreatedDate")
                 .or_else(|| params.get("create_time"))
                 .and_then(|s| s.parse().ok())
                 .unwrap_or(0),
@@ -187,7 +222,10 @@ impl RemoteAssetService {
         params.insert("Type".to_string(), asset.asset_type.to_string());
         params.insert("Local".to_string(), asset.local.to_string());
         params.insert("Temporary".to_string(), asset.temporary.to_string());
-        params.insert("Data".to_string(), general_purpose::STANDARD.encode(&asset.data));
+        params.insert(
+            "Data".to_string(),
+            general_purpose::STANDARD.encode(&asset.data),
+        );
         params.insert("CreatorID".to_string(), asset.creator_id.clone());
         params.insert("Flags".to_string(), asset.flags.to_string());
         params
@@ -204,7 +242,8 @@ impl AssetServiceTrait for RemoteAssetService {
 
         let metadata_response = self.send_request("get", &params).await?;
 
-        let result = metadata_response.get("result")
+        let result = metadata_response
+            .get("result")
             .map(|s| s != "null" && s != "Failure")
             .unwrap_or(true);
 
@@ -213,7 +252,9 @@ impl AssetServiceTrait for RemoteAssetService {
         }
 
         let data = if let Some(data_str) = metadata_response.get("Data") {
-            general_purpose::STANDARD.decode(data_str).unwrap_or_default()
+            general_purpose::STANDARD
+                .decode(data_str)
+                .unwrap_or_default()
         } else {
             self.get_asset_raw(id).await?.unwrap_or_default()
         };
@@ -229,7 +270,8 @@ impl AssetServiceTrait for RemoteAssetService {
 
         let response = self.send_request("get_metadata", &params).await?;
 
-        let result = response.get("result")
+        let result = response
+            .get("result")
             .map(|s| s != "null" && s != "Failure")
             .unwrap_or(true);
 
@@ -251,12 +293,14 @@ impl AssetServiceTrait for RemoteAssetService {
         let params = self.asset_to_params(asset);
         let response = self.send_request("store", &params).await?;
 
-        let id = response.get("ID")
+        let id = response
+            .get("ID")
             .or_else(|| response.get("id"))
             .cloned()
             .unwrap_or_else(|| asset.id.clone());
 
-        let success = response.get("result")
+        let success = response
+            .get("result")
             .map(|s| s == "true" || s == "True" || s == "TRUE" || s == &id)
             .unwrap_or(true);
 
@@ -264,7 +308,10 @@ impl AssetServiceTrait for RemoteAssetService {
             info!("Remote: Stored asset: {}", id);
             Ok(id)
         } else {
-            let message = response.get("message").cloned().unwrap_or_else(|| "Unknown error".to_string());
+            let message = response
+                .get("message")
+                .cloned()
+                .unwrap_or_else(|| "Unknown error".to_string());
             warn!("Remote: Failed to store asset: {}", message);
             Err(anyhow!("Failed to store asset: {}", message))
         }
@@ -278,7 +325,8 @@ impl AssetServiceTrait for RemoteAssetService {
 
         let response = self.send_request("delete", &params).await?;
 
-        Ok(response.get("result")
+        Ok(response
+            .get("result")
             .map(|s| s == "true" || s == "True" || s == "TRUE")
             .unwrap_or(false))
     }
@@ -291,9 +339,11 @@ impl AssetServiceTrait for RemoteAssetService {
 
         let response = self.send_request("get_metadata", &params).await?;
 
-        Ok(response.get("result")
+        Ok(response
+            .get("result")
             .map(|s| s != "null" && s != "Failure")
-            .unwrap_or(false) && response.contains_key("ID"))
+            .unwrap_or(false)
+            && response.contains_key("ID"))
     }
 }
 

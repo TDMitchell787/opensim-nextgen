@@ -3,15 +3,15 @@
 //! Handles identity creation, authentication, and management for zero trust
 //! network access in OpenSim Next.
 
+use super::config::{ZitiConfig, ZitiIdentityConfig, ZitiIdentityType};
+use super::ffi::{ZitiFFI, ZitiLogLevel};
+use anyhow::{anyhow, Result};
+use serde::{Deserialize, Serialize};
 use std::collections::HashMap;
 use std::path::{Path, PathBuf};
 use std::sync::Arc;
 use tokio::sync::RwLock;
 use uuid::Uuid;
-use serde::{Deserialize, Serialize};
-use anyhow::{Result, anyhow};
-use super::config::{ZitiConfig, ZitiIdentityConfig, ZitiIdentityType};
-use super::ffi::{ZitiFFI, ZitiLogLevel};
 
 /// Identity manager for OpenZiti zero trust authentication
 pub struct ZitiIdentityManager {
@@ -27,46 +27,46 @@ pub struct ZitiIdentityManager {
 pub struct ZitiIdentity {
     /// Unique identity ID
     pub id: String,
-    
+
     /// Identity name
     pub name: String,
-    
+
     /// Identity type
     pub identity_type: ZitiIdentityType,
-    
+
     /// Certificate data
     pub certificate: Option<String>,
-    
+
     /// Private key data (encrypted)
     pub private_key: Option<String>,
-    
+
     /// CA bundle
     pub ca_bundle: Option<String>,
-    
+
     /// Identity attributes
     pub attributes: HashMap<String, String>,
-    
+
     /// Tags for policy matching
     pub tags: Vec<String>,
-    
+
     /// Expiration timestamp
     pub expires_at: Option<u64>,
-    
+
     /// Creation timestamp
     pub created_at: u64,
-    
+
     /// Last authentication timestamp
     pub last_auth: Option<u64>,
-    
+
     /// Authentication attempts
     pub auth_attempts: u32,
-    
+
     /// Status
     pub status: ZitiIdentityStatus,
-    
+
     /// Associated services
     pub services: Vec<String>,
-    
+
     /// Policies that apply to this identity
     pub policies: Vec<String>,
 }
@@ -76,19 +76,19 @@ pub struct ZitiIdentity {
 pub enum ZitiIdentityStatus {
     /// Identity is active and can authenticate
     Active,
-    
+
     /// Identity is disabled
     Disabled,
-    
+
     /// Identity is expired
     Expired,
-    
+
     /// Identity is revoked
     Revoked,
-    
+
     /// Identity is pending enrollment
     Pending,
-    
+
     /// Identity enrollment failed
     Failed,
 }
@@ -98,19 +98,19 @@ pub enum ZitiIdentityStatus {
 pub struct ZitiEnrollmentConfig {
     /// Enrollment token
     pub token: String,
-    
+
     /// Enrollment URL
     pub url: String,
-    
+
     /// Identity name
     pub name: String,
-    
+
     /// Certificate validity period in days
     pub validity_days: u32,
-    
+
     /// Additional attributes
     pub attributes: HashMap<String, String>,
-    
+
     /// Tags
     pub tags: Vec<String>,
 }
@@ -120,16 +120,16 @@ pub struct ZitiEnrollmentConfig {
 pub struct ZitiAuthResult {
     /// Authentication success
     pub success: bool,
-    
+
     /// Identity information
     pub identity: Option<ZitiIdentity>,
-    
+
     /// Error message if authentication failed
     pub error: Option<String>,
-    
+
     /// Authentication token (if applicable)
     pub token: Option<String>,
-    
+
     /// Session expiration
     pub expires_at: Option<u64>,
 }
@@ -139,16 +139,16 @@ pub struct ZitiAuthResult {
 pub struct ZitiIdentityVerification {
     /// Identity ID to verify
     pub identity_id: String,
-    
+
     /// Verification challenge
     pub challenge: String,
-    
+
     /// Expected response
     pub expected_response: String,
-    
+
     /// Verification timestamp
     pub timestamp: u64,
-    
+
     /// Verification expiration
     pub expires_at: u64,
 }
@@ -175,7 +175,7 @@ impl ZitiIdentityManager {
             ffi.initialize(
                 "https://controller.ziti.local:1280", // Default controller
                 &self.config.cert_file.to_string_lossy(),
-                ZitiLogLevel::Info
+                ZitiLogLevel::Info,
             )?;
         }
 
@@ -197,7 +197,7 @@ impl ZitiIdentityManager {
 
         // Load identity from files
         let identity = self.load_identity_from_files().await?;
-        
+
         // Verify identity status
         if identity.status != ZitiIdentityStatus::Active {
             return Ok(ZitiAuthResult {
@@ -215,7 +215,7 @@ impl ZitiIdentityManager {
                 .duration_since(std::time::UNIX_EPOCH)
                 .unwrap_or_default()
                 .as_secs();
-            
+
             if expires_at < now {
                 return Ok(ZitiAuthResult {
                     success: false,
@@ -300,7 +300,8 @@ impl ZitiIdentityManager {
                 std::time::SystemTime::now()
                     .duration_since(std::time::UNIX_EPOCH)
                     .unwrap_or_default()
-                    .as_secs() + (config.validity_days as u64 * 24 * 3600)
+                    .as_secs()
+                    + (config.validity_days as u64 * 24 * 3600),
             ),
             created_at: std::time::SystemTime::now()
                 .duration_since(std::time::UNIX_EPOCH)
@@ -330,7 +331,7 @@ impl ZitiIdentityManager {
     /// Verify an identity
     pub async fn verify_identity(&self, verification: ZitiIdentityVerification) -> Result<bool> {
         let identities = self.identities.read().await;
-        
+
         if let Some(identity) = identities.get(&verification.identity_id) {
             if identity.status != ZitiIdentityStatus::Active {
                 return Ok(false);
@@ -348,7 +349,7 @@ impl ZitiIdentityManager {
 
             // Perform verification (simplified)
             let verification_success = self.perform_verification(&verification).await?;
-            
+
             Ok(verification_success)
         } else {
             Ok(false)
@@ -377,7 +378,7 @@ impl ZitiIdentityManager {
     pub async fn update_identity(&mut self, identity: ZitiIdentity) -> Result<()> {
         let mut identities = self.identities.write().await;
         identities.insert(identity.id.clone(), identity.clone());
-        
+
         // Save to disk if it's the current identity
         if let Some(current) = self.get_current_identity().await {
             if current.id == identity.id {
@@ -391,7 +392,7 @@ impl ZitiIdentityManager {
     /// Delete identity
     pub async fn delete_identity(&mut self, identity_id: &str) -> Result<()> {
         let mut identities = self.identities.write().await;
-        
+
         if let Some(identity) = identities.remove(identity_id) {
             // Clear current identity if it's the one being deleted
             let current_identity = self.current_identity.read().await;
@@ -419,20 +420,29 @@ impl ZitiIdentityManager {
     pub async fn get_statistics(&self) -> HashMap<String, u64> {
         let identities = self.identities.read().await;
         let mut stats = HashMap::new();
-        
+
         stats.insert("total_identities".to_string(), identities.len() as u64);
-        stats.insert("active_identities".to_string(), 
-                    identities.values()
-                        .filter(|i| i.status == ZitiIdentityStatus::Active)
-                        .count() as u64);
-        stats.insert("expired_identities".to_string(),
-                    identities.values()
-                        .filter(|i| i.status == ZitiIdentityStatus::Expired)
-                        .count() as u64);
-        stats.insert("disabled_identities".to_string(),
-                    identities.values()
-                        .filter(|i| i.status == ZitiIdentityStatus::Disabled)
-                        .count() as u64);
+        stats.insert(
+            "active_identities".to_string(),
+            identities
+                .values()
+                .filter(|i| i.status == ZitiIdentityStatus::Active)
+                .count() as u64,
+        );
+        stats.insert(
+            "expired_identities".to_string(),
+            identities
+                .values()
+                .filter(|i| i.status == ZitiIdentityStatus::Expired)
+                .count() as u64,
+        );
+        stats.insert(
+            "disabled_identities".to_string(),
+            identities
+                .values()
+                .filter(|i| i.status == ZitiIdentityStatus::Disabled)
+                .count() as u64,
+        );
 
         if self.is_authenticated {
             stats.insert("authenticated".to_string(), 1);
@@ -453,21 +463,20 @@ impl ZitiIdentityManager {
 
     /// Load identity from certificate and key files
     async fn load_identity_from_files(&self) -> Result<ZitiIdentity> {
-        let cert_content = tokio::fs::read_to_string(&self.config.cert_file).await
-            .map_err(|e| anyhow!(
-                format!("Failed to read certificate file: {}", e)
-            ))?;
+        let cert_content = tokio::fs::read_to_string(&self.config.cert_file)
+            .await
+            .map_err(|e| anyhow!(format!("Failed to read certificate file: {}", e)))?;
 
-        let key_content = tokio::fs::read_to_string(&self.config.key_file).await
-            .map_err(|e| anyhow!(
-                format!("Failed to read private key file: {}", e)
-            ))?;
+        let key_content = tokio::fs::read_to_string(&self.config.key_file)
+            .await
+            .map_err(|e| anyhow!(format!("Failed to read private key file: {}", e)))?;
 
         let ca_bundle = if let Some(ca_path) = &self.config.ca_bundle {
-            Some(tokio::fs::read_to_string(ca_path).await
-                .map_err(|e| anyhow!(
-                    format!("Failed to read CA bundle: {}", e)
-                ))?)
+            Some(
+                tokio::fs::read_to_string(ca_path)
+                    .await
+                    .map_err(|e| anyhow!(format!("Failed to read CA bundle: {}", e)))?,
+            )
         } else {
             None
         };
@@ -497,25 +506,22 @@ impl ZitiIdentityManager {
     /// Save identity to certificate and key files
     async fn save_identity_to_files(&self, identity: &ZitiIdentity) -> Result<()> {
         if let Some(cert) = &identity.certificate {
-            tokio::fs::write(&self.config.cert_file, cert).await
-                .map_err(|e| anyhow!(
-                    format!("Failed to write certificate file: {}", e)
-                ))?;
+            tokio::fs::write(&self.config.cert_file, cert)
+                .await
+                .map_err(|e| anyhow!(format!("Failed to write certificate file: {}", e)))?;
         }
 
         if let Some(key) = &identity.private_key {
-            tokio::fs::write(&self.config.key_file, key).await
-                .map_err(|e| anyhow!(
-                    format!("Failed to write private key file: {}", e)
-                ))?;
+            tokio::fs::write(&self.config.key_file, key)
+                .await
+                .map_err(|e| anyhow!(format!("Failed to write private key file: {}", e)))?;
         }
 
         if let Some(ca_bundle) = &identity.ca_bundle {
             if let Some(ca_path) = &self.config.ca_bundle {
-                tokio::fs::write(ca_path, ca_bundle).await
-                    .map_err(|e| anyhow!(
-                        format!("Failed to write CA bundle: {}", e)
-                    ))?;
+                tokio::fs::write(ca_path, ca_bundle)
+                    .await
+                    .map_err(|e| anyhow!(format!("Failed to write CA bundle: {}", e)))?;
             }
         }
 
@@ -526,7 +532,7 @@ impl ZitiIdentityManager {
     async fn handle_enrollment(&mut self) -> Result<ZitiAuthResult> {
         if let Some(auto_enroll) = &self.config.auto_enroll {
             tracing::info!("Auto-enrolling identity using token");
-            
+
             let enrollment_config = ZitiEnrollmentConfig {
                 token: auto_enroll.token.clone(),
                 url: auto_enroll.endpoint.clone(),
@@ -556,13 +562,15 @@ impl ZitiIdentityManager {
                     error: Some(format!("Enrollment failed: {}", e)),
                     token: None,
                     expires_at: None,
-                })
+                }),
             }
         } else {
             Ok(ZitiAuthResult {
                 success: false,
                 identity: None,
-                error: Some("No identity files found and auto-enrollment not configured".to_string()),
+                error: Some(
+                    "No identity files found and auto-enrollment not configured".to_string(),
+                ),
                 token: None,
                 expires_at: None,
             })
@@ -570,12 +578,18 @@ impl ZitiIdentityManager {
     }
 
     /// Perform enrollment with controller
-    async fn perform_enrollment(&self, mut identity: ZitiIdentity, _config: &ZitiEnrollmentConfig) -> Result<ZitiIdentity> {
+    async fn perform_enrollment(
+        &self,
+        mut identity: ZitiIdentity,
+        _config: &ZitiEnrollmentConfig,
+    ) -> Result<ZitiIdentity> {
         // Simplified enrollment - in real implementation would communicate with controller
         identity.status = ZitiIdentityStatus::Active;
-        identity.certificate = Some("-----BEGIN CERTIFICATE-----\n...\n-----END CERTIFICATE-----".to_string());
-        identity.private_key = Some("-----BEGIN PRIVATE KEY-----\n...\n-----END PRIVATE KEY-----".to_string());
-        
+        identity.certificate =
+            Some("-----BEGIN CERTIFICATE-----\n...\n-----END CERTIFICATE-----".to_string());
+        identity.private_key =
+            Some("-----BEGIN PRIVATE KEY-----\n...\n-----END PRIVATE KEY-----".to_string());
+
         Ok(identity)
     }
 

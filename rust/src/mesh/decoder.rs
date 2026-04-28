@@ -3,11 +3,13 @@ use flate2::read::ZlibDecoder;
 use std::io::Read;
 use tracing::warn;
 
-use super::encoder::{MeshFace, MeshGeometry, MeshSkinInfo, VertexWeights, JointInfluence};
+use super::encoder::{JointInfluence, MeshFace, MeshGeometry, MeshSkinInfo, VertexWeights};
 use super::types::MeshAssetHeader;
 
 pub fn decode_lod_geometry(data: &[u8], header: &MeshAssetHeader) -> Result<MeshGeometry> {
-    let block_ref = header.high_lod.as_ref()
+    let block_ref = header
+        .high_lod
+        .as_ref()
         .ok_or_else(|| anyhow!("No high_lod block in mesh header"))?;
     decode_lod_block(data, header.data_start, block_ref, data, header)
 }
@@ -22,7 +24,8 @@ pub fn decode_lod_geometry_level(
         LodLevel::Medium => header.medium_lod.as_ref(),
         LodLevel::Low => header.low_lod.as_ref(),
         LodLevel::Lowest => header.lowest_lod.as_ref(),
-    }.ok_or_else(|| anyhow!("No {:?} LOD block in mesh header", level))?;
+    }
+    .ok_or_else(|| anyhow!("No {:?} LOD block in mesh header", level))?;
     decode_lod_block(data, header.data_start, block_ref, data, header)
 }
 
@@ -43,39 +46,45 @@ fn decode_lod_block(
 ) -> Result<MeshGeometry> {
     let abs_offset = data_start + block_ref.offset;
     if abs_offset + block_ref.size > asset_data.len() {
-        bail!("LOD block out of bounds: offset={} size={} datalen={}",
-            abs_offset, block_ref.size, asset_data.len());
+        bail!(
+            "LOD block out of bounds: offset={} size={} datalen={}",
+            abs_offset,
+            block_ref.size,
+            asset_data.len()
+        );
     }
 
     let compressed = &asset_data[abs_offset..abs_offset + block_ref.size];
     let mut decoder = ZlibDecoder::new(compressed);
     let mut decompressed = Vec::new();
-    decoder.read_to_end(&mut decompressed)
+    decoder
+        .read_to_end(&mut decompressed)
         .map_err(|e| anyhow!("LOD zlib decompression failed: {}", e))?;
 
     let faces = parse_lod_llsd(&decompressed)?;
 
     let skin_info = decode_skin_block(asset_data, header)?;
 
-    Ok(MeshGeometry {
-        faces,
-        skin_info,
-    })
+    Ok(MeshGeometry { faces, skin_info })
 }
 
 fn parse_lod_llsd(data: &[u8]) -> Result<Vec<MeshFace>> {
     let mut pos = 0;
 
     if pos >= data.len() || data[pos] != b'[' {
-        bail!("LOD data doesn't start with LLSD array marker '[', got 0x{:02x} at {}",
-            data.get(pos).copied().unwrap_or(0), pos);
+        bail!(
+            "LOD data doesn't start with LLSD array marker '[', got 0x{:02x} at {}",
+            data.get(pos).copied().unwrap_or(0),
+            pos
+        );
     }
     pos += 1;
 
     if pos + 4 > data.len() {
         bail!("Truncated face count");
     }
-    let face_count = u32::from_be_bytes([data[pos], data[pos+1], data[pos+2], data[pos+3]]) as usize;
+    let face_count =
+        u32::from_be_bytes([data[pos], data[pos + 1], data[pos + 2], data[pos + 3]]) as usize;
     pos += 4;
 
     let mut faces = Vec::with_capacity(face_count);
@@ -90,15 +99,19 @@ fn parse_lod_llsd(data: &[u8]) -> Result<Vec<MeshFace>> {
 
 fn parse_face_map(data: &[u8], pos: &mut usize) -> Result<MeshFace> {
     if *pos >= data.len() || data[*pos] != b'{' {
-        bail!("Expected map marker '{{' at {}, got 0x{:02x}",
-            *pos, data.get(*pos).copied().unwrap_or(0));
+        bail!(
+            "Expected map marker '{{' at {}, got 0x{:02x}",
+            *pos,
+            data.get(*pos).copied().unwrap_or(0)
+        );
     }
     *pos += 1;
 
     if *pos + 4 > data.len() {
         bail!("Truncated face map entry count");
     }
-    let entry_count = u32::from_be_bytes([data[*pos], data[*pos+1], data[*pos+2], data[*pos+3]]) as usize;
+    let entry_count =
+        u32::from_be_bytes([data[*pos], data[*pos + 1], data[*pos + 2], data[*pos + 3]]) as usize;
     *pos += 4;
 
     let mut position_bytes: Vec<u8> = Vec::new();
@@ -146,8 +159,7 @@ fn parse_face_map(data: &[u8], pos: &mut usize) -> Result<MeshFace> {
         *pos += 1;
     }
 
-    let (pos_min, pos_max) = position_domain
-        .unwrap_or(([0.0, 0.0, 0.0], [1.0, 1.0, 1.0]));
+    let (pos_min, pos_max) = position_domain.unwrap_or(([0.0, 0.0, 0.0], [1.0, 1.0, 1.0]));
 
     let vertex_count = position_bytes.len() / 6;
     if vertex_count == 0 {
@@ -164,8 +176,7 @@ fn parse_face_map(data: &[u8], pos: &mut usize) -> Result<MeshFace> {
         vec![[0.0f32, 0.0, 1.0]; vertex_count]
     };
 
-    let (tc_min, tc_max) = texcoord_domain
-        .unwrap_or(([0.0, 0.0], [1.0, 1.0]));
+    let (tc_min, tc_max) = texcoord_domain.unwrap_or(([0.0, 0.0], [1.0, 1.0]));
     let tex_coords = if texcoord_bytes.len() == vertex_count * 4 {
         dequantize_vec2(&texcoord_bytes, &tc_min, &tc_max)
     } else {
@@ -248,7 +259,10 @@ fn decode_vertex_weights(data: &[u8], vertex_count: usize) -> Vec<VertexWeights>
             }
             let w16 = u16::from_le_bytes([data[pos + 1], data[pos + 2]]);
             let weight = w16 as f32 / 65535.0;
-            influences.push(JointInfluence { joint_index, weight });
+            influences.push(JointInfluence {
+                joint_index,
+                weight,
+            });
             pos += 3;
             if influences.len() >= 4 {
                 break;
@@ -258,7 +272,9 @@ fn decode_vertex_weights(data: &[u8], vertex_count: usize) -> Vec<VertexWeights>
     }
 
     if weights.len() < vertex_count {
-        weights.resize_with(vertex_count, || VertexWeights { influences: Vec::new() });
+        weights.resize_with(vertex_count, || VertexWeights {
+            influences: Vec::new(),
+        });
     }
 
     weights
@@ -272,8 +288,12 @@ fn decode_skin_block(data: &[u8], header: &MeshAssetHeader) -> Result<Option<Mes
 
     let abs_offset = header.data_start + block_ref.offset;
     if abs_offset + block_ref.size > data.len() {
-        warn!("Skin block out of bounds: offset={} size={} datalen={}",
-            abs_offset, block_ref.size, data.len());
+        warn!(
+            "Skin block out of bounds: offset={} size={} datalen={}",
+            abs_offset,
+            block_ref.size,
+            data.len()
+        );
         return Ok(None);
     }
 
@@ -299,7 +319,8 @@ fn parse_skin_llsd(data: &[u8]) -> Result<Option<MeshSkinInfo>> {
     if pos + 4 > data.len() {
         bail!("Truncated skin map count");
     }
-    let entry_count = u32::from_be_bytes([data[pos], data[pos+1], data[pos+2], data[pos+3]]) as usize;
+    let entry_count =
+        u32::from_be_bytes([data[pos], data[pos + 1], data[pos + 2], data[pos + 3]]) as usize;
     pos += 4;
 
     let mut joint_names: Vec<String> = Vec::new();
@@ -350,20 +371,23 @@ fn parse_skin_llsd(data: &[u8]) -> Result<Option<MeshSkinInfo>> {
     }))
 }
 
-fn skip_remaining_value(_data: &[u8], _pos: &mut usize, _vals: &[f64]) {
-}
+fn skip_remaining_value(_data: &[u8], _pos: &mut usize, _vals: &[f64]) {}
 
 fn read_llsd_key(data: &[u8], pos: &mut usize) -> Result<String> {
     if *pos >= data.len() || data[*pos] != b'k' {
-        bail!("Expected LLSD key marker 'k' at {}, got 0x{:02x}",
-            *pos, data.get(*pos).copied().unwrap_or(0));
+        bail!(
+            "Expected LLSD key marker 'k' at {}, got 0x{:02x}",
+            *pos,
+            data.get(*pos).copied().unwrap_or(0)
+        );
     }
     *pos += 1;
 
     if *pos + 4 > data.len() {
         bail!("Not enough bytes for key length at {}", *pos);
     }
-    let len = u32::from_be_bytes([data[*pos], data[*pos+1], data[*pos+2], data[*pos+3]]) as usize;
+    let len =
+        u32::from_be_bytes([data[*pos], data[*pos + 1], data[*pos + 2], data[*pos + 3]]) as usize;
     *pos += 4;
 
     if *pos + len > data.len() {
@@ -376,14 +400,18 @@ fn read_llsd_key(data: &[u8], pos: &mut usize) -> Result<String> {
 
 fn read_llsd_binary(data: &[u8], pos: &mut usize) -> Result<Vec<u8>> {
     if *pos >= data.len() || data[*pos] != b'b' {
-        bail!("Expected binary marker 'b' at {}, got 0x{:02x}",
-            *pos, data.get(*pos).copied().unwrap_or(0));
+        bail!(
+            "Expected binary marker 'b' at {}, got 0x{:02x}",
+            *pos,
+            data.get(*pos).copied().unwrap_or(0)
+        );
     }
     *pos += 1;
     if *pos + 4 > data.len() {
         bail!("Not enough bytes for binary length at {}", *pos);
     }
-    let len = u32::from_be_bytes([data[*pos], data[*pos+1], data[*pos+2], data[*pos+3]]) as usize;
+    let len =
+        u32::from_be_bytes([data[*pos], data[*pos + 1], data[*pos + 2], data[*pos + 3]]) as usize;
     *pos += 4;
     if *pos + len > data.len() {
         bail!("Binary data length {} exceeds data at {}", len, *pos);
@@ -402,7 +430,7 @@ fn read_llsd_real(data: &[u8], pos: &mut usize) -> Result<f64> {
         if *pos + 8 > data.len() {
             bail!("Not enough bytes for f64 at {}", *pos);
         }
-        let val = f64::from_be_bytes(data[*pos..*pos+8].try_into()?);
+        let val = f64::from_be_bytes(data[*pos..*pos + 8].try_into()?);
         *pos += 8;
         Ok(val)
     } else if data[*pos] == b'i' {
@@ -410,7 +438,7 @@ fn read_llsd_real(data: &[u8], pos: &mut usize) -> Result<f64> {
         if *pos + 4 > data.len() {
             bail!("Not enough bytes for integer-as-real at {}", *pos);
         }
-        let val = i32::from_be_bytes(data[*pos..*pos+4].try_into()?);
+        let val = i32::from_be_bytes(data[*pos..*pos + 4].try_into()?);
         *pos += 4;
         Ok(val as f64)
     } else {
@@ -427,7 +455,8 @@ fn read_llsd_string_array(data: &[u8], pos: &mut usize) -> Result<Vec<String>> {
     if *pos + 4 > data.len() {
         bail!("Truncated array count at {}", *pos);
     }
-    let count = u32::from_be_bytes([data[*pos], data[*pos+1], data[*pos+2], data[*pos+3]]) as usize;
+    let count =
+        u32::from_be_bytes([data[*pos], data[*pos + 1], data[*pos + 2], data[*pos + 3]]) as usize;
     *pos += 4;
 
     let mut result = Vec::with_capacity(count);
@@ -440,12 +469,14 @@ fn read_llsd_string_array(data: &[u8], pos: &mut usize) -> Result<Vec<String>> {
             if *pos + 4 > data.len() {
                 break;
             }
-            let len = u32::from_be_bytes([data[*pos], data[*pos+1], data[*pos+2], data[*pos+3]]) as usize;
+            let len =
+                u32::from_be_bytes([data[*pos], data[*pos + 1], data[*pos + 2], data[*pos + 3]])
+                    as usize;
             *pos += 4;
             if *pos + len > data.len() {
                 break;
             }
-            let s = String::from_utf8_lossy(&data[*pos..*pos+len]).to_string();
+            let s = String::from_utf8_lossy(&data[*pos..*pos + len]).to_string();
             *pos += len;
             result.push(s);
         } else {
@@ -469,7 +500,8 @@ fn read_llsd_real_array(data: &[u8], pos: &mut usize) -> Result<Vec<f64>> {
     if *pos + 4 > data.len() {
         bail!("Truncated array count at {}", *pos);
     }
-    let count = u32::from_be_bytes([data[*pos], data[*pos+1], data[*pos+2], data[*pos+3]]) as usize;
+    let count =
+        u32::from_be_bytes([data[*pos], data[*pos + 1], data[*pos + 2], data[*pos + 3]]) as usize;
     *pos += 4;
 
     let mut result = Vec::with_capacity(count);
@@ -495,7 +527,8 @@ fn read_llsd_matrix_array(data: &[u8], pos: &mut usize) -> Result<Vec<[f32; 16]>
     if *pos + 4 > data.len() {
         bail!("Truncated array count at {}", *pos);
     }
-    let count = u32::from_be_bytes([data[*pos], data[*pos+1], data[*pos+2], data[*pos+3]]) as usize;
+    let count =
+        u32::from_be_bytes([data[*pos], data[*pos + 1], data[*pos + 2], data[*pos + 3]]) as usize;
     *pos += 4;
 
     let mut result = Vec::with_capacity(count);
@@ -526,7 +559,8 @@ fn read_domain_3d(data: &[u8], pos: &mut usize) -> Result<([f64; 3], [f64; 3])> 
     if *pos + 4 > data.len() {
         bail!("Truncated domain map count");
     }
-    let entry_count = u32::from_be_bytes([data[*pos], data[*pos+1], data[*pos+2], data[*pos+3]]) as usize;
+    let entry_count =
+        u32::from_be_bytes([data[*pos], data[*pos + 1], data[*pos + 2], data[*pos + 3]]) as usize;
     *pos += 4;
 
     let mut min = [0.0f64; 3];
@@ -568,7 +602,8 @@ fn read_domain_2d(data: &[u8], pos: &mut usize) -> Result<([f64; 2], [f64; 2])> 
     if *pos + 4 > data.len() {
         bail!("Truncated domain map count");
     }
-    let entry_count = u32::from_be_bytes([data[*pos], data[*pos+1], data[*pos+2], data[*pos+3]]) as usize;
+    let entry_count =
+        u32::from_be_bytes([data[*pos], data[*pos + 1], data[*pos + 2], data[*pos + 3]]) as usize;
     *pos += 4;
 
     let mut min = [0.0f64; 2];
@@ -607,39 +642,69 @@ fn skip_llsd_value(data: &[u8], pos: &mut usize) -> Result<()> {
         bail!("No data to skip at {}", *pos);
     }
     match data[*pos] {
-        0x00 | b'!' | b'1' | b'0' => { *pos += 1; }
-        b'i' => { *pos += 5; }
-        b'r' => { *pos += 9; }
-        b'u' => { *pos += 17; }
-        b'd' => { *pos += 9; }
+        0x00 | b'!' | b'1' | b'0' => {
+            *pos += 1;
+        }
+        b'i' => {
+            *pos += 5;
+        }
+        b'r' => {
+            *pos += 9;
+        }
+        b'u' => {
+            *pos += 17;
+        }
+        b'd' => {
+            *pos += 9;
+        }
         b's' | b'b' | b'l' => {
             *pos += 1;
-            if *pos + 4 > data.len() { bail!("Truncated length at {}", *pos); }
-            let len = u32::from_be_bytes([data[*pos], data[*pos+1], data[*pos+2], data[*pos+3]]) as usize;
+            if *pos + 4 > data.len() {
+                bail!("Truncated length at {}", *pos);
+            }
+            let len =
+                u32::from_be_bytes([data[*pos], data[*pos + 1], data[*pos + 2], data[*pos + 3]])
+                    as usize;
             *pos += 4 + len;
         }
         b'{' => {
             *pos += 1;
-            if *pos + 4 > data.len() { bail!("Truncated map count at {}", *pos); }
-            let count = u32::from_be_bytes([data[*pos], data[*pos+1], data[*pos+2], data[*pos+3]]) as usize;
+            if *pos + 4 > data.len() {
+                bail!("Truncated map count at {}", *pos);
+            }
+            let count =
+                u32::from_be_bytes([data[*pos], data[*pos + 1], data[*pos + 2], data[*pos + 3]])
+                    as usize;
             *pos += 4;
             for _ in 0..count {
-                if *pos >= data.len() { break; }
+                if *pos >= data.len() {
+                    break;
+                }
                 read_llsd_key(data, pos)?;
                 skip_llsd_value(data, pos)?;
             }
-            if *pos < data.len() && data[*pos] == b'}' { *pos += 1; }
+            if *pos < data.len() && data[*pos] == b'}' {
+                *pos += 1;
+            }
         }
         b'[' => {
             *pos += 1;
-            if *pos + 4 > data.len() { bail!("Truncated array count at {}", *pos); }
-            let count = u32::from_be_bytes([data[*pos], data[*pos+1], data[*pos+2], data[*pos+3]]) as usize;
+            if *pos + 4 > data.len() {
+                bail!("Truncated array count at {}", *pos);
+            }
+            let count =
+                u32::from_be_bytes([data[*pos], data[*pos + 1], data[*pos + 2], data[*pos + 3]])
+                    as usize;
             *pos += 4;
             for _ in 0..count {
-                if *pos >= data.len() { break; }
+                if *pos >= data.len() {
+                    break;
+                }
                 skip_llsd_value(data, pos)?;
             }
-            if *pos < data.len() && data[*pos] == b']' { *pos += 1; }
+            if *pos < data.len() && data[*pos] == b']' {
+                *pos += 1;
+            }
         }
         other => {
             bail!("Unknown LLSD type marker: 0x{:02x} at {}", other, *pos);
@@ -654,7 +719,9 @@ fn skip_llsd_value(data: &[u8], pos: &mut usize) -> Result<()> {
 #[cfg(test)]
 mod tests {
     use super::*;
-    use crate::mesh::encoder::{encode_mesh_asset, MeshFace, MeshGeometry, MeshSkinInfo, VertexWeights, JointInfluence};
+    use crate::mesh::encoder::{
+        encode_mesh_asset, JointInfluence, MeshFace, MeshGeometry, MeshSkinInfo, VertexWeights,
+    };
     use crate::mesh::parser::parse_mesh_header;
 
     fn make_test_face() -> MeshFace {
@@ -671,12 +738,7 @@ mod tests {
                 [0.0, 0.0, 1.0],
                 [0.0, 1.0, 0.0],
             ],
-            tex_coords: vec![
-                [0.0, 0.0],
-                [1.0, 0.0],
-                [0.5, 1.0],
-                [0.5, 0.5],
-            ],
+            tex_coords: vec![[0.0, 0.0], [1.0, 0.0], [0.5, 1.0], [0.5, 0.5]],
             indices: vec![0, 1, 2, 0, 2, 3],
             joint_weights: None,
             original_position_indices: None,
@@ -697,29 +759,51 @@ mod tests {
                 [0.0, 0.0, 1.0],
                 [0.0, 0.0, 1.0],
             ],
-            tex_coords: vec![
-                [0.0, 0.0],
-                [1.0, 0.0],
-                [1.0, 1.0],
-                [0.0, 1.0],
-            ],
+            tex_coords: vec![[0.0, 0.0], [1.0, 0.0], [1.0, 1.0], [0.0, 1.0]],
             indices: vec![0, 1, 2, 0, 2, 3],
             joint_weights: Some(vec![
-                VertexWeights { influences: vec![
-                    JointInfluence { joint_index: 0, weight: 0.8 },
-                    JointInfluence { joint_index: 1, weight: 0.2 },
-                ]},
-                VertexWeights { influences: vec![
-                    JointInfluence { joint_index: 0, weight: 0.5 },
-                    JointInfluence { joint_index: 1, weight: 0.5 },
-                ]},
-                VertexWeights { influences: vec![
-                    JointInfluence { joint_index: 1, weight: 0.9 },
-                    JointInfluence { joint_index: 2, weight: 0.1 },
-                ]},
-                VertexWeights { influences: vec![
-                    JointInfluence { joint_index: 1, weight: 1.0 },
-                ]},
+                VertexWeights {
+                    influences: vec![
+                        JointInfluence {
+                            joint_index: 0,
+                            weight: 0.8,
+                        },
+                        JointInfluence {
+                            joint_index: 1,
+                            weight: 0.2,
+                        },
+                    ],
+                },
+                VertexWeights {
+                    influences: vec![
+                        JointInfluence {
+                            joint_index: 0,
+                            weight: 0.5,
+                        },
+                        JointInfluence {
+                            joint_index: 1,
+                            weight: 0.5,
+                        },
+                    ],
+                },
+                VertexWeights {
+                    influences: vec![
+                        JointInfluence {
+                            joint_index: 1,
+                            weight: 0.9,
+                        },
+                        JointInfluence {
+                            joint_index: 2,
+                            weight: 0.1,
+                        },
+                    ],
+                },
+                VertexWeights {
+                    influences: vec![JointInfluence {
+                        joint_index: 1,
+                        weight: 1.0,
+                    }],
+                },
             ]),
             original_position_indices: None,
         };
@@ -727,11 +811,19 @@ mod tests {
         let skin = MeshSkinInfo {
             joint_names: vec!["mPelvis".into(), "mTorso".into(), "mChest".into()],
             inverse_bind_matrices: vec![
-                [1.0, 0.0, 0.0, 0.0,  0.0, 1.0, 0.0, 0.0,  0.0, 0.0, 1.0, 0.0,  0.0, 0.0, 0.0, 1.0],
-                [1.0, 0.0, 0.0, 0.0,  0.0, 1.0, 0.0, 0.0,  0.0, 0.0, 1.0, 0.0,  0.0, -0.5, 0.0, 1.0],
-                [1.0, 0.0, 0.0, 0.0,  0.0, 1.0, 0.0, 0.0,  0.0, 0.0, 1.0, 0.0,  0.0, -1.0, 0.0, 1.0],
+                [
+                    1.0, 0.0, 0.0, 0.0, 0.0, 1.0, 0.0, 0.0, 0.0, 0.0, 1.0, 0.0, 0.0, 0.0, 0.0, 1.0,
+                ],
+                [
+                    1.0, 0.0, 0.0, 0.0, 0.0, 1.0, 0.0, 0.0, 0.0, 0.0, 1.0, 0.0, 0.0, -0.5, 0.0, 1.0,
+                ],
+                [
+                    1.0, 0.0, 0.0, 0.0, 0.0, 1.0, 0.0, 0.0, 0.0, 0.0, 1.0, 0.0, 0.0, -1.0, 0.0, 1.0,
+                ],
             ],
-            bind_shape_matrix: [1.0, 0.0, 0.0, 0.0,  0.0, 1.0, 0.0, 0.0,  0.0, 0.0, 1.0, 0.0,  0.0, 0.0, 0.0, 1.0],
+            bind_shape_matrix: [
+                1.0, 0.0, 0.0, 0.0, 0.0, 1.0, 0.0, 0.0, 0.0, 0.0, 1.0, 0.0, 0.0, 0.0, 0.0, 1.0,
+            ],
             pelvis_offset: 0.0,
         };
 
@@ -753,24 +845,54 @@ mod tests {
         let orig = &geom.faces[0];
         let dec = &decoded.faces[0];
 
-        assert_eq!(dec.positions.len(), orig.positions.len(), "vertex count mismatch");
-        assert_eq!(dec.normals.len(), orig.normals.len(), "normal count mismatch");
-        assert_eq!(dec.tex_coords.len(), orig.tex_coords.len(), "texcoord count mismatch");
-        assert_eq!(dec.indices.len(), orig.indices.len(), "index count mismatch");
+        assert_eq!(
+            dec.positions.len(),
+            orig.positions.len(),
+            "vertex count mismatch"
+        );
+        assert_eq!(
+            dec.normals.len(),
+            orig.normals.len(),
+            "normal count mismatch"
+        );
+        assert_eq!(
+            dec.tex_coords.len(),
+            orig.tex_coords.len(),
+            "texcoord count mismatch"
+        );
+        assert_eq!(
+            dec.indices.len(),
+            orig.indices.len(),
+            "index count mismatch"
+        );
 
         for i in 0..orig.positions.len() {
             for axis in 0..3 {
                 let diff = (dec.positions[i][axis] - orig.positions[i][axis]).abs();
-                assert!(diff < 0.01, "position[{}][{}] diff={} (orig={}, dec={})",
-                    i, axis, diff, orig.positions[i][axis], dec.positions[i][axis]);
+                assert!(
+                    diff < 0.01,
+                    "position[{}][{}] diff={} (orig={}, dec={})",
+                    i,
+                    axis,
+                    diff,
+                    orig.positions[i][axis],
+                    dec.positions[i][axis]
+                );
             }
         }
 
         for i in 0..orig.tex_coords.len() {
             for axis in 0..2 {
                 let diff = (dec.tex_coords[i][axis] - orig.tex_coords[i][axis]).abs();
-                assert!(diff < 0.01, "texcoord[{}][{}] diff={} (orig={}, dec={})",
-                    i, axis, diff, orig.tex_coords[i][axis], dec.tex_coords[i][axis]);
+                assert!(
+                    diff < 0.01,
+                    "texcoord[{}][{}] diff={} (orig={}, dec={})",
+                    i,
+                    axis,
+                    diff,
+                    orig.tex_coords[i][axis],
+                    dec.tex_coords[i][axis]
+                );
             }
         }
 
@@ -798,7 +920,10 @@ mod tests {
             original_position_indices: None,
         };
 
-        let geom = MeshGeometry { faces: vec![face1, face2], skin_info: None };
+        let geom = MeshGeometry {
+            faces: vec![face1, face2],
+            skin_info: None,
+        };
         let blob = encode_mesh_asset(&geom).expect("encode failed");
         let header = parse_mesh_header(&blob).expect("header parse failed");
         let decoded = decode_lod_geometry(&blob, &header).expect("decode failed");
@@ -808,7 +933,11 @@ mod tests {
         assert_eq!(decoded.faces[1].positions.len(), 3);
 
         let diff = (decoded.faces[1].positions[0][0] - 2.0).abs();
-        assert!(diff < 0.01, "face2 position X should be ~2.0, got {}", decoded.faces[1].positions[0][0]);
+        assert!(
+            diff < 0.01,
+            "face2 position X should be ~2.0, got {}",
+            decoded.faces[1].positions[0][0]
+        );
     }
 
     #[test]
@@ -826,7 +955,10 @@ mod tests {
         assert_eq!(decoded.faces.len(), 1);
         assert_eq!(decoded.faces[0].positions.len(), 4);
 
-        let dec_skin = decoded.skin_info.as_ref().expect("skin_info should be present");
+        let dec_skin = decoded
+            .skin_info
+            .as_ref()
+            .expect("skin_info should be present");
         assert_eq!(dec_skin.joint_names, vec!["mPelvis", "mTorso", "mChest"]);
         assert_eq!(dec_skin.inverse_bind_matrices.len(), 3);
 
@@ -835,26 +967,42 @@ mod tests {
             assert!(diff < 0.001, "bind_shape_matrix[{}] diff={}", i, diff);
         }
 
-        let dec_weights = decoded.faces[0].joint_weights.as_ref().expect("weights should be present");
+        let dec_weights = decoded.faces[0]
+            .joint_weights
+            .as_ref()
+            .expect("weights should be present");
         assert_eq!(dec_weights.len(), 4);
         assert_eq!(dec_weights[0].influences[0].joint_index, 0);
-        assert!(dec_weights[0].influences[0].weight > 0.7, "first vertex should be ~0.8 on joint 0");
+        assert!(
+            dec_weights[0].influences[0].weight > 0.7,
+            "first vertex should be ~0.8 on joint 0"
+        );
         assert_eq!(dec_weights[3].influences[0].joint_index, 1);
-        assert!(dec_weights[3].influences[0].weight > 0.95, "last vertex should be ~1.0 on joint 1");
+        assert!(
+            dec_weights[3].influences[0].weight > 0.95,
+            "last vertex should be ~1.0 on joint 1"
+        );
     }
 
     #[test]
     fn test_round_trip_preserves_normals() {
         let face = MeshFace {
             positions: vec![[0.0, 0.0, 0.0], [1.0, 0.0, 0.0], [0.0, 1.0, 0.0]],
-            normals: vec![[0.577, 0.577, 0.577], [-0.707, 0.707, 0.0], [0.0, -1.0, 0.0]],
+            normals: vec![
+                [0.577, 0.577, 0.577],
+                [-0.707, 0.707, 0.0],
+                [0.0, -1.0, 0.0],
+            ],
             tex_coords: vec![[0.0, 0.0], [1.0, 0.0], [0.0, 1.0]],
             indices: vec![0, 1, 2],
             joint_weights: None,
             original_position_indices: None,
         };
 
-        let geom = MeshGeometry { faces: vec![face], skin_info: None };
+        let geom = MeshGeometry {
+            faces: vec![face],
+            skin_info: None,
+        };
         let blob = encode_mesh_asset(&geom).expect("encode failed");
         let header = parse_mesh_header(&blob).expect("header parse failed");
         let decoded = decode_lod_geometry(&blob, &header).expect("decode failed");
@@ -879,7 +1027,12 @@ mod tests {
         let blob = encode_mesh_asset(&geom).expect("encode failed");
         let header = parse_mesh_header(&blob).expect("header parse failed");
 
-        for level in [LodLevel::High, LodLevel::Medium, LodLevel::Low, LodLevel::Lowest] {
+        for level in [
+            LodLevel::High,
+            LodLevel::Medium,
+            LodLevel::Low,
+            LodLevel::Lowest,
+        ] {
             let decoded = decode_lod_geometry_level(&blob, &header, level)
                 .expect(&format!("decode {:?} failed", level));
             assert_eq!(decoded.faces.len(), 1);

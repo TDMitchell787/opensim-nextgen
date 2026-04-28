@@ -1,7 +1,7 @@
-use axum::extract::{State, Path};
-use axum::response::IntoResponse;
+use axum::extract::{Path, State};
 use axum::http::StatusCode;
-use tracing::{info, debug};
+use axum::response::IntoResponse;
+use tracing::{debug, info};
 
 use super::RobustState;
 
@@ -10,7 +10,11 @@ pub async fn handle_neighbour(
     Path(region_id): Path<String>,
     body: String,
 ) -> impl IntoResponse {
-    info!("[NEIGHBOUR] HelloNeighbour for region {}, body_len={}", region_id, body.len());
+    info!(
+        "[NEIGHBOUR] HelloNeighbour for region {}, body_len={}",
+        region_id,
+        body.len()
+    );
     debug!("[NEIGHBOUR] Body: {}", &body[..body.len().min(500)]);
 
     (

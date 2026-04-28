@@ -1,11 +1,11 @@
 //! Inventory database operations and management
 //! Uses legacy OpenSim schema for compatibility (inventoryfolders, inventoryitems)
 
-use std::sync::Arc;
 use anyhow::{anyhow, Result};
 use serde::{Deserialize, Serialize};
-use sqlx::{Row, FromRow};
-use tracing::{info, warn, error, debug};
+use sqlx::{FromRow, Row};
+use std::sync::Arc;
+use tracing::{debug, error, info, warn};
 use uuid::Uuid;
 
 use super::multi_backend::DatabaseConnection;
@@ -152,7 +152,9 @@ impl InventoryDatabase {
     /// Create a new inventory database
     pub async fn new(connection: Arc<DatabaseConnection>) -> Result<Self> {
         info!("Initializing inventory database");
-        Ok(Self { connection: Some(connection) })
+        Ok(Self {
+            connection: Some(connection),
+        })
     }
 
     /// Create a stub inventory database for SQLite compatibility
@@ -168,7 +170,7 @@ impl InventoryDatabase {
                 super::multi_backend::DatabaseConnection::PostgreSQL(pool) => Ok(pool),
                 _ => Err(anyhow!("Database is not PostgreSQL")),
             },
-            None => Err(anyhow!("Database operation not available in stub mode"))
+            None => Err(anyhow!("Database operation not available in stub mode")),
         }
     }
 
@@ -176,7 +178,10 @@ impl InventoryDatabase {
 
     /// Create a new inventory folder
     pub async fn create_folder(&self, request: CreateFolderRequest) -> Result<InventoryFolder> {
-        info!("Creating inventory folder: {} for user {}", request.folder_name, request.user_id);
+        info!(
+            "Creating inventory folder: {} for user {}",
+            request.folder_name, request.user_id
+        );
 
         let folder_id = Uuid::new_v4();
 
@@ -187,7 +192,7 @@ impl InventoryDatabase {
             )
             VALUES ($1, $2, $3, $4, $5, 1)
             RETURNING folderid, agentid, parentfolderid, foldername, type, version
-            "#
+            "#,
         )
         .bind(folder_id)
         .bind(request.user_id)
@@ -198,7 +203,10 @@ impl InventoryDatabase {
         .await
         .map_err(|e| anyhow!("Failed to create inventory folder: {}", e))?;
 
-        debug!("Created inventory folder: {} ({})", folder.folder_name, folder.id);
+        debug!(
+            "Created inventory folder: {} ({})",
+            folder.folder_name, folder.id
+        );
         Ok(folder)
     }
 
@@ -250,8 +258,15 @@ impl InventoryDatabase {
     }
 
     /// Get folder by user and type
-    pub async fn get_folder_by_type(&self, user_id: Uuid, folder_type: i32) -> Result<Option<InventoryFolder>> {
-        debug!("Getting folder of type {} for user: {}", folder_type, user_id);
+    pub async fn get_folder_by_type(
+        &self,
+        user_id: Uuid,
+        folder_type: i32,
+    ) -> Result<Option<InventoryFolder>> {
+        debug!(
+            "Getting folder of type {} for user: {}",
+            folder_type, user_id
+        );
 
         let folder = sqlx::query_as::<_, InventoryFolder>(
             "SELECT folderid, agentid, parentfolderid, foldername, type, version FROM inventoryfolders WHERE agentid = $1 AND type = $2 LIMIT 1"
@@ -277,12 +292,21 @@ impl InventoryDatabase {
         .await
         .map_err(|e| anyhow!("Failed to get folder contents: {}", e))?;
 
-        debug!("Found {} subfolders in folder: {}", folders.len(), folder_id);
+        debug!(
+            "Found {} subfolders in folder: {}",
+            folders.len(),
+            folder_id
+        );
         Ok(folders)
     }
 
     /// Update folder
-    pub async fn update_folder(&self, folder_id: Uuid, folder_name: &str, folder_type: i32) -> Result<InventoryFolder> {
+    pub async fn update_folder(
+        &self,
+        folder_id: Uuid,
+        folder_name: &str,
+        folder_type: i32,
+    ) -> Result<InventoryFolder> {
         debug!("Updating inventory folder: {}", folder_id);
 
         let folder = sqlx::query_as::<_, InventoryFolder>(
@@ -291,7 +315,7 @@ impl InventoryDatabase {
             SET foldername = $2, type = $3, version = version + 1
             WHERE folderid = $1
             RETURNING folderid, agentid, parentfolderid, foldername, type, version
-            "#
+            "#,
         )
         .bind(folder_id)
         .bind(folder_name)
@@ -300,7 +324,10 @@ impl InventoryDatabase {
         .await
         .map_err(|e| anyhow!("Failed to update inventory folder: {}", e))?;
 
-        debug!("Updated inventory folder: {} ({})", folder.folder_name, folder.id);
+        debug!(
+            "Updated inventory folder: {} ({})",
+            folder.folder_name, folder.id
+        );
         Ok(folder)
     }
 
@@ -308,7 +335,10 @@ impl InventoryDatabase {
     pub async fn delete_folder(&self, folder_id: Uuid) -> Result<bool> {
         warn!("Deleting inventory folder: {}", folder_id);
 
-        let connection = self.connection.as_ref().ok_or_else(|| anyhow!("Database not available in stub mode"))?;
+        let connection = self
+            .connection
+            .as_ref()
+            .ok_or_else(|| anyhow!("Database not available in stub mode"))?;
         let mut tx = connection.begin_transaction().await?;
 
         let pg_tx = tx.as_postgres_tx()?;
@@ -318,11 +348,12 @@ impl InventoryDatabase {
             .execute(&mut **pg_tx)
             .await;
 
-        let subfolders = sqlx::query("SELECT folderid FROM inventoryfolders WHERE parentfolderid = $1")
-            .bind(folder_id)
-            .fetch_all(&mut **pg_tx)
-            .await
-            .map_err(|e| anyhow!("Failed to get subfolders: {}", e))?;
+        let subfolders =
+            sqlx::query("SELECT folderid FROM inventoryfolders WHERE parentfolderid = $1")
+                .bind(folder_id)
+                .fetch_all(&mut **pg_tx)
+                .await
+                .map_err(|e| anyhow!("Failed to get subfolders: {}", e))?;
 
         for row in subfolders {
             let subfolder_id: Uuid = row.try_get("folderid")?;
@@ -342,7 +373,9 @@ impl InventoryDatabase {
             .await
             .map_err(|e| anyhow!("Failed to delete inventory folder: {}", e))?;
 
-        tx.commit().await.map_err(|e| anyhow!("Failed to commit folder deletion: {}", e))?;
+        tx.commit()
+            .await
+            .map_err(|e| anyhow!("Failed to commit folder deletion: {}", e))?;
 
         let deleted = result.rows_affected() > 0;
         if deleted {
@@ -356,7 +389,10 @@ impl InventoryDatabase {
 
     /// Create a new inventory item
     pub async fn create_item(&self, request: CreateItemRequest) -> Result<InventoryItem> {
-        info!("Creating inventory item: {} for user {}", request.item_name, request.user_id);
+        info!(
+            "Creating inventory item: {} for user {}",
+            request.item_name, request.user_id
+        );
 
         let item_id = Uuid::new_v4();
         let creation_date = std::time::SystemTime::now()
@@ -414,7 +450,7 @@ impl InventoryDatabase {
                 groupid, groupowned, saleprice, saletype, flags,
                 inventorybasepermissions, inventorycurrentpermissions,
                 inventoryeveryonepermissions, inventorygrouppermissions, inventorynextpermissions
-            FROM inventoryitems WHERE inventoryid = $1"#
+            FROM inventoryitems WHERE inventoryid = $1"#,
         )
         .bind(item_id)
         .fetch_optional(self.pool()?)
@@ -434,7 +470,7 @@ impl InventoryDatabase {
                 groupid, groupowned, saleprice, saletype, flags,
                 inventorybasepermissions, inventorycurrentpermissions,
                 inventoryeveryonepermissions, inventorygrouppermissions, inventorynextpermissions
-            FROM inventoryitems WHERE parentfolderid = $1 ORDER BY inventoryname"#
+            FROM inventoryitems WHERE parentfolderid = $1 ORDER BY inventoryname"#,
         )
         .bind(folder_id)
         .fetch_all(self.pool()?)
@@ -446,8 +482,15 @@ impl InventoryDatabase {
     }
 
     /// Get user's items by type
-    pub async fn get_user_items_by_type(&self, user_id: Uuid, inventory_type: i32) -> Result<Vec<InventoryItem>> {
-        debug!("Getting items of type {} for user: {}", inventory_type, user_id);
+    pub async fn get_user_items_by_type(
+        &self,
+        user_id: Uuid,
+        inventory_type: i32,
+    ) -> Result<Vec<InventoryItem>> {
+        debug!(
+            "Getting items of type {} for user: {}",
+            inventory_type, user_id
+        );
 
         let items = sqlx::query_as::<_, InventoryItem>(
             r#"SELECT inventoryid, avatarid, parentfolderid, assetid, assettype, invtype,
@@ -455,7 +498,7 @@ impl InventoryDatabase {
                 groupid, groupowned, saleprice, saletype, flags,
                 inventorybasepermissions, inventorycurrentpermissions,
                 inventoryeveryonepermissions, inventorygrouppermissions, inventorynextpermissions
-            FROM inventoryitems WHERE avatarid = $1 AND invtype = $2 ORDER BY inventoryname"#
+            FROM inventoryitems WHERE avatarid = $1 AND invtype = $2 ORDER BY inventoryname"#,
         )
         .bind(user_id)
         .bind(inventory_type)
@@ -463,7 +506,12 @@ impl InventoryDatabase {
         .await
         .map_err(|e| anyhow!("Failed to get user items by type: {}", e))?;
 
-        debug!("Found {} items of type {} for user: {}", items.len(), inventory_type, user_id);
+        debug!(
+            "Found {} items of type {} for user: {}",
+            items.len(),
+            inventory_type,
+            user_id
+        );
         Ok(items)
     }
 
@@ -477,7 +525,7 @@ impl InventoryDatabase {
                 groupid, groupowned, saleprice, saletype, flags,
                 inventorybasepermissions, inventorycurrentpermissions,
                 inventoryeveryonepermissions, inventorygrouppermissions, inventorynextpermissions
-            FROM inventoryitems WHERE avatarid = $1 ORDER BY inventoryname"#
+            FROM inventoryitems WHERE avatarid = $1 ORDER BY inventoryname"#,
         )
         .bind(user_id)
         .fetch_all(self.pool()?)
@@ -489,7 +537,12 @@ impl InventoryDatabase {
     }
 
     /// Update inventory item
-    pub async fn update_item(&self, item_id: Uuid, item_name: &str, description: &str) -> Result<InventoryItem> {
+    pub async fn update_item(
+        &self,
+        item_id: Uuid,
+        item_name: &str,
+        description: &str,
+    ) -> Result<InventoryItem> {
         debug!("Updating inventory item: {}", item_id);
 
         let item = sqlx::query_as::<_, InventoryItem>(
@@ -502,7 +555,7 @@ impl InventoryDatabase {
                 groupid, groupowned, saleprice, saletype, flags,
                 inventorybasepermissions, inventorycurrentpermissions,
                 inventoryeveryonepermissions, inventorygrouppermissions, inventorynextpermissions
-            "#
+            "#,
         )
         .bind(item_id)
         .bind(item_name)
@@ -517,7 +570,10 @@ impl InventoryDatabase {
 
     /// Move item to different folder
     pub async fn move_item(&self, item_id: Uuid, new_folder_id: Uuid) -> Result<InventoryItem> {
-        debug!("Moving inventory item {} to folder {}", item_id, new_folder_id);
+        debug!(
+            "Moving inventory item {} to folder {}",
+            item_id, new_folder_id
+        );
 
         let item = sqlx::query_as::<_, InventoryItem>(
             r#"
@@ -529,7 +585,7 @@ impl InventoryDatabase {
                 groupid, groupowned, saleprice, saletype, flags,
                 inventorybasepermissions, inventorycurrentpermissions,
                 inventoryeveryonepermissions, inventorygrouppermissions, inventorynextpermissions
-            "#
+            "#,
         )
         .bind(item_id)
         .bind(new_folder_id)
@@ -537,7 +593,10 @@ impl InventoryDatabase {
         .await
         .map_err(|e| anyhow!("Failed to move inventory item: {}", e))?;
 
-        debug!("Moved inventory item: {} to folder: {}", item.item_name, new_folder_id);
+        debug!(
+            "Moved inventory item: {} to folder: {}",
+            item.item_name, new_folder_id
+        );
         Ok(item)
     }
 
@@ -563,7 +622,10 @@ impl InventoryDatabase {
 
     /// Create a new asset
     pub async fn create_asset(&self, request: CreateAssetRequest) -> Result<AssetData> {
-        info!("Creating asset: {} (type: {})", request.asset_name, request.asset_type);
+        info!(
+            "Creating asset: {} (type: {})",
+            request.asset_name, request.asset_type
+        );
 
         let asset_id = Uuid::new_v4();
         let create_time = std::time::SystemTime::now()
@@ -580,7 +642,7 @@ impl InventoryDatabase {
             VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $8, 0, $9)
             RETURNING id, name, description, assettype, local, temporary,
                 data, create_time, access_time, asset_flags, creatorid
-            "#
+            "#,
         )
         .bind(asset_id)
         .bind(&request.asset_name)
@@ -696,7 +758,11 @@ impl InventoryDatabase {
             folders.push(folder);
         }
 
-        info!("Created {} default folders for user: {}", folders.len(), user_id);
+        info!(
+            "Created {} default folders for user: {}",
+            folders.len(),
+            user_id
+        );
         Ok(folders)
     }
 
@@ -725,8 +791,8 @@ impl InventoryDatabase {
 
         for (wearable_item_id, name, wearable_type) in cof_links {
             let link_id = Uuid::new_v4();
-            let item_uuid = Uuid::parse_str(wearable_item_id)
-                .map_err(|e| anyhow!("Invalid UUID: {}", e))?;
+            let item_uuid =
+                Uuid::parse_str(wearable_item_id).map_err(|e| anyhow!("Invalid UUID: {}", e))?;
 
             sqlx::query(
                 r#"
@@ -764,16 +830,18 @@ impl InventoryDatabase {
     pub async fn get_user_inventory_stats(&self, user_id: Uuid) -> Result<InventoryStats> {
         debug!("Getting inventory statistics for user: {}", user_id);
 
-        let folder_count_row = sqlx::query("SELECT COUNT(*) as count FROM inventoryfolders WHERE agentid = $1")
-            .bind(user_id)
-            .fetch_one(self.pool()?)
-            .await?;
+        let folder_count_row =
+            sqlx::query("SELECT COUNT(*) as count FROM inventoryfolders WHERE agentid = $1")
+                .bind(user_id)
+                .fetch_one(self.pool()?)
+                .await?;
         let folder_count: i64 = folder_count_row.try_get("count")?;
 
-        let item_count_row = sqlx::query("SELECT COUNT(*) as count FROM inventoryitems WHERE avatarid = $1")
-            .bind(user_id)
-            .fetch_one(self.pool()?)
-            .await?;
+        let item_count_row =
+            sqlx::query("SELECT COUNT(*) as count FROM inventoryitems WHERE avatarid = $1")
+                .bind(user_id)
+                .fetch_one(self.pool()?)
+                .await?;
         let item_count: i64 = item_count_row.try_get("count")?;
 
         Ok(InventoryStats {
@@ -783,17 +851,22 @@ impl InventoryDatabase {
     }
 
     /// Recursive folder deletion helper
-    fn delete_folder_recursive<'a>(&'a self, tx: &'a mut sqlx::Transaction<'_, sqlx::Postgres>, folder_id: Uuid) -> std::pin::Pin<Box<dyn std::future::Future<Output = Result<()>> + Send + 'a>> {
+    fn delete_folder_recursive<'a>(
+        &'a self,
+        tx: &'a mut sqlx::Transaction<'_, sqlx::Postgres>,
+        folder_id: Uuid,
+    ) -> std::pin::Pin<Box<dyn std::future::Future<Output = Result<()>> + Send + 'a>> {
         Box::pin(async move {
             let _ = sqlx::query("DELETE FROM inventoryitems WHERE parentfolderid = $1")
                 .bind(folder_id)
                 .execute(&mut **tx)
                 .await;
 
-            let subfolders = sqlx::query("SELECT folderid FROM inventoryfolders WHERE parentfolderid = $1")
-                .bind(folder_id)
-                .fetch_all(&mut **tx)
-                .await?;
+            let subfolders =
+                sqlx::query("SELECT folderid FROM inventoryfolders WHERE parentfolderid = $1")
+                    .bind(folder_id)
+                    .fetch_all(&mut **tx)
+                    .await?;
 
             for row in subfolders {
                 let subfolder_id: Uuid = row.try_get("folderid")?;

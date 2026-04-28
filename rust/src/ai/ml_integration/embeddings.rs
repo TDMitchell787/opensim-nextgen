@@ -1,8 +1,8 @@
 use super::super::AIError;
-use std::sync::Arc;
-use std::collections::HashMap;
-use tokio::sync::RwLock;
 use serde::{Deserialize, Serialize};
+use std::collections::HashMap;
+use std::sync::Arc;
+use tokio::sync::RwLock;
 use uuid::Uuid;
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
@@ -18,7 +18,9 @@ impl EmbeddingModel {
         match name.to_lowercase().as_str() {
             "all-minilm-l6-v2" => EmbeddingModel::AllMiniLML6V2,
             "all-mpnet-base-v2" => EmbeddingModel::AllMpnetBaseV2,
-            "paraphrase-multilingual-minilm-l12-v2" => EmbeddingModel::ParaphraseMultilingualMiniLML12V2,
+            "paraphrase-multilingual-minilm-l12-v2" => {
+                EmbeddingModel::ParaphraseMultilingualMiniLML12V2
+            }
             other => EmbeddingModel::Custom(other.to_string()),
         }
     }
@@ -36,7 +38,9 @@ impl EmbeddingModel {
         match self {
             EmbeddingModel::AllMiniLML6V2 => "all-MiniLM-L6-v2",
             EmbeddingModel::AllMpnetBaseV2 => "all-mpnet-base-v2",
-            EmbeddingModel::ParaphraseMultilingualMiniLML12V2 => "paraphrase-multilingual-MiniLM-L12-v2",
+            EmbeddingModel::ParaphraseMultilingualMiniLML12V2 => {
+                "paraphrase-multilingual-MiniLM-L12-v2"
+            }
             EmbeddingModel::Custom(name) => name,
         }
     }
@@ -91,10 +95,8 @@ impl EmbeddingService {
             let mut cache = self.cache.write().await;
 
             if cache.len() >= self.max_cache_size {
-                let keys_to_remove: Vec<String> = cache.keys()
-                    .take(cache.len() / 10)
-                    .cloned()
-                    .collect();
+                let keys_to_remove: Vec<String> =
+                    cache.keys().take(cache.len() / 10).cloned().collect();
                 for key in keys_to_remove {
                     cache.remove(&key);
                 }
@@ -187,7 +189,8 @@ impl EmbeddingService {
             return f32::MAX;
         }
 
-        a.iter().zip(b.iter())
+        a.iter()
+            .zip(b.iter())
             .map(|(x, y)| (x - y).powi(2))
             .sum::<f32>()
             .sqrt()
@@ -199,7 +202,8 @@ impl EmbeddingService {
         candidate_embeddings: &[(Uuid, Vec<f32>)],
         top_k: usize,
     ) -> Vec<(Uuid, f32)> {
-        let mut similarities: Vec<(Uuid, f32)> = candidate_embeddings.iter()
+        let mut similarities: Vec<(Uuid, f32)> = candidate_embeddings
+            .iter()
             .map(|(id, emb)| (*id, self.similarity(query_embedding, emb)))
             .collect();
 

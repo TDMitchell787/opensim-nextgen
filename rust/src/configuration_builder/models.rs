@@ -176,11 +176,21 @@ pub struct ContainerConfig {
     pub enable_tls: bool,
 }
 
-fn default_memory_limit() -> i32 { 2048 }
-fn default_cpu_limit() -> f64 { 2.0 }
-fn default_replicas() -> i32 { 1 }
-fn default_min_replicas() -> i32 { 1 }
-fn default_max_replicas() -> i32 { 5 }
+fn default_memory_limit() -> i32 {
+    2048
+}
+fn default_cpu_limit() -> f64 {
+    2.0
+}
+fn default_replicas() -> i32 {
+    1
+}
+fn default_min_replicas() -> i32 {
+    1
+}
+fn default_max_replicas() -> i32 {
+    5
+}
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct PortMapping {
@@ -190,7 +200,9 @@ pub struct PortMapping {
     pub protocol: String,
 }
 
-fn default_protocol() -> String { "tcp".to_string() }
+fn default_protocol() -> String {
+    "tcp".to_string()
+}
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct OpenSimIniConfig {
@@ -218,8 +230,12 @@ pub struct OpenSimIniConfig {
     pub additional_sections: HashMap<String, HashMap<String, String>>,
 }
 
-fn default_http_port() -> u16 { 9000 }
-fn default_internal_ip() -> String { "0.0.0.0".to_string() }
+fn default_http_port() -> u16 {
+    9000
+}
+fn default_internal_ip() -> String {
+    "0.0.0.0".to_string()
+}
 
 impl Default for OpenSimIniConfig {
     fn default() -> Self {
@@ -263,10 +279,18 @@ pub struct RegionIniConfig {
     pub estate_owner: String,
 }
 
-fn default_location() -> i32 { 1000 }
-fn default_region_size() -> i32 { 256 }
-fn default_max_agents() -> i32 { 40 }
-fn default_max_prims() -> i32 { 45000 }
+fn default_location() -> i32 {
+    1000
+}
+fn default_region_size() -> i32 {
+    256
+}
+fn default_max_agents() -> i32 {
+    40
+}
+fn default_max_prims() -> i32 {
+    45000
+}
 
 impl Default for RegionIniConfig {
     fn default() -> Self {
@@ -304,7 +328,9 @@ pub struct OsslConfig {
     pub enable_json_store: bool,
 }
 
-fn default_true() -> bool { true }
+fn default_true() -> bool {
+    true
+}
 
 impl Default for OsslConfig {
     fn default() -> Self {
@@ -520,11 +546,7 @@ impl Default for PortAllocation {
         Self {
             base_port: 9000,
             allocated_ports: Vec::new(),
-            reserved_ranges: vec![
-                (9000, 9099),
-                (9100, 9199),
-                (9200, 9299),
-            ],
+            reserved_ranges: vec![(9000, 9099), (9100, 9199), (9200, 9299)],
         }
     }
 }
@@ -646,7 +668,8 @@ impl RegionGridConfig {
     }
 
     fn format_region_name(&self, index: i32) -> String {
-        self.grid_layout.naming_pattern
+        self.grid_layout
+            .naming_pattern
             .replace("{name}", &self.grid_name)
             .replace("{index:02}", &format!("{:02}", index))
             .replace("{index}", &index.to_string())
@@ -658,12 +681,20 @@ impl RegionGridConfig {
 
         SystemRequirements {
             min_memory_mb: (per_region.min_memory_mb as f64 * count as f64 * scaling_factor) as i32,
-            recommended_memory_mb: (per_region.recommended_memory_mb as f64 * count as f64 * scaling_factor) as i32,
-            min_cpu_cores: ((per_region.min_cpu_cores as f64 * count as f64).sqrt().ceil() as i32).max(per_region.min_cpu_cores),
-            recommended_cpu_cores: ((per_region.recommended_cpu_cores as f64 * count as f64 * 0.7).ceil() as i32).max(per_region.recommended_cpu_cores),
+            recommended_memory_mb: (per_region.recommended_memory_mb as f64
+                * count as f64
+                * scaling_factor) as i32,
+            min_cpu_cores: ((per_region.min_cpu_cores as f64 * count as f64)
+                .sqrt()
+                .ceil() as i32)
+                .max(per_region.min_cpu_cores),
+            recommended_cpu_cores: ((per_region.recommended_cpu_cores as f64 * count as f64 * 0.7)
+                .ceil() as i32)
+                .max(per_region.recommended_cpu_cores),
             network_bandwidth_mbps: per_region.network_bandwidth_mbps * count,
             disk_space_gb: per_region.disk_space_gb * count,
-            notes: Some(format!("{} regions, {} total agents capacity",
+            notes: Some(format!(
+                "{} regions, {} total agents capacity",
                 count,
                 self.max_agents_per_region * count
             )),
@@ -791,7 +822,13 @@ pub struct CartItem {
 }
 
 impl CartItem {
-    pub fn new(name: String, world_name: String, simulator_type: SimulatorType, grid_config: RegionGridConfig, base_requirements: SystemRequirements) -> Self {
+    pub fn new(
+        name: String,
+        world_name: String,
+        simulator_type: SimulatorType,
+        grid_config: RegionGridConfig,
+        base_requirements: SystemRequirements,
+    ) -> Self {
         Self {
             id: uuid::Uuid::new_v4().to_string(),
             name,
@@ -954,7 +991,8 @@ impl ExistingWorld {
         let size_units_y = region.size_y / 256;
         for dx in 0..size_units_x {
             for dy in 0..size_units_y {
-                self.occupied_locations.push((region.location_x + dx, region.location_y + dy));
+                self.occupied_locations
+                    .push((region.location_x + dx, region.location_y + dy));
             }
         }
         self.regions.push(region);
@@ -985,7 +1023,13 @@ impl ExistingWorld {
         port
     }
 
-    pub fn find_available_location(&self, near_x: i32, near_y: i32, size_x: i32, size_y: i32) -> Option<(i32, i32)> {
+    pub fn find_available_location(
+        &self,
+        near_x: i32,
+        near_y: i32,
+        size_x: i32,
+        size_y: i32,
+    ) -> Option<(i32, i32)> {
         for radius in 0i32..100 {
             for dx in -radius..=radius {
                 for dy in -radius..=radius {
@@ -1002,11 +1046,31 @@ impl ExistingWorld {
         None
     }
 
-    pub fn suggest_safe_grid_layout(&self, width: i32, height: i32, region_size: i32) -> Option<GridLayout> {
-        let near_x = self.occupied_locations.iter().map(|(x, _)| *x).max().unwrap_or(1000);
-        let near_y = self.occupied_locations.iter().map(|(_, y)| *y).max().unwrap_or(1000);
+    pub fn suggest_safe_grid_layout(
+        &self,
+        width: i32,
+        height: i32,
+        region_size: i32,
+    ) -> Option<GridLayout> {
+        let near_x = self
+            .occupied_locations
+            .iter()
+            .map(|(x, _)| *x)
+            .max()
+            .unwrap_or(1000);
+        let near_y = self
+            .occupied_locations
+            .iter()
+            .map(|(_, y)| *y)
+            .max()
+            .unwrap_or(1000);
 
-        if let Some((base_x, base_y)) = self.find_available_location(near_x + 1, near_y + 1, width * region_size, height * region_size) {
+        if let Some((base_x, base_y)) = self.find_available_location(
+            near_x + 1,
+            near_y + 1,
+            width * region_size,
+            height * region_size,
+        ) {
             let base_port = self.find_next_available_port(9000);
             let ports_needed = width * height;
             let mut all_ports_available = true;
@@ -1091,7 +1155,12 @@ impl GridDeploymentCart {
         conflicts
     }
 
-    pub fn suggest_safe_layout_for_item(&self, width: i32, height: i32, region_size: i32) -> Option<GridLayout> {
+    pub fn suggest_safe_layout_for_item(
+        &self,
+        width: i32,
+        height: i32,
+        region_size: i32,
+    ) -> Option<GridLayout> {
         if let Some(existing) = &self.existing_world {
             let mut combined = existing.clone();
             for item in &self.items {
@@ -1187,7 +1256,9 @@ impl GridDeploymentCart {
         let mut worlds_map: HashMap<String, (Vec<String>, i32, u16, u16)> = HashMap::new();
 
         for item in &self.items {
-            let req = item.grid_config.aggregate_requirements(&item.base_requirements);
+            let req = item
+                .grid_config
+                .aggregate_requirements(&item.base_requirements);
             max_memory += req.min_memory_mb;
             max_cpu = max_cpu.max(req.min_cpu_cores);
             max_bandwidth += req.network_bandwidth_mbps;
@@ -1205,9 +1276,9 @@ impl GridDeploymentCart {
             let (start, end) = item.port_range();
             port_ranges.push((item.name.clone(), start, end));
 
-            let world_entry = worlds_map.entry(item.world_name.clone()).or_insert_with(|| {
-                (Vec::new(), 0, u16::MAX, 0)
-            });
+            let world_entry = worlds_map
+                .entry(item.world_name.clone())
+                .or_insert_with(|| (Vec::new(), 0, u16::MAX, 0));
             world_entry.0.push(item.name.clone());
             world_entry.1 += region_count;
             world_entry.2 = world_entry.2.min(start);
@@ -1216,12 +1287,14 @@ impl GridDeploymentCart {
 
         let worlds: Vec<WorldSummary> = worlds_map
             .into_iter()
-            .map(|(world_name, (items, total_regions, port_start, port_end))| WorldSummary {
-                world_name,
-                items,
-                total_regions,
-                port_range: (port_start, port_end),
-            })
+            .map(
+                |(world_name, (items, total_regions, port_start, port_end))| WorldSummary {
+                    world_name,
+                    items,
+                    total_regions,
+                    port_range: (port_start, port_end),
+                },
+            )
             .collect();
 
         let port_conflicts = self.find_port_conflicts();
@@ -1230,32 +1303,41 @@ impl GridDeploymentCart {
         }
 
         if max_memory > 65536 {
-            warnings.push(format!("Max memory ({} GB) exceeds typical server capacity", max_memory / 1024));
+            warnings.push(format!(
+                "Max memory ({} GB) exceeds typical server capacity",
+                max_memory / 1024
+            ));
         }
 
         if total_regions > 256 {
-            warnings.push(format!("{} regions is very large - consider multi-server deployment", total_regions));
+            warnings.push(format!(
+                "{} regions is very large - consider multi-server deployment",
+                total_regions
+            ));
         }
 
         let profile = &self.usage_profile;
-        let active_regions = (total_regions as f64 * (1.0 - profile.empty_region_percentage)) as i32;
+        let active_regions =
+            (total_regions as f64 * (1.0 - profile.empty_region_percentage)) as i32;
 
         let realistic_avatars = (active_regions as f64 * profile.average_avatars_per_region) as i32;
         let peak_avatars = (realistic_avatars as f64 * profile.peak_usage_multiplier) as i32;
 
         let memory_per_avatar_mb = 50;
         let base_region_memory_mb = 256;
-        let realistic_memory = (total_regions * base_region_memory_mb) +
-            (realistic_avatars * memory_per_avatar_mb) +
-            (max_memory as f64 * profile.active_script_percentage * 0.3) as i32;
+        let realistic_memory = (total_regions * base_region_memory_mb)
+            + (realistic_avatars * memory_per_avatar_mb)
+            + (max_memory as f64 * profile.active_script_percentage * 0.3) as i32;
 
-        let realistic_cpu = ((max_cpu as f64) *
-            (0.3 + profile.physics_load_factor * 0.4 + (realistic_avatars as f64 / total_max_agents.max(1) as f64) * 0.3))
+        let realistic_cpu = ((max_cpu as f64)
+            * (0.3
+                + profile.physics_load_factor * 0.4
+                + (realistic_avatars as f64 / total_max_agents.max(1) as f64) * 0.3))
             .ceil() as i32;
 
-        let realistic_bandwidth = ((max_bandwidth as f64) *
-            (realistic_avatars as f64 / total_max_agents.max(1) as f64).max(0.1))
-            .ceil() as i32;
+        let realistic_bandwidth = ((max_bandwidth as f64)
+            * (realistic_avatars as f64 / total_max_agents.max(1) as f64).max(0.1))
+        .ceil() as i32;
 
         CartAggregation {
             total_regions,
@@ -1269,7 +1351,10 @@ impl GridDeploymentCart {
                 recommended_cpu_cores: (max_cpu as f64 * 1.5).ceil() as i32,
                 network_bandwidth_mbps: max_bandwidth,
                 disk_space_gb: total_regions * 2,
-                notes: Some(format!("Maximum capacity: {} avatars, {} prims", total_max_agents, total_max_prims)),
+                notes: Some(format!(
+                    "Maximum capacity: {} avatars, {} prims",
+                    total_max_agents, total_max_prims
+                )),
             },
             realistic_projection: UsageProjection {
                 max_memory_mb: max_memory,

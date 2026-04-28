@@ -1,7 +1,7 @@
-use std::sync::Arc;
 use anyhow::Result;
+use std::sync::Arc;
+use tracing::{debug, info, warn};
 use uuid::Uuid;
-use tracing::{info, warn, debug};
 
 use crate::services::traits::UserAgentServiceTrait;
 
@@ -35,7 +35,8 @@ impl HGInstantMessageService {
 
     pub async fn forward_im_to_foreign_user(&self, im: &GridInstantMessage) -> Result<bool> {
         let target_grid = self.uas.get_server_urls(im.to_agent_id).await?;
-        let im_server_uri = target_grid.get("IMServerURI")
+        let im_server_uri = target_grid
+            .get("IMServerURI")
             .or_else(|| target_grid.get("HomeURI"))
             .cloned()
             .unwrap_or_default();
@@ -45,7 +46,10 @@ impl HGInstantMessageService {
             return Ok(false);
         }
 
-        debug!("[HG-IM] Forwarding IM from {} to {} via {}", im.from_agent_id, im.to_agent_id, im_server_uri);
+        debug!(
+            "[HG-IM] Forwarding IM from {} to {} via {}",
+            im.from_agent_id, im.to_agent_id, im_server_uri
+        );
 
         let client = reqwest::Client::builder()
             .timeout(std::time::Duration::from_secs(10))
@@ -70,14 +74,25 @@ impl HGInstantMessageService {
              <RegionID>{}</RegionID>\
              <timestamp>{}</timestamp>\
              </GridInstantMessage>",
-            im.from_agent_id, xml_escape(&im.from_agent_name), im.to_agent_id,
-            im.dialog, im.from_group, xml_escape(&im.message), im.im_session_id,
-            im.offline, im.position_x, im.position_y, im.position_z,
-            base64_encode(&im.binary_bucket), im.region_id, im.timestamp,
+            im.from_agent_id,
+            xml_escape(&im.from_agent_name),
+            im.to_agent_id,
+            im.dialog,
+            im.from_group,
+            xml_escape(&im.message),
+            im.im_session_id,
+            im.offline,
+            im.position_x,
+            im.position_y,
+            im.position_z,
+            base64_encode(&im.binary_bucket),
+            im.region_id,
+            im.timestamp,
         );
 
         let url = format!("{}/InstantMessage/", im_server_uri.trim_end_matches('/'));
-        let resp = client.post(&url)
+        let resp = client
+            .post(&url)
             .header("Content-Type", "application/xml")
             .body(body)
             .send()
@@ -85,7 +100,10 @@ impl HGInstantMessageService {
 
         let success = resp.status().is_success();
         if success {
-            info!("[HG-IM] IM forwarded to {} at {}", im.to_agent_id, im_server_uri);
+            info!(
+                "[HG-IM] IM forwarded to {} at {}",
+                im.to_agent_id, im_server_uri
+            );
         } else {
             warn!("[HG-IM] IM forward failed: HTTP {}", resp.status());
         }
@@ -93,7 +111,10 @@ impl HGInstantMessageService {
     }
 
     pub async fn incoming_im(&self, im: &GridInstantMessage) -> Result<bool> {
-        info!("[HG-IM] Incoming cross-grid IM from {} to {}", im.from_agent_id, im.to_agent_id);
+        info!(
+            "[HG-IM] Incoming cross-grid IM from {} to {}",
+            im.from_agent_id, im.to_agent_id
+        );
         Ok(true)
     }
 }

@@ -1,18 +1,16 @@
 //! Database initialization system for OpenSim Next
-//! 
+//!
 //! Automatically creates and populates all required database tables
 //! with default data on first startup, matching OpenSim Master behavior
 
-use sqlx::{SqliteConnection, SqlitePool};
-use tracing::{info, debug, warn};
 use anyhow::Result;
+use sqlx::{SqliteConnection, SqlitePool};
+use tracing::{debug, info, warn};
 use uuid::Uuid;
 
 use super::migration_engine::{
-    MigrationEngine, 
-    get_asset_store_migrations, 
-    get_inventory_store_migrations,
-    get_estate_store_migrations
+    get_asset_store_migrations, get_estate_store_migrations, get_inventory_store_migrations,
+    MigrationEngine,
 };
 
 /// Database initialization coordinator
@@ -28,15 +26,15 @@ impl DatabaseInitializer {
     /// Run complete database initialization
     pub async fn initialize(&self) -> Result<()> {
         info!("🔧 Starting OpenSim Next database initialization...");
-        
+
         let mut conn = self.pool.acquire().await?;
-        
+
         // Step 1: Run all migrations
         self.run_all_migrations(&mut conn).await?;
-        
+
         // Step 2: Populate default data
         self.populate_default_data(&mut conn).await?;
-        
+
         info!("✅ Database initialization completed successfully");
         Ok(())
     }
@@ -50,15 +48,21 @@ impl DatabaseInitializer {
 
         // Asset Store migrations
         let asset_engine = MigrationEngine::new("AssetStore".to_string());
-        asset_engine.update_store(conn, get_asset_store_migrations()).await?;
+        asset_engine
+            .update_store(conn, get_asset_store_migrations())
+            .await?;
 
-        // Inventory Store migrations  
+        // Inventory Store migrations
         let inventory_engine = MigrationEngine::new("InventoryStore".to_string());
-        inventory_engine.update_store(conn, get_inventory_store_migrations()).await?;
+        inventory_engine
+            .update_store(conn, get_inventory_store_migrations())
+            .await?;
 
         // Estate Store migrations
         let estate_engine = MigrationEngine::new("EstateStore".to_string());
-        estate_engine.update_store(conn, get_estate_store_migrations()).await?;
+        estate_engine
+            .update_store(conn, get_estate_store_migrations())
+            .await?;
 
         info!("✅ All database migrations completed");
         Ok(())
@@ -80,10 +84,10 @@ impl DatabaseInitializer {
 
         // Populate default assets
         self.populate_default_assets(conn).await?;
-        
+
         // Populate default inventory structure
         self.populate_default_inventory(conn).await?;
-        
+
         // Populate default estate
         self.populate_default_estate(conn).await?;
 
@@ -274,7 +278,10 @@ impl DatabaseInitializer {
             .await?;
         }
 
-        info!("✅ Created {} default assets (6 wearables + 11 textures + 1 env)", default_assets.len());
+        info!(
+            "✅ Created {} default assets (6 wearables + 11 textures + 1 env)",
+            default_assets.len()
+        );
         Ok(())
     }
 
@@ -296,17 +303,23 @@ impl DatabaseInitializer {
     }
 
     /// Create inventory structure for a specific user
-    async fn create_user_inventory(&self, user_id: &str, conn: &mut SqliteConnection) -> Result<()> {
+    async fn create_user_inventory(
+        &self,
+        user_id: &str,
+        conn: &mut SqliteConnection,
+    ) -> Result<()> {
         debug!("Creating inventory for user: {}", user_id);
 
         let root_folder_id = Uuid::new_v4().to_string();
 
         // Create root folder
-        sqlx::query(r#"
+        sqlx::query(
+            r#"
             INSERT OR IGNORE INTO inventoryfolders 
             (folderID, agentID, parentFolderID, folderName, type, version)
             VALUES (?, ?, '00000000-0000-0000-0000-000000000000', 'My Inventory', 8, 1)
-        "#)
+        "#,
+        )
         .bind(&root_folder_id)
         .bind(user_id)
         .execute(&mut *conn)
@@ -315,7 +328,7 @@ impl DatabaseInitializer {
         // Create standard folders
         let standard_folders = vec![
             ("Animations", 20, 1),
-            ("Body Parts", 13, 1), 
+            ("Body Parts", 13, 1),
             ("Calling Cards", 2, 1),
             ("Clothing", 5, 1),
             ("Current Outfit", 46, 1),
@@ -334,11 +347,13 @@ impl DatabaseInitializer {
 
         for (folder_name, folder_type, version) in standard_folders {
             let folder_id = Uuid::new_v4().to_string();
-            sqlx::query(r#"
+            sqlx::query(
+                r#"
                 INSERT OR IGNORE INTO inventoryfolders 
                 (folderID, agentID, parentFolderID, folderName, type, version)
                 VALUES (?, ?, ?, ?, ?, ?)
-            "#)
+            "#,
+            )
             .bind(&folder_id)
             .bind(user_id)
             .bind(&root_folder_id)
@@ -349,13 +364,16 @@ impl DatabaseInitializer {
             .await?;
 
             if folder_name == "Body Parts" {
-                self.create_default_bodyparts(&folder_id, user_id, conn).await?;
+                self.create_default_bodyparts(&folder_id, user_id, conn)
+                    .await?;
             }
             if folder_name == "Clothing" {
-                self.create_default_clothing(&folder_id, user_id, conn).await?;
+                self.create_default_clothing(&folder_id, user_id, conn)
+                    .await?;
             }
             if folder_name == "Current Outfit" {
-                self.create_default_cof_links(&folder_id, user_id, conn).await?;
+                self.create_default_cof_links(&folder_id, user_id, conn)
+                    .await?;
             }
         }
 
@@ -365,23 +383,53 @@ impl DatabaseInitializer {
     /// Create default bodypart items for user
     /// CRITICAL: Item IDs MUST match exactly what's sent in AgentWearablesUpdateMessage::with_default_ruth()
     /// The viewer uses these item IDs to look up wearables in inventory
-    async fn create_default_bodyparts(&self, folder_id: &str, user_id: &str, conn: &mut SqliteConnection) -> Result<()> {
+    async fn create_default_bodyparts(
+        &self,
+        folder_id: &str,
+        user_id: &str,
+        conn: &mut SqliteConnection,
+    ) -> Result<()> {
         // Body parts (asset_type 13, inv_type 13) - goes in Body Parts folder
         // Item IDs match AgentWearablesUpdateMessage::with_default_ruth() EXACTLY
         let bodyparts = vec![
             // (name, item_id, asset_id, asset_type, inv_type)
             // Shape (wearable type 0)
-            ("Default Shape", "66c41e39-38f9-f75a-024e-585989bfaba9", "66c41e39-38f9-f75a-024e-585989bfab73", 13, 13),
+            (
+                "Default Shape",
+                "66c41e39-38f9-f75a-024e-585989bfaba9",
+                "66c41e39-38f9-f75a-024e-585989bfab73",
+                13,
+                13,
+            ),
             // Skin (wearable type 1)
-            ("Default Skin", "77c41e39-38f9-f75a-024e-585989bfabc9", "77c41e39-38f9-f75a-024e-585989bbabbb", 13, 13),
+            (
+                "Default Skin",
+                "77c41e39-38f9-f75a-024e-585989bfabc9",
+                "77c41e39-38f9-f75a-024e-585989bbabbb",
+                13,
+                13,
+            ),
             // Hair (wearable type 2)
-            ("Default Hair", "d342e6c1-b9d2-11dc-95ff-0800200c9a66", "d342e6c0-b9d2-11dc-95ff-0800200c9a66", 13, 13),
+            (
+                "Default Hair",
+                "d342e6c1-b9d2-11dc-95ff-0800200c9a66",
+                "d342e6c0-b9d2-11dc-95ff-0800200c9a66",
+                13,
+                13,
+            ),
             // Eyes (wearable type 3)
-            ("Default Eyes", "cdc31054-eed8-4021-994f-4e0c6e861b50", "4bb6fa4d-1cd2-498a-a84c-95c1a0e745a7", 13, 13),
+            (
+                "Default Eyes",
+                "cdc31054-eed8-4021-994f-4e0c6e861b50",
+                "4bb6fa4d-1cd2-498a-a84c-95c1a0e745a7",
+                13,
+                13,
+            ),
         ];
 
         for (name, item_id, asset_id, asset_type, inv_type) in bodyparts {
-            sqlx::query(r#"
+            sqlx::query(
+                r#"
                 INSERT OR IGNORE INTO inventoryitems
                 (inventoryID, assetID, assetType, inventoryName, inventoryDescription,
                  inventoryNextPermissions, inventoryCurrentPermissions, invType, creatorID,
@@ -390,7 +438,8 @@ impl DatabaseInitializer {
                  inventoryGroupPermissions)
                 VALUES (?, ?, ?, ?, ?, 647168, 647168, ?, '11111111-1111-0000-0000-000100bba000',
                         647168, 0, 0, 0, ?, '00000000-0000-0000-0000-000000000000', 0, 0, ?, ?, 0)
-            "#)
+            "#,
+            )
             .bind(item_id)
             .bind(asset_id)
             .bind(asset_type)
@@ -410,19 +459,37 @@ impl DatabaseInitializer {
 
     /// Create default clothing items for user
     /// CRITICAL: Item IDs MUST match exactly what's sent in AgentWearablesUpdateMessage::with_default_ruth()
-    async fn create_default_clothing(&self, folder_id: &str, user_id: &str, conn: &mut SqliteConnection) -> Result<()> {
+    async fn create_default_clothing(
+        &self,
+        folder_id: &str,
+        user_id: &str,
+        conn: &mut SqliteConnection,
+    ) -> Result<()> {
         // Clothing (asset_type 5, inv_type 5) - goes in Clothing folder
         // Item IDs match AgentWearablesUpdateMessage::with_default_ruth() EXACTLY
         let clothing = vec![
             // (name, item_id, asset_id, asset_type, inv_type)
             // Shirt (wearable type 4)
-            ("Default Shirt", "77c41e39-38f9-f75a-0000-585989bf0000", "00000000-38f9-1111-024e-222222111110", 5, 5),
+            (
+                "Default Shirt",
+                "77c41e39-38f9-f75a-0000-585989bf0000",
+                "00000000-38f9-1111-024e-222222111110",
+                5,
+                5,
+            ),
             // Pants (wearable type 5)
-            ("Default Pants", "77c41e39-38f9-f75a-0000-5859892f1111", "00000000-38f9-1111-024e-222222111120", 5, 5),
+            (
+                "Default Pants",
+                "77c41e39-38f9-f75a-0000-5859892f1111",
+                "00000000-38f9-1111-024e-222222111120",
+                5,
+                5,
+            ),
         ];
 
         for (name, item_id, asset_id, asset_type, inv_type) in clothing {
-            sqlx::query(r#"
+            sqlx::query(
+                r#"
                 INSERT OR IGNORE INTO inventoryitems
                 (inventoryID, assetID, assetType, inventoryName, inventoryDescription,
                  inventoryNextPermissions, inventoryCurrentPermissions, invType, creatorID,
@@ -431,7 +498,8 @@ impl DatabaseInitializer {
                  inventoryGroupPermissions)
                 VALUES (?, ?, ?, ?, ?, 647168, 647168, ?, '11111111-1111-0000-0000-000100bba000',
                         647168, 0, 0, 0, ?, '00000000-0000-0000-0000-000000000000', 0, 0, ?, ?, 0)
-            "#)
+            "#,
+            )
             .bind(item_id)
             .bind(asset_id)
             .bind(asset_type)
@@ -451,7 +519,12 @@ impl DatabaseInitializer {
 
     /// Phase 95.5: Create default COF (Current Outfit Folder) link items
     /// These are inventory links (assetType=24, invType=18) pointing to wearable ITEM UUIDs
-    async fn create_default_cof_links(&self, folder_id: &str, user_id: &str, conn: &mut SqliteConnection) -> Result<()> {
+    async fn create_default_cof_links(
+        &self,
+        folder_id: &str,
+        user_id: &str,
+        conn: &mut SqliteConnection,
+    ) -> Result<()> {
         // (wearable_item_id, name, wearable_type_flag)
         let cof_links = vec![
             ("66c41e39-38f9-f75a-024e-585989bfaba9", "Default Shape", 0),
@@ -495,7 +568,8 @@ impl DatabaseInitializer {
         info!("🏰 Creating default estate...");
 
         // Create default estate settings
-        sqlx::query(r#"
+        sqlx::query(
+            r#"
             INSERT OR IGNORE INTO estate_settings 
             (EstateID, EstateName, AbuseEmailToEstateOwner, DenyAnonymous, ResetHomeOnTeleport,
              FixedSun, DenyTransacted, BlockDwell, DenyIdentified, AllowVoice, UseGlobalTime,
@@ -505,7 +579,8 @@ impl DatabaseInitializer {
             VALUES 
             (1, 'Default Estate', 1, 0, 0, 0, 0, 0, 0, 1, 1, 1, 0, 1, 0, 0, 1, 0.0, 0, 1.0, 1,
              'abuse@localhost', '11111111-1111-0000-0000-000100bba000', 0)
-        "#)
+        "#,
+        )
         .execute(&mut *conn)
         .await?;
 
@@ -563,7 +638,9 @@ parameters 142\n\
 770 0\n772 0\n773 .5\n794 .17\n795 .25\n796 0\n797 0\n798 0\n799 .5\n841 0\n\
 842 0\n843 0\n853 0\n854 0\n855 0\n879 0\n880 0\n1103 0\n1104 0\n1105 0\n\
 1200 0\n1201 0\n\
-textures 0\n".as_bytes().to_vec()
+textures 0\n"
+        .as_bytes()
+        .to_vec()
 }
 
 pub fn create_ruth_skin_data() -> Vec<u8> {
@@ -595,7 +672,9 @@ parameters 26\n\
 textures 3\n\
 0 00000000-0000-1111-9999-000000000012\n\
 5 00000000-0000-1111-9999-000000000010\n\
-6 00000000-0000-1111-9999-000000000011\n".as_bytes().to_vec()
+6 00000000-0000-1111-9999-000000000011\n"
+        .as_bytes()
+        .to_vec()
 }
 
 pub fn create_ruth_hair_data() -> Vec<u8> {
@@ -631,7 +710,9 @@ parameters 90\n\
 787 0\n788 0\n789 0\n790 0\n870 -.29\n871 0\n872 .25\n1000 .5\n1001 .5\n1002 .7\n\
 1003 .7\n1004 0\n1005 0\n1006 0\n1007 0\n1008 0\n1009 0\n1010 0\n1011 0\n1012 .25\n\
 textures 1\n\
-4 7ca39b4c-bd19-4699-aff7-f93fd03d3e7b\n".as_bytes().to_vec()
+4 7ca39b4c-bd19-4699-aff7-f93fd03d3e7b\n"
+        .as_bytes()
+        .to_vec()
 }
 
 pub fn create_ruth_eyes_data() -> Vec<u8> {
@@ -659,7 +740,9 @@ type 3\n\
 parameters 2\n\
 98 0\n99 0\n\
 textures 1\n\
-3 6522e74d-1660-4e7f-b601-6f48c1659a77\n".as_bytes().to_vec()
+3 6522e74d-1660-4e7f-b601-6f48c1659a77\n"
+        .as_bytes()
+        .to_vec()
 }
 
 pub fn create_ruth_shirt_data() -> Vec<u8> {
@@ -687,7 +770,9 @@ type 4\n\
 parameters 10\n\
 781 .78\n800 .65\n801 .82\n802 .78\n803 .5\n804 .5\n805 .6\n828 0\n840 0\n868 0\n\
 textures 1\n\
-1 5748decc-f629-461c-9a36-a35a221fe21f\n".as_bytes().to_vec()
+1 5748decc-f629-461c-9a36-a35a221fe21f\n"
+        .as_bytes()
+        .to_vec()
 }
 
 pub fn create_ruth_pants_data() -> Vec<u8> {
@@ -715,7 +800,9 @@ type 5\n\
 parameters 9\n\
 625 0\n638 0\n806 .8\n807 .2\n808 .2\n814 1\n815 .8\n816 0\n869 0\n\
 textures 1\n\
-2 5748decc-f629-461c-9a36-a35a221fe21f\n".as_bytes().to_vec()
+2 5748decc-f629-461c-9a36-a35a221fe21f\n"
+        .as_bytes()
+        .to_vec()
 }
 
 pub fn create_default_j2k_texture() -> Vec<u8> {
@@ -753,10 +840,8 @@ pub fn create_default_j2k_texture() -> Vec<u8> {
         0x00, // TPsot
         0x01, // TNsot
         // SOD marker (Start of data)
-        0xFF, 0x93,
-        // Minimal packet: empty header + empty body (all white)
-        0x00,
-        // EOC - End of codestream
+        0xFF, 0x93, // Minimal packet: empty header + empty body (all white)
+        0x00, // EOC - End of codestream
         0xFF, 0xD9,
     ]
 }
@@ -795,7 +880,10 @@ fn load_ruth_texture_file(filename: &str) -> Vec<u8> {
         }
     }
 
-    warn!("Could not load Ruth texture {}, using placeholder", filename);
+    warn!(
+        "Could not load Ruth texture {}, using placeholder",
+        filename
+    );
     create_default_j2k_texture()
 }
 
@@ -808,7 +896,7 @@ mod tests {
     async fn test_database_initialization() {
         let pool = SqlitePool::connect(":memory:").await.unwrap();
         let initializer = DatabaseInitializer::new(pool);
-        
+
         // This should complete without errors
         initializer.initialize().await.unwrap();
     }

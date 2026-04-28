@@ -1,11 +1,11 @@
-use super::models::*;
-use super::ini_generator::IniGenerator;
 use super::grid_generator::GridGenerator;
-use anyhow::{Result, anyhow};
-use std::path::{Path, PathBuf};
+use super::ini_generator::IniGenerator;
+use super::models::*;
+use anyhow::{anyhow, Result};
 use std::fs;
+use std::path::{Path, PathBuf};
 use tokio::sync::mpsc;
-use tracing::{info, warn, error};
+use tracing::{error, info, warn};
 
 pub struct DeploymentEngine {
     progress_sender: Option<mpsc::Sender<DeploymentProgress>>,
@@ -26,12 +26,14 @@ impl DeploymentEngine {
 
     async fn send_progress(&self, config_id: &str, step: &str, progress: f32, message: &str) {
         if let Some(sender) = &self.progress_sender {
-            let _ = sender.send(DeploymentProgress {
-                config_id: config_id.to_string(),
-                step: step.to_string(),
-                progress,
-                message: message.to_string(),
-            }).await;
+            let _ = sender
+                .send(DeploymentProgress {
+                    config_id: config_id.to_string(),
+                    step: step.to_string(),
+                    progress,
+                    message: message.to_string(),
+                })
+                .await;
         }
         info!("[Deploy {}] {} - {}", config_id, step, message);
     }
@@ -43,24 +45,33 @@ impl DeploymentEngine {
     ) -> Result<DeploymentResult> {
         let config_id = &config.id;
 
-        self.send_progress(config_id, "validate", 0.0, "Validating configuration...").await;
+        self.send_progress(config_id, "validate", 0.0, "Validating configuration...")
+            .await;
 
         let validator = super::validator::ConfigurationValidator::new();
         let validation = validator.validate(config);
 
         if !validation.valid {
-            let errors: Vec<String> = validation.errors.iter()
+            let errors: Vec<String> = validation
+                .errors
+                .iter()
                 .map(|e| format!("{}: {}", e.field, e.message))
                 .collect();
-            return Err(anyhow!("Configuration validation failed: {}", errors.join(", ")));
+            return Err(anyhow!(
+                "Configuration validation failed: {}",
+                errors.join(", ")
+            ));
         }
 
-        self.send_progress(config_id, "validate", 0.1, "Configuration validated").await;
+        self.send_progress(config_id, "validate", 0.1, "Configuration validated")
+            .await;
 
         if request.create_backup {
-            self.send_progress(config_id, "backup", 0.15, "Creating backup...").await;
+            self.send_progress(config_id, "backup", 0.15, "Creating backup...")
+                .await;
             self.create_backup(&request.target_path).await?;
-            self.send_progress(config_id, "backup", 0.2, "Backup created").await;
+            self.send_progress(config_id, "backup", 0.2, "Backup created")
+                .await;
         }
 
         match request.deployment_type {
@@ -78,26 +89,36 @@ impl DeploymentEngine {
         let config_id = &config.id;
         let target_path = PathBuf::from(&request.target_path);
 
-        self.send_progress(config_id, "prepare", 0.25, "Preparing deployment directory...").await;
+        self.send_progress(
+            config_id,
+            "prepare",
+            0.25,
+            "Preparing deployment directory...",
+        )
+        .await;
         self.prepare_directory(&target_path)?;
 
-        self.send_progress(config_id, "generate", 0.35, "Generating OpenSim.ini...").await;
+        self.send_progress(config_id, "generate", 0.35, "Generating OpenSim.ini...")
+            .await;
         let opensim_ini = IniGenerator::generate_opensim_ini(&config.opensim_ini);
         fs::write(target_path.join("OpenSim.ini"), &opensim_ini)?;
 
-        self.send_progress(config_id, "generate", 0.45, "Generating Regions.ini...").await;
+        self.send_progress(config_id, "generate", 0.45, "Generating Regions.ini...")
+            .await;
         let regions_dir = target_path.join("Regions");
         fs::create_dir_all(&regions_dir)?;
         let region_ini = IniGenerator::generate_region_ini(&config.region_ini);
         fs::write(regions_dir.join("Regions.ini"), &region_ini)?;
 
-        self.send_progress(config_id, "generate", 0.55, "Generating OSSL settings...").await;
+        self.send_progress(config_id, "generate", 0.55, "Generating OSSL settings...")
+            .await;
         let config_include_dir = target_path.join("config-include");
         fs::create_dir_all(&config_include_dir)?;
         let ossl_ini = IniGenerator::generate_ossl_enable(&config.ossl_config);
         fs::write(config_include_dir.join("osslEnable.ini"), &ossl_ini)?;
 
-        self.send_progress(config_id, "generate", 0.65, "Generating Standalone.ini...").await;
+        self.send_progress(config_id, "generate", 0.65, "Generating Standalone.ini...")
+            .await;
         let standalone_ini = IniGenerator::generate_standalone_ini();
         fs::write(config_include_dir.join("Standalone.ini"), &standalone_ini)?;
 
@@ -108,16 +129,25 @@ impl DeploymentEngine {
         let instance_id = uuid::Uuid::new_v4().to_string();
 
         if request.register_with_manager {
-            self.send_progress(config_id, "register", 0.75, "Registering with Instance Manager...").await;
-            self.register_native_instance(&instance_id, config, &target_path).await?;
+            self.send_progress(
+                config_id,
+                "register",
+                0.75,
+                "Registering with Instance Manager...",
+            )
+            .await;
+            self.register_native_instance(&instance_id, config, &target_path)
+                .await?;
         }
 
         if request.auto_start {
-            self.send_progress(config_id, "start", 0.85, "Starting instance...").await;
+            self.send_progress(config_id, "start", 0.85, "Starting instance...")
+                .await;
             self.start_native_instance(&target_path).await?;
         }
 
-        self.send_progress(config_id, "complete", 1.0, "Deployment complete!").await;
+        self.send_progress(config_id, "complete", 1.0, "Deployment complete!")
+            .await;
 
         Ok(DeploymentResult {
             config_id: config_id.clone(),
@@ -139,13 +169,20 @@ impl DeploymentEngine {
         let target_path = PathBuf::from(&request.target_path);
         let instance_name = config.name.to_lowercase().replace(' ', "-");
 
-        self.send_progress(config_id, "prepare", 0.25, "Preparing Docker deployment...").await;
+        self.send_progress(config_id, "prepare", 0.25, "Preparing Docker deployment...")
+            .await;
         self.prepare_directory(&target_path)?;
 
         let config_dir = target_path.join("config").join(&instance_name);
         fs::create_dir_all(&config_dir)?;
 
-        self.send_progress(config_id, "generate", 0.35, "Generating configuration files...").await;
+        self.send_progress(
+            config_id,
+            "generate",
+            0.35,
+            "Generating configuration files...",
+        )
+        .await;
 
         let opensim_ini = IniGenerator::generate_opensim_ini(&config.opensim_ini);
         fs::write(config_dir.join("OpenSim.ini"), &opensim_ini)?;
@@ -160,28 +197,45 @@ impl DeploymentEngine {
         let ossl_ini = IniGenerator::generate_ossl_enable(&config.ossl_config);
         fs::write(config_include_dir.join("osslEnable.ini"), &ossl_ini)?;
 
-        self.send_progress(config_id, "generate", 0.5, "Generating docker-compose.override.yml...").await;
+        self.send_progress(
+            config_id,
+            "generate",
+            0.5,
+            "Generating docker-compose.override.yml...",
+        )
+        .await;
         let docker_compose = IniGenerator::generate_docker_compose_override(config, &instance_name);
-        fs::write(target_path.join("docker-compose.override.yml"), &docker_compose)?;
+        fs::write(
+            target_path.join("docker-compose.override.yml"),
+            &docker_compose,
+        )?;
 
         let instance_id = uuid::Uuid::new_v4().to_string();
         let mut container_id = None;
 
         if request.auto_start {
-            self.send_progress(config_id, "start", 0.7, "Starting Docker container...").await;
-            container_id = Some(self.start_docker_container(&target_path, &instance_name).await?);
+            self.send_progress(config_id, "start", 0.7, "Starting Docker container...")
+                .await;
+            container_id = Some(
+                self.start_docker_container(&target_path, &instance_name)
+                    .await?,
+            );
         }
 
         if request.register_with_manager {
-            self.send_progress(config_id, "register", 0.85, "Registering with Instance Manager...").await;
-            self.register_docker_instance(
-                &instance_id,
-                config,
-                container_id.as_deref(),
-            ).await?;
+            self.send_progress(
+                config_id,
+                "register",
+                0.85,
+                "Registering with Instance Manager...",
+            )
+            .await;
+            self.register_docker_instance(&instance_id, config, container_id.as_deref())
+                .await?;
         }
 
-        self.send_progress(config_id, "complete", 1.0, "Docker deployment complete!").await;
+        self.send_progress(config_id, "complete", 1.0, "Docker deployment complete!")
+            .await;
 
         Ok(DeploymentResult {
             config_id: config_id.clone(),
@@ -203,33 +257,56 @@ impl DeploymentEngine {
         let target_path = PathBuf::from(&request.target_path);
         let instance_name = config.name.to_lowercase().replace(' ', "-");
 
-        self.send_progress(config_id, "prepare", 0.2, "Preparing Kubernetes deployment...").await;
+        self.send_progress(
+            config_id,
+            "prepare",
+            0.2,
+            "Preparing Kubernetes deployment...",
+        )
+        .await;
         self.prepare_directory(&target_path)?;
 
         let k8s_dir = target_path.join("kubernetes");
         fs::create_dir_all(&k8s_dir)?;
 
-        self.send_progress(config_id, "generate", 0.35, "Generating ConfigMap...").await;
+        self.send_progress(config_id, "generate", 0.35, "Generating ConfigMap...")
+            .await;
         let configmap = IniGenerator::generate_kubernetes_configmap(config, &instance_name);
         fs::write(k8s_dir.join("configmap.yaml"), &configmap)?;
 
-        self.send_progress(config_id, "generate", 0.5, "Generating Helm values...").await;
+        self.send_progress(config_id, "generate", 0.5, "Generating Helm values...")
+            .await;
         let helm_values = IniGenerator::generate_helm_values(config, &instance_name);
         fs::write(k8s_dir.join("values.yaml"), &helm_values)?;
 
         let instance_id = uuid::Uuid::new_v4().to_string();
 
         if request.auto_start {
-            self.send_progress(config_id, "deploy", 0.7, "Deploying to Kubernetes...").await;
-            self.deploy_helm_chart(&k8s_dir, &instance_name, config).await?;
+            self.send_progress(config_id, "deploy", 0.7, "Deploying to Kubernetes...")
+                .await;
+            self.deploy_helm_chart(&k8s_dir, &instance_name, config)
+                .await?;
         }
 
         if request.register_with_manager {
-            self.send_progress(config_id, "register", 0.85, "Registering with Instance Manager...").await;
-            self.register_kubernetes_instance(&instance_id, config, &instance_name).await?;
+            self.send_progress(
+                config_id,
+                "register",
+                0.85,
+                "Registering with Instance Manager...",
+            )
+            .await;
+            self.register_kubernetes_instance(&instance_id, config, &instance_name)
+                .await?;
         }
 
-        self.send_progress(config_id, "complete", 1.0, "Kubernetes deployment complete!").await;
+        self.send_progress(
+            config_id,
+            "complete",
+            1.0,
+            "Kubernetes deployment complete!",
+        )
+        .await;
 
         Ok(DeploymentResult {
             config_id: config_id.clone(),
@@ -251,29 +328,47 @@ impl DeploymentEngine {
         let config_id = &config.id;
         let target_path = PathBuf::from(&request.target_path);
 
-        self.send_progress(config_id, "validate", 0.0, "Validating grid configuration...").await;
+        self.send_progress(
+            config_id,
+            "validate",
+            0.0,
+            "Validating grid configuration...",
+        )
+        .await;
 
         let issues = GridGenerator::validate_grid_config(grid_config);
-        let has_errors = issues.iter().any(|i| i.severity == super::grid_generator::IssueSeverity::Error);
+        let has_errors = issues
+            .iter()
+            .any(|i| i.severity == super::grid_generator::IssueSeverity::Error);
         if has_errors {
-            let errors: Vec<String> = issues.iter()
+            let errors: Vec<String> = issues
+                .iter()
                 .filter(|i| i.severity == super::grid_generator::IssueSeverity::Error)
                 .map(|e| e.message.clone())
                 .collect();
             return Err(anyhow!("Grid validation failed: {}", errors.join(", ")));
         }
 
-        self.send_progress(config_id, "validate", 0.1, "Grid configuration validated").await;
+        self.send_progress(config_id, "validate", 0.1, "Grid configuration validated")
+            .await;
 
         if request.create_backup {
-            self.send_progress(config_id, "backup", 0.15, "Creating backup...").await;
+            self.send_progress(config_id, "backup", 0.15, "Creating backup...")
+                .await;
             self.create_backup(&request.target_path).await?;
         }
 
-        self.send_progress(config_id, "prepare", 0.2, "Preparing deployment directory...").await;
+        self.send_progress(
+            config_id,
+            "prepare",
+            0.2,
+            "Preparing deployment directory...",
+        )
+        .await;
         self.prepare_directory(&target_path)?;
 
-        self.send_progress(config_id, "generate", 0.25, "Generating OpenSim.ini...").await;
+        self.send_progress(config_id, "generate", 0.25, "Generating OpenSim.ini...")
+            .await;
         let opensim_ini = IniGenerator::generate_opensim_ini(&config.opensim_ini);
         fs::write(target_path.join("OpenSim.ini"), &opensim_ini)?;
 
@@ -285,8 +380,9 @@ impl DeploymentEngine {
             config_id,
             "generate",
             0.3,
-            &format!("Generating {} region INI files...", total_regions)
-        ).await;
+            &format!("Generating {} region INI files...", total_regions),
+        )
+        .await;
 
         let region_files = GridGenerator::generate_all_region_inis(grid_config);
         let file_count = region_files.len();
@@ -300,18 +396,21 @@ impl DeploymentEngine {
                     config_id,
                     "generate",
                     progress,
-                    &format!("Generated {}/{} region files", i + 1, file_count)
-                ).await;
+                    &format!("Generated {}/{} region files", i + 1, file_count),
+                )
+                .await;
             }
         }
 
-        self.send_progress(config_id, "generate", 0.65, "Generating OSSL settings...").await;
+        self.send_progress(config_id, "generate", 0.65, "Generating OSSL settings...")
+            .await;
         let config_include_dir = target_path.join("config-include");
         fs::create_dir_all(&config_include_dir)?;
         let ossl_ini = IniGenerator::generate_ossl_enable(&config.ossl_config);
         fs::write(config_include_dir.join("osslEnable.ini"), &ossl_ini)?;
 
-        self.send_progress(config_id, "generate", 0.7, "Generating Standalone.ini...").await;
+        self.send_progress(config_id, "generate", 0.7, "Generating Standalone.ini...")
+            .await;
         let standalone_ini = IniGenerator::generate_standalone_ini();
         fs::write(config_include_dir.join("Standalone.ini"), &standalone_ini)?;
 
@@ -326,12 +425,20 @@ impl DeploymentEngine {
         let instance_id = uuid::Uuid::new_v4().to_string();
 
         if request.register_with_manager {
-            self.send_progress(config_id, "register", 0.8, "Registering with Instance Manager...").await;
-            self.register_native_instance(&instance_id, config, &target_path).await?;
+            self.send_progress(
+                config_id,
+                "register",
+                0.8,
+                "Registering with Instance Manager...",
+            )
+            .await;
+            self.register_native_instance(&instance_id, config, &target_path)
+                .await?;
         }
 
         if request.auto_start {
-            self.send_progress(config_id, "start", 0.9, "Starting instance...").await;
+            self.send_progress(config_id, "start", 0.9, "Starting instance...")
+                .await;
             self.start_native_instance(&target_path).await?;
         }
 
@@ -339,8 +446,12 @@ impl DeploymentEngine {
             config_id,
             "complete",
             1.0,
-            &format!("Grid deployment complete! {} regions deployed.", total_regions)
-        ).await;
+            &format!(
+                "Grid deployment complete! {} regions deployed.",
+                total_regions
+            ),
+        )
+        .await;
 
         info!(
             "Grid deployment complete: {} regions, ports {}-{}",
@@ -375,7 +486,8 @@ impl DeploymentEngine {
                 source.file_name().unwrap_or_default().to_string_lossy(),
                 chrono::Utc::now().format("%Y%m%d_%H%M%S")
             );
-            let backup_path = source.parent()
+            let backup_path = source
+                .parent()
                 .unwrap_or(Path::new("/tmp"))
                 .join(backup_name);
 
@@ -448,7 +560,9 @@ impl DeploymentEngine {
         instance_name: &str,
         config: &SavedConfiguration,
     ) -> Result<()> {
-        let namespace = config.container_config.as_ref()
+        let namespace = config
+            .container_config
+            .as_ref()
             .and_then(|c| c.namespace.clone())
             .unwrap_or_else(|| "opensim".to_string());
 

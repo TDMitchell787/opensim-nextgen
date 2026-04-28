@@ -3,14 +3,14 @@
 //! This module provides loading and lookup of standard Second Life/OpenSim
 //! animation UUIDs from the avataranimations.xml data file.
 
-use anyhow::{Result, anyhow};
+use anyhow::{anyhow, Result};
+use parking_lot::RwLock;
 use std::collections::HashMap;
 use std::path::Path;
-use std::sync::OnceLock;
-use parking_lot::RwLock;
 use std::sync::Arc;
-use uuid::Uuid;
+use std::sync::OnceLock;
 use tracing::{debug, info, warn};
+use uuid::Uuid;
 
 static GLOBAL_ANIMATIONS: OnceLock<Arc<RwLock<AnimationManager>>> = OnceLock::new();
 
@@ -52,7 +52,11 @@ impl AnimationManager {
         self.parse_animations_xml(&content)?;
         self.loaded = true;
 
-        info!("Loaded {} animations from {:?}", self.animations_by_name.len(), path);
+        info!(
+            "Loaded {} animations from {:?}",
+            self.animations_by_name.len(),
+            path
+        );
         Ok(())
     }
 
@@ -64,7 +68,8 @@ impl AnimationManager {
             }
 
             if let Some(animation) = self.parse_animation_element(line) {
-                self.animations_by_name.insert(animation.name.clone(), animation.clone());
+                self.animations_by_name
+                    .insert(animation.name.clone(), animation.clone());
                 self.animations_by_uuid.insert(animation.uuid, animation);
             }
         }
@@ -84,11 +89,7 @@ impl AnimationManager {
 
         let state = state_str.filter(|s| !s.is_empty());
 
-        Some(Animation {
-            name,
-            uuid,
-            state,
-        })
+        Some(Animation { name, uuid, state })
     }
 
     fn extract_attribute(&self, line: &str, attr: &str) -> Option<String> {
@@ -100,7 +101,8 @@ impl AnimationManager {
     }
 
     pub fn get_by_name(&self, name: &str) -> Option<&Animation> {
-        self.animations_by_name.get(&name.to_uppercase())
+        self.animations_by_name
+            .get(&name.to_uppercase())
             .or_else(|| self.animations_by_name.get(name))
     }
 
@@ -117,7 +119,8 @@ impl AnimationManager {
     }
 
     pub fn get_state_animation(&self, state: &str) -> Option<&Animation> {
-        self.animations_by_name.values()
+        self.animations_by_name
+            .values()
             .find(|a| a.state.as_deref() == Some(state))
     }
 
@@ -135,9 +138,7 @@ impl AnimationManager {
 }
 
 pub fn init_global_animations(bin_path: &Path) -> Result<()> {
-    let manager = GLOBAL_ANIMATIONS.get_or_init(|| {
-        Arc::new(RwLock::new(AnimationManager::new()))
-    });
+    let manager = GLOBAL_ANIMATIONS.get_or_init(|| Arc::new(RwLock::new(AnimationManager::new())));
 
     let mut guard = manager.write();
     if guard.is_loaded() {
@@ -314,10 +315,19 @@ mod tests {
 
     #[test]
     fn test_default_animation_uuids() {
-        assert_eq!(default_animations::STAND, "2408fe9e-df1d-1d7d-f4ff-1384fa7b350f");
-        assert_eq!(default_animations::WALK, "6ed24bd8-91aa-4b12-ccc7-c97c857ab4e0");
+        assert_eq!(
+            default_animations::STAND,
+            "2408fe9e-df1d-1d7d-f4ff-1384fa7b350f"
+        );
+        assert_eq!(
+            default_animations::WALK,
+            "6ed24bd8-91aa-4b12-ccc7-c97c857ab4e0"
+        );
 
         let stand_uuid = default_animations::stand_uuid();
-        assert_eq!(stand_uuid.to_string(), "2408fe9e-df1d-1d7d-f4ff-1384fa7b350f");
+        assert_eq!(
+            stand_uuid.to_string(),
+            "2408fe9e-df1d-1d7d-f4ff-1384fa7b350f"
+        );
     }
 }

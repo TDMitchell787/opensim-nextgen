@@ -1,5 +1,5 @@
 //! Messaging System for OpenSim Next Social Features
-//! 
+//!
 //! Provides comprehensive messaging capabilities including direct messages,
 //! group chat, notifications, message history, and real-time communication.
 
@@ -9,7 +9,7 @@ use anyhow::Result;
 use sqlx::Row;
 use std::collections::HashMap;
 use std::sync::Arc;
-use tokio::sync::{RwLock, mpsc};
+use tokio::sync::{mpsc, RwLock};
 use tracing::{debug, info, warn};
 use uuid::Uuid;
 
@@ -158,8 +158,8 @@ pub enum MessageEvent {
     MessageRead(Uuid, Uuid),      // message_id, user_id
     UserOnline(Uuid),
     UserOffline(Uuid),
-    TypingStarted(Uuid, Uuid),    // conversation_id, user_id
-    TypingStopped(Uuid, Uuid),    // conversation_id, user_id
+    TypingStarted(Uuid, Uuid), // conversation_id, user_id
+    TypingStopped(Uuid, Uuid), // conversation_id, user_id
 }
 
 /// Message rate limiting
@@ -282,7 +282,11 @@ impl MessagingSystem {
     }
 
     /// Send a message
-    pub async fn send_message(&self, sender_id: Uuid, request: SendMessageRequest) -> SocialResult<Message> {
+    pub async fn send_message(
+        &self,
+        sender_id: Uuid,
+        request: SendMessageRequest,
+    ) -> SocialResult<Message> {
         info!("Sending message from user {}", sender_id);
 
         // Check rate limits
@@ -291,7 +295,8 @@ impl MessagingSystem {
         // Get or create conversation
         let conversation_id = if let Some(conv_id) = request.conversation_id {
             // Verify sender is participant
-            self.verify_conversation_participant(conv_id, sender_id).await?;
+            self.verify_conversation_participant(conv_id, sender_id)
+                .await?;
             conv_id
         } else {
             // Create new conversation
@@ -309,7 +314,9 @@ impl MessagingSystem {
                 title: None,
                 settings: None,
             };
-            self.create_conversation(sender_id, create_request).await?.conversation_id
+            self.create_conversation(sender_id, create_request)
+                .await?
+                .conversation_id
         };
 
         // Create message
@@ -335,16 +342,22 @@ impl MessagingSystem {
         self.save_message(&message).await?;
 
         // Update conversation last message time
-        self.update_conversation_last_message(conversation_id, &message).await?;
+        self.update_conversation_last_message(conversation_id, &message)
+            .await?;
 
         // Update cache
         {
             let mut cache = self.message_cache.write().await;
-            cache.entry(conversation_id).or_insert_with(Vec::new).push(message.clone());
+            cache
+                .entry(conversation_id)
+                .or_insert_with(Vec::new)
+                .push(message.clone());
         }
 
         // Send real-time event
-        let _ = self.message_sender.send(MessageEvent::MessageSent(message.clone()));
+        let _ = self
+            .message_sender
+            .send(MessageEvent::MessageSent(message.clone()));
 
         // Update rate limiter
         self.update_message_rate_limit(sender_id).await;
@@ -354,11 +367,16 @@ impl MessagingSystem {
     }
 
     /// Create a new conversation
-    pub async fn create_conversation(&self, creator_id: Uuid, request: CreateConversationRequest) -> SocialResult<Conversation> {
+    pub async fn create_conversation(
+        &self,
+        creator_id: Uuid,
+        request: CreateConversationRequest,
+    ) -> SocialResult<Conversation> {
         info!("Creating new conversation by user {}", creator_id);
 
         // Validate request
-        self.validate_conversation_creation(&request, creator_id).await?;
+        self.validate_conversation_creation(&request, creator_id)
+            .await?;
 
         // Create conversation
         let conversation = Conversation {
@@ -382,21 +400,35 @@ impl MessagingSystem {
             conversations.insert(conversation.conversation_id, conversation.clone());
         }
 
-        info!("Conversation created successfully: {}", conversation.conversation_id);
+        info!(
+            "Conversation created successfully: {}",
+            conversation.conversation_id
+        );
         Ok(conversation)
     }
 
     /// Get conversation history
-    pub async fn get_conversation_history(&self, user_id: Uuid, request: MessageHistoryRequest) -> SocialResult<Vec<Message>> {
-        debug!("Getting conversation history for user {} conversation {}", user_id, request.conversation_id);
+    pub async fn get_conversation_history(
+        &self,
+        user_id: Uuid,
+        request: MessageHistoryRequest,
+    ) -> SocialResult<Vec<Message>> {
+        debug!(
+            "Getting conversation history for user {} conversation {}",
+            user_id, request.conversation_id
+        );
 
         // Verify user is participant
-        self.verify_conversation_participant(request.conversation_id, user_id).await?;
+        self.verify_conversation_participant(request.conversation_id, user_id)
+            .await?;
 
         // Get messages from cache first
         let cached_messages = {
             let cache = self.message_cache.read().await;
-            cache.get(&request.conversation_id).cloned().unwrap_or_default()
+            cache
+                .get(&request.conversation_id)
+                .cloned()
+                .unwrap_or_default()
         };
 
         let mut messages = cached_messages;
@@ -421,12 +453,18 @@ impl MessagingSystem {
             messages.truncate(limit as usize);
         }
 
-        debug!("Retrieved {} messages from conversation history", messages.len());
+        debug!(
+            "Retrieved {} messages from conversation history",
+            messages.len()
+        );
         Ok(messages)
     }
 
     /// Get user's conversations
-    pub async fn get_user_conversations(&self, user_id: Uuid) -> SocialResult<ConversationListResponse> {
+    pub async fn get_user_conversations(
+        &self,
+        user_id: Uuid,
+    ) -> SocialResult<ConversationListResponse> {
         debug!("Getting conversations for user {}", user_id);
 
         let conversations = self.active_conversations.read().await;
@@ -436,13 +474,17 @@ impl MessagingSystem {
         for conversation in conversations.values() {
             if conversation.participants.contains(&user_id) {
                 // Get last message
-                let last_message = self.get_conversation_last_message(conversation.conversation_id).await?;
-                
+                let last_message = self
+                    .get_conversation_last_message(conversation.conversation_id)
+                    .await?;
+
                 // Calculate unread count (placeholder)
                 let conversation_unread_count = 0; // Would calculate actual unread count
 
                 // Get participant info
-                let participant_info = self.get_participant_info(&conversation.participants).await?;
+                let participant_info = self
+                    .get_participant_info(&conversation.participants)
+                    .await?;
 
                 let summary = ConversationSummary {
                     conversation: conversation.clone(),
@@ -458,8 +500,16 @@ impl MessagingSystem {
 
         // Sort by last message time
         user_conversations.sort_by(|a, b| {
-            let a_time = a.last_message.as_ref().map(|m| m.sent_at).unwrap_or(a.conversation.created_at);
-            let b_time = b.last_message.as_ref().map(|m| m.sent_at).unwrap_or(b.conversation.created_at);
+            let a_time = a
+                .last_message
+                .as_ref()
+                .map(|m| m.sent_at)
+                .unwrap_or(a.conversation.created_at);
+            let b_time = b
+                .last_message
+                .as_ref()
+                .map(|m| m.sent_at)
+                .unwrap_or(b.conversation.created_at);
             b_time.cmp(&a_time)
         });
 
@@ -474,8 +524,15 @@ impl MessagingSystem {
     }
 
     /// Search messages
-    pub async fn search_messages(&self, user_id: Uuid, criteria: MessageSearchCriteria) -> SocialResult<Vec<Message>> {
-        debug!("Searching messages for user {} with query: {}", user_id, criteria.query);
+    pub async fn search_messages(
+        &self,
+        user_id: Uuid,
+        criteria: MessageSearchCriteria,
+    ) -> SocialResult<Vec<Message>> {
+        debug!(
+            "Searching messages for user {} with query: {}",
+            user_id, criteria.query
+        );
 
         let mut results = Vec::new();
         let cache = self.message_cache.read().await;
@@ -483,7 +540,10 @@ impl MessagingSystem {
         // Search through cached messages
         for (conversation_id, messages) in cache.iter() {
             // Check if user is participant in conversation
-            if self.is_conversation_participant(*conversation_id, user_id).await? {
+            if self
+                .is_conversation_participant(*conversation_id, user_id)
+                .await?
+            {
                 for message in messages {
                     if self.message_matches_criteria(message, &criteria) {
                         results.push(message.clone());
@@ -530,22 +590,37 @@ impl MessagingSystem {
         self.update_message_read_status(message_id, user_id).await?;
 
         // Send real-time event
-        let _ = self.message_sender.send(MessageEvent::MessageRead(message_id, user_id));
+        let _ = self
+            .message_sender
+            .send(MessageEvent::MessageRead(message_id, user_id));
 
         debug!("Message marked as read");
         Ok(())
     }
 
     /// Add reaction to message
-    pub async fn add_message_reaction(&self, user_id: Uuid, message_id: Uuid, emoji: String) -> SocialResult<()> {
-        info!("Adding reaction '{}' to message {} by user {}", emoji, message_id, user_id);
+    pub async fn add_message_reaction(
+        &self,
+        user_id: Uuid,
+        message_id: Uuid,
+        emoji: String,
+    ) -> SocialResult<()> {
+        info!(
+            "Adding reaction '{}' to message {} by user {}",
+            emoji, message_id, user_id
+        );
 
         // Get message and verify user can react
         let mut message = self.get_message(message_id).await?;
-        self.verify_conversation_participant(message.conversation_id, user_id).await?;
+        self.verify_conversation_participant(message.conversation_id, user_id)
+            .await?;
 
         // Add reaction
-        message.reactions.entry(emoji.clone()).or_insert_with(Vec::new).push(user_id);
+        message
+            .reactions
+            .entry(emoji.clone())
+            .or_insert_with(Vec::new)
+            .push(user_id);
 
         // Save to database
         self.save_message(&message).await?;
@@ -554,7 +629,9 @@ impl MessagingSystem {
         {
             let mut cache = self.message_cache.write().await;
             if let Some(messages) = cache.get_mut(&message.conversation_id) {
-                if let Some(cached_message) = messages.iter_mut().find(|m| m.message_id == message_id) {
+                if let Some(cached_message) =
+                    messages.iter_mut().find(|m| m.message_id == message_id)
+                {
                     cached_message.reactions = message.reactions.clone();
                 }
             }
@@ -565,14 +642,21 @@ impl MessagingSystem {
     }
 
     /// Update user online status
-    pub async fn update_user_status(&self, user_id: Uuid, status: OnlineStatus) -> SocialResult<()> {
-        debug!("Updating online status for user {} to {:?}", user_id, status);
+    pub async fn update_user_status(
+        &self,
+        user_id: Uuid,
+        status: OnlineStatus,
+    ) -> SocialResult<()> {
+        debug!(
+            "Updating online status for user {} to {:?}",
+            user_id, status
+        );
 
         let now = Utc::now();
-        
+
         {
             let mut online_users = self.online_users.write().await;
-            
+
             if matches!(status, OnlineStatus::Online) {
                 let session = UserSession {
                     user_id,
@@ -582,7 +666,7 @@ impl MessagingSystem {
                     device_info: None,
                 };
                 online_users.insert(user_id, session);
-                
+
                 // Send online event
                 let _ = self.message_sender.send(MessageEvent::UserOnline(user_id));
             } else {
@@ -590,10 +674,10 @@ impl MessagingSystem {
                     session.status = status.clone();
                     session.last_seen = now;
                 }
-                
+
                 if matches!(status, OnlineStatus::Offline) {
                     online_users.remove(&user_id);
-                    
+
                     // Send offline event
                     let _ = self.message_sender.send(MessageEvent::UserOffline(user_id));
                 }
@@ -606,23 +690,34 @@ impl MessagingSystem {
 
     /// Start typing indicator
     pub async fn start_typing(&self, user_id: Uuid, conversation_id: Uuid) -> SocialResult<()> {
-        debug!("User {} started typing in conversation {}", user_id, conversation_id);
+        debug!(
+            "User {} started typing in conversation {}",
+            user_id, conversation_id
+        );
 
         // Verify user is participant
-        self.verify_conversation_participant(conversation_id, user_id).await?;
+        self.verify_conversation_participant(conversation_id, user_id)
+            .await?;
 
         // Send typing event
-        let _ = self.message_sender.send(MessageEvent::TypingStarted(conversation_id, user_id));
+        let _ = self
+            .message_sender
+            .send(MessageEvent::TypingStarted(conversation_id, user_id));
 
         Ok(())
     }
 
     /// Stop typing indicator
     pub async fn stop_typing(&self, user_id: Uuid, conversation_id: Uuid) -> SocialResult<()> {
-        debug!("User {} stopped typing in conversation {}", user_id, conversation_id);
+        debug!(
+            "User {} stopped typing in conversation {}",
+            user_id, conversation_id
+        );
 
         // Send typing stopped event
-        let _ = self.message_sender.send(MessageEvent::TypingStopped(conversation_id, user_id));
+        let _ = self
+            .message_sender
+            .send(MessageEvent::TypingStopped(conversation_id, user_id));
 
         Ok(())
     }
@@ -633,11 +728,13 @@ impl MessagingSystem {
         let mut rate_limiter = self.rate_limiter.write().await;
         let now = std::time::Instant::now();
 
-        let user_limit = rate_limiter.entry(user_id).or_insert_with(|| MessageRateLimit {
-            user_id,
-            messages_this_minute: 0,
-            last_reset: now,
-        });
+        let user_limit = rate_limiter
+            .entry(user_id)
+            .or_insert_with(|| MessageRateLimit {
+                user_id,
+                messages_this_minute: 0,
+                last_reset: now,
+            });
 
         // Reset if a minute has passed
         if now.duration_since(user_limit.last_reset).as_secs() >= 60 {
@@ -688,7 +785,11 @@ impl MessagingSystem {
         Ok(())
     }
 
-    async fn validate_conversation_creation(&self, request: &CreateConversationRequest, creator_id: Uuid) -> SocialResult<()> {
+    async fn validate_conversation_creation(
+        &self,
+        request: &CreateConversationRequest,
+        creator_id: Uuid,
+    ) -> SocialResult<()> {
         if request.participant_ids.is_empty() {
             return Err(SocialError::ValidationError {
                 message: "Conversation must have at least one participant".to_string(),
@@ -702,7 +803,8 @@ impl MessagingSystem {
         }
 
         // Check for duplicate participants
-        let unique_participants: std::collections::HashSet<_> = request.participant_ids.iter().collect();
+        let unique_participants: std::collections::HashSet<_> =
+            request.participant_ids.iter().collect();
         if unique_participants.len() != request.participant_ids.len() {
             return Err(SocialError::ValidationError {
                 message: "Duplicate participants not allowed".to_string(),
@@ -712,8 +814,15 @@ impl MessagingSystem {
         Ok(())
     }
 
-    async fn verify_conversation_participant(&self, conversation_id: Uuid, user_id: Uuid) -> SocialResult<()> {
-        if !self.is_conversation_participant(conversation_id, user_id).await? {
+    async fn verify_conversation_participant(
+        &self,
+        conversation_id: Uuid,
+        user_id: Uuid,
+    ) -> SocialResult<()> {
+        if !self
+            .is_conversation_participant(conversation_id, user_id)
+            .await?
+        {
             return Err(SocialError::AccessDenied {
                 reason: "User is not a participant in this conversation".to_string(),
             });
@@ -721,9 +830,13 @@ impl MessagingSystem {
         Ok(())
     }
 
-    async fn is_conversation_participant(&self, conversation_id: Uuid, user_id: Uuid) -> SocialResult<bool> {
+    async fn is_conversation_participant(
+        &self,
+        conversation_id: Uuid,
+        user_id: Uuid,
+    ) -> SocialResult<bool> {
         let conversations = self.active_conversations.read().await;
-        
+
         if let Some(conversation) = conversations.get(&conversation_id) {
             Ok(conversation.participants.contains(&user_id))
         } else {
@@ -731,7 +844,11 @@ impl MessagingSystem {
         }
     }
 
-    fn message_matches_criteria(&self, message: &Message, criteria: &MessageSearchCriteria) -> bool {
+    fn message_matches_criteria(
+        &self,
+        message: &Message,
+        criteria: &MessageSearchCriteria,
+    ) -> bool {
         // Text search
         if let Some(text) = &message.content.text {
             if !text.to_lowercase().contains(&criteria.query.to_lowercase()) {
@@ -740,7 +857,9 @@ impl MessagingSystem {
         }
 
         // Conversation filter
-        if !criteria.conversation_ids.is_empty() && !criteria.conversation_ids.contains(&message.conversation_id) {
+        if !criteria.conversation_ids.is_empty()
+            && !criteria.conversation_ids.contains(&message.conversation_id)
+        {
             return false;
         }
 
@@ -750,7 +869,9 @@ impl MessagingSystem {
         }
 
         // Message type filter
-        if !criteria.message_types.is_empty() && !criteria.message_types.contains(&message.message_type) {
+        if !criteria.message_types.is_empty()
+            && !criteria.message_types.contains(&message.message_type)
+        {
             return false;
         }
 
@@ -764,7 +885,11 @@ impl MessagingSystem {
         true
     }
 
-    async fn update_conversation_last_message(&self, conversation_id: Uuid, message: &Message) -> SocialResult<()> {
+    async fn update_conversation_last_message(
+        &self,
+        conversation_id: Uuid,
+        message: &Message,
+    ) -> SocialResult<()> {
         let mut conversations = self.active_conversations.write().await;
         if let Some(conversation) = conversations.get_mut(&conversation_id) {
             conversation.last_message_at = Some(message.sent_at);
@@ -773,9 +898,12 @@ impl MessagingSystem {
         Ok(())
     }
 
-    async fn get_conversation_last_message(&self, conversation_id: Uuid) -> SocialResult<Option<Message>> {
+    async fn get_conversation_last_message(
+        &self,
+        conversation_id: Uuid,
+    ) -> SocialResult<Option<Message>> {
         let cache = self.message_cache.read().await;
-        
+
         if let Some(messages) = cache.get(&conversation_id) {
             // Get the most recent message
             let last_message = messages.iter().max_by_key(|m| m.sent_at).cloned();
@@ -785,11 +913,16 @@ impl MessagingSystem {
         }
     }
 
-    async fn get_participant_info(&self, participant_ids: &[Uuid]) -> SocialResult<Vec<ParticipantInfo>> {
+    async fn get_participant_info(
+        &self,
+        participant_ids: &[Uuid],
+    ) -> SocialResult<Vec<ParticipantInfo>> {
         let online_users = self.online_users.read().await;
-        let statuses: HashMap<Uuid, OnlineStatus> = participant_ids.iter()
+        let statuses: HashMap<Uuid, OnlineStatus> = participant_ids
+            .iter()
             .map(|&user_id| {
-                let status = online_users.get(&user_id)
+                let status = online_users
+                    .get(&user_id)
                     .map(|session| session.status.clone())
                     .unwrap_or(OnlineStatus::Offline);
                 (user_id, status)
@@ -801,7 +934,10 @@ impl MessagingSystem {
 
         for &user_id in participant_ids {
             let display_name = self.get_user_display_name(user_id).await;
-            let online_status = statuses.get(&user_id).cloned().unwrap_or(OnlineStatus::Offline);
+            let online_status = statuses
+                .get(&user_id)
+                .cloned()
+                .unwrap_or(OnlineStatus::Offline);
 
             let participant = ParticipantInfo {
                 user_id,
@@ -819,7 +955,7 @@ impl MessagingSystem {
 
     async fn get_message(&self, message_id: Uuid) -> SocialResult<Message> {
         let cache = self.message_cache.read().await;
-        
+
         for messages in cache.values() {
             if let Some(message) = messages.iter().find(|m| m.message_id == message_id) {
                 return Ok(message.clone());
@@ -863,22 +999,29 @@ impl MessagingSystem {
         Ok(())
     }
 
-    async fn update_message_read_status(&self, _message_id: Uuid, _user_id: Uuid) -> SocialResult<()> {
+    async fn update_message_read_status(
+        &self,
+        _message_id: Uuid,
+        _user_id: Uuid,
+    ) -> SocialResult<()> {
         Ok(())
     }
 
     async fn get_user_display_name(&self, user_id: Uuid) -> String {
         if let Ok(pool) = self.database.legacy_pool() {
-            let row_result = sqlx::query(
-                "SELECT FirstName, LastName FROM UserAccounts WHERE PrincipalID = $1"
-            )
-            .bind(user_id.to_string())
-            .fetch_optional(pool)
-            .await;
+            let row_result =
+                sqlx::query("SELECT FirstName, LastName FROM UserAccounts WHERE PrincipalID = $1")
+                    .bind(user_id.to_string())
+                    .fetch_optional(pool)
+                    .await;
 
             if let Ok(Some(row)) = row_result {
-                let first_name: String = row.try_get("FirstName").unwrap_or_else(|_| "Unknown".to_string());
-                let last_name: String = row.try_get("LastName").unwrap_or_else(|_| "User".to_string());
+                let first_name: String = row
+                    .try_get("FirstName")
+                    .unwrap_or_else(|_| "Unknown".to_string());
+                let last_name: String = row
+                    .try_get("LastName")
+                    .unwrap_or_else(|_| "User".to_string());
                 return format!("{} {}", first_name, last_name);
             }
         }

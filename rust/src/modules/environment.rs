@@ -108,7 +108,11 @@ impl IEnvironmentModule for EnvironmentModule {
 
 const SIMULATOR_VIEWER_TIME_ID: u32 = 0xFFFF0096; // Low 150
 
-fn build_viewer_time_message(sun_direction: &[f32; 3], sun_phase: f32, sun_angular_velocity: f32) -> Vec<u8> {
+fn build_viewer_time_message(
+    sun_direction: &[f32; 3],
+    sun_phase: f32,
+    sun_angular_velocity: f32,
+) -> Vec<u8> {
     let mut packet = Vec::with_capacity(40);
     packet.push(0x40);
     packet.extend_from_slice(&0u32.to_be_bytes());
@@ -145,16 +149,23 @@ fn build_viewer_time_message(sun_direction: &[f32; 3], sun_phase: f32, sun_angul
 
 #[async_trait]
 impl RegionModule for EnvironmentModule {
-    fn name(&self) -> &'static str { "EnvironmentModule" }
-    fn replaceable_interface(&self) -> Option<&'static str> { Some("IEnvironmentModule") }
+    fn name(&self) -> &'static str {
+        "EnvironmentModule"
+    }
+    fn replaceable_interface(&self) -> Option<&'static str> {
+        Some("IEnvironmentModule")
+    }
 
     async fn initialize(&mut self, config: &ModuleConfig) -> Result<()> {
         let mut env_config = self.config.write();
         env_config.use_fixed_sun = config.get_bool("use_fixed_sun", false);
         env_config.fixed_sun_hour = config.get_f32("fixed_sun_hour", 6.0);
-        env_config.day_cycle_length = config.get_f32("day_cycle_length", DEFAULT_DAY_CYCLE as f32) as f64;
-        info!("[ENVIRONMENT MODULE] Initialized (fixed_sun={}, cycle={:.0}s)",
-              env_config.use_fixed_sun, env_config.day_cycle_length);
+        env_config.day_cycle_length =
+            config.get_f32("day_cycle_length", DEFAULT_DAY_CYCLE as f32) as f64;
+        info!(
+            "[ENVIRONMENT MODULE] Initialized (fixed_sun={}, cycle={:.0}s)",
+            env_config.use_fixed_sun, env_config.day_cycle_length
+        );
         Ok(())
     }
 
@@ -165,23 +176,31 @@ impl RegionModule for EnvironmentModule {
         self.avatar_states = Some(scene.avatar_states.clone());
         self.service_registry = Some(scene.service_registry.clone());
 
-        scene.service_registry.write().register::<EnvironmentModule>(
-            Arc::new(EnvironmentModule {
+        scene
+            .service_registry
+            .write()
+            .register::<EnvironmentModule>(Arc::new(EnvironmentModule {
                 config: self.config.clone(),
                 region_uuid: self.region_uuid,
                 socket: self.socket.clone(),
                 session_manager: self.session_manager.clone(),
                 avatar_states: self.avatar_states.clone(),
                 service_registry: self.service_registry.clone(),
-            }),
-        );
+            }));
 
-        info!("[ENVIRONMENT MODULE] Added to region {:?}", scene.region_name);
+        info!(
+            "[ENVIRONMENT MODULE] Added to region {:?}",
+            scene.region_name
+        );
         Ok(())
     }
 
-    fn as_any(&self) -> &dyn Any { self }
-    fn as_any_mut(&mut self) -> &mut dyn Any { self }
+    fn as_any(&self) -> &dyn Any {
+        self
+    }
+    fn as_any_mut(&mut self) -> &mut dyn Any {
+        self
+    }
 }
 
 #[async_trait]

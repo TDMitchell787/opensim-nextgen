@@ -1,10 +1,10 @@
-use std::sync::Arc;
 use anyhow::Result;
 use async_trait::async_trait;
-use tracing::{info, debug};
+use std::sync::Arc;
+use tracing::{debug, info};
 
-use crate::services::traits::{OfflineIMServiceTrait, OfflineIM};
 use crate::database::DatabaseConnection;
+use crate::services::traits::{OfflineIM, OfflineIMServiceTrait};
 
 pub struct LocalOfflineIMService {
     db: Arc<DatabaseConnection>,
@@ -19,7 +19,9 @@ impl LocalOfflineIMService {
 #[async_trait]
 impl OfflineIMServiceTrait for LocalOfflineIMService {
     async fn get_messages(&self, principal_id: &str) -> Result<Vec<OfflineIM>> {
-        let pool = self.db.postgres_pool()
+        let pool = self
+            .db
+            .postgres_pool()
             .ok_or_else(|| anyhow::anyhow!("No PG pool"))?;
 
         let rows = sqlx::query(
@@ -41,12 +43,18 @@ impl OfflineIMServiceTrait for LocalOfflineIMService {
             });
         }
 
-        debug!("[OFFLINEIM] get_messages({}) -> {} messages", principal_id, result.len());
+        debug!(
+            "[OFFLINEIM] get_messages({}) -> {} messages",
+            principal_id,
+            result.len()
+        );
         Ok(result)
     }
 
     async fn store_message(&self, im: &OfflineIM) -> Result<bool> {
-        let pool = self.db.postgres_pool()
+        let pool = self
+            .db
+            .postgres_pool()
             .ok_or_else(|| anyhow::anyhow!("No PG pool"))?;
 
         let now = std::time::SystemTime::now()
@@ -54,11 +62,14 @@ impl OfflineIMServiceTrait for LocalOfflineIMService {
             .unwrap_or_default()
             .as_secs() as i32;
 
-        info!("[OFFLINEIM] store_message: from={} to={}", im.from_id, im.principal_id);
+        info!(
+            "[OFFLINEIM] store_message: from={} to={}",
+            im.from_id, im.principal_id
+        );
 
         sqlx::query(
             r#"INSERT INTO im_offline ("PrincipalID", "FromID", "Message", "TMStamp")
-               VALUES ($1, $2, $3, $4)"#
+               VALUES ($1, $2, $3, $4)"#,
         )
         .bind(&im.principal_id)
         .bind(&im.from_id)
@@ -71,17 +82,17 @@ impl OfflineIMServiceTrait for LocalOfflineIMService {
     }
 
     async fn delete_messages(&self, principal_id: &str) -> Result<bool> {
-        let pool = self.db.postgres_pool()
+        let pool = self
+            .db
+            .postgres_pool()
             .ok_or_else(|| anyhow::anyhow!("No PG pool"))?;
 
         info!("[OFFLINEIM] delete_messages: {}", principal_id);
 
-        sqlx::query(
-            r#"DELETE FROM im_offline WHERE "PrincipalID" = $1"#
-        )
-        .bind(principal_id)
-        .execute(pool)
-        .await?;
+        sqlx::query(r#"DELETE FROM im_offline WHERE "PrincipalID" = $1"#)
+            .bind(principal_id)
+            .execute(pool)
+            .await?;
 
         Ok(true)
     }

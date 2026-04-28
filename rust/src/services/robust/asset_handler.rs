@@ -1,11 +1,11 @@
 use axum::extract::{Path, State};
+use axum::http::{header, StatusCode};
 use axum::response::IntoResponse;
-use axum::http::{StatusCode, header};
 use std::collections::HashMap;
 use tracing::{debug, warn};
 
-use super::RobustState;
 use super::xml_response::*;
+use super::RobustState;
 use crate::services::traits::{AssetBase, AssetMetadata};
 
 pub async fn handle_asset_post(
@@ -13,7 +13,8 @@ pub async fn handle_asset_post(
     headers: axum::http::HeaderMap,
     body: String,
 ) -> impl IntoResponse {
-    let content_type = headers.get(header::CONTENT_TYPE)
+    let content_type = headers
+        .get(header::CONTENT_TYPE)
         .and_then(|v| v.to_str().ok())
         .unwrap_or("");
 
@@ -24,7 +25,11 @@ pub async fn handle_asset_post(
     }
 
     let params = parse_form_body(&body);
-    let method = params.get("METHOD").or_else(|| params.get("method")).cloned().unwrap_or_default();
+    let method = params
+        .get("METHOD")
+        .or_else(|| params.get("method"))
+        .cloned()
+        .unwrap_or_default();
 
     debug!("Asset handler POST: METHOD={}", method);
 
@@ -40,10 +45,17 @@ pub async fn handle_asset_post(
         }
     };
 
-    (StatusCode::OK, [(header::CONTENT_TYPE, "text/xml; charset=utf-8")], xml)
+    (
+        StatusCode::OK,
+        [(header::CONTENT_TYPE, "text/xml; charset=utf-8")],
+        xml,
+    )
 }
 
-async fn handle_xml_asset_store(state: &RobustState, xml_body: &str) -> (StatusCode, [(header::HeaderName, &'static str); 1], String) {
+async fn handle_xml_asset_store(
+    state: &RobustState,
+    xml_body: &str,
+) -> (StatusCode, [(header::HeaderName, &'static str); 1], String) {
     use tracing::info;
 
     fn extract_xml_field<'a>(xml: &'a str, tag: &str) -> Option<&'a str> {
@@ -68,18 +80,35 @@ async fn handle_xml_asset_store(state: &RobustState, xml_body: &str) -> (StatusC
 
     let name = extract_xml_field(xml_body, "Name").unwrap_or("foreign asset");
     let description = extract_xml_field(xml_body, "Description").unwrap_or("");
-    let asset_type: i8 = extract_xml_field(xml_body, "Type").and_then(|s| s.parse().ok()).unwrap_or(0);
-    let local = extract_xml_field(xml_body, "Local").map(|s| s == "True" || s == "true").unwrap_or(false);
-    let temporary = extract_xml_field(xml_body, "Temporary").map(|s| s == "True" || s == "true").unwrap_or(false);
+    let asset_type: i8 = extract_xml_field(xml_body, "Type")
+        .and_then(|s| s.parse().ok())
+        .unwrap_or(0);
+    let local = extract_xml_field(xml_body, "Local")
+        .map(|s| s == "True" || s == "true")
+        .unwrap_or(false);
+    let temporary = extract_xml_field(xml_body, "Temporary")
+        .map(|s| s == "True" || s == "true")
+        .unwrap_or(false);
     let creator_id = extract_xml_field(xml_body, "CreatorID").unwrap_or("");
-    let flags: i32 = extract_xml_field(xml_body, "Flags").and_then(|s| s.parse().ok()).unwrap_or(0);
+    let flags: i32 = extract_xml_field(xml_body, "Flags")
+        .and_then(|s| s.parse().ok())
+        .unwrap_or(0);
 
     let data = extract_xml_field(xml_body, "Data")
-        .map(|s| base64::Engine::decode(&base64::engine::general_purpose::STANDARD, s).unwrap_or_default())
+        .map(|s| {
+            base64::Engine::decode(&base64::engine::general_purpose::STANDARD, s)
+                .unwrap_or_default()
+        })
         .unwrap_or_default();
 
-    info!("[HG-ASSET] XML asset POST: id='{}' clean_id='{}' name='{}' type={} size={} bytes",
-          id, clean_id, name, asset_type, data.len());
+    info!(
+        "[HG-ASSET] XML asset POST: id='{}' clean_id='{}' name='{}' type={} size={} bytes",
+        id,
+        clean_id,
+        name,
+        asset_type,
+        data.len()
+    );
 
     let asset = AssetBase {
         id: clean_id.to_string(),
@@ -95,12 +124,20 @@ async fn handle_xml_asset_store(state: &RobustState, xml_body: &str) -> (StatusC
 
     match state.asset_service.store(&asset).await {
         Ok(stored_id) => {
-            info!("[HG-ASSET] Stored XML asset: {} ({} bytes)", stored_id, asset.data.len());
+            info!(
+                "[HG-ASSET] Stored XML asset: {} ({} bytes)",
+                stored_id,
+                asset.data.len()
+            );
             let response = format!(
                 "<?xml version=\"1.0\" encoding=\"utf-8\"?><string xmlns=\"http://schemas.microsoft.com/2003/10/Serialization/\">{}</string>",
                 stored_id
             );
-            (StatusCode::OK, [(header::CONTENT_TYPE, "text/xml; charset=utf-8")], response)
+            (
+                StatusCode::OK,
+                [(header::CONTENT_TYPE, "text/xml; charset=utf-8")],
+                response,
+            )
         }
         Err(e) => {
             tracing::warn!("[HG-ASSET] Failed to store XML asset '{}': {}", clean_id, e);
@@ -108,7 +145,11 @@ async fn handle_xml_asset_store(state: &RobustState, xml_body: &str) -> (StatusC
                 "<?xml version=\"1.0\" encoding=\"utf-8\"?><string xmlns=\"http://schemas.microsoft.com/2003/10/Serialization/\">{}</string>",
                 ""
             );
-            (StatusCode::OK, [(header::CONTENT_TYPE, "text/xml; charset=utf-8")], response)
+            (
+                StatusCode::OK,
+                [(header::CONTENT_TYPE, "text/xml; charset=utf-8")],
+                response,
+            )
         }
     }
 }
@@ -120,9 +161,12 @@ pub async fn handle_asset_get(
     debug!("Asset handler GET: id={}", id);
 
     match state.asset_service.get_data(&id).await {
-        Ok(Some(data)) => {
-            (StatusCode::OK, [(header::CONTENT_TYPE, "application/octet-stream")], data).into_response()
-        }
+        Ok(Some(data)) => (
+            StatusCode::OK,
+            [(header::CONTENT_TYPE, "application/octet-stream")],
+            data,
+        )
+            .into_response(),
         Ok(None) => StatusCode::NOT_FOUND.into_response(),
         Err(_) => StatusCode::INTERNAL_SERVER_ERROR.into_response(),
     }
@@ -137,7 +181,12 @@ pub async fn handle_asset_metadata_get(
     match state.asset_service.get_metadata(&id).await {
         Ok(Some(meta)) => {
             let xml = single_result(metadata_to_fields(&meta));
-            (StatusCode::OK, [(header::CONTENT_TYPE, "text/xml; charset=utf-8")], xml).into_response()
+            (
+                StatusCode::OK,
+                [(header::CONTENT_TYPE, "text/xml; charset=utf-8")],
+                xml,
+            )
+                .into_response()
         }
         Ok(None) => StatusCode::NOT_FOUND.into_response(),
         Err(_) => StatusCode::INTERNAL_SERVER_ERROR.into_response(),
@@ -145,7 +194,11 @@ pub async fn handle_asset_metadata_get(
 }
 
 async fn handle_get(state: &RobustState, params: &HashMap<String, String>) -> String {
-    let id = params.get("ID").or_else(|| params.get("id")).cloned().unwrap_or_default();
+    let id = params
+        .get("ID")
+        .or_else(|| params.get("id"))
+        .cloned()
+        .unwrap_or_default();
 
     match state.asset_service.get(&id).await {
         Ok(Some(asset)) => single_result(asset_to_fields(&asset)),
@@ -155,7 +208,11 @@ async fn handle_get(state: &RobustState, params: &HashMap<String, String>) -> St
 }
 
 async fn handle_get_metadata(state: &RobustState, params: &HashMap<String, String>) -> String {
-    let id = params.get("ID").or_else(|| params.get("id")).cloned().unwrap_or_default();
+    let id = params
+        .get("ID")
+        .or_else(|| params.get("id"))
+        .cloned()
+        .unwrap_or_default();
 
     match state.asset_service.get_metadata(&id).await {
         Ok(Some(meta)) => single_result(metadata_to_fields(&meta)),
@@ -166,17 +223,38 @@ async fn handle_get_metadata(state: &RobustState, params: &HashMap<String, Strin
 
 async fn handle_store(state: &RobustState, params: &HashMap<String, String>) -> String {
     let asset = AssetBase {
-        id: params.get("ID").or_else(|| params.get("id")).cloned().unwrap_or_default(),
-        name: params.get("Name").or_else(|| params.get("NAME")).cloned().unwrap_or_default(),
+        id: params
+            .get("ID")
+            .or_else(|| params.get("id"))
+            .cloned()
+            .unwrap_or_default(),
+        name: params
+            .get("Name")
+            .or_else(|| params.get("NAME"))
+            .cloned()
+            .unwrap_or_default(),
         description: params.get("Description").cloned().unwrap_or_default(),
         asset_type: params.get("Type").and_then(|s| s.parse().ok()).unwrap_or(0),
-        local: params.get("Local").map(|s| s == "True" || s == "true" || s == "1").unwrap_or(false),
-        temporary: params.get("Temporary").map(|s| s == "True" || s == "true" || s == "1").unwrap_or(false),
-        data: params.get("Data")
-            .map(|s| base64::Engine::decode(&base64::engine::general_purpose::STANDARD, s).unwrap_or_default())
+        local: params
+            .get("Local")
+            .map(|s| s == "True" || s == "true" || s == "1")
+            .unwrap_or(false),
+        temporary: params
+            .get("Temporary")
+            .map(|s| s == "True" || s == "true" || s == "1")
+            .unwrap_or(false),
+        data: params
+            .get("Data")
+            .map(|s| {
+                base64::Engine::decode(&base64::engine::general_purpose::STANDARD, s)
+                    .unwrap_or_default()
+            })
             .unwrap_or_default(),
         creator_id: params.get("CreatorID").cloned().unwrap_or_default(),
-        flags: params.get("Flags").and_then(|s| s.parse().ok()).unwrap_or(0),
+        flags: params
+            .get("Flags")
+            .and_then(|s| s.parse().ok())
+            .unwrap_or(0),
     };
 
     match state.asset_service.store(&asset).await {
@@ -190,7 +268,11 @@ async fn handle_store(state: &RobustState, params: &HashMap<String, String>) -> 
 }
 
 async fn handle_delete(state: &RobustState, params: &HashMap<String, String>) -> String {
-    let id = params.get("ID").or_else(|| params.get("id")).cloned().unwrap_or_default();
+    let id = params
+        .get("ID")
+        .or_else(|| params.get("id"))
+        .cloned()
+        .unwrap_or_default();
 
     match state.asset_service.delete(&id).await {
         Ok(true) => success_result(),
@@ -200,7 +282,11 @@ async fn handle_delete(state: &RobustState, params: &HashMap<String, String>) ->
 }
 
 async fn handle_exists(state: &RobustState, params: &HashMap<String, String>) -> String {
-    let id = params.get("ID").or_else(|| params.get("id")).cloned().unwrap_or_default();
+    let id = params
+        .get("ID")
+        .or_else(|| params.get("id"))
+        .cloned()
+        .unwrap_or_default();
 
     match state.asset_service.asset_exists(&id).await {
         Ok(exists) => bool_result(exists),
@@ -214,11 +300,20 @@ fn asset_to_fields(asset: &AssetBase) -> HashMap<String, String> {
     m.insert("Name".to_string(), asset.name.clone());
     m.insert("Description".to_string(), asset.description.clone());
     m.insert("Type".to_string(), asset.asset_type.to_string());
-    m.insert("Local".to_string(), if asset.local { "True" } else { "False" }.to_string());
-    m.insert("Temporary".to_string(), if asset.temporary { "True" } else { "False" }.to_string());
+    m.insert(
+        "Local".to_string(),
+        if asset.local { "True" } else { "False" }.to_string(),
+    );
+    m.insert(
+        "Temporary".to_string(),
+        if asset.temporary { "True" } else { "False" }.to_string(),
+    );
     m.insert("CreatorID".to_string(), asset.creator_id.clone());
     m.insert("Flags".to_string(), asset.flags.to_string());
-    m.insert("Data".to_string(), base64::Engine::encode(&base64::engine::general_purpose::STANDARD, &asset.data));
+    m.insert(
+        "Data".to_string(),
+        base64::Engine::encode(&base64::engine::general_purpose::STANDARD, &asset.data),
+    );
     m
 }
 
@@ -263,7 +358,11 @@ pub async fn handle_assets_exist(
     }
     xml.push_str("</ArrayOfBoolean>");
 
-    (StatusCode::OK, [(header::CONTENT_TYPE, "text/xml; charset=utf-8")], xml)
+    (
+        StatusCode::OK,
+        [(header::CONTENT_TYPE, "text/xml; charset=utf-8")],
+        xml,
+    )
 }
 
 fn metadata_to_fields(meta: &AssetMetadata) -> HashMap<String, String> {
@@ -272,8 +371,14 @@ fn metadata_to_fields(meta: &AssetMetadata) -> HashMap<String, String> {
     m.insert("Name".to_string(), meta.name.clone());
     m.insert("Description".to_string(), meta.description.clone());
     m.insert("Type".to_string(), meta.asset_type.to_string());
-    m.insert("Local".to_string(), if meta.local { "True" } else { "False" }.to_string());
-    m.insert("Temporary".to_string(), if meta.temporary { "True" } else { "False" }.to_string());
+    m.insert(
+        "Local".to_string(),
+        if meta.local { "True" } else { "False" }.to_string(),
+    );
+    m.insert(
+        "Temporary".to_string(),
+        if meta.temporary { "True" } else { "False" }.to_string(),
+    );
     m.insert("CreatorID".to_string(), meta.creator_id.clone());
     m.insert("Flags".to_string(), meta.flags.to_string());
     m.insert("CreatedDate".to_string(), meta.created_date.to_string());

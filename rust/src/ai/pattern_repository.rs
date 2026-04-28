@@ -240,8 +240,7 @@ impl PatternRepository {
 
     pub async fn save_learned_pattern(&self, pattern: &LearnedPattern) -> Result<()> {
         let id = Uuid::parse_str(&pattern.id).unwrap_or_else(|_| Uuid::new_v4());
-        let pattern_data = serde_json::to_vec(pattern)
-            .context("Failed to serialize pattern")?;
+        let pattern_data = serde_json::to_vec(pattern).context("Failed to serialize pattern")?;
 
         let category = format!("{:?}", pattern.category);
 
@@ -252,7 +251,8 @@ impl PatternRepository {
             &pattern_data,
             pattern.elegance_score,
             pattern.usage_frequency,
-        ).await?;
+        )
+        .await?;
 
         let mut cache = self.cache.write().await;
         cache.content_patterns.insert(id, pattern.clone());
@@ -261,22 +261,22 @@ impl PatternRepository {
         Ok(())
     }
 
-    pub async fn save_architectural_pattern(&self, key: &str, pattern: &ArchitecturalPattern) -> Result<()> {
+    pub async fn save_architectural_pattern(
+        &self,
+        key: &str,
+        pattern: &ArchitecturalPattern,
+    ) -> Result<()> {
         let id = string_to_uuid(key);
-        let pattern_data = serde_json::to_vec(pattern)
-            .context("Failed to serialize architectural pattern")?;
+        let pattern_data =
+            serde_json::to_vec(pattern).context("Failed to serialize architectural pattern")?;
 
-        self.save_pattern_to_db(
-            id,
-            &pattern.style,
-            "architectural",
-            &pattern_data,
-            0.0,
-            0,
-        ).await?;
+        self.save_pattern_to_db(id, &pattern.style, "architectural", &pattern_data, 0.0, 0)
+            .await?;
 
         let mut cache = self.cache.write().await;
-        cache.architectural_patterns.insert(key.to_string(), pattern.clone());
+        cache
+            .architectural_patterns
+            .insert(key.to_string(), pattern.clone());
         cache.dirty = true;
 
         Ok(())
@@ -284,8 +284,8 @@ impl PatternRepository {
 
     pub async fn save_material_pattern(&self, key: &str, pattern: &MaterialPattern) -> Result<()> {
         let id = string_to_uuid(key);
-        let pattern_data = serde_json::to_vec(pattern)
-            .context("Failed to serialize material pattern")?;
+        let pattern_data =
+            serde_json::to_vec(pattern).context("Failed to serialize material pattern")?;
 
         self.save_pattern_to_db(
             id,
@@ -294,10 +294,13 @@ impl PatternRepository {
             &pattern_data,
             0.0,
             0,
-        ).await?;
+        )
+        .await?;
 
         let mut cache = self.cache.write().await;
-        cache.material_patterns.insert(key.to_string(), pattern.clone());
+        cache
+            .material_patterns
+            .insert(key.to_string(), pattern.clone());
         cache.dirty = true;
 
         Ok(())
@@ -305,29 +308,29 @@ impl PatternRepository {
 
     pub async fn save_spatial_pattern(&self, key: &str, pattern: &SpatialPattern) -> Result<()> {
         let id = string_to_uuid(key);
-        let pattern_data = serde_json::to_vec(pattern)
-            .context("Failed to serialize spatial pattern")?;
+        let pattern_data =
+            serde_json::to_vec(pattern).context("Failed to serialize spatial pattern")?;
 
-        self.save_pattern_to_db(
-            id,
-            &pattern.layout_type,
-            "spatial",
-            &pattern_data,
-            0.0,
-            0,
-        ).await?;
+        self.save_pattern_to_db(id, &pattern.layout_type, "spatial", &pattern_data, 0.0, 0)
+            .await?;
 
         let mut cache = self.cache.write().await;
-        cache.spatial_patterns.insert(key.to_string(), pattern.clone());
+        cache
+            .spatial_patterns
+            .insert(key.to_string(), pattern.clone());
         cache.dirty = true;
 
         Ok(())
     }
 
-    pub async fn save_scripting_pattern(&self, key: &str, pattern: &ScriptingPattern) -> Result<()> {
+    pub async fn save_scripting_pattern(
+        &self,
+        key: &str,
+        pattern: &ScriptingPattern,
+    ) -> Result<()> {
         let id = string_to_uuid(key);
-        let pattern_data = serde_json::to_vec(pattern)
-            .context("Failed to serialize scripting pattern")?;
+        let pattern_data =
+            serde_json::to_vec(pattern).context("Failed to serialize scripting pattern")?;
 
         self.save_pattern_to_db(
             id,
@@ -336,10 +339,13 @@ impl PatternRepository {
             &pattern_data,
             0.0,
             0,
-        ).await?;
+        )
+        .await?;
 
         let mut cache = self.cache.write().await;
-        cache.scripting_patterns.insert(key.to_string(), pattern.clone());
+        cache
+            .scripting_patterns
+            .insert(key.to_string(), pattern.clone());
         cache.dirty = true;
 
         Ok(())
@@ -347,17 +353,11 @@ impl PatternRepository {
 
     pub async fn save_anti_pattern(&self, key: &str, pattern: &AntiPattern) -> Result<()> {
         let id = string_to_uuid(key);
-        let pattern_data = serde_json::to_vec(pattern)
-            .context("Failed to serialize anti pattern")?;
+        let pattern_data =
+            serde_json::to_vec(pattern).context("Failed to serialize anti pattern")?;
 
-        self.save_pattern_to_db(
-            id,
-            &pattern.name,
-            "anti",
-            &pattern_data,
-            0.0,
-            0,
-        ).await?;
+        self.save_pattern_to_db(id, &pattern.name, "anti", &pattern_data, 0.0, 0)
+            .await?;
 
         let mut cache = self.cache.write().await;
         cache.anti_patterns.insert(key.to_string(), pattern.clone());
@@ -469,18 +469,29 @@ impl PatternRepository {
                 .await
                 .context("Failed to load pattern from PostgreSQL")?;
 
-                Ok(row.map(|(id_str, name, category, pattern_data, quality_score, usage_count, created_at, updated_at)| {
-                    StoredPattern {
-                        id: Uuid::parse_str(&id_str).unwrap_or(id),
+                Ok(row.map(
+                    |(
+                        id_str,
                         name,
                         category,
                         pattern_data,
                         quality_score,
-                        usage_count: usage_count as u32,
+                        usage_count,
                         created_at,
                         updated_at,
-                    }
-                }))
+                    )| {
+                        StoredPattern {
+                            id: Uuid::parse_str(&id_str).unwrap_or(id),
+                            name,
+                            category,
+                            pattern_data,
+                            quality_score,
+                            usage_count: usage_count as u32,
+                            created_at,
+                            updated_at,
+                        }
+                    },
+                ))
             }
             crate::database::DatabasePoolRef::MySQL(mysql_pool) => {
                 let row: Option<(String, String, String, Vec<u8>, f64, i32, DateTime<Utc>, DateTime<Utc>)> = sqlx::query_as(
@@ -491,18 +502,29 @@ impl PatternRepository {
                 .await
                 .context("Failed to load pattern from MySQL")?;
 
-                Ok(row.map(|(id_str, name, category, pattern_data, quality_score, usage_count, created_at, updated_at)| {
-                    StoredPattern {
-                        id: Uuid::parse_str(&id_str).unwrap_or(id),
+                Ok(row.map(
+                    |(
+                        id_str,
                         name,
                         category,
                         pattern_data,
                         quality_score,
-                        usage_count: usage_count as u32,
+                        usage_count,
                         created_at,
                         updated_at,
-                    }
-                }))
+                    )| {
+                        StoredPattern {
+                            id: Uuid::parse_str(&id_str).unwrap_or(id),
+                            name,
+                            category,
+                            pattern_data,
+                            quality_score,
+                            usage_count: usage_count as u32,
+                            created_at,
+                            updated_at,
+                        }
+                    },
+                ))
             }
         }
     }
@@ -549,14 +571,17 @@ impl PatternRepository {
             let id = Uuid::parse_str(&id_str).unwrap_or_else(|_| Uuid::new_v4());
 
             match category.as_str() {
-                "content" | "Primitives" | "Architecture" | "Landscape" | "Interactive" | "Environments" | "Vehicles" | "Wearables" => {
+                "content" | "Primitives" | "Architecture" | "Landscape" | "Interactive"
+                | "Environments" | "Vehicles" | "Wearables" => {
                     if let Ok(pattern) = serde_json::from_slice::<LearnedPattern>(&pattern_data) {
                         cache.content_patterns.insert(id, pattern);
                         content_count += 1;
                     }
                 }
                 "architectural" => {
-                    if let Ok(pattern) = serde_json::from_slice::<ArchitecturalPattern>(&pattern_data) {
+                    if let Ok(pattern) =
+                        serde_json::from_slice::<ArchitecturalPattern>(&pattern_data)
+                    {
                         cache.architectural_patterns.insert(name, pattern);
                         architectural_count += 1;
                     }
@@ -653,7 +678,8 @@ impl PatternRepository {
                 &pattern_data,
                 pattern.elegance_score,
                 pattern.usage_frequency,
-            ).await?;
+            )
+            .await?;
         }
 
         drop(cache);
@@ -666,7 +692,12 @@ impl PatternRepository {
         Ok(())
     }
 
-    pub async fn record_metric(&self, pattern_id: Uuid, metric_type: &str, metric_value: f64) -> Result<()> {
+    pub async fn record_metric(
+        &self,
+        pattern_id: Uuid,
+        metric_type: &str,
+        metric_value: f64,
+    ) -> Result<()> {
         let pool = self.db.get_pool()?;
         let now = Utc::now();
 
@@ -724,15 +755,18 @@ impl PatternRepository {
             }
         };
 
-        Ok(rows.into_iter().map(|(id, pattern_id_str, metric_type, metric_value, recorded_at)| {
-            LearningMetric {
-                id,
-                pattern_id: Uuid::parse_str(&pattern_id_str).unwrap_or(pattern_id),
-                metric_type,
-                metric_value,
-                recorded_at,
-            }
-        }).collect())
+        Ok(rows
+            .into_iter()
+            .map(
+                |(id, pattern_id_str, metric_type, metric_value, recorded_at)| LearningMetric {
+                    id,
+                    pattern_id: Uuid::parse_str(&pattern_id_str).unwrap_or(pattern_id),
+                    metric_type,
+                    metric_value,
+                    recorded_at,
+                },
+            )
+            .collect())
     }
 
     pub async fn get_content_patterns(&self) -> HashMap<Uuid, LearnedPattern> {

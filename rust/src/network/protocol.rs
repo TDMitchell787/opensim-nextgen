@@ -1,5 +1,5 @@
 //! Network protocol definitions for OpenSim
-//! 
+//!
 //! This module defines the network protocol types and structures used for
 //! communication between clients and the server.
 
@@ -149,7 +149,7 @@ pub enum Message {
         rotation: Rotation,
         velocity: Velocity,
     },
-    
+
     // Error
     Error {
         code: u32,
@@ -164,4 +164,4 @@ pub enum AssetType {
     Animation,
     Mesh,
     Script,
-} 
+}

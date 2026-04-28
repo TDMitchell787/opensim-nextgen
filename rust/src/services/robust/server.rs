@@ -1,9 +1,9 @@
 use anyhow::Result;
-use tracing::info;
 use tokio::net::TcpListener;
+use tracing::info;
 
-use super::RobustState;
 use super::router::create_robust_router;
+use super::RobustState;
 
 pub async fn start_robust_server(port: u16, state: RobustState) -> Result<()> {
     let router = create_robust_router(state);
@@ -18,10 +18,12 @@ pub async fn start_robust_server(port: u16, state: RobustState) -> Result<()> {
     info!("  Presence service:    POST /presence");
     info!("  Avatar service:      POST /avatar");
 
-    let listener = TcpListener::bind(&addr).await
+    let listener = TcpListener::bind(&addr)
+        .await
         .map_err(|e| anyhow::anyhow!("Failed to bind Robust server to {}: {}", addr, e))?;
 
-    axum::serve(listener, router).await
+    axum::serve(listener, router)
+        .await
         .map_err(|e| anyhow::anyhow!("Robust server error: {}", e))?;
 
     Ok(())

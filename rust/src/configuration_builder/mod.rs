@@ -1,15 +1,15 @@
+pub mod deployment;
+pub mod grid_generator;
+pub mod ini_generator;
 pub mod models;
 pub mod templates;
-pub mod ini_generator;
-pub mod grid_generator;
-pub mod deployment;
 pub mod validator;
 
+pub use deployment::DeploymentEngine;
+pub use grid_generator::GridGenerator;
+pub use ini_generator::IniGenerator;
 pub use models::*;
 pub use templates::BuiltInTemplates;
-pub use ini_generator::IniGenerator;
-pub use grid_generator::GridGenerator;
-pub use deployment::DeploymentEngine;
 pub use validator::ConfigurationValidator;
 
 use serde::{Deserialize, Serialize};
@@ -19,30 +19,65 @@ use tokio::sync::mpsc;
 #[serde(tag = "type", content = "data")]
 pub enum ConfigBuilderMessage {
     GetTemplates,
-    GetTemplate { id: String },
-    GetSimulatorTypeDefaults { simulator_type: SimulatorType },
+    GetTemplate {
+        id: String,
+    },
+    GetSimulatorTypeDefaults {
+        simulator_type: SimulatorType,
+    },
     SaveConfiguration(SavedConfiguration),
     GetConfigurations,
-    GetConfiguration { id: String },
-    DeleteConfiguration { id: String },
+    GetConfiguration {
+        id: String,
+    },
+    DeleteConfiguration {
+        id: String,
+    },
     ValidateConfiguration(SavedConfiguration),
     ValidateGridConfig(RegionGridConfig),
     GenerateGridRegions(RegionGridConfig),
-    SuggestGridLayout { region_count: i32 },
+    SuggestGridLayout {
+        region_count: i32,
+    },
     DeployConfiguration(DeploymentRequest),
-    DeployGridConfiguration { config: SavedConfiguration, grid_config: RegionGridConfig, request: DeploymentRequest },
-    ExportConfiguration { id: String, format: ExportFormat },
-    AddToCart { item: CartItem },
-    RemoveFromCart { item_id: String },
+    DeployGridConfiguration {
+        config: SavedConfiguration,
+        grid_config: RegionGridConfig,
+        request: DeploymentRequest,
+    },
+    ExportConfiguration {
+        id: String,
+        format: ExportFormat,
+    },
+    AddToCart {
+        item: CartItem,
+    },
+    RemoveFromCart {
+        item_id: String,
+    },
     ClearCart,
     GetCart,
-    UpdateCartUsageProfile { profile: RealisticUsageProfile },
+    UpdateCartUsageProfile {
+        profile: RealisticUsageProfile,
+    },
     AggregateCart,
-    DeployCart { request: DeploymentRequest },
-    LoadExistingWorld { path: String },
-    ScanForExistingWorlds { search_path: String },
-    SuggestSafeLayout { width: i32, height: i32, region_size: i32 },
-    ValidateCartItem { item: CartItem },
+    DeployCart {
+        request: DeploymentRequest,
+    },
+    LoadExistingWorld {
+        path: String,
+    },
+    ScanForExistingWorlds {
+        search_path: String,
+    },
+    SuggestSafeLayout {
+        width: i32,
+        height: i32,
+        region_size: i32,
+    },
+    ValidateCartItem {
+        item: CartItem,
+    },
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
@@ -60,26 +95,50 @@ pub enum ConfigBuilderResponse {
     SimulatorTypeDefaults(SimulatorTypeDefaults),
     Configurations(Vec<SavedConfiguration>),
     Configuration(Option<SavedConfiguration>),
-    ConfigurationSaved { id: String },
-    ConfigurationDeleted { id: String },
+    ConfigurationSaved {
+        id: String,
+    },
+    ConfigurationDeleted {
+        id: String,
+    },
     ValidationResult(ValidationResult),
-    GridValidationResult { issues: Vec<grid_generator::GridValidationIssue> },
-    GridRegionsGenerated { grid_config: RegionGridConfig, summary: grid_generator::GridSummary },
+    GridValidationResult {
+        issues: Vec<grid_generator::GridValidationIssue>,
+    },
+    GridRegionsGenerated {
+        grid_config: RegionGridConfig,
+        summary: grid_generator::GridSummary,
+    },
     GridLayoutSuggestions(Vec<grid_generator::GridLayoutSuggestion>),
     DeploymentProgress(DeploymentProgress),
     DeploymentResult(DeploymentResult),
-    ExportReady { url: String },
+    ExportReady {
+        url: String,
+    },
     Cart(GridDeploymentCart),
-    CartItemAdded { item_id: String, suggested_next_port: u16 },
-    CartItemRemoved { item_id: String },
+    CartItemAdded {
+        item_id: String,
+        suggested_next_port: u16,
+    },
+    CartItemRemoved {
+        item_id: String,
+    },
     CartCleared,
     CartAggregation(CartAggregation),
-    CartDeploymentResult { results: Vec<DeploymentResult>, warnings: Vec<String> },
+    CartDeploymentResult {
+        results: Vec<DeploymentResult>,
+        warnings: Vec<String>,
+    },
     ExistingWorldLoaded(ExistingWorld),
     ExistingWorldsFound(Vec<ExistingWorld>),
     SafeLayoutSuggestion(Option<GridLayout>),
-    CartItemValidation { conflicts: Vec<String>, safe: bool },
-    Error { message: String },
+    CartItemValidation {
+        conflicts: Vec<String>,
+        safe: bool,
+    },
+    Error {
+        message: String,
+    },
 }
 
 pub struct ConfigurationBuilderService {
@@ -151,32 +210,43 @@ impl ConfigurationBuilderService {
         IniGenerator::generate_kubernetes_configmap(config, instance_name)
     }
 
-    pub fn generate_helm_values(
-        &self,
-        config: &SavedConfiguration,
-        instance_name: &str,
-    ) -> String {
+    pub fn generate_helm_values(&self, config: &SavedConfiguration, instance_name: &str) -> String {
         IniGenerator::generate_helm_values(config, instance_name)
     }
 
-    pub fn get_simulator_type_defaults(&self, simulator_type: &SimulatorType) -> SimulatorTypeDefaults {
+    pub fn get_simulator_type_defaults(
+        &self,
+        simulator_type: &SimulatorType,
+    ) -> SimulatorTypeDefaults {
         simulator_type.get_defaults()
     }
 
-    pub fn generate_grid_regions(&self, config: &mut RegionGridConfig) -> grid_generator::GridSummary {
+    pub fn generate_grid_regions(
+        &self,
+        config: &mut RegionGridConfig,
+    ) -> grid_generator::GridSummary {
         config.generate_regions();
         GridGenerator::generate_grid_summary(config)
     }
 
-    pub fn validate_grid_config(&self, config: &RegionGridConfig) -> Vec<grid_generator::GridValidationIssue> {
+    pub fn validate_grid_config(
+        &self,
+        config: &RegionGridConfig,
+    ) -> Vec<grid_generator::GridValidationIssue> {
         GridGenerator::validate_grid_config(config)
     }
 
-    pub fn suggest_grid_layout(&self, region_count: i32) -> Vec<grid_generator::GridLayoutSuggestion> {
+    pub fn suggest_grid_layout(
+        &self,
+        region_count: i32,
+    ) -> Vec<grid_generator::GridLayoutSuggestion> {
         GridGenerator::suggest_layout_for_count(region_count)
     }
 
-    pub fn generate_grid_ini_files(&self, config: &RegionGridConfig) -> std::collections::HashMap<String, String> {
+    pub fn generate_grid_ini_files(
+        &self,
+        config: &RegionGridConfig,
+    ) -> std::collections::HashMap<String, String> {
         GridGenerator::generate_all_region_inis(config)
     }
 
@@ -184,11 +254,18 @@ impl ConfigurationBuilderService {
         GridGenerator::generate_combined_regions_ini(config)
     }
 
-    pub fn calculate_server_capacity(&self, requirements: &SystemRequirements) -> grid_generator::ServerCapacityEstimate {
+    pub fn calculate_server_capacity(
+        &self,
+        requirements: &SystemRequirements,
+    ) -> grid_generator::ServerCapacityEstimate {
         GridGenerator::calculate_server_capacity(requirements)
     }
 
-    pub fn calculate_aggregate_requirements(&self, grid_config: &RegionGridConfig, per_region: &SystemRequirements) -> SystemRequirements {
+    pub fn calculate_aggregate_requirements(
+        &self,
+        grid_config: &RegionGridConfig,
+        per_region: &SystemRequirements,
+    ) -> SystemRequirements {
         grid_config.aggregate_requirements(per_region)
     }
 
@@ -200,13 +277,17 @@ impl ConfigurationBuilderService {
         mut grid_config: RegionGridConfig,
     ) -> CartItem {
         let template = self.get_template(&format!("{:?}", simulator_type).to_lowercase());
-        let base_requirements = template
-            .map(|t| t.system_requirements)
-            .unwrap_or_default();
+        let base_requirements = template.map(|t| t.system_requirements).unwrap_or_default();
 
         grid_config.generate_regions();
 
-        CartItem::new(name, world_name, simulator_type, grid_config, base_requirements)
+        CartItem::new(
+            name,
+            world_name,
+            simulator_type,
+            grid_config,
+            base_requirements,
+        )
     }
 
     pub fn aggregate_cart(&self, cart: &GridDeploymentCart) -> CartAggregation {
@@ -216,7 +297,10 @@ impl ConfigurationBuilderService {
     pub fn get_usage_profiles() -> Vec<(&'static str, RealisticUsageProfile)> {
         vec![
             ("Light (mostly empty)", RealisticUsageProfile::light_usage()),
-            ("Moderate (2 avg/region)", RealisticUsageProfile::moderate_usage()),
+            (
+                "Moderate (2 avg/region)",
+                RealisticUsageProfile::moderate_usage(),
+            ),
             ("Heavy (5 avg/region)", RealisticUsageProfile::heavy_usage()),
             ("Event (crowded)", RealisticUsageProfile::event_usage()),
         ]
@@ -265,7 +349,8 @@ impl ConfigurationBuilderService {
 
     fn parse_region_ini(&self, content: &str, world: &mut ExistingWorld) {
         let mut current_section: Option<String> = None;
-        let mut region_data: std::collections::HashMap<String, String> = std::collections::HashMap::new();
+        let mut region_data: std::collections::HashMap<String, String> =
+            std::collections::HashMap::new();
 
         for line in content.lines() {
             let line = line.trim();
@@ -274,11 +359,11 @@ impl ConfigurationBuilderService {
                 if let Some(name) = current_section.take() {
                     self.add_region_from_data(&name, &region_data, world);
                 }
-                current_section = Some(line[1..line.len()-1].to_string());
+                current_section = Some(line[1..line.len() - 1].to_string());
                 region_data.clear();
             } else if let Some(pos) = line.find('=') {
                 let key = line[..pos].trim().to_lowercase();
-                let value = line[pos+1..].trim().to_string();
+                let value = line[pos + 1..].trim().to_string();
                 region_data.insert(key, value);
             }
         }
@@ -288,28 +373,45 @@ impl ConfigurationBuilderService {
         }
     }
 
-    fn add_region_from_data(&self, name: &str, data: &std::collections::HashMap<String, String>, world: &mut ExistingWorld) {
-        let uuid = data.get("regionuuid").cloned().unwrap_or_else(|| uuid::Uuid::new_v4().to_string());
+    fn add_region_from_data(
+        &self,
+        name: &str,
+        data: &std::collections::HashMap<String, String>,
+        world: &mut ExistingWorld,
+    ) {
+        let uuid = data
+            .get("regionuuid")
+            .cloned()
+            .unwrap_or_else(|| uuid::Uuid::new_v4().to_string());
 
         let (location_x, location_y) = if let Some(loc) = data.get("location") {
             let parts: Vec<&str> = loc.split(',').collect();
             (
-                parts.first().and_then(|s| s.trim().parse().ok()).unwrap_or(1000),
-                parts.get(1).and_then(|s| s.trim().parse().ok()).unwrap_or(1000),
+                parts
+                    .first()
+                    .and_then(|s| s.trim().parse().ok())
+                    .unwrap_or(1000),
+                parts
+                    .get(1)
+                    .and_then(|s| s.trim().parse().ok())
+                    .unwrap_or(1000),
             )
         } else {
             (1000, 1000)
         };
 
-        let port = data.get("internalport")
+        let port = data
+            .get("internalport")
             .and_then(|s| s.parse().ok())
             .unwrap_or(9000);
 
-        let size_x = data.get("sizex")
+        let size_x = data
+            .get("sizex")
             .and_then(|s| s.parse().ok())
             .unwrap_or(256);
 
-        let size_y = data.get("sizey")
+        let size_y = data
+            .get("sizey")
             .and_then(|s| s.parse().ok())
             .unwrap_or(256);
 
@@ -335,8 +437,12 @@ impl ConfigurationBuilderService {
             for entry in entries.flatten() {
                 let entry_path = entry.path();
                 if entry_path.is_dir() {
-                    if entry_path.join("Regions").exists() || entry_path.join("bin").join("Regions").exists() {
-                        if let Ok(world) = self.load_existing_world_from_path(entry_path.to_str().unwrap_or("")) {
+                    if entry_path.join("Regions").exists()
+                        || entry_path.join("bin").join("Regions").exists()
+                    {
+                        if let Ok(world) =
+                            self.load_existing_world_from_path(entry_path.to_str().unwrap_or(""))
+                        {
                             if !world.regions.is_empty() {
                                 worlds.push(world);
                             }
@@ -490,15 +596,39 @@ mod tests {
         assert_eq!(aggregation.worlds.len(), 1);
         assert!(aggregation.port_conflicts.is_empty());
 
-        assert!(aggregation.realistic_projection.realistic_avatars < aggregation.realistic_projection.max_avatars);
-        assert!(aggregation.realistic_projection.realistic_memory_mb < aggregation.max_requirements.min_memory_mb);
+        assert!(
+            aggregation.realistic_projection.realistic_avatars
+                < aggregation.realistic_projection.max_avatars
+        );
+        assert!(
+            aggregation.realistic_projection.realistic_memory_mb
+                < aggregation.max_requirements.min_memory_mb
+        );
 
-        println!("Cart aggregation for {} regions:", aggregation.total_regions);
-        println!("  Max memory: {} MB", aggregation.max_requirements.min_memory_mb);
-        println!("  Realistic memory: {} MB", aggregation.realistic_projection.realistic_memory_mb);
-        println!("  Max avatars: {}", aggregation.realistic_projection.max_avatars);
-        println!("  Realistic avatars: {}", aggregation.realistic_projection.realistic_avatars);
-        println!("  Peak avatars: {}", aggregation.realistic_projection.peak_avatars);
+        println!(
+            "Cart aggregation for {} regions:",
+            aggregation.total_regions
+        );
+        println!(
+            "  Max memory: {} MB",
+            aggregation.max_requirements.min_memory_mb
+        );
+        println!(
+            "  Realistic memory: {} MB",
+            aggregation.realistic_projection.realistic_memory_mb
+        );
+        println!(
+            "  Max avatars: {}",
+            aggregation.realistic_projection.max_avatars
+        );
+        println!(
+            "  Realistic avatars: {}",
+            aggregation.realistic_projection.realistic_avatars
+        );
+        println!(
+            "  Peak avatars: {}",
+            aggregation.realistic_projection.peak_avatars
+        );
     }
 
     #[test]
@@ -528,8 +658,18 @@ mod tests {
             ..Default::default()
         };
 
-        cart.add_item(service.create_cart_item("Area 1".to_string(), "World".to_string(), SimulatorType::Mainland, config1));
-        cart.add_item(service.create_cart_item("Area 2".to_string(), "World".to_string(), SimulatorType::Mainland, config2));
+        cart.add_item(service.create_cart_item(
+            "Area 1".to_string(),
+            "World".to_string(),
+            SimulatorType::Mainland,
+            config1,
+        ));
+        cart.add_item(service.create_cart_item(
+            "Area 2".to_string(),
+            "World".to_string(),
+            SimulatorType::Mainland,
+            config2,
+        ));
 
         let aggregation = cart.aggregate();
         assert!(!aggregation.port_conflicts.is_empty());

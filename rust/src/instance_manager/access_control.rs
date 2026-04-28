@@ -49,9 +49,15 @@ pub enum ControllerAuthError {
 impl IntoResponse for ControllerAuthError {
     fn into_response(self) -> axum::response::Response {
         let (status, message) = match self {
-            ControllerAuthError::MissingAuth => (StatusCode::UNAUTHORIZED, "Authentication required"),
-            ControllerAuthError::InvalidAuth => (StatusCode::UNAUTHORIZED, "Invalid authentication"),
-            ControllerAuthError::InsufficientPermissions => (StatusCode::FORBIDDEN, "Insufficient permissions"),
+            ControllerAuthError::MissingAuth => {
+                (StatusCode::UNAUTHORIZED, "Authentication required")
+            }
+            ControllerAuthError::InvalidAuth => {
+                (StatusCode::UNAUTHORIZED, "Invalid authentication")
+            }
+            ControllerAuthError::InsufficientPermissions => {
+                (StatusCode::FORBIDDEN, "Insufficient permissions")
+            }
         };
         (status, Json(json!({ "success": false, "error": message }))).into_response()
     }
@@ -59,7 +65,8 @@ impl IntoResponse for ControllerAuthError {
 
 fn extract_auth_from_headers(headers: &HeaderMap) -> Option<ControllerSession> {
     if let Some(api_key) = headers.get("X-API-Key").and_then(|v| v.to_str().ok()) {
-        let expected = std::env::var("OPENSIM_API_KEY").unwrap_or_else(|_| "dev-api-key-change-me".to_string());
+        let expected = std::env::var("OPENSIM_API_KEY")
+            .unwrap_or_else(|_| "dev-api-key-change-me".to_string());
         if api_key == expected {
             return Some(ControllerSession {
                 user_id: "api-key-admin".to_string(),
@@ -116,7 +123,10 @@ macro_rules! impl_require_level {
         {
             type Rejection = ControllerAuthError;
 
-            async fn from_request_parts(parts: &mut Parts, _state: &S) -> Result<Self, Self::Rejection> {
+            async fn from_request_parts(
+                parts: &mut Parts,
+                _state: &S,
+            ) -> Result<Self, Self::Rejection> {
                 let session = extract_auth_from_headers(&parts.headers)
                     .ok_or(ControllerAuthError::MissingAuth)?;
 
@@ -168,28 +178,40 @@ pub async fn handle_set_level(
     Json(request): Json<SetLevelRequest>,
 ) -> (StatusCode, Json<SetLevelResponse>) {
     if request.level > controller_levels::CENTRAL_ADMIN {
-        return (StatusCode::BAD_REQUEST, Json(SetLevelResponse {
-            success: false,
-            message: "Level cannot exceed 500 (CentralAdmin)".to_string(),
-            user_id: request.user_id,
-            new_level: request.level,
-            level_name: controller_levels::level_name(request.level).to_string(),
-        }));
+        return (
+            StatusCode::BAD_REQUEST,
+            Json(SetLevelResponse {
+                success: false,
+                message: "Level cannot exceed 500 (CentralAdmin)".to_string(),
+                user_id: request.user_id,
+                new_level: request.level,
+                level_name: controller_levels::level_name(request.level).to_string(),
+            }),
+        );
     }
 
     tracing::info!(
         "CentralAdmin {} setting user {} to level {} ({})",
-        session.username, request.user_id, request.level,
+        session.username,
+        request.user_id,
+        request.level,
         controller_levels::level_name(request.level)
     );
 
-    (StatusCode::OK, Json(SetLevelResponse {
-        success: true,
-        message: format!("User level updated to {} ({})", request.level, controller_levels::level_name(request.level)),
-        user_id: request.user_id,
-        new_level: request.level,
-        level_name: controller_levels::level_name(request.level).to_string(),
-    }))
+    (
+        StatusCode::OK,
+        Json(SetLevelResponse {
+            success: true,
+            message: format!(
+                "User level updated to {} ({})",
+                request.level,
+                controller_levels::level_name(request.level)
+            ),
+            user_id: request.user_id,
+            new_level: request.level,
+            level_name: controller_levels::level_name(request.level).to_string(),
+        }),
+    )
 }
 
 pub async fn handle_list_users(

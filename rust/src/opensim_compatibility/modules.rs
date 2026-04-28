@@ -3,10 +3,10 @@
 //! Provides compatibility with existing OpenSimulator addon modules
 //! and third-party plugins.
 
-use std::path::{Path, PathBuf};
-use std::fs;
-use std::collections::HashMap;
 use anyhow::Result;
+use std::collections::HashMap;
+use std::fs;
+use std::path::{Path, PathBuf};
 
 /// Loaded addon module information
 #[derive(Debug, Clone)]
@@ -64,7 +64,10 @@ impl ModuleLoader {
     pub async fn scan_modules(&mut self) -> Result<()> {
         if !self.addon_modules_path.exists() {
             fs::create_dir_all(&self.addon_modules_path)?;
-            tracing::info!("Created addon-modules directory: {}", self.addon_modules_path.display());
+            tracing::info!(
+                "Created addon-modules directory: {}",
+                self.addon_modules_path.display()
+            );
             return Ok(());
         }
 
@@ -72,23 +75,25 @@ impl ModuleLoader {
 
         // Scan for .dll files (Windows modules)
         self.scan_dll_modules().await?;
-        
+
         // Scan for .so files (Linux modules)
         self.scan_so_modules().await?;
-        
+
         // Scan for .dylib files (macOS modules)
         self.scan_dylib_modules().await?;
-        
+
         // Scan for .jar files (Java modules)
         self.scan_jar_modules().await?;
-        
+
         // Scan for module metadata files
         self.scan_metadata_files().await?;
 
-        tracing::info!("Scanned {} addon modules from {}", 
-                      self.loaded_modules.len(), 
-                      self.addon_modules_path.display());
-        
+        tracing::info!(
+            "Scanned {} addon modules from {}",
+            self.loaded_modules.len(),
+            self.addon_modules_path.display()
+        );
+
         Ok(())
     }
 
@@ -119,17 +124,17 @@ impl ModuleLoader {
     /// Scan modules by file pattern
     async fn scan_modules_by_pattern(&mut self, pattern: &Path, extension: &str) -> Result<()> {
         let parent_dir = pattern.parent().unwrap_or(Path::new("."));
-        
+
         if !parent_dir.exists() {
             return Ok(());
         }
 
         let entries = fs::read_dir(parent_dir)?;
-        
+
         for entry in entries {
             let entry = entry?;
             let path = entry.path();
-            
+
             if let Some(ext) = path.extension() {
                 if ext.to_string_lossy().to_lowercase() == extension {
                     let module = self.create_module_from_path(&path)?;
@@ -137,21 +142,21 @@ impl ModuleLoader {
                 }
             }
         }
-        
+
         Ok(())
     }
 
     /// Scan for module metadata files (.xml, .ini, .json)
     async fn scan_metadata_files(&mut self) -> Result<()> {
         let metadata_extensions = &["xml", "ini", "json", "config"];
-        
+
         for extension in metadata_extensions {
             let entries = fs::read_dir(&self.addon_modules_path)?;
-            
+
             for entry in entries {
                 let entry = entry?;
                 let path = entry.path();
-                
+
                 if let Some(ext) = path.extension() {
                     if ext.to_string_lossy().to_lowercase() == *extension {
                         self.parse_metadata_file(&path)?;
@@ -159,13 +164,14 @@ impl ModuleLoader {
                 }
             }
         }
-        
+
         Ok(())
     }
 
     /// Create module info from file path
     fn create_module_from_path(&self, path: &Path) -> Result<LoadedModule> {
-        let name = path.file_stem()
+        let name = path
+            .file_stem()
             .and_then(|s| s.to_str())
             .unwrap_or("unknown")
             .to_string();
@@ -186,14 +192,17 @@ impl ModuleLoader {
     /// Detect module type from name and path
     fn detect_module_type(&self, name: &str, _path: &Path) -> ModuleType {
         let name_lower = name.to_lowercase();
-        
+
         if name_lower.contains("region") {
             ModuleType::RegionModule
         } else if name_lower.contains("shared") {
             ModuleType::SharedModule
         } else if name_lower.contains("script") || name_lower.contains("lsl") {
             ModuleType::ScriptEngine
-        } else if name_lower.contains("physics") || name_lower.contains("ode") || name_lower.contains("bullet") {
+        } else if name_lower.contains("physics")
+            || name_lower.contains("ode")
+            || name_lower.contains("bullet")
+        {
             ModuleType::PhysicsEngine
         } else if name_lower.contains("asset") {
             ModuleType::AssetConnector
@@ -211,28 +220,31 @@ impl ModuleLoader {
     /// Parse module metadata file
     fn parse_metadata_file(&mut self, path: &Path) -> Result<()> {
         let content = fs::read_to_string(path)?;
-        
+
         // Try to find corresponding module
-        let metadata_name = path.file_stem()
+        let metadata_name = path
+            .file_stem()
             .and_then(|s| s.to_str())
             .unwrap_or("unknown");
 
         // Apply ELEGANT ARCHIVE SOLUTION: Single-pass extraction to avoid borrow conflicts
-        let module_index = self.loaded_modules.iter()
+        let module_index = self
+            .loaded_modules
+            .iter()
             .position(|m| m.name == metadata_name);
-            
+
         if let Some(index) = module_index {
             // Extract metadata parsing action based on file extension
             let parse_action = match path.extension().and_then(|s| s.to_str()) {
                 Some("xml") => Some("xml"),
-                Some("ini") => Some("ini"), 
+                Some("ini") => Some("ini"),
                 Some("json") => Some("json"),
                 _ => {
                     tracing::warn!("Unknown metadata format: {}", path.display());
                     None
                 }
             };
-            
+
             // Now safely get mutable reference and apply the action
             if let Some(module) = self.loaded_modules.get_mut(index) {
                 if let Some(action) = parse_action {
@@ -245,7 +257,7 @@ impl ModuleLoader {
                 }
             }
         }
-        
+
         Ok(())
     }
 
@@ -253,7 +265,7 @@ impl ModuleLoader {
     fn parse_xml_metadata(&self, module: &mut LoadedModule, content: &str) -> Result<()> {
         // Basic XML parsing for OpenSim addin manifest
         // In a real implementation, you'd use a proper XML parser
-        
+
         if let Some(start) = content.find("<Description>") {
             if let Some(end) = content[start..].find("</Description>") {
                 let desc_start = start + "<Description>".len();
@@ -261,7 +273,7 @@ impl ModuleLoader {
                 module.description = Some(content[desc_start..desc_end].trim().to_string());
             }
         }
-        
+
         if let Some(start) = content.find("<Version>") {
             if let Some(end) = content[start..].find("</Version>") {
                 let ver_start = start + "<Version>".len();
@@ -269,7 +281,7 @@ impl ModuleLoader {
                 module.version = Some(content[ver_start..ver_end].trim().to_string());
             }
         }
-        
+
         Ok(())
     }
 
@@ -308,7 +320,7 @@ impl ModuleLoader {
     fn parse_xml_metadata_static(module: &mut LoadedModule, content: &str) -> Result<()> {
         // Basic XML parsing for OpenSim addin manifest
         // In a real implementation, you'd use a proper XML parser
-        
+
         if let Some(start) = content.find("<Description>") {
             if let Some(end) = content[start..].find("</Description>") {
                 let desc_start = start + "<Description>".len();
@@ -316,7 +328,7 @@ impl ModuleLoader {
                 module.description = Some(content[desc_start..desc_end].trim().to_string());
             }
         }
-        
+
         if let Some(start) = content.find("<Version>") {
             if let Some(end) = content[start..].find("</Version>") {
                 let ver_start = start + "<Version>".len();
@@ -324,7 +336,7 @@ impl ModuleLoader {
                 module.version = Some(content[ver_start..ver_end].trim().to_string());
             }
         }
-        
+
         Ok(())
     }
 
@@ -361,7 +373,8 @@ impl ModuleLoader {
 
     /// Check if module is enabled in configuration
     fn is_module_enabled(&self, name: &str) -> bool {
-        self.module_configs.get(name)
+        self.module_configs
+            .get(name)
             .map(|config| config.enabled)
             .unwrap_or(true) // Default to enabled
     }
@@ -373,7 +386,8 @@ impl ModuleLoader {
 
     /// Get modules by type
     pub fn get_modules_by_type(&self, module_type: ModuleType) -> Vec<&LoadedModule> {
-        self.loaded_modules.iter()
+        self.loaded_modules
+            .iter()
             .filter(|m| m.module_type == module_type)
             .collect()
     }
@@ -382,9 +396,10 @@ impl ModuleLoader {
     pub fn set_module_enabled(&mut self, name: &str, enabled: bool) -> Result<()> {
         if let Some(module) = self.loaded_modules.iter_mut().find(|m| m.name == name) {
             module.enabled = enabled;
-            
+
             // Update config
-            self.module_configs.entry(name.to_string())
+            self.module_configs
+                .entry(name.to_string())
                 .or_insert_with(|| ModuleConfig {
                     enabled: true,
                     priority: 0,
@@ -392,8 +407,12 @@ impl ModuleLoader {
                     initialization_params: HashMap::new(),
                 })
                 .enabled = enabled;
-                
-            tracing::info!("Module {} {}", name, if enabled { "enabled" } else { "disabled" });
+
+            tracing::info!(
+                "Module {} {}",
+                name,
+                if enabled { "enabled" } else { "disabled" }
+            );
         }
         Ok(())
     }
@@ -417,19 +436,20 @@ impl ModuleLoader {
             config_section: None,
             initialization_params: HashMap::new(),
         };
-        
+
         for line in ini_content.lines() {
             let line = line.trim();
-            
+
             if line.starts_with('[') && line.ends_with(']') {
                 // Save previous config if we have one
                 if !current_section.is_empty() {
                     current_config.config_section = Some(current_section.clone());
-                    self.module_configs.insert(current_section.clone(), current_config.clone());
+                    self.module_configs
+                        .insert(current_section.clone(), current_config.clone());
                 }
-                
+
                 // Start new section
-                current_section = line[1..line.len()-1].to_string();
+                current_section = line[1..line.len() - 1].to_string();
                 current_config = ModuleConfig {
                     enabled: true,
                     priority: 0,
@@ -439,23 +459,25 @@ impl ModuleLoader {
             } else if let Some(eq_pos) = line.find('=') {
                 let key = line[..eq_pos].trim();
                 let value = line[eq_pos + 1..].trim().trim_matches('"');
-                
+
                 match key {
                     "Enabled" => current_config.enabled = value.to_lowercase() == "true",
                     "Priority" => current_config.priority = value.parse().unwrap_or(0),
                     _ => {
-                        current_config.initialization_params.insert(key.to_string(), value.to_string());
+                        current_config
+                            .initialization_params
+                            .insert(key.to_string(), value.to_string());
                     }
                 }
             }
         }
-        
+
         // Save final config
         if !current_section.is_empty() {
             current_config.config_section = Some(current_section.clone());
             self.module_configs.insert(current_section, current_config);
         }
-        
+
         Ok(())
     }
 }

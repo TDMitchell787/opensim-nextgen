@@ -14,12 +14,30 @@ impl StaticAssets {
         STATIC_ASSETS.get_or_init(|| {
             let mut assets = HashMap::new();
 
-            assets.insert("head_color.tga".to_string(), Self::create_default_skin_texture(1024, 1024));
-            assets.insert("head_alpha.tga".to_string(), Self::create_default_alpha_texture(1024, 1024));
-            assets.insert("head_skingrain.tga".to_string(), Self::create_skin_grain_texture(1024, 1024));
-            assets.insert("head_hair.tga".to_string(), Self::create_default_hair_texture(1024, 1024));
-            assets.insert("upperbody_color.tga".to_string(), Self::create_default_skin_texture(1024, 1024));
-            assets.insert("lowerbody_color.tga".to_string(), Self::create_default_skin_texture(1024, 1024));
+            assets.insert(
+                "head_color.tga".to_string(),
+                Self::create_default_skin_texture(1024, 1024),
+            );
+            assets.insert(
+                "head_alpha.tga".to_string(),
+                Self::create_default_alpha_texture(1024, 1024),
+            );
+            assets.insert(
+                "head_skingrain.tga".to_string(),
+                Self::create_skin_grain_texture(1024, 1024),
+            );
+            assets.insert(
+                "head_hair.tga".to_string(),
+                Self::create_default_hair_texture(1024, 1024),
+            );
+            assets.insert(
+                "upperbody_color.tga".to_string(),
+                Self::create_default_skin_texture(1024, 1024),
+            );
+            assets.insert(
+                "lowerbody_color.tga".to_string(),
+                Self::create_default_skin_texture(1024, 1024),
+            );
 
             debug!("Initialized {} static baking assets", assets.len());
             assets
@@ -100,7 +118,8 @@ impl StaticAssets {
     fn encode_png(img: &image::RgbaImage) -> Vec<u8> {
         let mut bytes = Vec::new();
         let mut cursor = Cursor::new(&mut bytes);
-        img.write_to(&mut cursor, image::ImageFormat::Png).unwrap_or_default();
+        img.write_to(&mut cursor, image::ImageFormat::Png)
+            .unwrap_or_default();
         bytes
     }
 
@@ -108,9 +127,9 @@ impl StaticAssets {
         let (width, height) = bake_type.dimensions();
 
         let (r, g, b) = match bake_type {
-            super::types::BakeType::Head |
-            super::types::BakeType::UpperBody |
-            super::types::BakeType::LowerBody => (215, 180, 160),
+            super::types::BakeType::Head
+            | super::types::BakeType::UpperBody
+            | super::types::BakeType::LowerBody => (215, 180, 160),
             super::types::BakeType::Eyes => (100, 150, 200),
             super::types::BakeType::Hair => (80, 60, 40),
             super::types::BakeType::Skirt => (128, 128, 128),

@@ -1,5 +1,5 @@
 //! Advanced Grid Scaling Management
-//! 
+//!
 //! Provides enterprise-grade automatic scaling, load distribution,
 //! and capacity management for virtual world grids.
 
@@ -9,7 +9,7 @@ use crate::monitoring::MetricsCollector;
 use std::sync::Arc;
 use tokio::sync::RwLock;
 use tokio::time::{interval, Duration};
-use tracing::{info, warn, error, debug};
+use tracing::{debug, error, info, warn};
 
 /// Grid scaling manager
 pub struct GridScalingManager {
@@ -370,7 +370,8 @@ impl GridScalingManager {
     /// Get scaling policy for a grid
     pub async fn get_scaling_policy(&self, grid_id: Uuid) -> GridResult<ScalingPolicy> {
         let policies = self.scaling_policies.read().await;
-        Ok(policies.get(&grid_id)
+        Ok(policies
+            .get(&grid_id)
             .cloned()
             .unwrap_or_else(|| ScalingPolicy::default()))
     }
@@ -382,7 +383,10 @@ impl GridScalingManager {
         operation_type: ScalingOperationType,
         reason: String,
     ) -> GridResult<Uuid> {
-        info!("Triggering manual scaling for grid {}: {:?}", grid_id, operation_type);
+        info!(
+            "Triggering manual scaling for grid {}: {:?}",
+            grid_id, operation_type
+        );
 
         // Create scaling operation
         let operation = ScalingOperation {
@@ -426,12 +430,18 @@ impl GridScalingManager {
         let mut events = self.scaling_events.write().await;
         events.push(event);
 
-        info!("Manual scaling operation {} triggered successfully", operation_id);
+        info!(
+            "Manual scaling operation {} triggered successfully",
+            operation_id
+        );
         Ok(operation_id)
     }
 
     /// Get scaling recommendations for a grid
-    pub async fn get_scaling_recommendations(&self, grid_id: Uuid) -> GridResult<Vec<ScalingRecommendation>> {
+    pub async fn get_scaling_recommendations(
+        &self,
+        grid_id: Uuid,
+    ) -> GridResult<Vec<ScalingRecommendation>> {
         info!("Generating scaling recommendations for grid {}", grid_id);
 
         let mut recommendations = Vec::new();
@@ -449,17 +459,25 @@ impl GridScalingManager {
         // Performance optimization recommendations
         recommendations.extend(self.generate_performance_recommendations(grid_id).await?);
 
-        info!("Generated {} recommendations for grid {}", recommendations.len(), grid_id);
+        info!(
+            "Generated {} recommendations for grid {}",
+            recommendations.len(),
+            grid_id
+        );
         Ok(recommendations)
     }
 
     /// Get scaling operation status
-    pub async fn get_scaling_operation_status(&self, operation_id: Uuid) -> GridResult<ScalingOperation> {
+    pub async fn get_scaling_operation_status(
+        &self,
+        operation_id: Uuid,
+    ) -> GridResult<ScalingOperation> {
         let operations = self.active_scaling_operations.read().await;
-        operations.get(&operation_id)
+        operations
+            .get(&operation_id)
             .cloned()
-            .ok_or_else(|| GridError::ScalingFailed { 
-                reason: format!("Operation {} not found", operation_id) 
+            .ok_or_else(|| GridError::ScalingFailed {
+                reason: format!("Operation {} not found", operation_id),
             })
     }
 
@@ -469,7 +487,10 @@ impl GridScalingManager {
 
         let mut operations = self.active_scaling_operations.write().await;
         if let Some(operation) = operations.get_mut(&operation_id) {
-            if matches!(operation.status, ScalingOperationStatus::Queued | ScalingOperationStatus::InProgress) {
+            if matches!(
+                operation.status,
+                ScalingOperationStatus::Queued | ScalingOperationStatus::InProgress
+            ) {
                 operation.status = ScalingOperationStatus::Cancelled;
                 // Trigger rollback if needed
                 self.rollback_scaling_operation(operation_id).await?;
@@ -481,19 +502,24 @@ impl GridScalingManager {
     }
 
     /// Get scaling history for a grid
-    pub async fn get_scaling_history(&self, grid_id: Uuid, limit: Option<u32>) -> GridResult<Vec<ScalingEvent>> {
+    pub async fn get_scaling_history(
+        &self,
+        grid_id: Uuid,
+        limit: Option<u32>,
+    ) -> GridResult<Vec<ScalingEvent>> {
         let events = self.scaling_events.read().await;
-        let mut grid_events: Vec<_> = events.iter()
+        let mut grid_events: Vec<_> = events
+            .iter()
             .filter(|event| event.grid_id == grid_id)
             .cloned()
             .collect();
-        
+
         grid_events.sort_by(|a, b| b.created_at.cmp(&a.created_at));
-        
+
         if let Some(limit) = limit {
             grid_events.truncate(limit as usize);
         }
-        
+
         Ok(grid_events)
     }
 
@@ -539,7 +565,10 @@ impl GridScalingManager {
         Ok(())
     }
 
-    async fn generate_scaling_steps(&self, operation_type: &ScalingOperationType) -> GridResult<Vec<ScalingStep>> {
+    async fn generate_scaling_steps(
+        &self,
+        operation_type: &ScalingOperationType,
+    ) -> GridResult<Vec<ScalingStep>> {
         let steps = match operation_type {
             ScalingOperationType::AddInstances(_) => vec![
                 ScalingStep {
@@ -595,7 +624,7 @@ impl GridScalingManager {
             ],
             _ => Vec::new(),
         };
-        
+
         Ok(steps)
     }
 
@@ -611,17 +640,26 @@ impl GridScalingManager {
         Ok(())
     }
 
-    async fn generate_ai_recommendations(&self, _grid_id: Uuid) -> GridResult<Vec<ScalingRecommendation>> {
+    async fn generate_ai_recommendations(
+        &self,
+        _grid_id: Uuid,
+    ) -> GridResult<Vec<ScalingRecommendation>> {
         // Generate AI-based scaling recommendations
         Ok(Vec::new())
     }
 
-    async fn generate_cost_recommendations(&self, _grid_id: Uuid) -> GridResult<Vec<ScalingRecommendation>> {
+    async fn generate_cost_recommendations(
+        &self,
+        _grid_id: Uuid,
+    ) -> GridResult<Vec<ScalingRecommendation>> {
         // Generate cost optimization recommendations
         Ok(Vec::new())
     }
 
-    async fn generate_performance_recommendations(&self, _grid_id: Uuid) -> GridResult<Vec<ScalingRecommendation>> {
+    async fn generate_performance_recommendations(
+        &self,
+        _grid_id: Uuid,
+    ) -> GridResult<Vec<ScalingRecommendation>> {
         // Generate performance optimization recommendations
         Ok(Vec::new())
     }
@@ -655,7 +693,11 @@ impl GridScalingManager {
         Ok(())
     }
 
-    async fn store_scaling_policy(&self, _grid_id: Uuid, _policy: &ScalingPolicy) -> GridResult<()> {
+    async fn store_scaling_policy(
+        &self,
+        _grid_id: Uuid,
+        _policy: &ScalingPolicy,
+    ) -> GridResult<()> {
         debug!("Storing scaling policy in database");
         Ok(())
     }

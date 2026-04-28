@@ -71,8 +71,14 @@ async fn main() -> Result<()> {
                     match parser::extract_physics_convex(&data, &header) {
                         Ok(convex) => {
                             println!("  --- Convex Physics Data ---");
-                            println!("  Min: [{:.4}, {:.4}, {:.4}]", convex.min[0], convex.min[1], convex.min[2]);
-                            println!("  Max: [{:.4}, {:.4}, {:.4}]", convex.max[0], convex.max[1], convex.max[2]);
+                            println!(
+                                "  Min: [{:.4}, {:.4}, {:.4}]",
+                                convex.min[0], convex.min[1], convex.min[2]
+                            );
+                            println!(
+                                "  Max: [{:.4}, {:.4}, {:.4}]",
+                                convex.max[0], convex.max[1], convex.max[2]
+                            );
                             println!("  Bounding hull: {} vertices", convex.bounding_hull.len());
                             println!("  Hull count: {}", convex.hull_count());
                             println!("  Total vertices: {}", convex.total_vertices());

@@ -2,12 +2,12 @@
 //! Provides centralized management of all capability endpoints
 
 use super::*;
-use std::collections::HashMap;
-use std::sync::Arc;
 use axum::{
     routing::{get, post},
     Router,
 };
+use std::collections::HashMap;
+use std::sync::Arc;
 
 /// Capability registry for managing all capability endpoints
 #[derive(Debug)]
@@ -49,7 +49,7 @@ impl HttpMethod {
     pub fn as_str(&self) -> &'static str {
         match self {
             Self::GET => "GET",
-            Self::POST => "POST", 
+            Self::POST => "POST",
             Self::PUT => "PUT",
             Self::DELETE => "DELETE",
         }
@@ -62,36 +62,43 @@ impl CapabilityRegistry {
         capabilities_manager: Arc<std::sync::Mutex<CapabilitiesManager>>,
         base_url: String,
     ) -> Self {
-        info!("Initializing capability registry with base URL: {}", base_url);
-        
+        info!(
+            "Initializing capability registry with base URL: {}",
+            base_url
+        );
+
         let mut registry = Self {
             handlers: HashMap::new(),
             capabilities_manager,
             base_url,
         };
-        
+
         // Register default capability handlers
         registry.register_default_handlers();
-        
+
         registry
     }
-    
+
     /// Register a capability handler
     pub fn register_handler(&mut self, info: CapabilityHandlerInfo) {
-        debug!("Registering capability handler: {} ({})", info.name, info.method.as_str());
+        debug!(
+            "Registering capability handler: {} ({})",
+            info.name,
+            info.method.as_str()
+        );
         self.handlers.insert(info.name.clone(), info);
     }
-    
+
     /// Get handler information for a capability
     pub fn get_handler_info(&self, capability_name: &str) -> Option<&CapabilityHandlerInfo> {
         self.handlers.get(capability_name)
     }
-    
+
     /// Get all registered handlers
     pub fn get_all_handlers(&self) -> Vec<&CapabilityHandlerInfo> {
         self.handlers.values().collect()
     }
-    
+
     /// Get handlers by implementation status
     pub fn get_handlers_by_status(&self, implemented: bool) -> Vec<&CapabilityHandlerInfo> {
         self.handlers
@@ -99,18 +106,18 @@ impl CapabilityRegistry {
             .filter(|h| h.implemented == implemented)
             .collect()
     }
-    
+
     /// Check if a capability is registered
     pub fn is_capability_registered(&self, capability_name: &str) -> bool {
         self.handlers.contains_key(capability_name)
     }
-    
+
     /// Get implementation statistics
     pub fn get_implementation_stats(&self) -> CapabilityImplementationStats {
         let total = self.handlers.len();
         let implemented = self.handlers.values().filter(|h| h.implemented).count();
         let not_implemented = total - implemented;
-        
+
         CapabilityImplementationStats {
             total_registered: total,
             implemented,
@@ -122,37 +129,59 @@ impl CapabilityRegistry {
             },
         }
     }
-    
+
     /// Create Axum router for capability endpoints
     pub fn create_router(&self) -> Router {
         use crate::capabilities::handlers::*;
         use crate::capabilities::seed::*;
-        
-        let handler_state = CapabilityHandlerState::new(
-            self.capabilities_manager.clone(),
-            self.base_url.clone(),
-        );
-        
+
+        let handler_state =
+            CapabilityHandlerState::new(self.capabilities_manager.clone(), self.base_url.clone());
+
         let seed_state = SeedCapabilityState::new(self.capabilities_manager.clone());
-        
+
         Router::new()
             // Seed capability (bootstrap)
             .route("/cap/:agent_id", post(handle_seed_capability))
-            .route("/cap/:agent_id/:cap_id", post(handle_seed_capability_with_uuid))
+            .route(
+                "/cap/:agent_id/:cap_id",
+                post(handle_seed_capability_with_uuid),
+            )
             .with_state(seed_state)
             // Essential capabilities
-            .route("/cap/:agent_id/:cap_id/EventQueueGet", get(handle_event_queue_get))
-            .route("/cap/:agent_id/:cap_id/SimulatorFeatures", get(handle_simulator_features))
+            .route(
+                "/cap/:agent_id/:cap_id/EventQueueGet",
+                get(handle_event_queue_get),
+            )
+            .route(
+                "/cap/:agent_id/:cap_id/SimulatorFeatures",
+                get(handle_simulator_features),
+            )
             .route("/cap/:agent_id/:cap_id/GetTexture", get(handle_get_texture))
-            .route("/cap/:agent_id/:cap_id/UpdateAgentInformation", post(handle_update_agent_information))
-            .route("/cap/:agent_id/:cap_id/WebFetchInventoryDescendents", post(handle_web_fetch_inventory_descendants))
-            .route("/cap/:agent_id/:cap_id/AgentPreferences", post(handle_agent_preferences))
+            .route(
+                "/cap/:agent_id/:cap_id/UpdateAgentInformation",
+                post(handle_update_agent_information),
+            )
+            .route(
+                "/cap/:agent_id/:cap_id/WebFetchInventoryDescendents",
+                post(handle_web_fetch_inventory_descendants),
+            )
+            .route(
+                "/cap/:agent_id/:cap_id/AgentPreferences",
+                post(handle_agent_preferences),
+            )
             // Generic handler for not-yet-implemented capabilities
-            .route("/cap/:agent_id/:cap_id/*path", get(handle_generic_capability))
-            .route("/cap/:agent_id/:cap_id/*path", post(handle_generic_capability))
+            .route(
+                "/cap/:agent_id/:cap_id/*path",
+                get(handle_generic_capability),
+            )
+            .route(
+                "/cap/:agent_id/:cap_id/*path",
+                post(handle_generic_capability),
+            )
             .with_state(handler_state)
     }
-    
+
     /// Register default capability handlers
     fn register_default_handlers(&mut self) {
         // Essential capabilities (high priority, implemented)
@@ -160,7 +189,8 @@ impl CapabilityRegistry {
             CapabilityHandlerInfo {
                 name: "seed_capability".to_string(),
                 method: HttpMethod::POST,
-                description: "Bootstrap capability that provides all other capabilities".to_string(),
+                description: "Bootstrap capability that provides all other capabilities"
+                    .to_string(),
                 implemented: true,
                 priority: 10,
             },
@@ -221,7 +251,7 @@ impl CapabilityRegistry {
                 priority: 6,
             },
         ];
-        
+
         // Upload capabilities (medium priority, not implemented)
         let upload_handlers = vec![
             CapabilityHandlerInfo {
@@ -260,7 +290,7 @@ impl CapabilityRegistry {
                 priority: 4,
             },
         ];
-        
+
         // Advanced capabilities (low priority, not implemented)
         let advanced_handlers = vec![
             CapabilityHandlerInfo {
@@ -306,19 +336,23 @@ impl CapabilityRegistry {
                 priority: 1,
             },
         ];
-        
+
         // Register all handlers
-        for handler in essential_handlers.into_iter()
+        for handler in essential_handlers
+            .into_iter()
             .chain(upload_handlers.into_iter())
-            .chain(advanced_handlers.into_iter()) {
+            .chain(advanced_handlers.into_iter())
+        {
             self.register_handler(handler);
         }
-        
+
         info!("Registered {} capability handlers", self.handlers.len());
-        
+
         let stats = self.get_implementation_stats();
-        info!("Capability implementation: {}/{} ({:.1}%) implemented", 
-              stats.implemented, stats.total_registered, stats.implementation_percentage);
+        info!(
+            "Capability implementation: {}/{} ({:.1}%) implemented",
+            stats.implemented, stats.total_registered, stats.implementation_percentage
+        );
     }
 }
 
@@ -352,22 +386,22 @@ impl CapabilityRegistryService {
             registry: CapabilityRegistry::new(capabilities_manager, base_url),
         }
     }
-    
+
     /// Get the registry
     pub fn registry(&self) -> &CapabilityRegistry {
         &self.registry
     }
-    
+
     /// Get mutable registry
     pub fn registry_mut(&mut self) -> &mut CapabilityRegistry {
         &mut self.registry
     }
-    
+
     /// Create Axum router
     pub fn create_router(&self) -> Router {
         self.registry.create_router()
     }
-    
+
     /// Get implementation statistics
     pub fn get_stats(&self) -> CapabilityImplementationStats {
         self.registry.get_implementation_stats()
@@ -388,20 +422,20 @@ mod tests {
     #[test]
     fn test_capability_registry_creation() {
         let registry = create_test_registry();
-        
+
         // Should have default handlers registered
         assert!(!registry.handlers.is_empty());
-        
+
         // Check that essential capabilities are registered
         assert!(registry.is_capability_registered("seed_capability"));
         assert!(registry.is_capability_registered("EventQueueGet"));
         assert!(registry.is_capability_registered("SimulatorFeatures"));
     }
-    
+
     #[test]
     fn test_handler_registration() {
         let mut registry = create_test_registry();
-        
+
         let custom_handler = CapabilityHandlerInfo {
             name: "CustomCapability".to_string(),
             method: HttpMethod::GET,
@@ -409,53 +443,56 @@ mod tests {
             implemented: true,
             priority: 5,
         };
-        
+
         registry.register_handler(custom_handler);
-        
+
         assert!(registry.is_capability_registered("CustomCapability"));
-        
+
         let handler_info = registry.get_handler_info("CustomCapability").unwrap();
         assert_eq!(handler_info.name, "CustomCapability");
         assert_eq!(handler_info.method, HttpMethod::GET);
         assert!(handler_info.implemented);
     }
-    
+
     #[test]
     fn test_implementation_stats() {
         let registry = create_test_registry();
         let stats = registry.get_implementation_stats();
-        
+
         assert!(stats.total_registered > 0);
         assert!(stats.implemented > 0);
         assert!(stats.not_implemented >= 0);
         assert!(stats.implementation_percentage >= 0.0);
         assert!(stats.implementation_percentage <= 100.0);
-        
+
         // Verify math
-        assert_eq!(stats.total_registered, stats.implemented + stats.not_implemented);
+        assert_eq!(
+            stats.total_registered,
+            stats.implemented + stats.not_implemented
+        );
     }
-    
+
     #[test]
     fn test_handlers_by_status() {
         let registry = create_test_registry();
-        
+
         let implemented = registry.get_handlers_by_status(true);
         let not_implemented = registry.get_handlers_by_status(false);
-        
+
         assert!(!implemented.is_empty());
         assert!(!not_implemented.is_empty());
-        
+
         // Verify all implemented handlers are marked as implemented
         for handler in &implemented {
             assert!(handler.implemented);
         }
-        
+
         // Verify all not-implemented handlers are marked as not implemented
         for handler in &not_implemented {
             assert!(!handler.implemented);
         }
     }
-    
+
     #[test]
     fn test_http_method() {
         assert_eq!(HttpMethod::GET.as_str(), "GET");
@@ -463,16 +500,16 @@ mod tests {
         assert_eq!(HttpMethod::PUT.as_str(), "PUT");
         assert_eq!(HttpMethod::DELETE.as_str(), "DELETE");
     }
-    
+
     #[test]
     fn test_capability_registry_service() {
         let config = CapabilitiesConfig::default();
         let manager = Arc::new(Mutex::new(CapabilitiesManager::new(config)));
         let service = CapabilityRegistryService::new(manager, "http://test.com/cap".to_string());
-        
+
         let stats = service.get_stats();
         assert!(stats.total_registered > 0);
-        
+
         // Test that we can create a router
         let _router = service.create_router();
     }

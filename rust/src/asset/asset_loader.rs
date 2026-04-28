@@ -4,12 +4,12 @@
 //! loading assets from XML definitions in bin/assets/ directory at server startup.
 //! This is CRITICAL for viewer functionality - without these assets, viewers cannot render.
 
-use std::path::{Path, PathBuf};
-use std::fs;
 use anyhow::{anyhow, Result};
-use tracing::{info, warn, debug};
-use uuid::Uuid;
 use sqlx::{Pool, Postgres};
+use std::fs;
+use std::path::{Path, PathBuf};
+use tracing::{debug, info, warn};
+use uuid::Uuid;
 
 #[derive(Debug, Clone)]
 pub struct AssetDefinition {
@@ -69,8 +69,10 @@ impl AssetLoader {
             }
         }
 
-        info!("🎨 Asset loading complete: {} loaded, {} skipped (already exist)",
-              self.loaded_count, self.skipped_count);
+        info!(
+            "🎨 Asset loading complete: {} loaded, {} skipped (already exist)",
+            self.loaded_count, self.skipped_count
+        );
 
         Ok(())
     }
@@ -102,7 +104,7 @@ impl AssetLoader {
                 if section.contains("Name=") && section.contains("file") {
                     if let (Some(name), Some(file)) = (
                         self.extract_attribute_from_section(section, "Section", "Name"),
-                        self.extract_key_value(section, "file")
+                        self.extract_key_value(section, "file"),
                     ) {
                         if !file.is_empty() && !file.contains("MyAssetSet") {
                             asset_sets.push((name, file));
@@ -144,7 +146,12 @@ impl AssetLoader {
         None
     }
 
-    fn extract_attribute_from_section(&self, section: &str, _elem: &str, attr_name: &str) -> Option<String> {
+    fn extract_attribute_from_section(
+        &self,
+        section: &str,
+        _elem: &str,
+        attr_name: &str,
+    ) -> Option<String> {
         self.extract_attribute(section, attr_name)
     }
 
@@ -158,13 +165,23 @@ impl AssetLoader {
         None
     }
 
-    async fn load_asset_set(&mut self, pool: &Pool<Postgres>, set_name: &str, set_path: &Path) -> Result<usize> {
+    async fn load_asset_set(
+        &mut self,
+        pool: &Pool<Postgres>,
+        set_name: &str,
+        set_path: &Path,
+    ) -> Result<usize> {
         let content = fs::read_to_string(set_path)?;
         let base_dir = set_path.parent().unwrap_or(Path::new("."));
         let mut loaded = 0;
 
         let assets = self.parse_asset_set_xml(&content)?;
-        debug!("  📄 {}: parsed {} asset definitions from {:?}", set_name, assets.len(), set_path);
+        debug!(
+            "  📄 {}: parsed {} asset definitions from {:?}",
+            set_name,
+            assets.len(),
+            set_path
+        );
 
         for asset_def in assets {
             match self.load_single_asset(pool, base_dir, &asset_def).await {
@@ -196,12 +213,16 @@ impl AssetLoader {
             let name = self.extract_key_value(section, "name");
             let asset_type_str = self.extract_key_value(section, "assetType");
             let file_name = self.extract_key_value(section, "fileName");
-            let description = self.extract_key_value(section, "description").unwrap_or_default();
+            let description = self
+                .extract_key_value(section, "description")
+                .unwrap_or_default();
 
             if let (Some(id_str), Some(name), Some(type_str), Some(file)) =
                 (asset_id, name, asset_type_str, file_name)
             {
-                if let (Ok(uuid), Ok(asset_type)) = (Uuid::parse_str(&id_str), type_str.parse::<i32>()) {
+                if let (Ok(uuid), Ok(asset_type)) =
+                    (Uuid::parse_str(&id_str), type_str.parse::<i32>())
+                {
                     assets.push(AssetDefinition {
                         asset_id: uuid,
                         name,
@@ -216,7 +237,12 @@ impl AssetLoader {
         Ok(assets)
     }
 
-    async fn load_single_asset(&self, pool: &Pool<Postgres>, base_dir: &Path, asset_def: &AssetDefinition) -> Result<bool> {
+    async fn load_single_asset(
+        &self,
+        pool: &Pool<Postgres>,
+        base_dir: &Path,
+        asset_def: &AssetDefinition,
+    ) -> Result<bool> {
         let file_path = base_dir.join(&asset_def.file_name);
         if !file_path.exists() {
             return Err(anyhow!("Asset file not found: {:?}", file_path));
@@ -228,20 +254,24 @@ impl AssetLoader {
             .unwrap_or_default()
             .as_secs() as i64;
 
-        let existing_size: Option<i32> = sqlx::query_scalar(
-            "SELECT length(data)::int4 FROM assets WHERE id = $1"
-        )
-        .bind(asset_def.asset_id)
-        .fetch_optional(pool)
-        .await?;
+        let existing_size: Option<i32> =
+            sqlx::query_scalar("SELECT length(data)::int4 FROM assets WHERE id = $1")
+                .bind(asset_def.asset_id)
+                .fetch_optional(pool)
+                .await?;
 
         match existing_size {
             Some(size) if (size as usize) >= data.len() => {
                 return Ok(false);
             }
             Some(size) => {
-                info!("Replacing stub asset {} ({} bytes -> {} bytes): {}",
-                    asset_def.asset_id, size, data.len(), asset_def.name);
+                info!(
+                    "Replacing stub asset {} ({} bytes -> {} bytes): {}",
+                    asset_def.asset_id,
+                    size,
+                    data.len(),
+                    asset_def.name
+                );
                 sqlx::query("UPDATE assets SET data = $2, access_time = $3 WHERE id = $1")
                     .bind(asset_def.asset_id)
                     .bind(&data)

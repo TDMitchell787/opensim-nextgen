@@ -1,5 +1,5 @@
 //! Grid Federation Management
-//! 
+//!
 //! Manages enterprise-grade grid federation, inter-grid communication,
 //! trust relationships, and shared services between virtual world grids.
 
@@ -7,7 +7,7 @@ use super::*;
 use crate::database::DatabaseManager;
 use std::sync::Arc;
 use tokio::sync::RwLock;
-use tracing::{info, warn, error, debug};
+use tracing::{debug, error, info, warn};
 
 /// Grid federation manager
 pub struct GridFederationManager {
@@ -154,10 +154,13 @@ impl GridFederationManager {
         services: Vec<SharedServiceType>,
         message: Option<String>,
     ) -> GridResult<FederationRequest> {
-        info!("Creating federation request from {} to {}", requesting_grid_id, target_grid_id);
+        info!(
+            "Creating federation request from {} to {}",
+            requesting_grid_id, target_grid_id
+        );
 
         let requesting_grid = self.get_grid(requesting_grid_id).await?;
-        
+
         let request = FederationRequest {
             request_id: Uuid::new_v4(),
             requesting_grid_id,
@@ -181,9 +184,13 @@ impl GridFederationManager {
         self.store_federation_request(&request).await?;
 
         // Send request to target grid
-        self.send_federation_request(&request, target_grid_id).await?;
+        self.send_federation_request(&request, target_grid_id)
+            .await?;
 
-        info!("Federation request {} created successfully", request.request_id);
+        info!(
+            "Federation request {} created successfully",
+            request.request_id
+        );
         Ok(request)
     }
 
@@ -231,21 +238,32 @@ impl GridFederationManager {
 
             // Set up shared services
             for service_type in approved_services {
-                self.setup_shared_service(request.requesting_grid_id, service_type).await?;
+                self.setup_shared_service(request.requesting_grid_id, service_type)
+                    .await?;
             }
         }
 
         // Send response to requesting grid
-        self.send_federation_response(&response, request.requesting_grid_id).await?;
+        self.send_federation_response(&response, request.requesting_grid_id)
+            .await?;
 
-        info!("Federation request {} processed: {}", request.request_id, if approved { "approved" } else { "denied" });
+        info!(
+            "Federation request {} processed: {}",
+            request.request_id,
+            if approved { "approved" } else { "denied" }
+        );
         Ok(response)
     }
 
     /// Create trust relationship between grids
-    pub async fn create_trust_relationship(&self, relationship: TrustRelationship) -> GridResult<()> {
-        info!("Creating trust relationship between {} and {}", 
-              relationship.source_grid_id, relationship.target_grid_id);
+    pub async fn create_trust_relationship(
+        &self,
+        relationship: TrustRelationship,
+    ) -> GridResult<()> {
+        info!(
+            "Creating trust relationship between {} and {}",
+            relationship.source_grid_id, relationship.target_grid_id
+        );
 
         // Validate trust relationship
         self.validate_trust_relationship(&relationship).await?;
@@ -258,10 +276,15 @@ impl GridFederationManager {
         relationships.insert(relationship.relationship_id, relationship.clone());
 
         // Update grid federation statistics
-        self.update_federation_statistics(relationship.source_grid_id).await?;
-        self.update_federation_statistics(relationship.target_grid_id).await?;
+        self.update_federation_statistics(relationship.source_grid_id)
+            .await?;
+        self.update_federation_statistics(relationship.target_grid_id)
+            .await?;
 
-        info!("Trust relationship {} created successfully", relationship.relationship_id);
+        info!(
+            "Trust relationship {} created successfully",
+            relationship.relationship_id
+        );
         Ok(())
     }
 
@@ -271,7 +294,10 @@ impl GridFederationManager {
         consumer_grid_id: Uuid,
         service_type: SharedServiceType,
     ) -> GridResult<SharedService> {
-        info!("Setting up shared service {:?} for grid {}", service_type, consumer_grid_id);
+        info!(
+            "Setting up shared service {:?} for grid {}",
+            service_type, consumer_grid_id
+        );
 
         let service = SharedService {
             service_id: Uuid::new_v4(),
@@ -298,7 +324,8 @@ impl GridFederationManager {
     /// Get grid information
     pub async fn get_grid(&self, grid_id: Uuid) -> GridResult<EnterpriseGrid> {
         let grids = self.grids.read().await;
-        grids.get(&grid_id)
+        grids
+            .get(&grid_id)
             .cloned()
             .ok_or(GridError::GridNotFound { grid_id })
     }
@@ -306,7 +333,8 @@ impl GridFederationManager {
     /// List all federated grids
     pub async fn list_federated_grids(&self) -> GridResult<Vec<EnterpriseGrid>> {
         let grids = self.grids.read().await;
-        Ok(grids.values()
+        Ok(grids
+            .values()
             .filter(|grid| grid.federation_info.federation_enabled)
             .cloned()
             .collect())
@@ -319,7 +347,8 @@ impl GridFederationManager {
         target_grid_id: Uuid,
     ) -> GridResult<Option<TrustRelationship>> {
         let relationships = self.trust_relationships.read().await;
-        let relationship = relationships.values()
+        let relationship = relationships
+            .values()
             .find(|r| r.source_grid_id == source_grid_id && r.target_grid_id == target_grid_id)
             .cloned();
         Ok(relationship)
@@ -332,7 +361,10 @@ impl GridFederationManager {
     }
 
     /// Get federation statistics
-    pub async fn get_federation_statistics(&self, grid_id: Uuid) -> GridResult<FederationStatistics> {
+    pub async fn get_federation_statistics(
+        &self,
+        grid_id: Uuid,
+    ) -> GridResult<FederationStatistics> {
         let grid = self.get_grid(grid_id).await?;
         Ok(grid.federation_info.federation_statistics)
     }
@@ -345,16 +377,20 @@ impl GridFederationManager {
             let relationships = self.trust_relationships.read().await;
             let services = self.shared_services.read().await;
 
-            let total_partners = relationships.values()
+            let total_partners = relationships
+                .values()
                 .filter(|r| r.source_grid_id == grid_id || r.target_grid_id == grid_id)
                 .count() as u32;
 
-            let active_partnerships = relationships.values()
-                .filter(|r| (r.source_grid_id == grid_id || r.target_grid_id == grid_id) && 
-                           r.verified)
+            let active_partnerships = relationships
+                .values()
+                .filter(|r| {
+                    (r.source_grid_id == grid_id || r.target_grid_id == grid_id) && r.verified
+                })
                 .count() as u32;
 
-            let total_shared_services = services.values()
+            let total_shared_services = services
+                .values()
                 .filter(|s| s.provider_grid_id == grid_id || s.consumer_grids.contains(&grid_id))
                 .count() as u32;
 
@@ -386,7 +422,8 @@ impl GridFederationManager {
 
         // Remove all shared services involving this grid
         let mut services = self.shared_services.write().await;
-        services.retain(|_, s| s.provider_grid_id != grid_id && !s.consumer_grids.contains(&grid_id));
+        services
+            .retain(|_, s| s.provider_grid_id != grid_id && !s.consumer_grids.contains(&grid_id));
 
         // Update grid status
         let mut grids = self.grids.write().await;
@@ -414,7 +451,10 @@ impl GridFederationManager {
         Ok(())
     }
 
-    async fn validate_trust_relationship(&self, _relationship: &TrustRelationship) -> GridResult<()> {
+    async fn validate_trust_relationship(
+        &self,
+        _relationship: &TrustRelationship,
+    ) -> GridResult<()> {
         // Validate trust relationship parameters
         Ok(())
     }
@@ -430,10 +470,16 @@ impl GridFederationManager {
             SharedServiceType::Backup => "backup",
             SharedServiceType::Monitoring => "monitoring",
         };
-        Ok(format!("https://federation.opensim.next/services/{}", service_path))
+        Ok(format!(
+            "https://federation.opensim.next/services/{}",
+            service_path
+        ))
     }
 
-    async fn get_default_sla_requirements(&self, _service_type: &SharedServiceType) -> GridResult<SLARequirements> {
+    async fn get_default_sla_requirements(
+        &self,
+        _service_type: &SharedServiceType,
+    ) -> GridResult<SLARequirements> {
         Ok(SLARequirements {
             uptime_percentage: 99.9,
             max_response_time_ms: 1000,
@@ -454,13 +500,21 @@ impl GridFederationManager {
         })
     }
 
-    async fn send_federation_request(&self, _request: &FederationRequest, _target_grid_id: Uuid) -> GridResult<()> {
+    async fn send_federation_request(
+        &self,
+        _request: &FederationRequest,
+        _target_grid_id: Uuid,
+    ) -> GridResult<()> {
         // Send federation request to target grid
         debug!("Sending federation request to target grid");
         Ok(())
     }
 
-    async fn send_federation_response(&self, _response: &FederationResponse, _target_grid_id: Uuid) -> GridResult<()> {
+    async fn send_federation_response(
+        &self,
+        _response: &FederationResponse,
+        _target_grid_id: Uuid,
+    ) -> GridResult<()> {
         // Send federation response to requesting grid
         debug!("Sending federation response to requesting grid");
         Ok(())

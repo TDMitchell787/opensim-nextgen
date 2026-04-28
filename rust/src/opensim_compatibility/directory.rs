@@ -2,19 +2,19 @@
 //!
 //! Ensures compatibility with OpenSimulator's expected directory layout.
 
-use std::path::{Path, PathBuf};
-use std::fs;
 use anyhow::Result;
+use std::fs;
+use std::path::{Path, PathBuf};
 
 /// Required OpenSim directories
 const REQUIRED_DIRECTORIES: &[&str] = &[
     "config-include",
-    "Regions", 
+    "Regions",
     "assetcache",
     "assets",
     "addon-modules",
     "data",
-    "inventory", 
+    "inventory",
     "Library",
     "maptiles",
     "Physics",
@@ -34,20 +34,22 @@ const OPTIONAL_DIRECTORIES: &[&str] = &[
 pub fn ensure_opensim_structure(bin_directory: &Path) -> Result<()> {
     // Create bin directory if it doesn't exist
     if !bin_directory.exists() {
-        fs::create_dir_all(bin_directory)
-            .map_err(|e| anyhow::anyhow!(
-                "Failed to create bin directory {}: {}", bin_directory.display(), e
-            ))?;
+        fs::create_dir_all(bin_directory).map_err(|e| {
+            anyhow::anyhow!(
+                "Failed to create bin directory {}: {}",
+                bin_directory.display(),
+                e
+            )
+        })?;
     }
 
     // Create required directories
     for dir_name in REQUIRED_DIRECTORIES {
         let dir_path = bin_directory.join(dir_name);
         if !dir_path.exists() {
-            fs::create_dir_all(&dir_path)
-                .map_err(|e| anyhow::anyhow!(
-                    "Failed to create directory {}: {}", dir_path.display(), e
-                ))?;
+            fs::create_dir_all(&dir_path).map_err(|e| {
+                anyhow::anyhow!("Failed to create directory {}: {}", dir_path.display(), e)
+            })?;
             tracing::debug!("Created directory: {}", dir_path.display());
         }
     }
@@ -58,10 +60,13 @@ pub fn ensure_opensim_structure(bin_directory: &Path) -> Result<()> {
     for subdir in config_subdirs {
         let subdir_path = config_include.join(subdir);
         if !subdir_path.exists() {
-            fs::create_dir_all(&subdir_path)
-                .map_err(|e| anyhow::anyhow!(
-                    "Failed to create config subdirectory {}: {}", subdir_path.display(), e
-                ))?;
+            fs::create_dir_all(&subdir_path).map_err(|e| {
+                anyhow::anyhow!(
+                    "Failed to create config subdirectory {}: {}",
+                    subdir_path.display(),
+                    e
+                )
+            })?;
         }
     }
 
@@ -71,14 +76,20 @@ pub fn ensure_opensim_structure(bin_directory: &Path) -> Result<()> {
     for subdir in library_subdirs {
         let subdir_path = library_dir.join(subdir);
         if !subdir_path.exists() {
-            fs::create_dir_all(&subdir_path)
-                .map_err(|e| anyhow::anyhow!(
-                    "Failed to create library subdirectory {}: {}", subdir_path.display(), e
-                ))?;
+            fs::create_dir_all(&subdir_path).map_err(|e| {
+                anyhow::anyhow!(
+                    "Failed to create library subdirectory {}: {}",
+                    subdir_path.display(),
+                    e
+                )
+            })?;
         }
     }
 
-    tracing::info!("OpenSim directory structure verified/created at: {}", bin_directory.display());
+    tracing::info!(
+        "OpenSim directory structure verified/created at: {}",
+        bin_directory.display()
+    );
     Ok(())
 }
 
@@ -137,7 +148,8 @@ impl OpenSimDirectories {
         for path in &paths {
             if !path.exists() {
                 return Err(anyhow::anyhow!(
-                    "Required directory missing: {}", path.display()
+                    "Required directory missing: {}",
+                    path.display()
                 ));
             }
         }
@@ -177,7 +189,8 @@ pub fn is_opensim_compatible(bin_directory: &Path) -> bool {
 pub fn migrate_directory_structure(old_path: &Path, new_path: &Path) -> Result<()> {
     if !old_path.exists() {
         return Err(anyhow::anyhow!(
-            "Source directory does not exist: {}", old_path.display()
+            "Source directory does not exist: {}",
+            old_path.display()
         ));
     }
 
@@ -187,7 +200,7 @@ pub fn migrate_directory_structure(old_path: &Path, new_path: &Path) -> Result<(
     // Copy configuration files if they exist
     let config_files = &[
         "OpenSim.ini",
-        "config-include/Standalone.ini", 
+        "config-include/Standalone.ini",
         "config-include/GridCommon.ini",
         "Regions/Regions.ini",
     ];
@@ -195,15 +208,13 @@ pub fn migrate_directory_structure(old_path: &Path, new_path: &Path) -> Result<(
     for config_file in config_files {
         let old_file = old_path.join(config_file);
         let new_file = new_path.join(config_file);
-        
+
         if old_file.exists() {
             if let Some(parent) = new_file.parent() {
                 fs::create_dir_all(parent)?;
             }
             fs::copy(&old_file, &new_file)
-                .map_err(|e| anyhow::anyhow!(
-                    "Failed to copy {}: {}", config_file, e
-                ))?;
+                .map_err(|e| anyhow::anyhow!("Failed to copy {}: {}", config_file, e))?;
             tracing::info!("Migrated config file: {}", config_file);
         }
     }

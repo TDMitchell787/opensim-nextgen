@@ -1,11 +1,14 @@
-use std::sync::Arc;
 use std::collections::HashMap;
-use uuid::Uuid;
+use std::sync::Arc;
 use tracing::info;
+use uuid::Uuid;
 
-use crate::ai::ml_integration::llm_client::{LocalLLMClient, LLMConfig, ChatMessage, MessageRole};
 use crate::ai::build_session::BuildSessionStore;
-use crate::ai::npc_memory::{NPCMemoryStore, should_store_memory, extract_memory_fact, wants_oar_export, extract_oar_filename};
+use crate::ai::ml_integration::llm_client::{ChatMessage, LLMConfig, LocalLLMClient, MessageRole};
+use crate::ai::npc_memory::{
+    extract_memory_fact, extract_oar_filename, should_store_memory, wants_oar_export,
+    NPCMemoryStore,
+};
 
 #[derive(Debug, Clone)]
 pub struct NPCAvatar {
@@ -80,12 +83,18 @@ impl NPCBrain {
                     info!("[NPC] LLM connected (Ollama) for {}", npc.full_name());
                     Some(client)
                 } else {
-                    info!("[NPC] LLM not available - {} will use canned responses", npc.full_name());
+                    info!(
+                        "[NPC] LLM not available - {} will use canned responses",
+                        npc.full_name()
+                    );
                     None
                 }
             }
             Err(_) => {
-                info!("[NPC] LLM client init failed - {} will use canned responses", npc.full_name());
+                info!(
+                    "[NPC] LLM client init failed - {} will use canned responses",
+                    npc.full_name()
+                );
                 None
             }
         };
@@ -119,7 +128,12 @@ impl NPCBrain {
         self
     }
 
-    pub async fn process_chat(&mut self, speaker_id: Uuid, speaker_name: &str, message: &str) -> NPCResponse {
+    pub async fn process_chat(
+        &mut self,
+        speaker_id: Uuid,
+        speaker_name: &str,
+        message: &str,
+    ) -> NPCResponse {
         let lower = message.trim().to_lowercase();
         if lower == "help" || lower == "/help" || lower == "aria help" {
             return NPCResponse {
@@ -129,7 +143,10 @@ impl NPCBrain {
         }
 
         if let Some(ref llm) = self.llm_client {
-            let history = self.conversation_history.entry(speaker_id).or_insert_with(Vec::new);
+            let history = self
+                .conversation_history
+                .entry(speaker_id)
+                .or_insert_with(Vec::new);
 
             if history.is_empty() {
                 history.push(ChatMessage {
@@ -139,7 +156,9 @@ impl NPCBrain {
             }
 
             let session_ctx = if let Some(ref store) = self.build_sessions {
-                store.get_context_prompt(speaker_id, self.npc.agent_id).await
+                store
+                    .get_context_prompt(speaker_id, self.npc.agent_id)
+                    .await
             } else {
                 String::new()
             };
@@ -154,7 +173,10 @@ impl NPCBrain {
             if !combined_ctx.is_empty() {
                 if history.len() >= 2 {
                     if let Some(prev) = history.last() {
-                        if matches!(prev.role, MessageRole::System) && (prev.content.starts_with("\nCURRENT BUILD SESSION") || prev.content.starts_with("\n\nYOUR MEMORIES")) {
+                        if matches!(prev.role, MessageRole::System)
+                            && (prev.content.starts_with("\nCURRENT BUILD SESSION")
+                                || prev.content.starts_with("\n\nYOUR MEMORIES"))
+                        {
                             history.pop();
                         }
                     }
@@ -179,31 +201,49 @@ impl NPCBrain {
 
                     if history.len() > 24 {
                         let system = history[0].clone();
-                        let recent: Vec<_> = history[history.len()-12..].to_vec();
+                        let recent: Vec<_> = history[history.len() - 12..].to_vec();
                         history.clear();
                         history.push(system);
                         history.extend(recent);
                     }
 
-                    info!("[NPC] Raw LLM response for {}: {}", self.npc.first_name, &response.text[..response.text.len().min(500)]);
+                    info!(
+                        "[NPC] Raw LLM response for {}: {}",
+                        self.npc.first_name,
+                        &response.text[..response.text.len().min(500)]
+                    );
                     let mut resp = parse_npc_response_with_speaker(&response.text, speaker_id);
 
-                    if wants_oar_export(&lower) && !resp.actions.iter().any(|a| matches!(a, NPCAction::ExportOar { .. })) {
+                    if wants_oar_export(&lower)
+                        && !resp
+                            .actions
+                            .iter()
+                            .any(|a| matches!(a, NPCAction::ExportOar { .. }))
+                    {
                         let filename = extract_oar_filename(message);
-                        info!("[NPC] OAR intercept: LLM missed export_oar, injecting {}", filename);
+                        info!(
+                            "[NPC] OAR intercept: LLM missed export_oar, injecting {}",
+                            filename
+                        );
                         resp.actions.push(NPCAction::ExportOar {
                             region_id: Uuid::nil(),
                             filename: filename.clone(),
                         });
-                        if resp.chat_text.contains("can't") || resp.chat_text.contains("don't have") || resp.chat_text.contains("cannot") || resp.chat_text.contains("not able") {
-                            resp.chat_text = format!("Done! I've exported the region to '{}'.", filename);
+                        if resp.chat_text.contains("can't")
+                            || resp.chat_text.contains("don't have")
+                            || resp.chat_text.contains("cannot")
+                            || resp.chat_text.contains("not able")
+                        {
+                            resp.chat_text =
+                                format!("Done! I've exported the region to '{}'.", filename);
                         }
                     }
 
                     if let Some(ref mem) = self.memory_store {
                         if should_store_memory(message) {
                             let (fact, category) = extract_memory_fact(message);
-                            mem.add_memory(self.npc.agent_id, speaker_id, &fact, &category).await;
+                            mem.add_memory(self.npc.agent_id, speaker_id, &fact, &category)
+                                .await;
                         }
                     }
 
@@ -212,13 +252,17 @@ impl NPCBrain {
                             let lower = message.to_lowercase();
                             let project_hint = extract_project_name(&lower);
                             if !project_hint.is_empty() {
-                                store.set_project_name(speaker_id, self.npc.agent_id, &project_hint).await;
+                                store
+                                    .set_project_name(speaker_id, self.npc.agent_id, &project_hint)
+                                    .await;
                             }
                         }
 
                         for action in &resp.actions {
                             if let NPCAction::DeleteObject { local_id } = action {
-                                store.record_deleted_object(speaker_id, self.npc.agent_id, *local_id).await;
+                                store
+                                    .record_deleted_object(speaker_id, self.npc.agent_id, *local_id)
+                                    .await;
                             }
                         }
                     }
@@ -248,30 +292,115 @@ pub struct NPCResponse {
 
 #[derive(Debug, Clone)]
 pub enum NPCAction {
-    RezBox { position: [f32; 3], scale: [f32; 3], name: String },
-    RezCylinder { position: [f32; 3], scale: [f32; 3], name: String },
-    RezSphere { position: [f32; 3], scale: [f32; 3], name: String },
-    RezTorus { position: [f32; 3], scale: [f32; 3], name: String },
-    RezTube { position: [f32; 3], scale: [f32; 3], name: String },
-    RezRing { position: [f32; 3], scale: [f32; 3], name: String },
-    RezPrism { position: [f32; 3], scale: [f32; 3], name: String },
-    SetPosition { local_id: u32, position: [f32; 3] },
-    SetRotation { local_id: u32, rotation: [f32; 4] },
-    SetScale { local_id: u32, scale: [f32; 3] },
-    SetColor { local_id: u32, color: [f32; 4] },
-    SetTexture { local_id: u32, texture_uuid: String },
-    SetName { local_id: u32, name: String },
-    LinkObjects { root_id: u32, child_ids: Vec<u32> },
-    DeleteObject { local_id: u32 },
-    InsertScript { local_id: u32, script_name: String, script_source: String },
-    InsertTemplateScript { local_id: u32, template_name: String, params: std::collections::HashMap<String, String> },
-    UpdateScript { local_id: u32, script_name: String, script_source: String },
-    GiveObject { local_id: u32, target_agent_id: Uuid },
-    ExportOar { region_id: Uuid, filename: String },
-    RezMesh { geometry_type: String, position: [f32; 3], scale: [f32; 3], name: String },
-    ImportMesh { file_path: String, name: String, position: [f32; 3] },
-    BlenderGenerate { template: String, params: HashMap<String, String>, name: String, position: [f32; 3] },
-    CreateBadge { target_agent_id: Uuid },
+    RezBox {
+        position: [f32; 3],
+        scale: [f32; 3],
+        name: String,
+    },
+    RezCylinder {
+        position: [f32; 3],
+        scale: [f32; 3],
+        name: String,
+    },
+    RezSphere {
+        position: [f32; 3],
+        scale: [f32; 3],
+        name: String,
+    },
+    RezTorus {
+        position: [f32; 3],
+        scale: [f32; 3],
+        name: String,
+    },
+    RezTube {
+        position: [f32; 3],
+        scale: [f32; 3],
+        name: String,
+    },
+    RezRing {
+        position: [f32; 3],
+        scale: [f32; 3],
+        name: String,
+    },
+    RezPrism {
+        position: [f32; 3],
+        scale: [f32; 3],
+        name: String,
+    },
+    SetPosition {
+        local_id: u32,
+        position: [f32; 3],
+    },
+    SetRotation {
+        local_id: u32,
+        rotation: [f32; 4],
+    },
+    SetScale {
+        local_id: u32,
+        scale: [f32; 3],
+    },
+    SetColor {
+        local_id: u32,
+        color: [f32; 4],
+    },
+    SetTexture {
+        local_id: u32,
+        texture_uuid: String,
+    },
+    SetName {
+        local_id: u32,
+        name: String,
+    },
+    LinkObjects {
+        root_id: u32,
+        child_ids: Vec<u32>,
+    },
+    DeleteObject {
+        local_id: u32,
+    },
+    InsertScript {
+        local_id: u32,
+        script_name: String,
+        script_source: String,
+    },
+    InsertTemplateScript {
+        local_id: u32,
+        template_name: String,
+        params: std::collections::HashMap<String, String>,
+    },
+    UpdateScript {
+        local_id: u32,
+        script_name: String,
+        script_source: String,
+    },
+    GiveObject {
+        local_id: u32,
+        target_agent_id: Uuid,
+    },
+    ExportOar {
+        region_id: Uuid,
+        filename: String,
+    },
+    RezMesh {
+        geometry_type: String,
+        position: [f32; 3],
+        scale: [f32; 3],
+        name: String,
+    },
+    ImportMesh {
+        file_path: String,
+        name: String,
+        position: [f32; 3],
+    },
+    BlenderGenerate {
+        template: String,
+        params: HashMap<String, String>,
+        name: String,
+        position: [f32; 3],
+    },
+    CreateBadge {
+        target_agent_id: Uuid,
+    },
     CreateTShirt {
         target_agent_id: Uuid,
         logo_path: String,
@@ -283,9 +412,18 @@ pub enum NPCAction {
         collar: String,
         name: String,
     },
-    ComposeFilm { scene_name: String, description: String },
-    ComposeMusic { title: String, description: String },
-    ComposeAd { board_name: String, description: String },
+    ComposeFilm {
+        scene_name: String,
+        description: String,
+    },
+    ComposeMusic {
+        title: String,
+        description: String,
+    },
+    ComposeAd {
+        board_name: String,
+        description: String,
+    },
     ComposePhoto {
         subject_position: [f32; 3],
         camera_angle: String,
@@ -295,8 +433,13 @@ pub enum NPCAction {
         region_id: Option<String>,
         name: String,
     },
-    PackageObjectIntoPrim { source_local_id: u32, container_local_id: u32 },
-    GiveToRequester { local_id: u32 },
+    PackageObjectIntoPrim {
+        source_local_id: u32,
+        container_local_id: u32,
+    },
+    GiveToRequester {
+        local_id: u32,
+    },
     DroneCinematography {
         scene_name: String,
         shot_type: String,
@@ -430,11 +573,12 @@ pub fn parse_npc_response(text: &str) -> NPCResponse {
 
 pub fn parse_npc_response_with_speaker(text: &str, speaker_id: Uuid) -> NPCResponse {
     if let Some(json_start) = text.find("```json") {
-        if let Some(json_end) = text[json_start+7..].find("```") {
-            let json_str = &text[json_start+7..json_start+7+json_end].trim();
+        if let Some(json_end) = text[json_start + 7..].find("```") {
+            let json_str = &text[json_start + 7..json_start + 7 + json_end].trim();
             if let Ok(val) = serde_json::from_str::<serde_json::Value>(json_str) {
                 let actions = parse_actions_from_json(&val, speaker_id);
-                let chat = val.get("say")
+                let chat = val
+                    .get("say")
                     .and_then(|v| v.as_str())
                     .unwrap_or("")
                     .to_string();
@@ -450,11 +594,15 @@ pub fn parse_npc_response_with_speaker(text: &str, speaker_id: Uuid) -> NPCRespo
 
     if let Ok(val) = serde_json::from_str::<serde_json::Value>(text.trim()) {
         let actions = parse_actions_from_json(&val, speaker_id);
-        let chat = val.get("say")
+        let chat = val
+            .get("say")
             .and_then(|v| v.as_str())
             .unwrap_or(text)
             .to_string();
-        return NPCResponse { chat_text: chat, actions };
+        return NPCResponse {
+            chat_text: chat,
+            actions,
+        };
     }
 
     NPCResponse {
@@ -463,12 +611,19 @@ pub fn parse_npc_response_with_speaker(text: &str, speaker_id: Uuid) -> NPCRespo
     }
 }
 
-fn parse_rez_action(obj: &serde_json::Map<String, serde_json::Value>, key: &str, default_name: &str) -> Option<([f32; 3], [f32; 3], String)> {
+fn parse_rez_action(
+    obj: &serde_json::Map<String, serde_json::Value>,
+    key: &str,
+    default_name: &str,
+) -> Option<([f32; 3], [f32; 3], String)> {
     obj.get(key).and_then(|v| v.as_object()).map(|rez| {
         (
             parse_f32_3(rez.get("pos")),
             parse_f32_3_or(rez.get("scale"), [1.0, 1.0, 1.0]),
-            rez.get("name").and_then(|v| v.as_str()).unwrap_or(default_name).to_string(),
+            rez.get("name")
+                .and_then(|v| v.as_str())
+                .unwrap_or(default_name)
+                .to_string(),
         )
     })
 }
@@ -479,25 +634,54 @@ fn parse_actions_from_json(val: &serde_json::Value, speaker_id: Uuid) -> Vec<NPC
         for action in arr {
             if let Some(obj) = action.as_object() {
                 if let Some((pos, scale, name)) = parse_rez_action(obj, "rez_box", "Box") {
-                    actions.push(NPCAction::RezBox { position: pos, scale, name });
+                    actions.push(NPCAction::RezBox {
+                        position: pos,
+                        scale,
+                        name,
+                    });
                 }
-                if let Some((pos, scale, name)) = parse_rez_action(obj, "rez_cylinder", "Cylinder") {
-                    actions.push(NPCAction::RezCylinder { position: pos, scale, name });
+                if let Some((pos, scale, name)) = parse_rez_action(obj, "rez_cylinder", "Cylinder")
+                {
+                    actions.push(NPCAction::RezCylinder {
+                        position: pos,
+                        scale,
+                        name,
+                    });
                 }
                 if let Some((pos, scale, name)) = parse_rez_action(obj, "rez_sphere", "Sphere") {
-                    actions.push(NPCAction::RezSphere { position: pos, scale, name });
+                    actions.push(NPCAction::RezSphere {
+                        position: pos,
+                        scale,
+                        name,
+                    });
                 }
                 if let Some((pos, scale, name)) = parse_rez_action(obj, "rez_torus", "Torus") {
-                    actions.push(NPCAction::RezTorus { position: pos, scale, name });
+                    actions.push(NPCAction::RezTorus {
+                        position: pos,
+                        scale,
+                        name,
+                    });
                 }
                 if let Some((pos, scale, name)) = parse_rez_action(obj, "rez_tube", "Tube") {
-                    actions.push(NPCAction::RezTube { position: pos, scale, name });
+                    actions.push(NPCAction::RezTube {
+                        position: pos,
+                        scale,
+                        name,
+                    });
                 }
                 if let Some((pos, scale, name)) = parse_rez_action(obj, "rez_ring", "Ring") {
-                    actions.push(NPCAction::RezRing { position: pos, scale, name });
+                    actions.push(NPCAction::RezRing {
+                        position: pos,
+                        scale,
+                        name,
+                    });
                 }
                 if let Some((pos, scale, name)) = parse_rez_action(obj, "rez_prism", "Prism") {
-                    actions.push(NPCAction::RezPrism { position: pos, scale, name });
+                    actions.push(NPCAction::RezPrism {
+                        position: pos,
+                        scale,
+                        name,
+                    });
                 }
                 if let Some(s) = obj.get("set_position").and_then(|v| v.as_object()) {
                     if let Some(id) = s.get("local_id").and_then(|v| v.as_u64()) {
@@ -535,7 +719,11 @@ fn parse_actions_from_json(val: &serde_json::Value, speaker_id: Uuid) -> Vec<NPC
                     if let Some(id) = s.get("local_id").and_then(|v| v.as_u64()) {
                         actions.push(NPCAction::SetTexture {
                             local_id: id as u32,
-                            texture_uuid: s.get("uuid").and_then(|v| v.as_str()).unwrap_or("").to_string(),
+                            texture_uuid: s
+                                .get("uuid")
+                                .and_then(|v| v.as_str())
+                                .unwrap_or("")
+                                .to_string(),
                         });
                     }
                 }
@@ -543,38 +731,69 @@ fn parse_actions_from_json(val: &serde_json::Value, speaker_id: Uuid) -> Vec<NPC
                     if let Some(id) = s.get("local_id").and_then(|v| v.as_u64()) {
                         actions.push(NPCAction::SetName {
                             local_id: id as u32,
-                            name: s.get("name").and_then(|v| v.as_str()).unwrap_or("").to_string(),
+                            name: s
+                                .get("name")
+                                .and_then(|v| v.as_str())
+                                .unwrap_or("")
+                                .to_string(),
                         });
                     }
                 }
                 if let Some(s) = obj.get("link_objects").and_then(|v| v.as_object()) {
                     if let Some(root) = s.get("root_id").and_then(|v| v.as_u64()) {
-                        let children = s.get("child_ids")
+                        let children = s
+                            .get("child_ids")
                             .and_then(|v| v.as_array())
-                            .map(|arr| arr.iter().filter_map(|v| v.as_u64().map(|id| id as u32)).collect())
+                            .map(|arr| {
+                                arr.iter()
+                                    .filter_map(|v| v.as_u64().map(|id| id as u32))
+                                    .collect()
+                            })
                             .unwrap_or_default();
-                        actions.push(NPCAction::LinkObjects { root_id: root as u32, child_ids: children });
+                        actions.push(NPCAction::LinkObjects {
+                            root_id: root as u32,
+                            child_ids: children,
+                        });
                     }
                 }
                 if let Some(del) = obj.get("delete_object") {
                     if let Some(id) = del.get("local_id").and_then(|v| v.as_u64()) {
-                        actions.push(NPCAction::DeleteObject { local_id: id as u32 });
+                        actions.push(NPCAction::DeleteObject {
+                            local_id: id as u32,
+                        });
                     }
                 }
                 if let Some(s) = obj.get("insert_script").and_then(|v| v.as_object()) {
                     if let Some(id) = s.get("local_id").and_then(|v| v.as_u64()) {
-                        let script_name = s.get("script_name").and_then(|v| v.as_str()).unwrap_or("Script").to_string();
-                        let script_source = s.get("script_source").and_then(|v| v.as_str()).unwrap_or("").to_string();
+                        let script_name = s
+                            .get("script_name")
+                            .and_then(|v| v.as_str())
+                            .unwrap_or("Script")
+                            .to_string();
+                        let script_source = s
+                            .get("script_source")
+                            .and_then(|v| v.as_str())
+                            .unwrap_or("")
+                            .to_string();
                         if !script_source.is_empty() {
                             actions.push(NPCAction::InsertScript {
-                                local_id: id as u32, script_name, script_source,
+                                local_id: id as u32,
+                                script_name,
+                                script_source,
                             });
                         }
                     }
                 }
-                if let Some(s) = obj.get("insert_template_script").and_then(|v| v.as_object()) {
+                if let Some(s) = obj
+                    .get("insert_template_script")
+                    .and_then(|v| v.as_object())
+                {
                     if let Some(id) = s.get("local_id").and_then(|v| v.as_u64()) {
-                        let template_name = s.get("template_name").and_then(|v| v.as_str()).unwrap_or("").to_string();
+                        let template_name = s
+                            .get("template_name")
+                            .and_then(|v| v.as_str())
+                            .unwrap_or("")
+                            .to_string();
                         let mut params = HashMap::new();
                         if let Some(p) = s.get("params").and_then(|v| v.as_object()) {
                             for (k, v) in p {
@@ -585,77 +804,113 @@ fn parse_actions_from_json(val: &serde_json::Value, speaker_id: Uuid) -> Vec<NPC
                         }
                         if !template_name.is_empty() {
                             actions.push(NPCAction::InsertTemplateScript {
-                                local_id: id as u32, template_name, params,
+                                local_id: id as u32,
+                                template_name,
+                                params,
                             });
                         }
                     }
                 }
                 if let Some(s) = obj.get("update_script").and_then(|v| v.as_object()) {
                     if let Some(id) = s.get("local_id").and_then(|v| v.as_u64()) {
-                        let script_name = s.get("script_name").and_then(|v| v.as_str()).unwrap_or("Script").to_string();
-                        let script_source = s.get("script_source").and_then(|v| v.as_str()).unwrap_or("").to_string();
+                        let script_name = s
+                            .get("script_name")
+                            .and_then(|v| v.as_str())
+                            .unwrap_or("Script")
+                            .to_string();
+                        let script_source = s
+                            .get("script_source")
+                            .and_then(|v| v.as_str())
+                            .unwrap_or("")
+                            .to_string();
                         if !script_source.is_empty() {
                             actions.push(NPCAction::UpdateScript {
-                                local_id: id as u32, script_name, script_source,
+                                local_id: id as u32,
+                                script_name,
+                                script_source,
                             });
                         }
                     }
                 }
                 if let Some(s) = obj.get("give_object").and_then(|v| v.as_object()) {
                     if let Some(id) = s.get("local_id").and_then(|v| v.as_u64()) {
-                        let target = s.get("target_agent_id")
+                        let target = s
+                            .get("target_agent_id")
                             .and_then(|v| v.as_str())
                             .and_then(|s| Uuid::parse_str(s).ok())
                             .unwrap_or(speaker_id);
                         if !target.is_nil() {
-                            actions.push(NPCAction::GiveObject { local_id: id as u32, target_agent_id: target });
+                            actions.push(NPCAction::GiveObject {
+                                local_id: id as u32,
+                                target_agent_id: target,
+                            });
                         }
                     }
                 }
                 if let Some(s) = obj.get("export_oar").and_then(|v| v.as_object()) {
-                    let region_id = s.get("region_id")
+                    let region_id = s
+                        .get("region_id")
                         .and_then(|v| v.as_str())
                         .and_then(|s| Uuid::parse_str(s).ok())
                         .unwrap_or(Uuid::nil());
-                    let filename = s.get("filename")
+                    let filename = s
+                        .get("filename")
                         .and_then(|v| v.as_str())
                         .unwrap_or("export.oar")
                         .to_string();
-                    actions.push(NPCAction::ExportOar { region_id, filename });
+                    actions.push(NPCAction::ExportOar {
+                        region_id,
+                        filename,
+                    });
                 }
                 if let Some(s) = obj.get("rez_mesh").and_then(|v| v.as_object()) {
-                    let geometry_type = s.get("geometry_type")
+                    let geometry_type = s
+                        .get("geometry_type")
                         .and_then(|v| v.as_str())
                         .unwrap_or("box")
                         .to_string();
                     let position = parse_f32_3(s.get("pos"));
                     let scale = parse_f32_3_or(s.get("scale"), [1.0, 1.0, 1.0]);
-                    let name = s.get("name")
+                    let name = s
+                        .get("name")
                         .and_then(|v| v.as_str())
                         .unwrap_or("Mesh Object")
                         .to_string();
-                    actions.push(NPCAction::RezMesh { geometry_type, position, scale, name });
+                    actions.push(NPCAction::RezMesh {
+                        geometry_type,
+                        position,
+                        scale,
+                        name,
+                    });
                 }
                 if let Some(s) = obj.get("import_mesh").and_then(|v| v.as_object()) {
-                    let file_path = s.get("file_path")
+                    let file_path = s
+                        .get("file_path")
                         .and_then(|v| v.as_str())
                         .unwrap_or("")
                         .to_string();
-                    let name = s.get("name")
+                    let name = s
+                        .get("name")
                         .and_then(|v| v.as_str())
                         .unwrap_or("Imported Mesh")
                         .to_string();
                     let position = parse_f32_3(s.get("pos"));
                     if !file_path.is_empty() {
-                        actions.push(NPCAction::ImportMesh { file_path, name, position });
+                        actions.push(NPCAction::ImportMesh {
+                            file_path,
+                            name,
+                            position,
+                        });
                     }
                 }
                 if let Some(s) = obj.get("blender_generate").and_then(|v| v.as_object()) {
-                    let template = s.get("template")
+                    let template = s
+                        .get("template")
                         .and_then(|v| v.as_str())
                         .unwrap_or("")
                         .to_string();
-                    let name = s.get("name")
+                    let name = s
+                        .get("name")
                         .and_then(|v| v.as_str())
                         .unwrap_or("Generated Mesh")
                         .to_string();
@@ -671,55 +926,78 @@ fn parse_actions_from_json(val: &serde_json::Value, speaker_id: Uuid) -> Vec<NPC
                         }
                     }
                     if !template.is_empty() {
-                        actions.push(NPCAction::BlenderGenerate { template, params, name, position });
+                        actions.push(NPCAction::BlenderGenerate {
+                            template,
+                            params,
+                            name,
+                            position,
+                        });
                     }
                 }
                 if let Some(s) = obj.get("create_badge").and_then(|v| v.as_object()) {
-                    let target = s.get("target_agent_id")
+                    let target = s
+                        .get("target_agent_id")
                         .and_then(|v| v.as_str())
                         .and_then(|s| Uuid::parse_str(s).ok())
                         .unwrap_or(speaker_id);
                     if !target.is_nil() {
-                        actions.push(NPCAction::CreateBadge { target_agent_id: target });
+                        actions.push(NPCAction::CreateBadge {
+                            target_agent_id: target,
+                        });
                     }
                 }
                 if let Some(s) = obj.get("create_tshirt").and_then(|v| v.as_object()) {
-                    let target = s.get("target_agent_id")
+                    let target = s
+                        .get("target_agent_id")
                         .and_then(|v| v.as_str())
                         .and_then(|s| Uuid::parse_str(s).ok())
                         .unwrap_or(speaker_id);
-                    let logo_path = s.get("logo_path")
+                    let logo_path = s
+                        .get("logo_path")
                         .and_then(|v| v.as_str())
                         .unwrap_or("")
                         .to_string();
-                    let shirt_color = if let Some(arr) = s.get("shirt_color").and_then(|v| v.as_array()) {
-                        let r = arr.get(0).and_then(|v| v.as_u64()).unwrap_or(255) as u8;
-                        let g = arr.get(1).and_then(|v| v.as_u64()).unwrap_or(255) as u8;
-                        let b = arr.get(2).and_then(|v| v.as_u64()).unwrap_or(255) as u8;
-                        let a = arr.get(3).and_then(|v| v.as_u64()).unwrap_or(255) as u8;
-                        [r, g, b, a]
-                    } else {
-                        [255, 255, 255, 255]
-                    };
-                    let front_offset = s.get("front_offset_inches")
+                    let shirt_color =
+                        if let Some(arr) = s.get("shirt_color").and_then(|v| v.as_array()) {
+                            let r = arr.get(0).and_then(|v| v.as_u64()).unwrap_or(255) as u8;
+                            let g = arr.get(1).and_then(|v| v.as_u64()).unwrap_or(255) as u8;
+                            let b = arr.get(2).and_then(|v| v.as_u64()).unwrap_or(255) as u8;
+                            let a = arr.get(3).and_then(|v| v.as_u64()).unwrap_or(255) as u8;
+                            [r, g, b, a]
+                        } else {
+                            [255, 255, 255, 255]
+                        };
+                    let front_offset = s
+                        .get("front_offset_inches")
                         .and_then(|v| v.as_f64())
                         .unwrap_or(2.0) as f32;
-                    let back_offset = s.get("back_offset_inches")
+                    let back_offset = s
+                        .get("back_offset_inches")
                         .and_then(|v| v.as_f64())
                         .map(|v| v as f32)
-                        .or_else(|| if !logo_path.is_empty() { Some(4.0) } else { None });
-                    let sleeve_length = s.get("sleeve_length")
+                        .or_else(|| {
+                            if !logo_path.is_empty() {
+                                Some(4.0)
+                            } else {
+                                None
+                            }
+                        });
+                    let sleeve_length = s
+                        .get("sleeve_length")
                         .and_then(|v| v.as_f64())
                         .unwrap_or(0.5) as f32;
-                    let fit = s.get("fit")
+                    let fit = s
+                        .get("fit")
                         .and_then(|v| v.as_str())
                         .unwrap_or("normal")
                         .to_string();
-                    let collar = s.get("collar")
+                    let collar = s
+                        .get("collar")
                         .and_then(|v| v.as_str())
                         .unwrap_or("crew")
                         .to_string();
-                    let name = s.get("name")
+                    let name = s
+                        .get("name")
                         .and_then(|v| v.as_str())
                         .unwrap_or("Custom T-Shirt")
                         .to_string();
@@ -738,31 +1016,88 @@ fn parse_actions_from_json(val: &serde_json::Value, speaker_id: Uuid) -> Vec<NPC
                     }
                 }
                 if let Some(s) = obj.get("compose_film").and_then(|v| v.as_object()) {
-                    let scene_name = s.get("scene_name").and_then(|v| v.as_str()).unwrap_or("Scene").to_string();
-                    let description = s.get("description").and_then(|v| v.as_str()).unwrap_or("").to_string();
-                    actions.push(NPCAction::ComposeFilm { scene_name, description });
+                    let scene_name = s
+                        .get("scene_name")
+                        .and_then(|v| v.as_str())
+                        .unwrap_or("Scene")
+                        .to_string();
+                    let description = s
+                        .get("description")
+                        .and_then(|v| v.as_str())
+                        .unwrap_or("")
+                        .to_string();
+                    actions.push(NPCAction::ComposeFilm {
+                        scene_name,
+                        description,
+                    });
                 }
                 if let Some(s) = obj.get("compose_music").and_then(|v| v.as_object()) {
-                    let title = s.get("title").and_then(|v| v.as_str()).unwrap_or("Untitled").to_string();
-                    let description = s.get("description").and_then(|v| v.as_str()).unwrap_or("").to_string();
+                    let title = s
+                        .get("title")
+                        .and_then(|v| v.as_str())
+                        .unwrap_or("Untitled")
+                        .to_string();
+                    let description = s
+                        .get("description")
+                        .and_then(|v| v.as_str())
+                        .unwrap_or("")
+                        .to_string();
                     actions.push(NPCAction::ComposeMusic { title, description });
                 }
                 if let Some(s) = obj.get("compose_ad").and_then(|v| v.as_object()) {
-                    let board_name = s.get("board_name").and_then(|v| v.as_str()).unwrap_or("Ad Board").to_string();
-                    let description = s.get("description").and_then(|v| v.as_str()).unwrap_or("").to_string();
-                    actions.push(NPCAction::ComposeAd { board_name, description });
+                    let board_name = s
+                        .get("board_name")
+                        .and_then(|v| v.as_str())
+                        .unwrap_or("Ad Board")
+                        .to_string();
+                    let description = s
+                        .get("description")
+                        .and_then(|v| v.as_str())
+                        .unwrap_or("")
+                        .to_string();
+                    actions.push(NPCAction::ComposeAd {
+                        board_name,
+                        description,
+                    });
                 }
                 if let Some(s) = obj.get("compose_photo").and_then(|v| v.as_object()) {
                     let subject_position = parse_f32_3(s.get("subject_position"));
-                    let camera_angle = s.get("camera_angle").and_then(|v| v.as_str()).unwrap_or("eye_level").to_string();
-                    let composition = s.get("composition").and_then(|v| v.as_str()).unwrap_or("rule_of_thirds").to_string();
-                    let lighting = s.get("lighting").and_then(|v| v.as_str()).unwrap_or("golden_hour").to_string();
-                    let depth_of_field = s.get("depth_of_field").and_then(|v| v.as_f64()).unwrap_or(0.5) as f32;
-                    let region_id = s.get("region_id").and_then(|v| v.as_str()).map(|v| v.to_string());
-                    let name = s.get("name").and_then(|v| v.as_str()).unwrap_or("photo").to_string();
+                    let camera_angle = s
+                        .get("camera_angle")
+                        .and_then(|v| v.as_str())
+                        .unwrap_or("eye_level")
+                        .to_string();
+                    let composition = s
+                        .get("composition")
+                        .and_then(|v| v.as_str())
+                        .unwrap_or("rule_of_thirds")
+                        .to_string();
+                    let lighting = s
+                        .get("lighting")
+                        .and_then(|v| v.as_str())
+                        .unwrap_or("golden_hour")
+                        .to_string();
+                    let depth_of_field = s
+                        .get("depth_of_field")
+                        .and_then(|v| v.as_f64())
+                        .unwrap_or(0.5) as f32;
+                    let region_id = s
+                        .get("region_id")
+                        .and_then(|v| v.as_str())
+                        .map(|v| v.to_string());
+                    let name = s
+                        .get("name")
+                        .and_then(|v| v.as_str())
+                        .unwrap_or("photo")
+                        .to_string();
                     actions.push(NPCAction::ComposePhoto {
-                        subject_position, camera_angle, composition, lighting,
-                        depth_of_field, region_id, name,
+                        subject_position,
+                        camera_angle,
+                        composition,
+                        lighting,
+                        depth_of_field,
+                        region_id,
+                        name,
                     });
                 }
                 if let Some(s) = obj.get("package_object").and_then(|v| v.as_object()) {
@@ -778,67 +1113,136 @@ fn parse_actions_from_json(val: &serde_json::Value, speaker_id: Uuid) -> Vec<NPC
                 }
                 if let Some(s) = obj.get("give_to_requester").and_then(|v| v.as_object()) {
                     if let Some(lid) = s.get("local_id").and_then(|v| v.as_u64()) {
-                        actions.push(NPCAction::GiveToRequester { local_id: lid as u32 });
+                        actions.push(NPCAction::GiveToRequester {
+                            local_id: lid as u32,
+                        });
                     }
                 }
                 if let Some(s) = obj.get("drone_cinematography").and_then(|v| v.as_object()) {
-                    let scene_name = s.get("scene_name").and_then(|v| v.as_str()).unwrap_or("Scene").to_string();
-                    let shot_type = s.get("shot_type").and_then(|v| v.as_str()).unwrap_or("orbit").to_string();
+                    let scene_name = s
+                        .get("scene_name")
+                        .and_then(|v| v.as_str())
+                        .unwrap_or("Scene")
+                        .to_string();
+                    let shot_type = s
+                        .get("shot_type")
+                        .and_then(|v| v.as_str())
+                        .unwrap_or("orbit")
+                        .to_string();
                     let subject_position = parse_f32_3(s.get("subject_position"));
                     let speed = s.get("speed").and_then(|v| v.as_f64()).unwrap_or(1.0) as f32;
-                    let camera_waypoints = s.get("camera_waypoints")
+                    let camera_waypoints = s
+                        .get("camera_waypoints")
                         .and_then(|v| v.as_array())
-                        .map(|arr| arr.iter().filter_map(|wp| {
-                            let o = wp.as_object()?;
-                            Some(CameraWaypoint {
-                                position: parse_f32_3(o.get("pos")),
-                                focus: parse_f32_3(o.get("focus")),
-                                fov: o.get("fov").and_then(|v| v.as_f64()).unwrap_or(60.0) as f32,
-                                dwell: o.get("dwell").and_then(|v| v.as_f64()).unwrap_or(2.0) as f32,
-                            })
-                        }).collect())
+                        .map(|arr| {
+                            arr.iter()
+                                .filter_map(|wp| {
+                                    let o = wp.as_object()?;
+                                    Some(CameraWaypoint {
+                                        position: parse_f32_3(o.get("pos")),
+                                        focus: parse_f32_3(o.get("focus")),
+                                        fov: o.get("fov").and_then(|v| v.as_f64()).unwrap_or(60.0)
+                                            as f32,
+                                        dwell: o
+                                            .get("dwell")
+                                            .and_then(|v| v.as_f64())
+                                            .unwrap_or(2.0)
+                                            as f32,
+                                    })
+                                })
+                                .collect()
+                        })
                         .unwrap_or_default();
-                    let (lights, lighting_preset) = if let Some(preset_str) = s.get("lights").and_then(|v| v.as_str()) {
-                        (vec![], Some(preset_str.to_lowercase()))
-                    } else if let Some(arr) = s.get("lights").and_then(|v| v.as_array()) {
-                        (arr.iter().filter_map(|l| {
-                            let o = l.as_object()?;
-                            Some(CinemaLight {
-                                name: o.get("name").and_then(|v| v.as_str()).unwrap_or("Light").to_string(),
-                                position: parse_f32_3(o.get("position")),
-                                color: parse_f32_3_or(o.get("color"), [1.0, 1.0, 1.0]),
-                                intensity: o.get("intensity").and_then(|v| v.as_f64()).unwrap_or(0.8) as f32,
-                                radius: o.get("radius").and_then(|v| v.as_f64()).unwrap_or(20.0) as f32,
-                                falloff: o.get("falloff").and_then(|v| v.as_f64()).unwrap_or(0.5) as f32,
-                            })
-                        }).collect(), None)
-                    } else {
-                        (vec![], None)
-                    };
+                    let (lights, lighting_preset) =
+                        if let Some(preset_str) = s.get("lights").and_then(|v| v.as_str()) {
+                            (vec![], Some(preset_str.to_lowercase()))
+                        } else if let Some(arr) = s.get("lights").and_then(|v| v.as_array()) {
+                            (
+                                arr.iter()
+                                    .filter_map(|l| {
+                                        let o = l.as_object()?;
+                                        Some(CinemaLight {
+                                            name: o
+                                                .get("name")
+                                                .and_then(|v| v.as_str())
+                                                .unwrap_or("Light")
+                                                .to_string(),
+                                            position: parse_f32_3(o.get("position")),
+                                            color: parse_f32_3_or(o.get("color"), [1.0, 1.0, 1.0]),
+                                            intensity: o
+                                                .get("intensity")
+                                                .and_then(|v| v.as_f64())
+                                                .unwrap_or(0.8)
+                                                as f32,
+                                            radius: o
+                                                .get("radius")
+                                                .and_then(|v| v.as_f64())
+                                                .unwrap_or(20.0)
+                                                as f32,
+                                            falloff: o
+                                                .get("falloff")
+                                                .and_then(|v| v.as_f64())
+                                                .unwrap_or(0.5)
+                                                as f32,
+                                        })
+                                    })
+                                    .collect(),
+                                None,
+                            )
+                        } else {
+                            (vec![], None)
+                        };
                     actions.push(NPCAction::DroneCinematography {
-                        scene_name, shot_type, camera_waypoints, lights, lighting_preset, subject_position, speed,
+                        scene_name,
+                        shot_type,
+                        camera_waypoints,
+                        lights,
+                        lighting_preset,
+                        subject_position,
+                        speed,
                     });
                 }
                 if let Some(s) = obj.get("terrain_generate").and_then(|v| v.as_object()) {
-                    let preset = s.get("preset")
+                    let preset = s
+                        .get("preset")
                         .and_then(|v| v.as_str())
                         .unwrap_or("rolling_hills")
                         .to_string();
                     let seed = s.get("seed").and_then(|v| v.as_u64()).map(|v| v as u32);
                     let scale = s.get("scale").and_then(|v| v.as_f64()).map(|v| v as f32);
-                    let roughness = s.get("roughness").and_then(|v| v.as_f64()).map(|v| v as f32);
-                    let water_level = s.get("water_level").and_then(|v| v.as_f64()).map(|v| v as f32);
-                    let region_id = s.get("region_id").and_then(|v| v.as_str()).map(|v| v.to_string());
-                    let grid_size = s.get("grid_size").and_then(|v| v.as_u64()).map(|v| v as u32);
+                    let roughness = s
+                        .get("roughness")
+                        .and_then(|v| v.as_f64())
+                        .map(|v| v as f32);
+                    let water_level = s
+                        .get("water_level")
+                        .and_then(|v| v.as_f64())
+                        .map(|v| v as f32);
+                    let region_id = s
+                        .get("region_id")
+                        .and_then(|v| v.as_str())
+                        .map(|v| v.to_string());
+                    let grid_size = s
+                        .get("grid_size")
+                        .and_then(|v| v.as_u64())
+                        .map(|v| v as u32);
                     let grid_x = s.get("grid_x").and_then(|v| v.as_u64()).map(|v| v as u32);
                     let grid_y = s.get("grid_y").and_then(|v| v.as_u64()).map(|v| v as u32);
                     actions.push(NPCAction::TerrainGenerate {
-                        preset, seed, scale, roughness, water_level,
-                        region_id, grid_size, grid_x, grid_y,
+                        preset,
+                        seed,
+                        scale,
+                        roughness,
+                        water_level,
+                        region_id,
+                        grid_size,
+                        grid_x,
+                        grid_y,
                     });
                 }
                 if let Some(s) = obj.get("terrain_load_r32").and_then(|v| v.as_object()) {
-                    let file_path = s.get("file_path")
+                    let file_path = s
+                        .get("file_path")
                         .and_then(|v| v.as_str())
                         .unwrap_or("")
                         .to_string();
@@ -847,36 +1251,68 @@ fn parse_actions_from_json(val: &serde_json::Value, speaker_id: Uuid) -> Vec<NPC
                     }
                 }
                 if let Some(s) = obj.get("terrain_load_image").and_then(|v| v.as_object()) {
-                    let file_path = s.get("file_path")
+                    let file_path = s
+                        .get("file_path")
                         .and_then(|v| v.as_str())
                         .unwrap_or("")
                         .to_string();
-                    let height_min = s.get("height_min").and_then(|v| v.as_f64()).map(|v| v as f32);
-                    let height_max = s.get("height_max").and_then(|v| v.as_f64()).map(|v| v as f32);
+                    let height_min = s
+                        .get("height_min")
+                        .and_then(|v| v.as_f64())
+                        .map(|v| v as f32);
+                    let height_max = s
+                        .get("height_max")
+                        .and_then(|v| v.as_f64())
+                        .map(|v| v as f32);
                     if !file_path.is_empty() {
-                        actions.push(NPCAction::TerrainLoadImage { file_path, height_min, height_max });
+                        actions.push(NPCAction::TerrainLoadImage {
+                            file_path,
+                            height_min,
+                            height_max,
+                        });
                     }
                 }
                 if let Some(s) = obj.get("terrain_preview").and_then(|v| v.as_object()) {
-                    let preset = s.get("preset")
+                    let preset = s
+                        .get("preset")
                         .and_then(|v| v.as_str())
                         .unwrap_or("rolling_hills")
                         .to_string();
                     let seed = s.get("seed").and_then(|v| v.as_u64()).map(|v| v as u32);
                     let scale = s.get("scale").and_then(|v| v.as_f64()).map(|v| v as f32);
-                    let roughness = s.get("roughness").and_then(|v| v.as_f64()).map(|v| v as f32);
-                    let water_level = s.get("water_level").and_then(|v| v.as_f64()).map(|v| v as f32);
-                    let region_id = s.get("region_id").and_then(|v| v.as_str()).map(|v| v.to_string());
-                    let grid_size = s.get("grid_size").and_then(|v| v.as_u64()).map(|v| v as u32);
+                    let roughness = s
+                        .get("roughness")
+                        .and_then(|v| v.as_f64())
+                        .map(|v| v as f32);
+                    let water_level = s
+                        .get("water_level")
+                        .and_then(|v| v.as_f64())
+                        .map(|v| v as f32);
+                    let region_id = s
+                        .get("region_id")
+                        .and_then(|v| v.as_str())
+                        .map(|v| v.to_string());
+                    let grid_size = s
+                        .get("grid_size")
+                        .and_then(|v| v.as_u64())
+                        .map(|v| v as u32);
                     let grid_x = s.get("grid_x").and_then(|v| v.as_u64()).map(|v| v as u32);
                     let grid_y = s.get("grid_y").and_then(|v| v.as_u64()).map(|v| v as u32);
                     actions.push(NPCAction::TerrainPreview {
-                        preset, seed, scale, roughness, water_level,
-                        region_id, grid_size, grid_x, grid_y,
+                        preset,
+                        seed,
+                        scale,
+                        roughness,
+                        water_level,
+                        region_id,
+                        grid_size,
+                        grid_x,
+                        grid_y,
                     });
                 }
                 if let Some(s) = obj.get("terrain_apply").and_then(|v| v.as_object()) {
-                    let preview_id = s.get("preview_id")
+                    let preview_id = s
+                        .get("preview_id")
                         .and_then(|v| v.as_str())
                         .unwrap_or("")
                         .to_string();
@@ -885,7 +1321,8 @@ fn parse_actions_from_json(val: &serde_json::Value, speaker_id: Uuid) -> Vec<NPC
                     }
                 }
                 if let Some(s) = obj.get("terrain_reject").and_then(|v| v.as_object()) {
-                    let preview_id = s.get("preview_id")
+                    let preview_id = s
+                        .get("preview_id")
                         .and_then(|v| v.as_str())
                         .unwrap_or("")
                         .to_string();
@@ -895,21 +1332,49 @@ fn parse_actions_from_json(val: &serde_json::Value, speaker_id: Uuid) -> Vec<NPC
                 }
                 if let Some(s) = obj.get("luxor_snapshot").and_then(|v| v.as_object()) {
                     let subject_position = parse_f32_3(s.get("subject_position"));
-                    let preset = s.get("preset").and_then(|v| v.as_str()).map(|v| v.to_string());
-                    let size = s.get("size").and_then(|v| v.as_str()).map(|v| v.to_string());
-                    let quality = s.get("quality").and_then(|v| v.as_str()).map(|v| v.to_string());
-                    let lighting = s.get("lighting").and_then(|v| v.as_str()).map(|v| v.to_string());
-                    let name = s.get("name").and_then(|v| v.as_str()).unwrap_or("photo").to_string();
-                    let effects = s.get("effects")
+                    let preset = s
+                        .get("preset")
+                        .and_then(|v| v.as_str())
+                        .map(|v| v.to_string());
+                    let size = s
+                        .get("size")
+                        .and_then(|v| v.as_str())
+                        .map(|v| v.to_string());
+                    let quality = s
+                        .get("quality")
+                        .and_then(|v| v.as_str())
+                        .map(|v| v.to_string());
+                    let lighting = s
+                        .get("lighting")
+                        .and_then(|v| v.as_str())
+                        .map(|v| v.to_string());
+                    let name = s
+                        .get("name")
+                        .and_then(|v| v.as_str())
+                        .unwrap_or("photo")
+                        .to_string();
+                    let effects = s
+                        .get("effects")
                         .and_then(|v| v.as_array())
-                        .map(|arr| arr.iter().filter_map(|v| v.as_str().map(|s| s.to_string())).collect())
+                        .map(|arr| {
+                            arr.iter()
+                                .filter_map(|v| v.as_str().map(|s| s.to_string()))
+                                .collect()
+                        })
                         .unwrap_or_default();
                     actions.push(NPCAction::LuxorSnapshot {
-                        preset, size, quality, effects, lighting, subject_position, name,
+                        preset,
+                        size,
+                        quality,
+                        effects,
+                        lighting,
+                        subject_position,
+                        name,
                     });
                 }
                 if let Some(s) = obj.get("build_vehicle").and_then(|v| v.as_object()) {
-                    let recipe = s.get("recipe")
+                    let recipe = s
+                        .get("recipe")
                         .and_then(|v| v.as_str())
                         .unwrap_or("")
                         .to_string();
@@ -923,7 +1388,11 @@ fn parse_actions_from_json(val: &serde_json::Value, speaker_id: Uuid) -> Vec<NPC
                         }
                     }
                     if !recipe.is_empty() {
-                        actions.push(NPCAction::BuildVehicle { recipe, position, tuning });
+                        actions.push(NPCAction::BuildVehicle {
+                            recipe,
+                            position,
+                            tuning,
+                        });
                     }
                 }
                 if let Some(s) = obj.get("modify_vehicle").and_then(|v| v.as_object()) {
@@ -941,7 +1410,10 @@ fn parse_actions_from_json(val: &serde_json::Value, speaker_id: Uuid) -> Vec<NPC
                     }
                 }
                 if let Some(s) = obj.get("find_nearby").and_then(|v| v.as_object()) {
-                    let name = s.get("name").and_then(|v| v.as_str()).map(|v| v.to_string());
+                    let name = s
+                        .get("name")
+                        .and_then(|v| v.as_str())
+                        .map(|v| v.to_string());
                     let radius = s.get("radius").and_then(|v| v.as_f64()).map(|v| v as f32);
                     actions.push(NPCAction::FindNearbyObject { name, radius });
                 }
@@ -953,7 +1425,10 @@ fn parse_actions_from_json(val: &serde_json::Value, speaker_id: Uuid) -> Vec<NPC
                 }
                 if let Some(s) = obj.get("script_linkset").and_then(|v| v.as_object()) {
                     let root_id = s.get("root_id").and_then(|v| v.as_u64()).unwrap_or(0) as u32;
-                    let root_script = s.get("root_script").and_then(|v| v.as_str()).map(|v| v.to_string());
+                    let root_script = s
+                        .get("root_script")
+                        .and_then(|v| v.as_str())
+                        .map(|v| v.to_string());
                     let mut script_map = HashMap::new();
                     if let Some(m) = s.get("scripts").and_then(|v| v.as_object()) {
                         for (prim_name, script_name) in m {
@@ -963,60 +1438,138 @@ fn parse_actions_from_json(val: &serde_json::Value, speaker_id: Uuid) -> Vec<NPC
                         }
                     }
                     if root_id > 0 && (!script_map.is_empty() || root_script.is_some()) {
-                        actions.push(NPCAction::ScriptLinkset { root_id, script_map, root_script });
+                        actions.push(NPCAction::ScriptLinkset {
+                            root_id,
+                            script_map,
+                            root_script,
+                        });
                     }
                 }
                 if let Some(s) = obj.get("add_to_linkset").and_then(|v| v.as_object()) {
                     let root_id = s.get("root_id").and_then(|v| v.as_u64()).unwrap_or(0) as u32;
-                    let new_prim_ids: Vec<u32> = s.get("new_prim_ids")
+                    let new_prim_ids: Vec<u32> = s
+                        .get("new_prim_ids")
                         .and_then(|v| v.as_array())
-                        .map(|arr| arr.iter().filter_map(|v| v.as_u64().map(|n| n as u32)).collect())
+                        .map(|arr| {
+                            arr.iter()
+                                .filter_map(|v| v.as_u64().map(|n| n as u32))
+                                .collect()
+                        })
                         .unwrap_or_default();
                     if root_id > 0 && !new_prim_ids.is_empty() {
-                        actions.push(NPCAction::AddToLinkset { root_id, new_prim_ids });
+                        actions.push(NPCAction::AddToLinkset {
+                            root_id,
+                            new_prim_ids,
+                        });
                     }
                 }
                 if let Some(s) = obj.get("luxor_video").and_then(|v| v.as_object()) {
                     let subject_position = parse_f32_3(s.get("subject_position"));
-                    let shot_type = s.get("shot_type").and_then(|v| v.as_str()).unwrap_or("orbit").to_string();
-                    let duration = s.get("duration").and_then(|v| v.as_f64()).unwrap_or(10.0) as f32;
+                    let shot_type = s
+                        .get("shot_type")
+                        .and_then(|v| v.as_str())
+                        .unwrap_or("orbit")
+                        .to_string();
+                    let duration =
+                        s.get("duration").and_then(|v| v.as_f64()).unwrap_or(10.0) as f32;
                     let fps = s.get("fps").and_then(|v| v.as_u64()).unwrap_or(30) as u32;
-                    let size = s.get("size").and_then(|v| v.as_str()).map(|v| v.to_string());
-                    let quality = s.get("quality").and_then(|v| v.as_str()).map(|v| v.to_string());
-                    let lighting = s.get("lighting").and_then(|v| v.as_str()).map(|v| v.to_string());
-                    let name = s.get("name").and_then(|v| v.as_str()).unwrap_or("video").to_string();
-                    let effects = s.get("effects")
+                    let size = s
+                        .get("size")
+                        .and_then(|v| v.as_str())
+                        .map(|v| v.to_string());
+                    let quality = s
+                        .get("quality")
+                        .and_then(|v| v.as_str())
+                        .map(|v| v.to_string());
+                    let lighting = s
+                        .get("lighting")
+                        .and_then(|v| v.as_str())
+                        .map(|v| v.to_string());
+                    let name = s
+                        .get("name")
+                        .and_then(|v| v.as_str())
+                        .unwrap_or("video")
+                        .to_string();
+                    let effects = s
+                        .get("effects")
                         .and_then(|v| v.as_array())
-                        .map(|arr| arr.iter().filter_map(|v| v.as_str().map(|s| s.to_string())).collect())
+                        .map(|arr| {
+                            arr.iter()
+                                .filter_map(|v| v.as_str().map(|s| s.to_string()))
+                                .collect()
+                        })
                         .unwrap_or_default();
                     actions.push(NPCAction::LuxorVideo {
-                        shot_type, duration, fps, size, quality, effects, lighting, subject_position, name,
+                        shot_type,
+                        duration,
+                        fps,
+                        size,
+                        quality,
+                        effects,
+                        lighting,
+                        subject_position,
+                        name,
                     });
                 }
                 if let Some(s) = obj.get("import_floorplan").and_then(|v| v.as_object()) {
-                    let image_path = s.get("image_path").and_then(|v| v.as_str()).unwrap_or("").to_string();
+                    let image_path = s
+                        .get("image_path")
+                        .and_then(|v| v.as_str())
+                        .unwrap_or("")
+                        .to_string();
                     let position = parse_f32_3(s.get("pos").or(s.get("position")));
-                    let wall_height = s.get("wall_height").and_then(|v| v.as_f64()).map(|v| v as f32);
+                    let wall_height = s
+                        .get("wall_height")
+                        .and_then(|v| v.as_f64())
+                        .map(|v| v as f32);
                     let scale = s.get("scale").and_then(|v| v.as_f64()).map(|v| v as f32);
                     if !image_path.is_empty() {
-                        actions.push(NPCAction::ImportFloorplan { image_path, position, wall_height, scale });
+                        actions.push(NPCAction::ImportFloorplan {
+                            image_path,
+                            position,
+                            wall_height,
+                            scale,
+                        });
                     }
                 }
                 if let Some(s) = obj.get("import_elevation").and_then(|v| v.as_object()) {
-                    let image_path = s.get("image_path").and_then(|v| v.as_str()).unwrap_or("").to_string();
+                    let image_path = s
+                        .get("image_path")
+                        .and_then(|v| v.as_str())
+                        .unwrap_or("")
+                        .to_string();
                     let position = parse_f32_3(s.get("pos").or(s.get("position")));
                     if !image_path.is_empty() {
-                        actions.push(NPCAction::ImportElevation { image_path, position });
+                        actions.push(NPCAction::ImportElevation {
+                            image_path,
+                            position,
+                        });
                     }
                 }
                 if let Some(s) = obj.get("import_blueprint").and_then(|v| v.as_object()) {
-                    let floorplan_path = s.get("floorplan_path").and_then(|v| v.as_str()).unwrap_or("").to_string();
-                    let elevation_path = s.get("elevation_path").and_then(|v| v.as_str()).map(|v| v.to_string());
+                    let floorplan_path = s
+                        .get("floorplan_path")
+                        .and_then(|v| v.as_str())
+                        .unwrap_or("")
+                        .to_string();
+                    let elevation_path = s
+                        .get("elevation_path")
+                        .and_then(|v| v.as_str())
+                        .map(|v| v.to_string());
                     let position = parse_f32_3(s.get("pos").or(s.get("position")));
-                    let wall_height = s.get("wall_height").and_then(|v| v.as_f64()).map(|v| v as f32);
+                    let wall_height = s
+                        .get("wall_height")
+                        .and_then(|v| v.as_f64())
+                        .map(|v| v as f32);
                     let scale = s.get("scale").and_then(|v| v.as_f64()).map(|v| v as f32);
                     if !floorplan_path.is_empty() {
-                        actions.push(NPCAction::ImportBlueprint { floorplan_path, elevation_path, position, wall_height, scale });
+                        actions.push(NPCAction::ImportBlueprint {
+                            floorplan_path,
+                            elevation_path,
+                            position,
+                            wall_height,
+                            scale,
+                        });
                     }
                 }
             }
@@ -1033,9 +1586,15 @@ fn parse_f32_3_or(val: Option<&serde_json::Value>, default: [f32; 3]) -> [f32; 3
     val.and_then(|v| v.as_array())
         .map(|arr| {
             [
-                arr.get(0).and_then(|v| v.as_f64()).unwrap_or(default[0] as f64) as f32,
-                arr.get(1).and_then(|v| v.as_f64()).unwrap_or(default[1] as f64) as f32,
-                arr.get(2).and_then(|v| v.as_f64()).unwrap_or(default[2] as f64) as f32,
+                arr.get(0)
+                    .and_then(|v| v.as_f64())
+                    .unwrap_or(default[0] as f64) as f32,
+                arr.get(1)
+                    .and_then(|v| v.as_f64())
+                    .unwrap_or(default[1] as f64) as f32,
+                arr.get(2)
+                    .and_then(|v| v.as_f64())
+                    .unwrap_or(default[2] as f64) as f32,
             ]
         })
         .unwrap_or(default)
@@ -1045,21 +1604,36 @@ fn parse_f32_4_or(val: Option<&serde_json::Value>, default: [f32; 4]) -> [f32; 4
     val.and_then(|v| v.as_array())
         .map(|arr| {
             [
-                arr.get(0).and_then(|v| v.as_f64()).unwrap_or(default[0] as f64) as f32,
-                arr.get(1).and_then(|v| v.as_f64()).unwrap_or(default[1] as f64) as f32,
-                arr.get(2).and_then(|v| v.as_f64()).unwrap_or(default[2] as f64) as f32,
-                arr.get(3).and_then(|v| v.as_f64()).unwrap_or(default[3] as f64) as f32,
+                arr.get(0)
+                    .and_then(|v| v.as_f64())
+                    .unwrap_or(default[0] as f64) as f32,
+                arr.get(1)
+                    .and_then(|v| v.as_f64())
+                    .unwrap_or(default[1] as f64) as f32,
+                arr.get(2)
+                    .and_then(|v| v.as_f64())
+                    .unwrap_or(default[2] as f64) as f32,
+                arr.get(3)
+                    .and_then(|v| v.as_f64())
+                    .unwrap_or(default[3] as f64) as f32,
             ]
         })
         .unwrap_or(default)
 }
 
 fn extract_project_name(message: &str) -> String {
-    let patterns = ["build me a ", "build a ", "create a ", "make a ", "make me a "];
+    let patterns = [
+        "build me a ",
+        "build a ",
+        "create a ",
+        "make a ",
+        "make me a ",
+    ];
     for pat in &patterns {
         if let Some(idx) = message.find(pat) {
             let rest = &message[idx + pat.len()..];
-            let name: String = rest.chars()
+            let name: String = rest
+                .chars()
                 .take_while(|c| c.is_alphanumeric() || *c == ' ' || *c == '-')
                 .collect();
             let trimmed = name.trim();
@@ -1178,10 +1752,21 @@ mod tests {
 ], "say": "Building you a wooden table with four legs!"}
 ```"#;
         let resp = parse_npc_response(llm_output);
-        assert_eq!(resp.actions.len(), 5, "Table should have 5 prims (top + 4 legs)");
-        assert_eq!(resp.chat_text, "Building you a wooden table with four legs!");
+        assert_eq!(
+            resp.actions.len(),
+            5,
+            "Table should have 5 prims (top + 4 legs)"
+        );
+        assert_eq!(
+            resp.chat_text,
+            "Building you a wooden table with four legs!"
+        );
         match &resp.actions[0] {
-            NPCAction::RezBox { position, scale, name } => {
+            NPCAction::RezBox {
+                position,
+                scale,
+                name,
+            } => {
                 assert_eq!(name, "Tabletop");
                 assert!((position[2] - 25.8).abs() < 0.01, "Tabletop at 25.8m");
                 assert!((scale[0] - 2.0).abs() < 0.01, "Tabletop 2m wide");
@@ -1190,7 +1775,9 @@ mod tests {
         }
         for i in 1..5 {
             match &resp.actions[i] {
-                NPCAction::RezBox { name, .. } => assert!(name.starts_with("Leg"), "Action {} should be a leg", i),
+                NPCAction::RezBox { name, .. } => {
+                    assert!(name.starts_with("Leg"), "Action {} should be a leg", i)
+                }
                 _ => panic!("Actions 1-4 should be RezBox legs"),
             }
         }
@@ -1217,7 +1804,10 @@ mod tests {
         match &resp.actions[1] {
             NPCAction::SetPosition { local_id, position } => {
                 assert_eq!(*local_id, 101);
-                assert!((position[2] - 26.2).abs() < 0.01, "Tabletop raised to 26.2m");
+                assert!(
+                    (position[2] - 26.2).abs() < 0.01,
+                    "Tabletop raised to 26.2m"
+                );
             }
             _ => panic!("Second action should be SetPosition"),
         }
@@ -1241,11 +1831,17 @@ mod tests {
 ```"#;
         let resp = parse_npc_response(llm_output);
         assert_eq!(resp.actions.len(), 10, "5 rez + 5 color");
-        let rez_count = resp.actions.iter().filter(|a| matches!(a,
-            NPCAction::RezBox { .. } | NPCAction::RezCylinder { .. }
-        )).count();
+        let rez_count = resp
+            .actions
+            .iter()
+            .filter(|a| matches!(a, NPCAction::RezBox { .. } | NPCAction::RezCylinder { .. }))
+            .count();
         assert_eq!(rez_count, 5, "5 rez actions (body + 4 wheels)");
-        let color_count = resp.actions.iter().filter(|a| matches!(a, NPCAction::SetColor { .. })).count();
+        let color_count = resp
+            .actions
+            .iter()
+            .filter(|a| matches!(a, NPCAction::SetColor { .. }))
+            .count();
         assert_eq!(color_count, 5, "5 color actions");
     }
 
@@ -1267,7 +1863,11 @@ mod tests {
             _ => panic!("First action should be LinkObjects"),
         }
         match &resp.actions[1] {
-            NPCAction::InsertTemplateScript { local_id, template_name, params } => {
+            NPCAction::InsertTemplateScript {
+                local_id,
+                template_name,
+                params,
+            } => {
                 assert_eq!(*local_id, 200);
                 assert_eq!(template_name, "car_controller");
                 assert_eq!(params.get("MAX_SPEED").unwrap(), "50.0");
@@ -1287,7 +1887,11 @@ mod tests {
         let resp = parse_npc_response(llm_output);
         assert_eq!(resp.actions.len(), 1);
         match &resp.actions[0] {
-            NPCAction::UpdateScript { local_id, script_name, script_source } => {
+            NPCAction::UpdateScript {
+                local_id,
+                script_name,
+                script_source,
+            } => {
                 assert_eq!(*local_id, 200);
                 assert_eq!(script_name, "car_controller");
                 assert!(!script_source.is_empty());
@@ -1306,9 +1910,15 @@ mod tests {
         let resp = parse_npc_response(llm_output);
         assert_eq!(resp.actions.len(), 1);
         match &resp.actions[0] {
-            NPCAction::GiveObject { local_id, target_agent_id } => {
+            NPCAction::GiveObject {
+                local_id,
+                target_agent_id,
+            } => {
                 assert_eq!(*local_id, 200);
-                assert_eq!(target_agent_id.to_string(), "12345678-1234-1234-1234-123456789abc");
+                assert_eq!(
+                    target_agent_id.to_string(),
+                    "12345678-1234-1234-1234-123456789abc"
+                );
             }
             _ => panic!("Should be GiveObject"),
         }
@@ -1350,7 +1960,11 @@ mod tests {
         let resp = parse_npc_response(llm_output);
         assert_eq!(resp.actions.len(), 3);
         match &resp.actions[1] {
-            NPCAction::InsertTemplateScript { template_name, params, .. } => {
+            NPCAction::InsertTemplateScript {
+                template_name,
+                params,
+                ..
+            } => {
                 assert_eq!(template_name, "vessel_controller");
                 assert_eq!(params.get("FORWARD_POWER").unwrap(), "25.0");
                 assert_eq!(params.get("WIND_BASE_SPEED").unwrap(), "12.0");
@@ -1370,7 +1984,12 @@ mod tests {
         let resp = parse_npc_response(llm_output);
         assert_eq!(resp.actions.len(), 1);
         match &resp.actions[0] {
-            NPCAction::RezMesh { geometry_type, position, scale, name } => {
+            NPCAction::RezMesh {
+                geometry_type,
+                position,
+                scale,
+                name,
+            } => {
                 assert_eq!(geometry_type, "sphere");
                 assert_eq!(name, "Globe");
                 assert!((position[2] - 26.0).abs() < 0.01);
@@ -1390,7 +2009,11 @@ mod tests {
         let resp = parse_npc_response(llm_output);
         assert_eq!(resp.actions.len(), 1);
         match &resp.actions[0] {
-            NPCAction::ImportMesh { file_path, name, position } => {
+            NPCAction::ImportMesh {
+                file_path,
+                name,
+                position,
+            } => {
                 assert_eq!(file_path, "/tmp/model.obj");
                 assert_eq!(name, "Custom Model");
                 assert!((position[2] - 26.0).abs() < 0.01);
@@ -1409,7 +2032,12 @@ mod tests {
         let resp = parse_npc_response(llm_output);
         assert_eq!(resp.actions.len(), 1);
         match &resp.actions[0] {
-            NPCAction::BlenderGenerate { template, params, name, position } => {
+            NPCAction::BlenderGenerate {
+                template,
+                params,
+                name,
+                position,
+            } => {
                 assert_eq!(template, "table");
                 assert_eq!(name, "Dining Table");
                 assert_eq!(params.get("WIDTH").unwrap(), "2.0");
@@ -1457,10 +2085,22 @@ mod tests {
         let source = crate::ai::script_templates::apply_template("car_controller", &params);
         assert!(source.is_some(), "car_controller template should exist");
         let lsl = source.unwrap();
-        assert!(lsl.contains("80.0"), "MAX_SPEED should be substituted to 80.0");
-        assert!(lsl.contains("50.0"), "FORWARD_POWER should be substituted to 50.0");
-        assert!(!lsl.contains("{{MAX_SPEED}}"), "Placeholder should be replaced");
-        assert!(lsl.contains("VEHICLE_TYPE_CAR"), "Should contain vehicle type");
+        assert!(
+            lsl.contains("80.0"),
+            "MAX_SPEED should be substituted to 80.0"
+        );
+        assert!(
+            lsl.contains("50.0"),
+            "FORWARD_POWER should be substituted to 50.0"
+        );
+        assert!(
+            !lsl.contains("{{MAX_SPEED}}"),
+            "Placeholder should be replaced"
+        );
+        assert!(
+            lsl.contains("VEHICLE_TYPE_CAR"),
+            "Should contain vehicle type"
+        );
     }
 
     #[test]
@@ -1470,7 +2110,10 @@ mod tests {
         assert!(source.is_some());
         let lsl = source.unwrap();
         assert!(lsl.contains("VEHICLE_TYPE_BOAT"), "Should be boat type");
-        assert!(lsl.contains("gWindDir") || lsl.contains("wind"), "Should have wind simulation");
+        assert!(
+            lsl.contains("gWindDir") || lsl.contains("wind"),
+            "Should have wind simulation"
+        );
     }
 
     #[test]
@@ -1479,9 +2122,18 @@ mod tests {
         let source = crate::ai::script_templates::apply_template("plane_controller", &params);
         assert!(source.is_some());
         let lsl = source.unwrap();
-        assert!(lsl.contains("VEHICLE_TYPE_AIRPLANE"), "Should be airplane type");
-        assert!(lsl.contains("lift") || lsl.contains("LIFT"), "Should have lift physics");
-        assert!(lsl.contains("stall") || lsl.contains("STALL"), "Should have stall detection");
+        assert!(
+            lsl.contains("VEHICLE_TYPE_AIRPLANE"),
+            "Should be airplane type"
+        );
+        assert!(
+            lsl.contains("lift") || lsl.contains("LIFT"),
+            "Should have lift physics"
+        );
+        assert!(
+            lsl.contains("stall") || lsl.contains("STALL"),
+            "Should have stall detection"
+        );
     }
 
     #[test]
@@ -1507,7 +2159,15 @@ mod tests {
         assert_eq!(resp.actions.len(), 1);
         assert_eq!(resp.chat_text, "Setting up cinematic shot!");
         match &resp.actions[0] {
-            NPCAction::DroneCinematography { scene_name, shot_type, camera_waypoints, lights, lighting_preset: _, subject_position, speed } => {
+            NPCAction::DroneCinematography {
+                scene_name,
+                shot_type,
+                camera_waypoints,
+                lights,
+                lighting_preset: _,
+                subject_position,
+                speed,
+            } => {
                 assert_eq!(scene_name, "Hero Shot");
                 assert_eq!(shot_type, "orbit");
                 assert_eq!(camera_waypoints.len(), 2);
@@ -1531,7 +2191,14 @@ mod tests {
         let resp = parse_npc_response(llm_output);
         assert_eq!(resp.actions.len(), 1);
         match &resp.actions[0] {
-            NPCAction::DroneCinematography { scene_name, shot_type, camera_waypoints, lights, speed, .. } => {
+            NPCAction::DroneCinematography {
+                scene_name,
+                shot_type,
+                camera_waypoints,
+                lights,
+                speed,
+                ..
+            } => {
                 assert_eq!(scene_name, "Quick Shot");
                 assert_eq!(shot_type, "dolly");
                 assert!(camera_waypoints.is_empty());
@@ -1544,7 +2211,10 @@ mod tests {
 
     #[test]
     fn test_extract_project_name() {
-        assert_eq!(extract_project_name("build me a wooden table"), "wooden table");
+        assert_eq!(
+            extract_project_name("build me a wooden table"),
+            "wooden table"
+        );
         assert_eq!(extract_project_name("create a red car"), "red car");
         assert_eq!(extract_project_name("make a sailing boat"), "sailing boat");
         assert_eq!(extract_project_name("hello there"), "");
@@ -1552,7 +2222,8 @@ mod tests {
 
     #[test]
     fn test_full_conversation_flow() {
-        let turn1 = parse_npc_response(r#"```json
+        let turn1 = parse_npc_response(
+            r#"```json
 {"actions": [
   {"rez_box": {"pos": [128,128,25.8], "scale": [2.0,1.0,0.08], "name": "Tabletop"}},
   {"rez_box": {"pos": [127.1,127.6,25.4], "scale": [0.1,0.1,0.8], "name": "Leg FL"}},
@@ -1560,10 +2231,12 @@ mod tests {
   {"rez_box": {"pos": [127.1,128.4,25.4], "scale": [0.1,0.1,0.8], "name": "Leg BL"}},
   {"rez_box": {"pos": [128.9,128.4,25.4], "scale": [0.1,0.1,0.8], "name": "Leg BR"}}
 ], "say": "Here's your table!"}
-```"#);
+```"#,
+        );
         assert_eq!(turn1.actions.len(), 5);
 
-        let turn2 = parse_npc_response(r#"```json
+        let turn2 = parse_npc_response(
+            r#"```json
 {"actions": [
   {"link_objects": {"root_id": 100, "child_ids": [101, 102, 103, 104]}},
   {"set_color": {"local_id": 100, "color": [0.55, 0.35, 0.17, 1.0]}},
@@ -1572,11 +2245,13 @@ mod tests {
   {"set_color": {"local_id": 103, "color": [0.55, 0.35, 0.17, 1.0]}},
   {"set_color": {"local_id": 104, "color": [0.55, 0.35, 0.17, 1.0]}}
 ], "say": "Linked and painted dark wood!"}
-```"#);
+```"#,
+        );
         assert_eq!(turn2.actions.len(), 6);
         assert!(matches!(&turn2.actions[0], NPCAction::LinkObjects { .. }));
 
-        let turn3 = parse_npc_response(r#"```json
+        let turn3 = parse_npc_response(
+            r#"```json
 {"actions": [
   {"set_scale": {"local_id": 100, "scale": [2.0, 1.0, 0.08]}},
   {"set_position": {"local_id": 100, "pos": [128, 128, 26.4]}},
@@ -1585,7 +2260,8 @@ mod tests {
   {"set_scale": {"local_id": 103, "scale": [0.1, 0.1, 1.4]}},
   {"set_scale": {"local_id": 104, "scale": [0.1, 0.1, 1.4]}}
 ], "say": "Table is now taller!"}
-```"#);
+```"#,
+        );
         assert_eq!(turn3.actions.len(), 6);
         match &turn3.actions[0] {
             NPCAction::SetScale { local_id, .. } => assert_eq!(*local_id, 100),

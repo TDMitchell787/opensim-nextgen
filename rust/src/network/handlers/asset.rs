@@ -1,16 +1,16 @@
 //! Handles asset-related messages
 
-use std::{collections::HashMap, sync::Arc};
 use anyhow::{anyhow, Result};
 use bytes::Bytes;
-use tracing::{info, warn, debug};
-use uuid::Uuid;
-use tokio_stream::{Stream, StreamExt};
 use futures::stream;
+use std::{collections::HashMap, sync::Arc};
+use tokio_stream::{Stream, StreamExt};
+use tracing::{debug, info, warn};
+use uuid::Uuid;
 
 use crate::{
-    network::{session::Session, llsd::LLSDValue},
-    asset::{AssetManager, AssetType, AssetMetadata},
+    asset::{AssetManager, AssetMetadata, AssetType},
+    network::{llsd::LLSDValue, session::Session},
 };
 use tokio::sync::RwLock;
 
@@ -45,8 +45,11 @@ impl AssetHandler {
         // Check asset size limits
         const MAX_ASSET_SIZE: usize = 10 * 1024 * 1024; // 10MB
         if asset_data.len() > MAX_ASSET_SIZE {
-            return Err(anyhow!("Asset too large: {} bytes (max: {} bytes)", 
-                asset_data.len(), MAX_ASSET_SIZE));
+            return Err(anyhow!(
+                "Asset too large: {} bytes (max: {} bytes)",
+                asset_data.len(),
+                MAX_ASSET_SIZE
+            ));
         }
 
         // Validate asset type based on data
@@ -57,16 +60,29 @@ impl AssetHandler {
 
         // Store asset
         let asset_metadata = AssetMetadata {
-            name: metadata.as_ref().and_then(|m| m.get("name")).cloned().unwrap_or_default(),
-            description: metadata.as_ref().and_then(|m| m.get("description")).cloned().unwrap_or_default(),
+            name: metadata
+                .as_ref()
+                .and_then(|m| m.get("name"))
+                .cloned()
+                .unwrap_or_default(),
+            description: metadata
+                .as_ref()
+                .and_then(|m| m.get("description"))
+                .cloned()
+                .unwrap_or_default(),
             creator_id: Uuid::nil(), // Will be set from session if available
             content_type: asset_type.content_type().to_string(),
             ..Default::default()
         };
         let asset_uuid = Uuid::parse_str(&asset_id).unwrap_or_else(|_| Uuid::new_v4());
-        asset_manager.store_asset(asset_uuid, asset_type, asset_data, asset_metadata, None).await?;
+        asset_manager
+            .store_asset(asset_uuid, asset_type, asset_data, asset_metadata, None)
+            .await?;
 
-        info!("Successfully uploaded asset {} for session {}", asset_id, session_id);
+        info!(
+            "Successfully uploaded asset {} for session {}",
+            asset_id, session_id
+        );
         Ok(asset_id)
     }
 
@@ -81,7 +97,10 @@ impl AssetHandler {
         let session_id = session_guard.session_id.clone();
         drop(session_guard);
 
-        info!("Handling asset download request for asset {} from session {}", asset_id, session_id);
+        info!(
+            "Handling asset download request for asset {} from session {}",
+            asset_id, session_id
+        );
 
         // Validate asset ID format
         if asset_id.is_empty() {
@@ -89,7 +108,8 @@ impl AssetHandler {
         }
 
         // Retrieve asset
-        let asset_uuid = Uuid::parse_str(asset_id).map_err(|_| anyhow::anyhow!("Invalid asset ID: {}", asset_id))?;
+        let asset_uuid = Uuid::parse_str(asset_id)
+            .map_err(|_| anyhow::anyhow!("Invalid asset ID: {}", asset_id))?;
         match asset_manager.get_asset(asset_uuid).await? {
             Some(asset) => {
                 info!("Asset {} downloaded by session {}", asset_id, session_id);
@@ -113,15 +133,28 @@ impl AssetHandler {
         let session_id = session_guard.session_id.clone();
         drop(session_guard);
 
-        info!("Handling asset metadata request for asset {} from session {}", asset_id, session_id);
+        info!(
+            "Handling asset metadata request for asset {} from session {}",
+            asset_id, session_id
+        );
 
-        let asset_uuid = Uuid::parse_str(asset_id).map_err(|_| anyhow::anyhow!("Invalid asset ID: {}", asset_id))?;
+        let asset_uuid = Uuid::parse_str(asset_id)
+            .map_err(|_| anyhow::anyhow!("Invalid asset ID: {}", asset_id))?;
         if let Some(metadata) = asset_manager.get_metadata(asset_uuid).await? {
             let mut llsd_map = HashMap::new();
             llsd_map.insert("name".to_string(), LLSDValue::String(metadata.name));
-            llsd_map.insert("description".to_string(), LLSDValue::String(metadata.description));
-            llsd_map.insert("content_type".to_string(), LLSDValue::String(metadata.content_type));
-            llsd_map.insert("creator_id".to_string(), LLSDValue::UUID(metadata.creator_id));
+            llsd_map.insert(
+                "description".to_string(),
+                LLSDValue::String(metadata.description),
+            );
+            llsd_map.insert(
+                "content_type".to_string(),
+                LLSDValue::String(metadata.content_type),
+            );
+            llsd_map.insert(
+                "creator_id".to_string(),
+                LLSDValue::UUID(metadata.creator_id),
+            );
             Ok(Some(LLSDValue::Map(llsd_map)))
         } else {
             Ok(None)
@@ -144,8 +177,12 @@ impl AssetHandler {
         let session_id = session_guard.session_id.clone();
         drop(session_guard);
 
-        info!("Handling chunked asset upload for session: {} (chunk {}/{})", 
-            session_id, chunk_index + 1, total_chunks);
+        info!(
+            "Handling chunked asset upload for session: {} (chunk {}/{})",
+            session_id,
+            chunk_index + 1,
+            total_chunks
+        );
 
         // Generate or use provided asset ID
         let final_asset_id = asset_id.unwrap_or_else(|| Uuid::new_v4().to_string());
@@ -156,14 +193,21 @@ impl AssetHandler {
         }
 
         // Store chunk temporarily
-        asset_manager.store_asset_chunk(&final_asset_id, chunk_index, chunk_data).await?;
+        asset_manager
+            .store_asset_chunk(&final_asset_id, chunk_index, chunk_data)
+            .await?;
 
         // If this is the last chunk, assemble the complete asset
         if chunk_index == total_chunks - 1 {
-            info!("Assembling complete asset {} from {} chunks", final_asset_id, total_chunks);
-            
-            let complete_data = asset_manager.assemble_asset_chunks(&final_asset_id, total_chunks).await?;
-            
+            info!(
+                "Assembling complete asset {} from {} chunks",
+                final_asset_id, total_chunks
+            );
+
+            let complete_data = asset_manager
+                .assemble_asset_chunks(&final_asset_id, total_chunks)
+                .await?;
+
             // Validate complete asset
             if let Err(e) = self.validate_asset_data(&complete_data, &asset_type) {
                 warn!("Asset validation failed for session {}: {}", session_id, e);
@@ -173,7 +217,8 @@ impl AssetHandler {
             }
 
             // Store final asset
-            let final_asset_uuid = Uuid::parse_str(&final_asset_id).unwrap_or_else(|_| Uuid::new_v4());
+            let final_asset_uuid =
+                Uuid::parse_str(&final_asset_id).unwrap_or_else(|_| Uuid::new_v4());
             let final_metadata = if let Some(meta_map) = metadata {
                 AssetMetadata {
                     name: meta_map.get("name").cloned().unwrap_or_default(),
@@ -185,12 +230,23 @@ impl AssetHandler {
             } else {
                 AssetMetadata::default()
             };
-            asset_manager.store_asset(final_asset_uuid, asset_type, complete_data, final_metadata, None).await?;
-            
+            asset_manager
+                .store_asset(
+                    final_asset_uuid,
+                    asset_type,
+                    complete_data,
+                    final_metadata,
+                    None,
+                )
+                .await?;
+
             // Clean up temporary chunks
             asset_manager.cleanup_asset_chunks(&final_asset_id).await?;
-            
-            info!("Successfully assembled and uploaded asset {} for session {}", final_asset_id, session_id);
+
+            info!(
+                "Successfully assembled and uploaded asset {} for session {}",
+                final_asset_id, session_id
+            );
         }
 
         Ok(final_asset_id)
@@ -208,7 +264,10 @@ impl AssetHandler {
         let session_id = session_guard.session_id.clone();
         drop(session_guard);
 
-        info!("Handling streaming asset download for asset {} from session {}", asset_id, session_id);
+        info!(
+            "Handling streaming asset download for asset {} from session {}",
+            asset_id, session_id
+        );
 
         // Validate asset ID format
         if asset_id.is_empty() {
@@ -216,7 +275,8 @@ impl AssetHandler {
         }
 
         // Get asset size first
-        let asset_uuid = Uuid::parse_str(asset_id).map_err(|_| anyhow::anyhow!("Invalid asset ID: {}", asset_id))?;
+        let asset_uuid = Uuid::parse_str(asset_id)
+            .map_err(|_| anyhow::anyhow!("Invalid asset ID: {}", asset_id))?;
         let asset = match asset_manager.get_asset(asset_uuid).await? {
             Some(asset) => asset,
             None => {
@@ -225,13 +285,20 @@ impl AssetHandler {
             }
         };
 
-        let data = asset.data.as_ref()
+        let data = asset
+            .data
+            .as_ref()
             .ok_or_else(|| anyhow!("Asset {} has no data", asset_id))?
             .as_ref();
         let chunk_size = chunk_size.unwrap_or(64 * 1024); // Default 64KB chunks
 
-        info!("Streaming asset {} ({} bytes) in chunks of {} bytes for session {}", 
-            asset_id, data.len(), chunk_size, session_id);
+        info!(
+            "Streaming asset {} ({} bytes) in chunks of {} bytes for session {}",
+            asset_id,
+            data.len(),
+            chunk_size,
+            session_id
+        );
 
         // Create streaming chunks
         let chunks: Vec<Bytes> = data
@@ -256,8 +323,10 @@ impl AssetHandler {
         let session_id = session_guard.session_id.clone();
         drop(session_guard);
 
-        info!("Handling progressive asset download for asset {} from session {} (range: {:?}-{:?})", 
-            asset_id, session_id, range_start, range_end);
+        info!(
+            "Handling progressive asset download for asset {} from session {} (range: {:?}-{:?})",
+            asset_id, session_id, range_start, range_end
+        );
 
         // Validate asset ID format
         if asset_id.is_empty() {
@@ -265,7 +334,8 @@ impl AssetHandler {
         }
 
         // Retrieve asset
-        let asset_uuid = Uuid::parse_str(asset_id).map_err(|_| anyhow::anyhow!("Invalid asset ID: {}", asset_id))?;
+        let asset_uuid = Uuid::parse_str(asset_id)
+            .map_err(|_| anyhow::anyhow!("Invalid asset ID: {}", asset_id))?;
         let asset = match asset_manager.get_asset(asset_uuid).await? {
             Some(asset) => asset,
             None => {
@@ -274,7 +344,9 @@ impl AssetHandler {
             }
         };
 
-        let data = asset.data.as_ref()
+        let data = asset
+            .data
+            .as_ref()
             .ok_or_else(|| anyhow!("Asset {} has no data", asset_id))?;
         let total_size = data.len();
 
@@ -283,7 +355,12 @@ impl AssetHandler {
         let end = range_end.unwrap_or(total_size - 1).min(total_size - 1);
 
         if start > end || start >= total_size {
-            return Err(anyhow!("Invalid range: {}-{} for asset of size {}", start, end, total_size));
+            return Err(anyhow!(
+                "Invalid range: {}-{} for asset of size {}",
+                start,
+                end,
+                total_size
+            ));
         }
 
         let range_data = data.slice(start..=end);
@@ -294,8 +371,14 @@ impl AssetHandler {
             content_length: range_data.len(),
         };
 
-        info!("Serving asset {} range {}-{} ({} bytes) for session {}", 
-            asset_id, start, end, range_data.len(), session_id);
+        info!(
+            "Serving asset {} range {}-{} ({} bytes) for session {}",
+            asset_id,
+            start,
+            end,
+            range_data.len(),
+            session_id
+        );
 
         Ok((range_data, range_info))
     }
@@ -311,16 +394,28 @@ impl AssetHandler {
         let session_id = session_guard.session_id.clone();
         drop(session_guard);
 
-        info!("Handling asset info request for asset {} from session {}", asset_id, session_id);
+        info!(
+            "Handling asset info request for asset {} from session {}",
+            asset_id, session_id
+        );
 
-        let asset_uuid = Uuid::parse_str(asset_id).map_err(|_| anyhow::anyhow!("Invalid asset ID: {}", asset_id))?;
+        let asset_uuid = Uuid::parse_str(asset_id)
+            .map_err(|_| anyhow::anyhow!("Invalid asset ID: {}", asset_id))?;
         if let Some(asset) = asset_manager.get_asset(asset_uuid).await? {
             let info = AssetInfo {
                 id: asset_id.to_string(),
                 asset_type: asset.asset_type.clone(),
                 size: asset.data.as_ref().map(|d| d.len()).unwrap_or(0),
-                created_at: asset.created_at.duration_since(std::time::UNIX_EPOCH).unwrap_or_default().as_secs(),
-                checksum: asset.data.as_ref().map(|d| calculate_checksum(d)).unwrap_or_else(|| "".to_string()),
+                created_at: asset
+                    .created_at
+                    .duration_since(std::time::UNIX_EPOCH)
+                    .unwrap_or_default()
+                    .as_secs(),
+                checksum: asset
+                    .data
+                    .as_ref()
+                    .map(|d| calculate_checksum(d))
+                    .unwrap_or_else(|| "".to_string()),
             };
             Ok(Some(info))
         } else {
@@ -336,12 +431,13 @@ impl AssetHandler {
                 if data.len() < 8 {
                     return Err(anyhow!("Invalid texture data: too short"));
                 }
-                
+
                 // Check for common image headers
                 let header = &data[..8.min(data.len())];
                 if header.starts_with(&[0x89, 0x50, 0x4E, 0x47]) // PNG
                     || header.starts_with(&[0xFF, 0xD8, 0xFF]) // JPEG
-                    || header.starts_with(b"GIF87a") || header.starts_with(b"GIF89a") // GIF
+                    || header.starts_with(b"GIF87a") || header.starts_with(b"GIF89a")
+                // GIF
                 {
                     Ok(())
                 } else {
@@ -353,7 +449,7 @@ impl AssetHandler {
                 if data.len() < 4 {
                     return Err(anyhow!("Invalid sound data: too short"));
                 }
-                
+
                 let header = &data[..4.min(data.len())];
                 if header.starts_with(b"RIFF") || header.starts_with(b"OggS") {
                     Ok(())
@@ -394,8 +490,8 @@ pub struct AssetInfo {
 
 /// Calculate SHA-256 checksum of asset data
 fn calculate_checksum(data: &Bytes) -> String {
-    use sha2::{Sha256, Digest};
+    use sha2::{Digest, Sha256};
     let mut hasher = Sha256::new();
     hasher.update(data);
     hex::encode(hasher.finalize())
-} 
+}

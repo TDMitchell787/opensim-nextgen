@@ -41,7 +41,9 @@ pub struct ChatModule {
     region_uuid: Option<Uuid>,
     socket: Option<Arc<tokio::net::UdpSocket>>,
     session_manager: Option<Arc<SessionManager>>,
-    avatar_states: Option<Arc<RwLock<std::collections::HashMap<Uuid, crate::udp::server::AvatarMovementState>>>>,
+    avatar_states: Option<
+        Arc<RwLock<std::collections::HashMap<Uuid, crate::udp::server::AvatarMovementState>>>,
+    >,
     service_registry: Option<Arc<RwLock<ServiceRegistry>>>,
 }
 
@@ -88,9 +90,7 @@ impl RegionModule for ChatModule {
         self.config.shout_distance = config.get_f32("shout_distance", 100.0);
         info!(
             "[CHAT MODULE] Initialized: whisper={}m, say={}m, shout={}m",
-            self.config.whisper_distance,
-            self.config.say_distance,
-            self.config.shout_distance,
+            self.config.whisper_distance, self.config.say_distance, self.config.shout_distance,
         );
         Ok(())
     }
@@ -120,8 +120,10 @@ impl RegionModule for ChatModule {
             100,
         );
 
-        scene.service_registry.write().register::<ChatModule>(
-            Arc::new(ChatModule {
+        scene
+            .service_registry
+            .write()
+            .register::<ChatModule>(Arc::new(ChatModule {
                 config: ChatConfig {
                     whisper_distance: self.config.whisper_distance,
                     say_distance: self.config.say_distance,
@@ -132,8 +134,7 @@ impl RegionModule for ChatModule {
                 session_manager: self.session_manager.clone(),
                 avatar_states: self.avatar_states.clone(),
                 service_registry: self.service_registry.clone(),
-            }),
-        );
+            }));
 
         info!("[CHAT MODULE] Added to region {:?}", scene.region_name);
         Ok(())
@@ -228,11 +229,7 @@ fn build_chat_from_simulator(
 
 #[async_trait]
 impl EventHandler for ChatEventHandler {
-    async fn handle_event(
-        &self,
-        event: &SceneEvent,
-        scene: &SceneContext,
-    ) -> Result<()> {
+    async fn handle_event(&self, event: &SceneEvent, scene: &SceneContext) -> Result<()> {
         if let SceneEvent::OnChatFromViewer {
             agent_id,
             message,

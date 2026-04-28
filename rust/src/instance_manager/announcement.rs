@@ -1,8 +1,4 @@
-use axum::{
-    extract::State,
-    http::StatusCode,
-    response::Json,
-};
+use axum::{extract::State, http::StatusCode, response::Json};
 use serde::{Deserialize, Serialize};
 use std::sync::Arc;
 use tracing::{info, warn};
@@ -61,19 +57,34 @@ pub async fn handle_announce(
 ) -> (StatusCode, Json<AnnounceResponse>) {
     info!(
         "Instance announcement: {} (mode={}, host={}, regions={})",
-        announcement.instance_id, announcement.service_mode, announcement.host, announcement.region_count
+        announcement.instance_id,
+        announcement.service_mode,
+        announcement.host,
+        announcement.region_count
     );
 
     let instance_exists = state.registry.has_instance(&announcement.instance_id).await;
 
     if instance_exists {
-        if let Err(e) = state.registry.update_status(&announcement.instance_id, InstanceStatus::Running).await {
+        if let Err(e) = state
+            .registry
+            .update_status(&announcement.instance_id, InstanceStatus::Running)
+            .await
+        {
             warn!("Failed to update instance status: {}", e);
         }
-        if let Err(e) = state.registry.update_connected(&announcement.instance_id, true).await {
+        if let Err(e) = state
+            .registry
+            .update_connected(&announcement.instance_id, true)
+            .await
+        {
             warn!("Failed to update instance connection: {}", e);
         }
-        if let Err(e) = state.registry.update_version(&announcement.instance_id, announcement.version.clone()).await {
+        if let Err(e) = state
+            .registry
+            .update_version(&announcement.instance_id, announcement.version.clone())
+            .await
+        {
             warn!("Failed to update instance version: {}", e);
         }
     } else {
@@ -101,18 +112,29 @@ pub async fn handle_announce(
         if let Err(e) = state.registry.add_instance(config).await {
             warn!("Failed to register announced instance: {}", e);
         }
-        if let Err(e) = state.registry.update_status(&announcement.instance_id, InstanceStatus::Running).await {
+        if let Err(e) = state
+            .registry
+            .update_status(&announcement.instance_id, InstanceStatus::Running)
+            .await
+        {
             warn!("Failed to set Running status: {}", e);
         }
-        if let Err(e) = state.registry.update_connected(&announcement.instance_id, true).await {
+        if let Err(e) = state
+            .registry
+            .update_connected(&announcement.instance_id, true)
+            .await
+        {
             warn!("Failed to update connection: {}", e);
         }
     }
 
-    (StatusCode::OK, Json(AnnounceResponse {
-        success: true,
-        message: format!("Instance {} registered", announcement.instance_id),
-    }))
+    (
+        StatusCode::OK,
+        Json(AnnounceResponse {
+            success: true,
+            message: format!("Instance {} registered", announcement.instance_id),
+        }),
+    )
 }
 
 pub async fn handle_heartbeat(
@@ -128,18 +150,31 @@ pub async fn handle_heartbeat(
         ..Default::default()
     };
 
-    if let Err(e) = state.registry.update_metrics(&heartbeat.instance_id, metrics).await {
-        warn!("Failed to update metrics for {}: {}", heartbeat.instance_id, e);
-        return (StatusCode::NOT_FOUND, Json(AnnounceResponse {
-            success: false,
-            message: format!("Instance {} not found", heartbeat.instance_id),
-        }));
+    if let Err(e) = state
+        .registry
+        .update_metrics(&heartbeat.instance_id, metrics)
+        .await
+    {
+        warn!(
+            "Failed to update metrics for {}: {}",
+            heartbeat.instance_id, e
+        );
+        return (
+            StatusCode::NOT_FOUND,
+            Json(AnnounceResponse {
+                success: false,
+                message: format!("Instance {} not found", heartbeat.instance_id),
+            }),
+        );
     }
 
-    (StatusCode::OK, Json(AnnounceResponse {
-        success: true,
-        message: "Heartbeat received".to_string(),
-    }))
+    (
+        StatusCode::OK,
+        Json(AnnounceResponse {
+            success: true,
+            message: "Heartbeat received".to_string(),
+        }),
+    )
 }
 
 pub async fn handle_list_instances(
@@ -171,11 +206,12 @@ pub async fn handle_list_instance_dirs(
     }))
 }
 
-pub async fn handle_health(
-    State(state): State<Arc<ControllerState>>,
-) -> Json<serde_json::Value> {
+pub async fn handle_health(State(state): State<Arc<ControllerState>>) -> Json<serde_json::Value> {
     let instances = state.registry.get_all_instances().await;
-    let running = instances.iter().filter(|i| i.status == InstanceStatus::Running).count();
+    let running = instances
+        .iter()
+        .filter(|i| i.status == InstanceStatus::Running)
+        .count();
     Json(serde_json::json!({
         "status": "healthy",
         "mode": "controller",
@@ -189,7 +225,10 @@ pub async fn handle_api_health(
     State(state): State<Arc<ControllerState>>,
 ) -> Json<serde_json::Value> {
     let instances = state.registry.get_all_instances().await;
-    let running_count = instances.iter().filter(|i| i.status == InstanceStatus::Running).count();
+    let running_count = instances
+        .iter()
+        .filter(|i| i.status == InstanceStatus::Running)
+        .count();
     let instance_id = instances.first().map(|i| i.id.clone()).unwrap_or_default();
     Json(serde_json::json!({
         "status": if running_count > 0 { "healthy" } else { "degraded" },
@@ -199,11 +238,12 @@ pub async fn handle_api_health(
     }))
 }
 
-pub async fn handle_api_info(
-    State(state): State<Arc<ControllerState>>,
-) -> Json<serde_json::Value> {
+pub async fn handle_api_info(State(state): State<Arc<ControllerState>>) -> Json<serde_json::Value> {
     let instances = state.registry.get_all_instances().await;
-    let running: Vec<_> = instances.iter().filter(|i| i.status == InstanceStatus::Running).collect();
+    let running: Vec<_> = instances
+        .iter()
+        .filter(|i| i.status == InstanceStatus::Running)
+        .collect();
 
     let mut total_users: u32 = 0;
     let mut total_regions: u32 = 0;
@@ -236,7 +276,10 @@ pub async fn handle_api_info(
 
     let disc_base = super::discovery::resolve_instances_base_dir();
     let disc_instances = super::discovery::scan_all_running_instances(&disc_base);
-    let region_count = disc_instances.iter().filter(|i| i.service_mode != "robust").count();
+    let region_count = disc_instances
+        .iter()
+        .filter(|i| i.service_mode != "robust")
+        .count();
     if total_regions == 0 {
         total_regions = region_count as u32;
     }

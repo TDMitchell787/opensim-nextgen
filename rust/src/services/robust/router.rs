@@ -1,32 +1,49 @@
-use axum::{Router, routing::{post, get, head, any, delete}, extract::State, Json, http::StatusCode, response::IntoResponse};
+use axum::{
+    extract::State,
+    http::StatusCode,
+    response::IntoResponse,
+    routing::{any, delete, get, head, post},
+    Json, Router,
+};
 
-use super::{RobustState, UasState, GatekeeperState};
-use super::grid_handler::handle_grid;
-use super::user_account_handler::handle_user_account;
-use super::auth_handler::handle_auth;
-use super::asset_handler::{handle_asset_post, handle_asset_get, handle_asset_metadata_get, handle_asset_delete, handle_assets_exist};
-use super::inventory_handler::handle_inventory;
-use super::presence_handler::handle_presence;
-use super::avatar_handler::handle_avatar;
-use super::gatekeeper_handler::{handle_gatekeeper, handle_foreign_agent, handle_gatekeeper_standalone, handle_foreign_agent_standalone, handle_agent_simulation, handle_agent_update, handle_object_simulation};
-use super::uas_handler::{handle_useragent, handle_home_agent, handle_useragent_standalone, handle_home_agent_standalone};
-use super::helo_handler::{handle_helo_get, handle_helo_head};
-use super::hgfriends_handler::handle_hgfriends;
-use super::hg_inventory_handler::handle_hg_inventory;
-use super::griduser_handler::handle_griduser;
 use super::agentprefs_handler::handle_agentprefs;
-use super::bakes_handler::{handle_bakes_get, handle_bakes_post};
-use super::mutelist_handler::handle_mutelist;
-use super::estate_handler::{handle_estates_get, handle_estate_get, handle_estate_post, handle_estate_regions};
-use super::map_handler::{handle_map_get, handle_map_post, handle_removemap_post};
+use super::asset_handler::{
+    handle_asset_delete, handle_asset_get, handle_asset_metadata_get, handle_asset_post,
+    handle_assets_exist,
+};
+use super::auth_handler::handle_auth;
 use super::authorization_handler::handle_authorization;
-use super::friends_handler::handle_friends;
-use super::land_handler::handle_land;
-use super::offlineim_handler::handle_offlineim;
-use super::neighbour_handler::{handle_neighbour, handle_neighbour_trailing};
-use super::profiles_handler::handle_profiles;
+use super::avatar_handler::handle_avatar;
+use super::bakes_handler::{handle_bakes_get, handle_bakes_post};
+use super::estate_handler::{
+    handle_estate_get, handle_estate_post, handle_estate_regions, handle_estates_get,
+};
 use super::freeswitch_handler::handle_freeswitch;
-use super::grid_info_handler::{handle_grid_info_xml, handle_grid_info_json, handle_grid_stats};
+use super::friends_handler::handle_friends;
+use super::gatekeeper_handler::{
+    handle_agent_simulation, handle_agent_update, handle_foreign_agent,
+    handle_foreign_agent_standalone, handle_gatekeeper, handle_gatekeeper_standalone,
+    handle_object_simulation,
+};
+use super::grid_handler::handle_grid;
+use super::grid_info_handler::{handle_grid_info_json, handle_grid_info_xml, handle_grid_stats};
+use super::griduser_handler::handle_griduser;
+use super::helo_handler::{handle_helo_get, handle_helo_head};
+use super::hg_inventory_handler::handle_hg_inventory;
+use super::hgfriends_handler::handle_hgfriends;
+use super::inventory_handler::handle_inventory;
+use super::land_handler::handle_land;
+use super::map_handler::{handle_map_get, handle_map_post, handle_removemap_post};
+use super::mutelist_handler::handle_mutelist;
+use super::neighbour_handler::{handle_neighbour, handle_neighbour_trailing};
+use super::offlineim_handler::handle_offlineim;
+use super::presence_handler::handle_presence;
+use super::profiles_handler::handle_profiles;
+use super::uas_handler::{
+    handle_home_agent, handle_home_agent_standalone, handle_useragent, handle_useragent_standalone,
+};
+use super::user_account_handler::handle_user_account;
+use super::{GatekeeperState, RobustState, UasState};
 
 pub fn create_robust_router(state: RobustState) -> Router {
     Router::new()
@@ -35,7 +52,10 @@ pub fn create_robust_router(state: RobustState) -> Router {
         .route("/auth", post(handle_auth))
         .route("/assets", post(handle_asset_post.clone()))
         .route("/assets/", post(handle_asset_post))
-        .route("/assets/:id", get(handle_asset_get.clone()).delete(handle_asset_delete))
+        .route(
+            "/assets/:id",
+            get(handle_asset_get.clone()).delete(handle_asset_delete),
+        )
         .route("/assets/:id/data", get(handle_asset_get))
         .route("/assets/:id/metadata", get(handle_asset_metadata_get))
         .route("/inventory", post(handle_inventory.clone()))
@@ -43,7 +63,10 @@ pub fn create_robust_router(state: RobustState) -> Router {
         .route("/presence", post(handle_presence))
         .route("/avatar", post(handle_avatar))
         .route("/gatekeeper", post(handle_gatekeeper))
-        .route("/foreignagent/:agent_id", post(handle_foreign_agent.clone()))
+        .route(
+            "/foreignagent/:agent_id",
+            post(handle_foreign_agent.clone()),
+        )
         .route("/foreignagent/:agent_id/", post(handle_foreign_agent))
         .route("/useragent", post(handle_useragent))
         .route("/homeagent/:agent_id", post(handle_home_agent.clone()))
@@ -59,7 +82,10 @@ pub fn create_robust_router(state: RobustState) -> Router {
         .route("/bakes/:id", get(handle_bakes_get).post(handle_bakes_post))
         .route("/mutelist", post(handle_mutelist))
         .route("/estates", get(handle_estates_get))
-        .route("/estates/estate", get(handle_estate_get).post(handle_estate_post))
+        .route(
+            "/estates/estate",
+            get(handle_estate_get).post(handle_estate_post),
+        )
         .route("/estates/estate/", post(handle_estate_post))
         .route("/estates/regions", get(handle_estate_regions))
         .route("/map/*path", get(handle_map_get))
@@ -87,7 +113,10 @@ pub fn create_robust_router(state: RobustState) -> Router {
 pub fn create_uas_router(state: UasState) -> Router {
     Router::new()
         .route("/useragent", post(handle_useragent_standalone))
-        .route("/homeagent/:agent_id", post(handle_home_agent_standalone.clone()))
+        .route(
+            "/homeagent/:agent_id",
+            post(handle_home_agent_standalone.clone()),
+        )
         .route("/homeagent/:agent_id/", post(handle_home_agent_standalone))
         .with_state(state)
 }
@@ -95,22 +124,35 @@ pub fn create_uas_router(state: UasState) -> Router {
 pub fn create_gatekeeper_router(state: GatekeeperState) -> Router {
     Router::new()
         .route("/gatekeeper", post(handle_gatekeeper_standalone))
-        .route("/foreignagent/:agent_id", post(handle_foreign_agent_standalone.clone()))
-        .route("/foreignagent/:agent_id/", post(handle_foreign_agent_standalone))
+        .route(
+            "/foreignagent/:agent_id",
+            post(handle_foreign_agent_standalone.clone()),
+        )
+        .route(
+            "/foreignagent/:agent_id/",
+            post(handle_foreign_agent_standalone),
+        )
         .route("/agent/:agent_id/:region_id", any(handle_agent_simulation))
         .route("/agent/:agent_id/:region_id/", any(handle_agent_simulation))
         .route("/agent/:agent_id", any(handle_agent_update))
         .route("/agent/:agent_id/", any(handle_agent_update))
-        .route("/object/:object_id/:region_id", any(handle_object_simulation))
-        .route("/object/:object_id/:region_id/", any(handle_object_simulation))
+        .route(
+            "/object/:object_id/:region_id",
+            any(handle_object_simulation),
+        )
+        .route(
+            "/object/:object_id/:region_id/",
+            any(handle_object_simulation),
+        )
         .with_state(state)
 }
 
-async fn handle_robust_ready(
-    State(_state): State<RobustState>,
-) -> impl IntoResponse {
-    (StatusCode::OK, Json(serde_json::json!({
-        "ready": true,
-        "service": "robust"
-    })))
+async fn handle_robust_ready(State(_state): State<RobustState>) -> impl IntoResponse {
+    (
+        StatusCode::OK,
+        Json(serde_json::json!({
+            "ready": true,
+            "service": "robust"
+        })),
+    )
 }

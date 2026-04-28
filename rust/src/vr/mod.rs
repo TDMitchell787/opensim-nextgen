@@ -2,20 +2,20 @@
 // Revolutionary VR/XR module for immersive virtual world experiences
 // Using ELEGANT ARCHIVE SOLUTION methodology with EADS/g integration
 
-use crate::avatar::AdvancedAvatarManager;
 use crate::ai::AIManager;
-use crate::monitoring::metrics::MetricsCollector;
+use crate::avatar::AdvancedAvatarManager;
 use crate::database::DatabaseManager;
+use crate::monitoring::metrics::MetricsCollector;
+use serde::{Deserialize, Serialize};
 use std::sync::Arc;
 use tokio::sync::RwLock;
-use serde::{Deserialize, Serialize};
 use uuid::Uuid;
 
-pub mod openxr_integration;
 pub mod haptic_systems;
+pub mod mixed_reality;
+pub mod openxr_integration;
 pub mod spatial_audio;
 pub mod vr_rendering;
-pub mod mixed_reality;
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct VRConfig {
@@ -41,12 +41,12 @@ impl Default for VRConfig {
             haptic_systems_enabled: true,
             spatial_audio_enabled: true,
             mixed_reality_enabled: false, // Advanced feature, disabled by default
-            target_framerate: 90, // Standard VR framerate
+            target_framerate: 90,         // Standard VR framerate
             foveated_rendering: true,
             eye_tracking_enabled: true,
             hand_tracking_enabled: true,
             max_concurrent_vr_users: 500,
-            audio_sample_rate: 48000, // Professional audio quality
+            audio_sample_rate: 48000,  // Professional audio quality
             haptic_refresh_rate: 1000, // 1kHz haptic updates
         }
     }
@@ -104,7 +104,8 @@ impl VRManager {
                     self.config.clone(),
                     self.metrics.clone(),
                     self.db.clone(),
-                ).await?
+                )
+                .await?,
             );
         }
 
@@ -114,26 +115,23 @@ impl VRManager {
                 haptic_systems::HapticSystemsManager::new(
                     self.config.clone(),
                     self.metrics.clone(),
-                ).await?
+                )
+                .await?,
             );
         }
 
         // Initialize Spatial Audio Engine
         if self.config.spatial_audio_enabled {
             self.spatial_audio = Some(
-                spatial_audio::SpatialAudioEngine::new(
-                    self.config.clone(),
-                    self.metrics.clone(),
-                ).await?
+                spatial_audio::SpatialAudioEngine::new(self.config.clone(), self.metrics.clone())
+                    .await?,
             );
         }
 
         // Initialize VR Rendering Pipeline
         self.vr_rendering = Some(
-            vr_rendering::VRRenderingPipeline::new(
-                self.config.clone(),
-                self.metrics.clone(),
-            ).await?
+            vr_rendering::VRRenderingPipeline::new(self.config.clone(), self.metrics.clone())
+                .await?,
         );
 
         // Initialize Mixed Reality Engine (optional)
@@ -143,25 +141,33 @@ impl VRManager {
                     self.config.clone(),
                     self.metrics.clone(),
                     self.db.clone(),
-                ).await?
+                )
+                .await?,
             );
         }
 
         Ok(())
     }
 
-    pub async fn start_vr_session(&self, user_id: Uuid, device_info: VRDeviceInfo) -> Result<VRSession, VRError> {
+    pub async fn start_vr_session(
+        &self,
+        user_id: Uuid,
+        device_info: VRDeviceInfo,
+    ) -> Result<VRSession, VRError> {
         let session_id = Uuid::new_v4();
-        
+
         // Create VR session with AI integration
         let session = VRSession {
             session_id,
             user_id,
             device_info: device_info.clone(),
             start_time: std::time::SystemTime::now(),
-            eye_tracking_active: device_info.supports_eye_tracking && self.config.eye_tracking_enabled,
-            hand_tracking_active: device_info.supports_hand_tracking && self.config.hand_tracking_enabled,
-            haptic_feedback_active: device_info.supports_haptics && self.config.haptic_systems_enabled,
+            eye_tracking_active: device_info.supports_eye_tracking
+                && self.config.eye_tracking_enabled,
+            hand_tracking_active: device_info.supports_hand_tracking
+                && self.config.hand_tracking_enabled,
+            haptic_feedback_active: device_info.supports_haptics
+                && self.config.haptic_systems_enabled,
             spatial_audio_active: self.config.spatial_audio_enabled,
             ai_assistance_active: true, // Always enable AI for enhanced VR experience
         };
@@ -173,7 +179,9 @@ impl VRManager {
 
         // Initialize haptic systems for this session
         if let Some(haptic) = &self.haptic_systems {
-            haptic.initialize_user_haptics(user_id, &device_info.haptic_capabilities).await?;
+            haptic
+                .initialize_user_haptics(user_id, &device_info.haptic_capabilities)
+                .await?;
         }
 
         // Initialize spatial audio for this session
@@ -188,12 +196,18 @@ impl VRManager {
         }
 
         // Record metrics
-        self.metrics.record_vr_session_started(user_id, &device_info.device_type).await;
+        self.metrics
+            .record_vr_session_started(user_id, &device_info.device_type)
+            .await;
 
         Ok(session)
     }
 
-    pub async fn update_vr_frame(&self, session_id: Uuid, frame_data: VRFrameData) -> Result<VRFrameResponse, VRError> {
+    pub async fn update_vr_frame(
+        &self,
+        session_id: Uuid,
+        frame_data: VRFrameData,
+    ) -> Result<VRFrameResponse, VRError> {
         let session = {
             let sessions = self.active_vr_sessions.read().await;
             sessions.get(&session_id).cloned()
@@ -215,9 +229,15 @@ impl VRManager {
         if session.ai_assistance_active {
             // Use AI for predictive eye tracking and foveated rendering
             if let Some(eye_data) = &frame_data.eye_tracking_data {
-                let ai_prediction = self.ai_manager.predict_user_behavior(session.user_id).await?;
+                let ai_prediction = self
+                    .ai_manager
+                    .predict_user_behavior(session.user_id)
+                    .await?;
                 response.ai_suggestions = vec![
-                    format!("Optimizing LOD based on gaze prediction: {:?}", ai_prediction.predicted_actions),
+                    format!(
+                        "Optimizing LOD based on gaze prediction: {:?}",
+                        ai_prediction.predicted_actions
+                    ),
                     "AI recommends foveated rendering adjustment".to_string(),
                 ];
             }
@@ -226,7 +246,9 @@ impl VRManager {
         // Render VR frame
         if let Some(rendering) = &self.vr_rendering {
             response.rendered_frame = Some(
-                rendering.render_stereo_frame(session_id, &frame_data).await?
+                rendering
+                    .render_stereo_frame(session_id, &frame_data)
+                    .await?,
             );
         }
 
@@ -234,7 +256,9 @@ impl VRManager {
         if session.haptic_feedback_active {
             if let Some(haptic) = &self.haptic_systems {
                 response.haptic_feedback = Some(
-                    haptic.generate_haptic_frame(session.user_id, &frame_data).await?
+                    haptic
+                        .generate_haptic_frame(session.user_id, &frame_data)
+                        .await?,
                 );
             }
         }
@@ -242,14 +266,15 @@ impl VRManager {
         // Update spatial audio
         if session.spatial_audio_active {
             if let Some(audio) = &self.spatial_audio {
-                response.spatial_audio_update = Some(
-                    audio.process_spatial_frame(session_id, &frame_data).await?
-                );
+                response.spatial_audio_update =
+                    Some(audio.process_spatial_frame(session_id, &frame_data).await?);
             }
         }
 
         // Record performance metrics
-        self.metrics.record_vr_frame_processed(session_id, response.performance_metrics.frame_time_ms).await;
+        self.metrics
+            .record_vr_frame_processed(session_id, response.performance_metrics.frame_time_ms)
+            .await;
 
         Ok(response)
     }
@@ -279,7 +304,9 @@ impl VRManager {
 
             // Record session end metrics
             let duration = session.start_time.elapsed().unwrap_or_default();
-            self.metrics.record_vr_session_ended(session.user_id, duration.as_secs()).await;
+            self.metrics
+                .record_vr_session_ended(session.user_id, duration.as_secs())
+                .await;
         }
 
         Ok(())
@@ -288,19 +315,29 @@ impl VRManager {
     pub async fn get_vr_health_status(&self) -> VRHealthStatus {
         VRHealthStatus {
             overall_healthy: self.config.enabled,
-            openxr_status: self.openxr_integration.as_ref()
+            openxr_status: self
+                .openxr_integration
+                .as_ref()
                 .map(|integration| integration.is_healthy())
                 .unwrap_or(false),
-            haptic_systems_status: self.haptic_systems.as_ref()
+            haptic_systems_status: self
+                .haptic_systems
+                .as_ref()
                 .map(|systems| systems.is_healthy())
                 .unwrap_or(false),
-            spatial_audio_status: self.spatial_audio.as_ref()
+            spatial_audio_status: self
+                .spatial_audio
+                .as_ref()
                 .map(|audio| audio.is_healthy())
                 .unwrap_or(false),
-            vr_rendering_status: self.vr_rendering.as_ref()
+            vr_rendering_status: self
+                .vr_rendering
+                .as_ref()
                 .map(|rendering| rendering.is_healthy())
                 .unwrap_or(false),
-            mixed_reality_status: self.mixed_reality.as_ref()
+            mixed_reality_status: self
+                .mixed_reality
+                .as_ref()
                 .map(|mr| mr.is_healthy())
                 .unwrap_or(false),
             active_sessions: self.active_vr_sessions.read().await.len(),
@@ -341,7 +378,7 @@ pub struct HapticCapabilities {
     pub tactile_feedback: bool,
     pub full_body_suit: bool,
     pub frequency_range: (f32, f32), // Hz
-    pub force_range: (f32, f32), // Newtons
+    pub force_range: (f32, f32),     // Newtons
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize)]

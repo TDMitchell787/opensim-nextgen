@@ -24,9 +24,13 @@ pub fn is_collada_y_up(dae_xml: &str) -> bool {
             Ok(Event::Start(ref e)) => {
                 let name = e.local_name();
                 let ln = std::str::from_utf8(name.as_ref()).unwrap_or("");
-                if ln == "up_axis" { in_up_axis = true; }
+                if ln == "up_axis" {
+                    in_up_axis = true;
+                }
             }
-            Ok(Event::End(_)) => { in_up_axis = false; }
+            Ok(Event::End(_)) => {
+                in_up_axis = false;
+            }
             Ok(Event::Text(ref e)) if in_up_axis => {
                 let text = e.unescape().unwrap_or_default().to_string();
                 return text.trim() == "Y_UP";
@@ -87,7 +91,8 @@ pub fn parse_collada_geometry_with_axis(dae_xml: &str, y_up: bool) -> Result<Vec
                         current_stride = 1;
                         for attr in e.attributes().flatten() {
                             if attr.key.as_ref() == b"id" {
-                                current_source_id = format!("#{}", String::from_utf8_lossy(&attr.value));
+                                current_source_id =
+                                    format!("#{}", String::from_utf8_lossy(&attr.value));
                             }
                         }
                     }
@@ -97,7 +102,8 @@ pub fn parse_collada_geometry_with_axis(dae_xml: &str, y_up: bool) -> Result<Vec
                     "accessor" if in_source => {
                         for attr in e.attributes().flatten() {
                             if attr.key.as_ref() == b"stride" {
-                                current_stride = String::from_utf8_lossy(&attr.value).parse().unwrap_or(1);
+                                current_stride =
+                                    String::from_utf8_lossy(&attr.value).parse().unwrap_or(1);
                             }
                         }
                     }
@@ -105,7 +111,8 @@ pub fn parse_collada_geometry_with_axis(dae_xml: &str, y_up: bool) -> Result<Vec
                         in_vertices = true;
                         for attr in e.attributes().flatten() {
                             if attr.key.as_ref() == b"id" {
-                                current_vertices_id = format!("#{}", String::from_utf8_lossy(&attr.value));
+                                current_vertices_id =
+                                    format!("#{}", String::from_utf8_lossy(&attr.value));
                             }
                         }
                     }
@@ -114,8 +121,12 @@ pub fn parse_collada_geometry_with_axis(dae_xml: &str, y_up: bool) -> Result<Vec
                         let mut source_ref = String::new();
                         for attr in e.attributes().flatten() {
                             match attr.key.as_ref() {
-                                b"semantic" => semantic = String::from_utf8_lossy(&attr.value).to_string(),
-                                b"source" => source_ref = String::from_utf8_lossy(&attr.value).to_string(),
+                                b"semantic" => {
+                                    semantic = String::from_utf8_lossy(&attr.value).to_string()
+                                }
+                                b"source" => {
+                                    source_ref = String::from_utf8_lossy(&attr.value).to_string()
+                                }
                                 _ => {}
                             }
                         }
@@ -142,17 +153,32 @@ pub fn parse_collada_geometry_with_axis(dae_xml: &str, y_up: bool) -> Result<Vec
                         let mut offset = 0usize;
                         for attr in e.attributes().flatten() {
                             match attr.key.as_ref() {
-                                b"semantic" => semantic = String::from_utf8_lossy(&attr.value).to_string(),
-                                b"source" => source_ref = String::from_utf8_lossy(&attr.value).to_string(),
-                                b"offset" => offset = String::from_utf8_lossy(&attr.value).parse().unwrap_or(0),
+                                b"semantic" => {
+                                    semantic = String::from_utf8_lossy(&attr.value).to_string()
+                                }
+                                b"source" => {
+                                    source_ref = String::from_utf8_lossy(&attr.value).to_string()
+                                }
+                                b"offset" => {
+                                    offset =
+                                        String::from_utf8_lossy(&attr.value).parse().unwrap_or(0)
+                                }
                                 _ => {}
                             }
                         }
                         input_stride = input_stride.max(offset + 1);
-                        tri_inputs.push(InputSemantic { semantic, source: source_ref, offset });
+                        tri_inputs.push(InputSemantic {
+                            semantic,
+                            source: source_ref,
+                            offset,
+                        });
                     }
-                    "vcount" if in_polylist => { in_vcount = true; }
-                    "p" if in_triangles || in_polylist => { in_p = true; }
+                    "vcount" if in_polylist => {
+                        in_vcount = true;
+                    }
+                    "p" if in_triangles || in_polylist => {
+                        in_p = true;
+                    }
                     _ => {}
                 }
             }
@@ -160,7 +186,9 @@ pub fn parse_collada_geometry_with_axis(dae_xml: &str, y_up: bool) -> Result<Vec
                 let ln = e.local_name();
                 let local_name = std::str::from_utf8(ln.as_ref()).unwrap_or("");
                 match local_name {
-                    "mesh" => { in_mesh = false; }
+                    "mesh" => {
+                        in_mesh = false;
+                    }
                     "source" => {
                         if in_source {
                             if let Some(src) = sources.get_mut(&current_source_id) {
@@ -170,7 +198,9 @@ pub fn parse_collada_geometry_with_axis(dae_xml: &str, y_up: bool) -> Result<Vec
                         in_source = false;
                         current_source_id.clear();
                     }
-                    "float_array" => { in_float_array = false; }
+                    "float_array" => {
+                        in_float_array = false;
+                    }
                     "vertices" => {
                         in_vertices = false;
                         current_vertices_id.clear();
@@ -178,7 +208,14 @@ pub fn parse_collada_geometry_with_axis(dae_xml: &str, y_up: bool) -> Result<Vec
                     "triangles" => {
                         if in_triangles && !p_data.is_empty() {
                             if let Some(f) = build_face_from_indices(
-                                &tri_inputs, &p_data, &[], input_stride, &sources, &vertices_map, true, y_up,
+                                &tri_inputs,
+                                &p_data,
+                                &[],
+                                input_stride,
+                                &sources,
+                                &vertices_map,
+                                true,
+                                y_up,
                             ) {
                                 all_faces.push(f);
                             }
@@ -188,32 +225,52 @@ pub fn parse_collada_geometry_with_axis(dae_xml: &str, y_up: bool) -> Result<Vec
                     "polylist" => {
                         if in_polylist && !p_data.is_empty() {
                             if let Some(f) = build_face_from_indices(
-                                &tri_inputs, &p_data, &vcount_data, input_stride, &sources, &vertices_map, false, y_up,
+                                &tri_inputs,
+                                &p_data,
+                                &vcount_data,
+                                input_stride,
+                                &sources,
+                                &vertices_map,
+                                false,
+                                y_up,
                             ) {
                                 all_faces.push(f);
                             }
                         }
                         in_polylist = false;
                     }
-                    "vcount" => { in_vcount = false; }
-                    "p" => { in_p = false; }
+                    "vcount" => {
+                        in_vcount = false;
+                    }
+                    "p" => {
+                        in_p = false;
+                    }
                     _ => {}
                 }
             }
             Ok(Event::Text(ref e)) => {
                 let text = e.unescape().unwrap_or_default().to_string();
                 if in_float_array && in_source && !current_source_id.is_empty() {
-                    let vals: Vec<f32> = text.split_whitespace()
+                    let vals: Vec<f32> = text
+                        .split_whitespace()
                         .filter_map(|s| s.parse().ok())
                         .collect();
-                    sources.insert(current_source_id.clone(), SourceData { floats: vals, stride: current_stride });
+                    sources.insert(
+                        current_source_id.clone(),
+                        SourceData {
+                            floats: vals,
+                            stride: current_stride,
+                        },
+                    );
                 } else if in_p {
                     p_data.extend(
-                        text.split_whitespace().filter_map(|s| s.parse::<usize>().ok())
+                        text.split_whitespace()
+                            .filter_map(|s| s.parse::<usize>().ok()),
                     );
                 } else if in_vcount {
                     vcount_data.extend(
-                        text.split_whitespace().filter_map(|s| s.parse::<usize>().ok())
+                        text.split_whitespace()
+                            .filter_map(|s| s.parse::<usize>().ok()),
                     );
                 }
             }
@@ -227,9 +284,11 @@ pub fn parse_collada_geometry_with_axis(dae_xml: &str, y_up: bool) -> Result<Vec
         bail!("No geometry found in Collada DAE");
     }
 
-    info!("[COLLADA_GEOM] Parsed: {} face group(s), {} total vertices",
+    info!(
+        "[COLLADA_GEOM] Parsed: {} face group(s), {} total vertices",
         all_faces.len(),
-        all_faces.iter().map(|f| f.positions.len()).sum::<usize>());
+        all_faces.iter().map(|f| f.positions.len()).sum::<usize>()
+    );
 
     Ok(all_faces)
 }
@@ -383,8 +442,11 @@ fn build_face_from_indices(
     }
 
     if normals.len() != positions.len() {
-        tracing::warn!("[COLLADA_GEOM] Normals count {} != positions {} — generating flat normals",
-            normals.len(), positions.len());
+        tracing::warn!(
+            "[COLLADA_GEOM] Normals count {} != positions {} — generating flat normals",
+            normals.len(),
+            positions.len()
+        );
         normals = generate_flat_normals(&positions, &out_indices);
     }
 
@@ -494,7 +556,11 @@ mod tests {
 
         let faces = parse_collada_geometry(dae).expect("parse failed");
         assert_eq!(faces.len(), 1);
-        assert_eq!(faces[0].indices.len(), 6, "Quad should triangulate to 6 indices");
+        assert_eq!(
+            faces[0].indices.len(),
+            6,
+            "Quad should triangulate to 6 indices"
+        );
         assert_eq!(faces[0].positions.len(), 4);
     }
 

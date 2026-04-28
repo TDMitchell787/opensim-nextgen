@@ -4,14 +4,17 @@
 //! Object serialization matches C# SceneObjectSerializer.ToOriginalXmlFormat().
 
 use anyhow::{anyhow, Context, Result};
-use base64::{Engine as _, engine::general_purpose::STANDARD as BASE64};
+use base64::{engine::general_purpose::STANDARD as BASE64, Engine as _};
 use sqlx::PgPool;
 use std::collections::{HashMap, HashSet};
 use std::path::Path;
 use tracing::{debug, info, warn};
 use uuid::Uuid;
 
-use super::xml_schemas::{create_oar_archive_xml, create_region_settings_xml, OarRegionSettings, OarRegionGeneral, OarGroundTextures, OarTerrainSettings};
+use super::xml_schemas::{
+    create_oar_archive_xml, create_region_settings_xml, OarGroundTextures, OarRegionGeneral,
+    OarRegionSettings, OarTerrainSettings,
+};
 use crate::archives::common::{paths, AssetType, SaveStatistics};
 use crate::archives::tar_handler::TarGzWriter;
 
@@ -65,10 +68,14 @@ impl OarWriter {
         let mut warnings = Vec::new();
         let mut collected_assets: HashSet<Uuid> = HashSet::new();
 
-        info!("Saving OAR to {:?} for region {}", path.as_ref(), options.region_id);
+        info!(
+            "Saving OAR to {:?} for region {}",
+            path.as_ref(),
+            options.region_id
+        );
 
-        let mut archive = TarGzWriter::create(path.as_ref())
-            .with_context(|| "Failed to create OAR archive")?;
+        let mut archive =
+            TarGzWriter::create(path.as_ref()).with_context(|| "Failed to create OAR archive")?;
 
         let archive_xml = create_oar_archive_xml(1, 0);
         archive.add_file(paths::ARCHIVE_XML, archive_xml.as_bytes())?;
@@ -76,11 +83,18 @@ impl OarWriter {
         match self.get_region_settings(&options.region_id).await {
             Ok(settings) => {
                 let settings_xml = create_region_settings_xml(&settings);
-                archive.add_file(&format!("{}region.xml", paths::SETTINGS_PATH), settings_xml.as_bytes())?;
+                archive.add_file(
+                    &format!("{}region.xml", paths::SETTINGS_PATH),
+                    settings_xml.as_bytes(),
+                )?;
                 info!("Saved region settings");
 
-                for tex in [&settings.ground_textures.texture1, &settings.ground_textures.texture2,
-                            &settings.ground_textures.texture3, &settings.ground_textures.texture4] {
+                for tex in [
+                    &settings.ground_textures.texture1,
+                    &settings.ground_textures.texture2,
+                    &settings.ground_textures.texture3,
+                    &settings.ground_textures.texture4,
+                ] {
                     if !tex.is_empty() {
                         if let Ok(uuid) = Uuid::parse_str(tex) {
                             collected_assets.insert(uuid);
@@ -132,7 +146,10 @@ impl OarWriter {
         }
 
         if options.include_objects {
-            match self.get_objects(&options.region_id, &options.object_uuids).await {
+            match self
+                .get_objects(&options.region_id, &options.object_uuids)
+                .await
+            {
                 Ok(objects) => {
                     for obj in &objects {
                         let obj_path = format!(
@@ -151,7 +168,10 @@ impl OarWriter {
                     info!("Saved {} objects", stats.objects_saved);
                 }
                 Err(e) => {
-                    warn!("Failed to get objects for region {}: {}", options.region_id, e);
+                    warn!(
+                        "Failed to get objects for region {}: {}",
+                        options.region_id, e
+                    );
                     warnings.push(format!("Failed to get objects: {}", e));
                 }
             }
@@ -293,32 +313,35 @@ impl OarWriter {
                 uuid, locallandid, name, description, owneruuid, groupuuid,
                 isgroupowned, area, auctionid, category, claimdate, claimprice,
                 landflags, landingtype, snapshotuuid
-            FROM land WHERE regionuuid = $1"#
+            FROM land WHERE regionuuid = $1"#,
         )
         .bind(region_id)
         .fetch_all(&self.db_pool)
         .await?;
 
-        Ok(rows.into_iter().map(|row| {
-            let is_group_owned_int: i32 = row.try_get("isgroupowned").unwrap_or(0);
-            ParcelData {
-                uuid: row.get("uuid"),
-                local_id: row.get("locallandid"),
-                name: row.get("name"),
-                description: row.try_get("description").ok(),
-                owner_uuid: row.get("owneruuid"),
-                group_uuid: row.try_get("groupuuid").unwrap_or_default(),
-                is_group_owned: is_group_owned_int != 0,
-                area: row.get("area"),
-                auction_id: row.try_get("auctionid").unwrap_or(0),
-                category: row.try_get("category").unwrap_or(0),
-                claim_date: row.try_get::<i32, _>("claimdate").unwrap_or(0) as i64,
-                claim_price: row.try_get("claimprice").unwrap_or(0),
-                flags: row.try_get::<i32, _>("landflags").unwrap_or(0) as u32,
-                landing_type: row.try_get("landingtype").unwrap_or(0),
-                snapshot_uuid: row.try_get("snapshotuuid").ok(),
-            }
-        }).collect())
+        Ok(rows
+            .into_iter()
+            .map(|row| {
+                let is_group_owned_int: i32 = row.try_get("isgroupowned").unwrap_or(0);
+                ParcelData {
+                    uuid: row.get("uuid"),
+                    local_id: row.get("locallandid"),
+                    name: row.get("name"),
+                    description: row.try_get("description").ok(),
+                    owner_uuid: row.get("owneruuid"),
+                    group_uuid: row.try_get("groupuuid").unwrap_or_default(),
+                    is_group_owned: is_group_owned_int != 0,
+                    area: row.get("area"),
+                    auction_id: row.try_get("auctionid").unwrap_or(0),
+                    category: row.try_get("category").unwrap_or(0),
+                    claim_date: row.try_get::<i32, _>("claimdate").unwrap_or(0) as i64,
+                    claim_price: row.try_get("claimprice").unwrap_or(0),
+                    flags: row.try_get::<i32, _>("landflags").unwrap_or(0) as u32,
+                    landing_type: row.try_get("landingtype").unwrap_or(0),
+                    snapshot_uuid: row.try_get("snapshotuuid").ok(),
+                }
+            })
+            .collect())
     }
 
     fn serialize_parcel(&self, parcel: &ParcelData) -> String {
@@ -357,7 +380,11 @@ impl OarWriter {
         )
     }
 
-    async fn get_objects(&self, region_id: &Uuid, filter_uuids: &Option<Vec<Uuid>>) -> Result<Vec<ObjectData>> {
+    async fn get_objects(
+        &self,
+        region_id: &Uuid,
+        filter_uuids: &Option<Vec<Uuid>>,
+    ) -> Result<Vec<ObjectData>> {
         use sqlx::Row;
 
         let base_query = r#"SELECT p.uuid, p.creatorid, p.ownerid, p.groupid, p.lastownerid, p.scenegroupid,
@@ -389,7 +416,9 @@ impl OarWriter {
                 info!("No object UUIDs to export");
                 return Ok(Vec::new());
             }
-            let placeholders: Vec<String> = uuids.iter().enumerate()
+            let placeholders: Vec<String> = uuids
+                .iter()
+                .enumerate()
                 .map(|(i, _)| format!("${}", i + 2))
                 .collect();
             let query = format!(
@@ -397,7 +426,11 @@ impl OarWriter {
                 base_query,
                 placeholders.join(", ")
             );
-            info!("Querying {} specific objects for region {}", uuids.len(), region_id);
+            info!(
+                "Querying {} specific objects for region {}",
+                uuids.len(),
+                region_id
+            );
             let mut q = sqlx::query(&query).bind(region_id);
             for uuid in uuids {
                 q = q.bind(uuid);
@@ -510,7 +543,10 @@ impl OarWriter {
             groups.entry(scene_group_id).or_default().push(prim);
         }
 
-        let all_prim_uuids: Vec<Uuid> = groups.values().flat_map(|v| v.iter().map(|p| p.uuid)).collect();
+        let all_prim_uuids: Vec<Uuid> = groups
+            .values()
+            .flat_map(|v| v.iter().map(|p| p.uuid))
+            .collect();
         let task_items = self.get_task_items(&all_prim_uuids).await?;
 
         let mut objects = Vec::new();
@@ -526,7 +562,9 @@ impl OarWriter {
             let root = match prims.iter().position(|p| p.link_number <= 1) {
                 Some(idx) => prims.remove(idx),
                 None => {
-                    if prims.is_empty() { continue; }
+                    if prims.is_empty() {
+                        continue;
+                    }
                     prims.remove(0)
                 }
             };
@@ -559,7 +597,10 @@ impl OarWriter {
         Ok(objects)
     }
 
-    async fn get_task_items(&self, prim_uuids: &[Uuid]) -> Result<HashMap<Uuid, Vec<TaskItemData>>> {
+    async fn get_task_items(
+        &self,
+        prim_uuids: &[Uuid],
+    ) -> Result<HashMap<Uuid, Vec<TaskItemData>>> {
         use sqlx::Row;
 
         if prim_uuids.is_empty() {
@@ -571,7 +612,7 @@ impl OarWriter {
                 creationdate, creatorid, ownerid, lastownerid, groupid,
                 nextpermissions, currentpermissions, basepermissions,
                 everyonepermissions, grouppermissions, flags
-            FROM primitems WHERE primid = ANY($1)"#
+            FROM primitems WHERE primid = ANY($1)"#,
         )
         .bind(prim_uuids)
         .fetch_all(&self.db_pool)
@@ -605,12 +646,11 @@ impl OarWriter {
     }
 
     async fn get_asset_data(&self, asset_id: &Uuid) -> Result<Option<(i32, Vec<u8>)>> {
-        let row: Option<(i64, Vec<u8>)> = sqlx::query_as(
-            "SELECT assettype, data FROM assets WHERE id = $1"
-        )
-        .bind(asset_id)
-        .fetch_optional(&self.db_pool)
-        .await?;
+        let row: Option<(i64, Vec<u8>)> =
+            sqlx::query_as("SELECT assettype, data FROM assets WHERE id = $1")
+                .bind(asset_id)
+                .fetch_optional(&self.db_pool)
+                .await?;
 
         Ok(row.map(|(t, d)| (t as i32, d)))
     }
@@ -753,7 +793,9 @@ struct ObjectData {
 
 fn extract_texture_uuids(te_bytes: &[u8]) -> Vec<Uuid> {
     let mut uuids = Vec::new();
-    if te_bytes.len() < 16 { return uuids; }
+    if te_bytes.len() < 16 {
+        return uuids;
+    }
 
     if let Ok(default_uuid) = Uuid::from_slice(&te_bytes[0..16]) {
         if !default_uuid.is_nil() {
@@ -765,8 +807,12 @@ fn extract_texture_uuids(te_bytes: &[u8]) -> Vec<Uuid> {
     while offset + 17 <= te_bytes.len() {
         let face_bits = te_bytes[offset];
         offset += 1;
-        if face_bits == 0 { break; }
-        if offset + 16 > te_bytes.len() { break; }
+        if face_bits == 0 {
+            break;
+        }
+        if offset + 16 > te_bytes.len() {
+            break;
+        }
         if let Ok(face_uuid) = Uuid::from_slice(&te_bytes[offset..offset + 16]) {
             if !face_uuid.is_nil() && !uuids.contains(&face_uuid) {
                 uuids.push(face_uuid);
@@ -780,15 +826,21 @@ fn extract_texture_uuids(te_bytes: &[u8]) -> Vec<Uuid> {
 
 fn extract_sculpt_uuid(extra_params: &[u8]) -> Vec<Uuid> {
     let mut uuids = Vec::new();
-    if extra_params.len() < 2 { return uuids; }
+    if extra_params.len() < 2 {
+        return uuids;
+    }
 
     let mut offset = 0;
     while offset < extra_params.len() {
-        if offset + 6 > extra_params.len() { break; }
+        if offset + 6 > extra_params.len() {
+            break;
+        }
         let param_type = u16::from_le_bytes([extra_params[offset], extra_params[offset + 1]]);
         let param_len = u32::from_le_bytes([
-            extra_params[offset + 2], extra_params[offset + 3],
-            extra_params[offset + 4], extra_params[offset + 5],
+            extra_params[offset + 2],
+            extra_params[offset + 3],
+            extra_params[offset + 4],
+            extra_params[offset + 5],
         ]) as usize;
         offset += 6;
         if param_type == 0x0030 && param_len >= 17 && offset + 17 <= extra_params.len() {
@@ -862,26 +914,79 @@ fn serialize_prim(xml: &mut String, prim: &PrimData, is_root: bool) {
     }
 
     write_uuid_field(xml, &i2, "UUID", &prim.uuid);
-    write_elem(xml, &i2, "LocalId", &(prim.link_number.max(1) as u32).to_string());
+    write_elem(
+        xml,
+        &i2,
+        "LocalId",
+        &(prim.link_number.max(1) as u32).to_string(),
+    );
     write_elem(xml, &i2, "Name", &xml_escape(&prim.name));
     write_elem(xml, &i2, "Material", &prim.material.to_string());
     write_elem(xml, &i2, "PassTouches", "false");
-    write_elem(xml, &i2, "PassCollisions", &prim.pass_collisions.to_string());
+    write_elem(
+        xml,
+        &i2,
+        "PassCollisions",
+        &prim.pass_collisions.to_string(),
+    );
     write_elem(xml, &i2, "RegionHandle", "0");
     write_elem(xml, &i2, "ScriptAccessPin", "0");
 
-    write_vector3(xml, &i2, "GroupPosition", prim.group_position_x, prim.group_position_y, prim.group_position_z);
+    write_vector3(
+        xml,
+        &i2,
+        "GroupPosition",
+        prim.group_position_x,
+        prim.group_position_y,
+        prim.group_position_z,
+    );
 
     if is_root {
         write_vector3(xml, &i2, "OffsetPosition", 0.0, 0.0, 0.0);
     } else {
-        write_vector3(xml, &i2, "OffsetPosition", prim.position_x, prim.position_y, prim.position_z);
+        write_vector3(
+            xml,
+            &i2,
+            "OffsetPosition",
+            prim.position_x,
+            prim.position_y,
+            prim.position_z,
+        );
     }
 
-    write_quat(xml, &i2, "RotationOffset", prim.rotation_x, prim.rotation_y, prim.rotation_z, prim.rotation_w);
-    write_vector3(xml, &i2, "Velocity", prim.velocity_x, prim.velocity_y, prim.velocity_z);
-    write_vector3(xml, &i2, "AngularVelocity", prim.angular_velocity_x, prim.angular_velocity_y, prim.angular_velocity_z);
-    write_vector3(xml, &i2, "Acceleration", prim.acceleration_x, prim.acceleration_y, prim.acceleration_z);
+    write_quat(
+        xml,
+        &i2,
+        "RotationOffset",
+        prim.rotation_x,
+        prim.rotation_y,
+        prim.rotation_z,
+        prim.rotation_w,
+    );
+    write_vector3(
+        xml,
+        &i2,
+        "Velocity",
+        prim.velocity_x,
+        prim.velocity_y,
+        prim.velocity_z,
+    );
+    write_vector3(
+        xml,
+        &i2,
+        "AngularVelocity",
+        prim.angular_velocity_x,
+        prim.angular_velocity_y,
+        prim.angular_velocity_z,
+    );
+    write_vector3(
+        xml,
+        &i2,
+        "Acceleration",
+        prim.acceleration_x,
+        prim.acceleration_y,
+        prim.acceleration_z,
+    );
     write_elem(xml, &i2, "Description", &xml_escape(&prim.description));
     write_elem(xml, &i2, "Text", &xml_escape(&prim.text));
     write_elem(xml, &i2, "SitName", &xml_escape(&prim.sit_name));
@@ -891,11 +996,48 @@ fn serialize_prim(xml: &mut String, prim: &PrimData, is_root: bool) {
 
     serialize_shape(xml, &i2, &prim.shape);
 
-    write_vector3(xml, &i2, "Scale", prim.shape.scale_x, prim.shape.scale_y, prim.shape.scale_z);
-    write_quat(xml, &i2, "SitTargetOrientation", prim.sit_target_orient_x, prim.sit_target_orient_y, prim.sit_target_orient_z, prim.sit_target_orient_w);
-    write_vector3(xml, &i2, "SitTargetPosition", prim.sit_target_offset_x, prim.sit_target_offset_y, prim.sit_target_offset_z);
-    write_vector3(xml, &i2, "SitTargetPositionLL", prim.sit_target_offset_x, prim.sit_target_offset_y, prim.sit_target_offset_z);
-    write_quat(xml, &i2, "SitTargetOrientationLL", prim.sit_target_orient_x, prim.sit_target_orient_y, prim.sit_target_orient_z, prim.sit_target_orient_w);
+    write_vector3(
+        xml,
+        &i2,
+        "Scale",
+        prim.shape.scale_x,
+        prim.shape.scale_y,
+        prim.shape.scale_z,
+    );
+    write_quat(
+        xml,
+        &i2,
+        "SitTargetOrientation",
+        prim.sit_target_orient_x,
+        prim.sit_target_orient_y,
+        prim.sit_target_orient_z,
+        prim.sit_target_orient_w,
+    );
+    write_vector3(
+        xml,
+        &i2,
+        "SitTargetPosition",
+        prim.sit_target_offset_x,
+        prim.sit_target_offset_y,
+        prim.sit_target_offset_z,
+    );
+    write_vector3(
+        xml,
+        &i2,
+        "SitTargetPositionLL",
+        prim.sit_target_offset_x,
+        prim.sit_target_offset_y,
+        prim.sit_target_offset_z,
+    );
+    write_quat(
+        xml,
+        &i2,
+        "SitTargetOrientationLL",
+        prim.sit_target_orient_x,
+        prim.sit_target_orient_y,
+        prim.sit_target_orient_z,
+        prim.sit_target_orient_w,
+    );
 
     write_elem(xml, &i2, "ParentID", "0");
     write_elem(xml, &i2, "CreationDate", &prim.creation_date.to_string());
@@ -912,8 +1054,18 @@ fn serialize_prim(xml: &mut String, prim: &PrimData, is_root: bool) {
     write_elem(xml, &i2, "BaseMask", &(prim.base_mask as u32).to_string());
     write_elem(xml, &i2, "OwnerMask", &(prim.owner_mask as u32).to_string());
     write_elem(xml, &i2, "GroupMask", &(prim.group_mask as u32).to_string());
-    write_elem(xml, &i2, "EveryoneMask", &(prim.everyone_mask as u32).to_string());
-    write_elem(xml, &i2, "NextOwnerMask", &(prim.next_owner_mask as u32).to_string());
+    write_elem(
+        xml,
+        &i2,
+        "EveryoneMask",
+        &(prim.everyone_mask as u32).to_string(),
+    );
+    write_elem(
+        xml,
+        &i2,
+        "NextOwnerMask",
+        &(prim.next_owner_mask as u32).to_string(),
+    );
 
     let flags_str = (prim.object_flags as u32).to_string();
     write_elem(xml, &i2, "Flags", &flags_str);
@@ -940,8 +1092,18 @@ fn serialize_shape(xml: &mut String, indent: &str, shape: &ShapeData) {
     write_elem(xml, &i2, "PathBegin", &shape.path_begin.to_string());
     write_elem(xml, &i2, "PathCurve", &shape.path_curve.to_string());
     write_elem(xml, &i2, "PathEnd", &shape.path_end.to_string());
-    write_elem(xml, &i2, "PathRadiusOffset", &shape.path_radius_offset.to_string());
-    write_elem(xml, &i2, "PathRevolutions", &shape.path_revolutions.to_string());
+    write_elem(
+        xml,
+        &i2,
+        "PathRadiusOffset",
+        &shape.path_radius_offset.to_string(),
+    );
+    write_elem(
+        xml,
+        &i2,
+        "PathRevolutions",
+        &shape.path_revolutions.to_string(),
+    );
     write_elem(xml, &i2, "PathScaleX", &shape.path_scale_x.to_string());
     write_elem(xml, &i2, "PathScaleY", &shape.path_scale_y.to_string());
     write_elem(xml, &i2, "PathShearX", &shape.path_shear_x.to_string());
@@ -950,19 +1112,41 @@ fn serialize_shape(xml: &mut String, indent: &str, shape: &ShapeData) {
     write_elem(xml, &i2, "PathTaperX", &shape.path_taper_x.to_string());
     write_elem(xml, &i2, "PathTaperY", &shape.path_taper_y.to_string());
     write_elem(xml, &i2, "PathTwist", &shape.path_twist.to_string());
-    write_elem(xml, &i2, "PathTwistBegin", &shape.path_twist_begin.to_string());
+    write_elem(
+        xml,
+        &i2,
+        "PathTwistBegin",
+        &shape.path_twist_begin.to_string(),
+    );
     write_elem(xml, &i2, "PCode", &shape.pcode.to_string());
     write_elem(xml, &i2, "ProfileBegin", &shape.profile_begin.to_string());
     write_elem(xml, &i2, "ProfileEnd", &shape.profile_end.to_string());
     write_elem(xml, &i2, "ProfileHollow", &shape.profile_hollow.to_string());
 
-    write_vector3(xml, &i2, "Scale", shape.scale_x, shape.scale_y, shape.scale_z);
+    write_vector3(
+        xml,
+        &i2,
+        "Scale",
+        shape.scale_x,
+        shape.scale_y,
+        shape.scale_z,
+    );
 
     write_elem(xml, &i2, "State", &shape.state.to_string());
     write_elem(xml, &i2, "LastAttachPoint", "0");
 
-    write_elem(xml, &i2, "ProfileShape", profile_shape_name(shape.profile_curve));
-    write_elem(xml, &i2, "HollowShape", hollow_shape_name(shape.profile_curve));
+    write_elem(
+        xml,
+        &i2,
+        "ProfileShape",
+        profile_shape_name(shape.profile_curve),
+    );
+    write_elem(
+        xml,
+        &i2,
+        "HollowShape",
+        hollow_shape_name(shape.profile_curve),
+    );
 
     write_elem(xml, &i2, "SculptType", "0");
     write_elem(xml, &i2, "FlexiEntry", "false");
@@ -976,7 +1160,12 @@ fn serialize_shape(xml: &mut String, indent: &str, shape: &ShapeData) {
     xml.push_str(&format!("{}</Shape>\n", indent));
 }
 
-fn serialize_task_inventory(xml: &mut String, indent: &str, items: &[TaskItemData], parent_prim_id: &Uuid) {
+fn serialize_task_inventory(
+    xml: &mut String,
+    indent: &str,
+    items: &[TaskItemData],
+    parent_prim_id: &Uuid,
+) {
     let i2 = format!("{}  ", indent);
     let i3 = format!("{}    ", indent);
 
@@ -985,22 +1174,47 @@ fn serialize_task_inventory(xml: &mut String, indent: &str, items: &[TaskItemDat
         xml.push_str(&format!("{}<TaskInventoryItem>\n", i2));
 
         write_uuid_field(xml, &i3, "AssetID", &item.asset_id);
-        write_elem(xml, &i3, "BasePermissions", &(item.base_permissions as u32).to_string());
+        write_elem(
+            xml,
+            &i3,
+            "BasePermissions",
+            &(item.base_permissions as u32).to_string(),
+        );
         write_elem(xml, &i3, "CreationDate", &item.creation_date.to_string());
         write_uuid_field(xml, &i3, "CreatorID", &uuid_from_str(&item.creator_id));
         write_elem(xml, &i3, "Description", &xml_escape(&item.description));
-        write_elem(xml, &i3, "EveryonePermissions", &(item.everyone_permissions as u32).to_string());
+        write_elem(
+            xml,
+            &i3,
+            "EveryonePermissions",
+            &(item.everyone_permissions as u32).to_string(),
+        );
         write_elem(xml, &i3, "Flags", &(item.flags as u32).to_string());
         write_uuid_field(xml, &i3, "GroupID", &uuid_from_str(&item.group_id));
-        write_elem(xml, &i3, "GroupPermissions", &(item.group_permissions as u32).to_string());
+        write_elem(
+            xml,
+            &i3,
+            "GroupPermissions",
+            &(item.group_permissions as u32).to_string(),
+        );
         write_elem(xml, &i3, "InvType", &item.inv_type.to_string());
         write_uuid_field(xml, &i3, "ItemID", &item.item_id);
         write_uuid_field(xml, &i3, "OldItemID", &Uuid::nil());
         write_uuid_field(xml, &i3, "LastOwnerID", &uuid_from_str(&item.last_owner_id));
         write_elem(xml, &i3, "Name", &xml_escape(&item.name));
-        write_elem(xml, &i3, "NextPermissions", &(item.next_permissions as u32).to_string());
+        write_elem(
+            xml,
+            &i3,
+            "NextPermissions",
+            &(item.next_permissions as u32).to_string(),
+        );
         write_uuid_field(xml, &i3, "OwnerID", &uuid_from_str(&item.owner_id));
-        write_elem(xml, &i3, "CurrentPermissions", &(item.current_permissions as u32).to_string());
+        write_elem(
+            xml,
+            &i3,
+            "CurrentPermissions",
+            &(item.current_permissions as u32).to_string(),
+        );
         write_uuid_field(xml, &i3, "ParentID", &Uuid::nil());
         write_uuid_field(xml, &i3, "ParentPartID", parent_prim_id);
         write_uuid_field(xml, &i3, "PermsGranter", &Uuid::nil());

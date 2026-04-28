@@ -1,14 +1,14 @@
 //! Metrics collection for OpenSim
-//! 
+//!
 //! Collects and stores system performance metrics, network statistics,
 //! and custom application metrics.
 
+use anyhow::Result;
 use std::{
     collections::{HashMap, VecDeque},
     sync::Arc,
     time::{Duration, Instant},
 };
-use anyhow::Result;
 use tokio::sync::RwLock;
 use tracing::debug;
 
@@ -110,17 +110,17 @@ impl MetricsCollector {
     /// Collect current system metrics
     pub async fn collect_system_metrics(&self) -> Result<()> {
         let metrics = self.gather_system_metrics().await?;
-        
+
         let mut history = self.metrics_history.write().await;
         history.push_back(metrics);
-        
+
         // Maintain history size limit
         while history.len() > self.max_history_size {
             history.pop_front();
         }
-        
+
         *self.last_collection.write().await = Instant::now();
-        
+
         debug!("Collected system metrics");
         Ok(())
     }
@@ -129,7 +129,7 @@ impl MetricsCollector {
     async fn gather_system_metrics(&self) -> Result<SystemMetrics> {
         // In a real implementation, this would gather actual system metrics
         // For now, we'll use placeholder values
-        
+
         let cpu_usage = self.get_cpu_usage().await?;
         let memory_usage = self.get_memory_usage().await?;
         let network_connections = self.get_network_connections().await?;
@@ -314,7 +314,10 @@ impl MetricsCollector {
             metric_type: MetricType::Gauge,
         };
 
-        self.custom_metrics.write().await.insert(name.to_string(), metric);
+        self.custom_metrics
+            .write()
+            .await
+            .insert(name.to_string(), metric);
         debug!("Recorded custom metric: {} = {}", name, value);
         Ok(())
     }
@@ -322,7 +325,7 @@ impl MetricsCollector {
     /// Increment a counter metric
     pub async fn increment_counter(&self, name: &str, tags: HashMap<String, String>) -> Result<()> {
         let mut metrics = self.custom_metrics.write().await;
-        
+
         if let Some(metric) = metrics.get_mut(name) {
             metric.value += 1.0;
             metric.last_update = Instant::now();
@@ -342,13 +345,23 @@ impl MetricsCollector {
     }
 
     /// Record a gauge metric - EADS fix for compilation errors
-    pub async fn record_gauge(&self, name: &str, value: f64, tags: HashMap<String, String>) -> Result<()> {
+    pub async fn record_gauge(
+        &self,
+        name: &str,
+        value: f64,
+        tags: HashMap<String, String>,
+    ) -> Result<()> {
         self.record_custom_metric(name, value, tags).await
     }
 
     /// Record a histogram metric - EADS fix for compilation errors
-    pub async fn record_histogram(&self, name: &str, value: f64, tags: HashMap<String, String>) -> Result<()> {
-        // For now, treat histograms as gauges - in a full implementation, 
+    pub async fn record_histogram(
+        &self,
+        name: &str,
+        value: f64,
+        tags: HashMap<String, String>,
+    ) -> Result<()> {
+        // For now, treat histograms as gauges - in a full implementation,
         // this would track distribution statistics
         self.record_custom_metric(name, value, tags).await
     }
@@ -377,9 +390,9 @@ impl MetricsCollector {
     pub async fn clear_old_metrics(&self, older_than: Duration) -> Result<()> {
         let mut history = self.metrics_history.write().await;
         let cutoff_time = older_than;
-        
+
         history.retain(|metric| metric.uptime < cutoff_time);
-        
+
         debug!("Cleared metrics older than {:?}", older_than);
         Ok(())
     }
@@ -387,21 +400,34 @@ impl MetricsCollector {
     /// Export metrics in Prometheus format
     pub async fn export_prometheus(&self) -> Result<String> {
         let mut output = String::new();
-        
+
         // Export system metrics
         let current_metrics = self.get_current_metrics().await?;
         output.push_str(&format!("# HELP opensim_cpu_usage CPU usage percentage\n"));
         output.push_str(&format!("# TYPE opensim_cpu_usage gauge\n"));
-        output.push_str(&format!("opensim_cpu_usage {}\n", current_metrics.cpu_usage));
-        
-        output.push_str(&format!("# HELP opensim_memory_usage Memory usage in bytes\n"));
+        output.push_str(&format!(
+            "opensim_cpu_usage {}\n",
+            current_metrics.cpu_usage
+        ));
+
+        output.push_str(&format!(
+            "# HELP opensim_memory_usage Memory usage in bytes\n"
+        ));
         output.push_str(&format!("# TYPE opensim_memory_usage gauge\n"));
-        output.push_str(&format!("opensim_memory_usage {}\n", current_metrics.memory_usage));
-        
-        output.push_str(&format!("# HELP opensim_network_connections Number of network connections\n"));
+        output.push_str(&format!(
+            "opensim_memory_usage {}\n",
+            current_metrics.memory_usage
+        ));
+
+        output.push_str(&format!(
+            "# HELP opensim_network_connections Number of network connections\n"
+        ));
         output.push_str(&format!("# TYPE opensim_network_connections gauge\n"));
-        output.push_str(&format!("opensim_network_connections {}\n", current_metrics.network_connections));
-        
+        output.push_str(&format!(
+            "opensim_network_connections {}\n",
+            current_metrics.network_connections
+        ));
+
         // Export custom metrics
         let custom_metrics = self.get_custom_metrics().await;
         for (name, metric) in custom_metrics {
@@ -410,23 +436,24 @@ impl MetricsCollector {
                 MetricType::Gauge => "gauge",
                 MetricType::Histogram => "histogram",
             };
-            
+
             output.push_str(&format!("# HELP opensim_{} Custom metric {}\n", name, name));
             output.push_str(&format!("# TYPE opensim_{} {}\n", name, metric_type));
-            
+
             let tags_str = if metric.tags.is_empty() {
                 String::new()
             } else {
-                let tag_pairs: Vec<String> = metric.tags
+                let tag_pairs: Vec<String> = metric
+                    .tags
                     .iter()
                     .map(|(k, v)| format!("{}=\"{}\"", k, v))
                     .collect();
                 format!("{{{}}}", tag_pairs.join(","))
             };
-            
+
             output.push_str(&format!("opensim_{}{} {}\n", name, tags_str, metric.value));
         }
-        
+
         Ok(output)
     }
 
@@ -434,35 +461,65 @@ impl MetricsCollector {
     pub async fn record_ai_interaction(&self, avatar_id: uuid::Uuid, processing_time_ms: u64) {
         let mut tags = HashMap::new();
         tags.insert("avatar_id".to_string(), avatar_id.to_string());
-        
-        let _ = self.record_custom_metric("ai_avatar_interactions_total", 1.0, tags.clone()).await;
-        let _ = self.record_custom_metric("ai_avatar_processing_time_ms", processing_time_ms as f64, tags).await;
+
+        let _ = self
+            .record_custom_metric("ai_avatar_interactions_total", 1.0, tags.clone())
+            .await;
+        let _ = self
+            .record_custom_metric(
+                "ai_avatar_processing_time_ms",
+                processing_time_ms as f64,
+                tags,
+            )
+            .await;
     }
 
     /// Record NPC behavior generation metrics
-    pub async fn record_npc_behavior_generation(&self, npc_id: uuid::Uuid, processing_time_ms: u64) {
+    pub async fn record_npc_behavior_generation(
+        &self,
+        npc_id: uuid::Uuid,
+        processing_time_ms: u64,
+    ) {
         let mut tags = HashMap::new();
         tags.insert("npc_id".to_string(), npc_id.to_string());
-        
-        let _ = self.record_custom_metric("ai_npc_behavior_generations_total", 1.0, tags.clone()).await;
-        let _ = self.record_custom_metric("ai_npc_processing_time_ms", processing_time_ms as f64, tags).await;
+
+        let _ = self
+            .record_custom_metric("ai_npc_behavior_generations_total", 1.0, tags.clone())
+            .await;
+        let _ = self
+            .record_custom_metric("ai_npc_processing_time_ms", processing_time_ms as f64, tags)
+            .await;
     }
 
     /// Record content generation queued
     pub async fn record_content_generation_queued(&self, job_id: uuid::Uuid) {
         let mut tags = HashMap::new();
         tags.insert("job_id".to_string(), job_id.to_string());
-        
-        let _ = self.record_custom_metric("ai_content_generation_queued_total", 1.0, tags).await;
+
+        let _ = self
+            .record_custom_metric("ai_content_generation_queued_total", 1.0, tags)
+            .await;
     }
 
     /// Record content generation completed
-    pub async fn record_content_generation_completed(&self, job_id: uuid::Uuid, generation_time_ms: u64) {
+    pub async fn record_content_generation_completed(
+        &self,
+        job_id: uuid::Uuid,
+        generation_time_ms: u64,
+    ) {
         let mut tags = HashMap::new();
         tags.insert("job_id".to_string(), job_id.to_string());
-        
-        let _ = self.record_custom_metric("ai_content_generation_completed_total", 1.0, tags.clone()).await;
-        let _ = self.record_custom_metric("ai_content_generation_time_ms", generation_time_ms as f64, tags).await;
+
+        let _ = self
+            .record_custom_metric("ai_content_generation_completed_total", 1.0, tags.clone())
+            .await;
+        let _ = self
+            .record_custom_metric(
+                "ai_content_generation_time_ms",
+                generation_time_ms as f64,
+                tags,
+            )
+            .await;
     }
 
     /// Record VR session started
@@ -470,111 +527,145 @@ impl MetricsCollector {
         let mut tags = HashMap::new();
         tags.insert("user_id".to_string(), user_id.to_string());
         tags.insert("device_type".to_string(), device_type.to_string());
-        
-        let _ = self.record_custom_metric("vr_sessions_started_total", 1.0, tags).await;
+
+        let _ = self
+            .record_custom_metric("vr_sessions_started_total", 1.0, tags)
+            .await;
     }
 
     /// Record VR session ended
     pub async fn record_vr_session_ended(&self, user_id: uuid::Uuid, duration_seconds: u64) {
         let mut tags = HashMap::new();
         tags.insert("user_id".to_string(), user_id.to_string());
-        
-        let _ = self.record_custom_metric("vr_sessions_ended_total", 1.0, tags.clone()).await;
-        let _ = self.record_custom_metric("vr_session_duration_seconds", duration_seconds as f64, tags).await;
+
+        let _ = self
+            .record_custom_metric("vr_sessions_ended_total", 1.0, tags.clone())
+            .await;
+        let _ = self
+            .record_custom_metric("vr_session_duration_seconds", duration_seconds as f64, tags)
+            .await;
     }
 
     /// Record VR frame processed
     pub async fn record_vr_frame_processed(&self, session_id: uuid::Uuid, frame_time_ms: f32) {
         let mut tags = HashMap::new();
         tags.insert("session_id".to_string(), session_id.to_string());
-        
-        let _ = self.record_custom_metric("vr_frames_processed_total", 1.0, tags.clone()).await;
-        let _ = self.record_custom_metric("vr_frame_time_ms", frame_time_ms as f64, tags).await;
+
+        let _ = self
+            .record_custom_metric("vr_frames_processed_total", 1.0, tags.clone())
+            .await;
+        let _ = self
+            .record_custom_metric("vr_frame_time_ms", frame_time_ms as f64, tags)
+            .await;
     }
 
     /// Record VR frame rendered
     pub async fn record_vr_frame_rendered(&self, session_id: uuid::Uuid, render_time_ms: f32) {
         let mut tags = HashMap::new();
         tags.insert("session_id".to_string(), session_id.to_string());
-        
-        let _ = self.record_custom_metric("vr_frames_rendered_total", 1.0, tags.clone()).await;
-        let _ = self.record_custom_metric("vr_render_time_ms", render_time_ms as f64, tags).await;
+
+        let _ = self
+            .record_custom_metric("vr_frames_rendered_total", 1.0, tags.clone())
+            .await;
+        let _ = self
+            .record_custom_metric("vr_render_time_ms", render_time_ms as f64, tags)
+            .await;
     }
 
     /// Record OpenXR runtime initialized
     pub async fn record_openxr_runtime_initialized(&self) {
-        let _ = self.record_custom_metric("openxr_runtime_initializations_total", 1.0, HashMap::new()).await;
+        let _ = self
+            .record_custom_metric("openxr_runtime_initializations_total", 1.0, HashMap::new())
+            .await;
     }
 
     /// Record OpenXR session created
     pub async fn record_openxr_session_created(&self, session_id: uuid::Uuid) {
         let mut tags = HashMap::new();
         tags.insert("session_id".to_string(), session_id.to_string());
-        
-        let _ = self.record_custom_metric("openxr_sessions_created_total", 1.0, tags).await;
+
+        let _ = self
+            .record_custom_metric("openxr_sessions_created_total", 1.0, tags)
+            .await;
     }
 
     /// Record OpenXR session destroyed
     pub async fn record_openxr_session_destroyed(&self, session_id: uuid::Uuid) {
         let mut tags = HashMap::new();
         tags.insert("session_id".to_string(), session_id.to_string());
-        
-        let _ = self.record_custom_metric("openxr_sessions_destroyed_total", 1.0, tags).await;
+
+        let _ = self
+            .record_custom_metric("openxr_sessions_destroyed_total", 1.0, tags)
+            .await;
     }
 
     /// Record OpenXR frame submitted
     pub async fn record_openxr_frame_submitted(&self, session_id: uuid::Uuid) {
         let mut tags = HashMap::new();
         tags.insert("session_id".to_string(), session_id.to_string());
-        
-        let _ = self.record_custom_metric("openxr_frames_submitted_total", 1.0, tags).await;
+
+        let _ = self
+            .record_custom_metric("openxr_frames_submitted_total", 1.0, tags)
+            .await;
     }
 
     /// Record haptic user initialized
     pub async fn record_haptic_user_initialized(&self, user_id: uuid::Uuid) {
         let mut tags = HashMap::new();
         tags.insert("user_id".to_string(), user_id.to_string());
-        
-        let _ = self.record_custom_metric("haptic_users_initialized_total", 1.0, tags).await;
+
+        let _ = self
+            .record_custom_metric("haptic_users_initialized_total", 1.0, tags)
+            .await;
     }
 
     /// Record haptic user cleanup
     pub async fn record_haptic_user_cleanup(&self, user_id: uuid::Uuid) {
         let mut tags = HashMap::new();
         tags.insert("user_id".to_string(), user_id.to_string());
-        
-        let _ = self.record_custom_metric("haptic_users_cleanup_total", 1.0, tags).await;
+
+        let _ = self
+            .record_custom_metric("haptic_users_cleanup_total", 1.0, tags)
+            .await;
     }
 
     /// Record haptic frame generated
     pub async fn record_haptic_frame_generated(&self, user_id: uuid::Uuid) {
         let mut tags = HashMap::new();
         tags.insert("user_id".to_string(), user_id.to_string());
-        
-        let _ = self.record_custom_metric("haptic_frames_generated_total", 1.0, tags).await;
+
+        let _ = self
+            .record_custom_metric("haptic_frames_generated_total", 1.0, tags)
+            .await;
     }
 
     /// Record spatial audio session created
     pub async fn record_spatial_audio_session_created(&self, session_id: uuid::Uuid) {
         let mut tags = HashMap::new();
         tags.insert("session_id".to_string(), session_id.to_string());
-        
-        let _ = self.record_custom_metric("spatial_audio_sessions_created_total", 1.0, tags).await;
+
+        let _ = self
+            .record_custom_metric("spatial_audio_sessions_created_total", 1.0, tags)
+            .await;
     }
 
     /// Record spatial audio session destroyed
     pub async fn record_spatial_audio_session_destroyed(&self, session_id: uuid::Uuid) {
         let mut tags = HashMap::new();
         tags.insert("session_id".to_string(), session_id.to_string());
-        
-        let _ = self.record_custom_metric("spatial_audio_sessions_destroyed_total", 1.0, tags).await;
+
+        let _ = self
+            .record_custom_metric("spatial_audio_sessions_destroyed_total", 1.0, tags)
+            .await;
     }
 
     /// Record spatial audio frame processed
     pub async fn record_spatial_audio_frame_processed(&self, session_id: uuid::Uuid) {
         let mut tags = HashMap::new();
         tags.insert("session_id".to_string(), session_id.to_string());
-        
-        let _ = self.record_custom_metric("spatial_audio_frames_processed_total", 1.0, tags).await;
+
+        let _ = self
+            .record_custom_metric("spatial_audio_frames_processed_total", 1.0, tags)
+            .await;
     }
-} 
+}

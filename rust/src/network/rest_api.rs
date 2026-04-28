@@ -1,8 +1,6 @@
 //! OpenSim Next REST API
 //! Comprehensive REST interface for assets, inventory, users, regions, and services
 
-use std::collections::HashMap;
-use std::sync::Arc;
 use anyhow::{anyhow, Result};
 use axum::{
     extract::{Path, Query, State},
@@ -13,9 +11,11 @@ use axum::{
 };
 use serde::{Deserialize, Serialize};
 use serde_json::{json, Value};
+use std::collections::HashMap;
+use std::sync::Arc;
 use tokio::sync::RwLock;
-use uuid::Uuid;
 use tracing::{error, info, warn};
+use uuid::Uuid;
 
 use crate::asset::AssetManager;
 use crate::database::DatabaseManager;
@@ -86,7 +86,7 @@ impl<T> ApiResponse<T> {
             version,
         }
     }
-    
+
     pub fn error(error: String, version: String) -> Self {
         Self {
             success: false,
@@ -292,76 +292,144 @@ impl RestApiService {
             metrics,
             sessions: Arc::new(RwLock::new(HashMap::new())),
         };
-        
+
         Self { state }
     }
-    
+
     pub fn create_router(&self) -> Router {
         let api_version = self.state.config.api_version.clone();
-        
+
         // Create FWDFE API routes with database access
         let fwdfe_state = FwdfeApiState {
             database: self.state.database.clone(),
         };
-        
+
         Router::new()
             // API info and health
             .route("/", get(api_info))
             .route("/health", get(health_check))
             .route("/version", get(version_info))
-            
             // FWDFE API routes for Flutter dashboard
             .merge(create_fwdfe_api_router().with_state(fwdfe_state))
-            
             // Asset endpoints
-            .route(&format!("/{}/assets", api_version), get(list_assets).post(upload_asset))
-            .route(&format!("/{}/assets/:id", api_version), get(get_asset).put(update_asset).delete(delete_asset))
-            .route(&format!("/{}/assets/:id/data", api_version), get(download_asset_data).put(upload_asset_data))
-            .route(&format!("/{}/assets/search", api_version), get(search_assets))
-            
+            .route(
+                &format!("/{}/assets", api_version),
+                get(list_assets).post(upload_asset),
+            )
+            .route(
+                &format!("/{}/assets/:id", api_version),
+                get(get_asset).put(update_asset).delete(delete_asset),
+            )
+            .route(
+                &format!("/{}/assets/:id/data", api_version),
+                get(download_asset_data).put(upload_asset_data),
+            )
+            .route(
+                &format!("/{}/assets/search", api_version),
+                get(search_assets),
+            )
             // Inventory endpoints
-            .route(&format!("/{}/inventory/users/:user_id/items", api_version), get(list_inventory_items).post(create_inventory_item))
-            .route(&format!("/{}/inventory/items/:id", api_version), get(get_inventory_item).put(update_inventory_item).delete(delete_inventory_item))
-            .route(&format!("/{}/inventory/users/:user_id/folders", api_version), get(list_inventory_folders).post(create_inventory_folder))
-            .route(&format!("/{}/inventory/folders/:id", api_version), get(get_inventory_folder).put(update_inventory_folder).delete(delete_inventory_folder))
-            
+            .route(
+                &format!("/{}/inventory/users/:user_id/items", api_version),
+                get(list_inventory_items).post(create_inventory_item),
+            )
+            .route(
+                &format!("/{}/inventory/items/:id", api_version),
+                get(get_inventory_item)
+                    .put(update_inventory_item)
+                    .delete(delete_inventory_item),
+            )
+            .route(
+                &format!("/{}/inventory/users/:user_id/folders", api_version),
+                get(list_inventory_folders).post(create_inventory_folder),
+            )
+            .route(
+                &format!("/{}/inventory/folders/:id", api_version),
+                get(get_inventory_folder)
+                    .put(update_inventory_folder)
+                    .delete(delete_inventory_folder),
+            )
             // User endpoints
-            .route(&format!("/{}/users", api_version), get(list_users).post(create_user))
-            .route(&format!("/{}/users/:id", api_version), get(get_user).put(update_user).delete(delete_user))
-            .route(&format!("/{}/users/:id/profile", api_version), get(get_user_profile).put(update_user_profile))
-            .route(&format!("/{}/users/:id/inventory", api_version), get(get_user_inventory_summary))
-            
+            .route(
+                &format!("/{}/users", api_version),
+                get(list_users).post(create_user),
+            )
+            .route(
+                &format!("/{}/users/:id", api_version),
+                get(get_user).put(update_user).delete(delete_user),
+            )
+            .route(
+                &format!("/{}/users/:id/profile", api_version),
+                get(get_user_profile).put(update_user_profile),
+            )
+            .route(
+                &format!("/{}/users/:id/inventory", api_version),
+                get(get_user_inventory_summary),
+            )
             // Region endpoints
-            .route(&format!("/{}/regions", api_version), get(list_regions).post(create_region))
-            .route(&format!("/{}/regions/:id", api_version), get(get_region).put(update_region).delete(delete_region))
-            .route(&format!("/{}/regions/:id/restart", api_version), post(restart_region))
-            .route(&format!("/{}/regions/:id/agents", api_version), get(list_region_agents))
-            .route(&format!("/{}/regions/:id/objects", api_version), get(list_region_objects))
-            
+            .route(
+                &format!("/{}/regions", api_version),
+                get(list_regions).post(create_region),
+            )
+            .route(
+                &format!("/{}/regions/:id", api_version),
+                get(get_region).put(update_region).delete(delete_region),
+            )
+            .route(
+                &format!("/{}/regions/:id/restart", api_version),
+                post(restart_region),
+            )
+            .route(
+                &format!("/{}/regions/:id/agents", api_version),
+                get(list_region_agents),
+            )
+            .route(
+                &format!("/{}/regions/:id/objects", api_version),
+                get(list_region_objects),
+            )
             // Authentication endpoints
             .route(&format!("/{}/auth/login", api_version), post(login))
             .route(&format!("/{}/auth/logout", api_version), post(logout))
-            .route(&format!("/{}/auth/refresh", api_version), post(refresh_token))
-            .route(&format!("/{}/auth/validate", api_version), get(validate_token))
-            
+            .route(
+                &format!("/{}/auth/refresh", api_version),
+                post(refresh_token),
+            )
+            .route(
+                &format!("/{}/auth/validate", api_version),
+                get(validate_token),
+            )
             // Statistics and monitoring endpoints
-            .route(&format!("/{}/stats/overview", api_version), get(get_stats_overview))
-            .route(&format!("/{}/stats/assets", api_version), get(get_asset_stats))
-            .route(&format!("/{}/stats/users", api_version), get(get_user_stats))
-            .route(&format!("/{}/stats/regions", api_version), get(get_region_stats))
-            
+            .route(
+                &format!("/{}/stats/overview", api_version),
+                get(get_stats_overview),
+            )
+            .route(
+                &format!("/{}/stats/assets", api_version),
+                get(get_asset_stats),
+            )
+            .route(
+                &format!("/{}/stats/users", api_version),
+                get(get_user_stats),
+            )
+            .route(
+                &format!("/{}/stats/regions", api_version),
+                get(get_region_stats),
+            )
             .with_state(self.state.clone())
     }
-    
+
     pub async fn start_server(&self) -> Result<()> {
-        let bind_addr = format!("{}:{}", self.state.config.bind_address, self.state.config.port);
+        let bind_addr = format!(
+            "{}:{}",
+            self.state.config.bind_address, self.state.config.port
+        );
         let router = self.create_router();
-        
+
         info!("Starting REST API server on {}", bind_addr);
-        
+
         let listener = tokio::net::TcpListener::bind(&bind_addr).await?;
         axum::serve(listener, router).await?;
-        
+
         Ok(())
     }
 
@@ -382,7 +450,7 @@ async fn api_info(State(state): State<ApiState>) -> impl IntoResponse {
             "description": "Comprehensive REST interface for virtual world services",
             "endpoints": {
                 "assets": "Asset management and storage",
-                "inventory": "User inventory and item management", 
+                "inventory": "User inventory and item management",
                 "users": "User accounts and profiles",
                 "regions": "Virtual world regions and management",
                 "auth": "Authentication and session management",
@@ -399,7 +467,7 @@ async fn api_info(State(state): State<ApiState>) -> impl IntoResponse {
         }),
         state.config.api_version,
     );
-    
+
     Json(response)
 }
 
@@ -418,7 +486,7 @@ async fn health_check(State(state): State<ApiState>) -> impl IntoResponse {
         }),
         state.config.api_version,
     );
-    
+
     Json(response)
 }
 
@@ -434,7 +502,7 @@ async fn version_info(State(state): State<ApiState>) -> impl IntoResponse {
         }),
         state.config.api_version,
     );
-    
+
     Json(response)
 }
 
@@ -462,18 +530,16 @@ async fn list_assets_impl(state: &ApiState, query: AssetSearchQuery) -> Result<V
     // Implementation would query the asset manager with filters
     let page = query.pagination.page.unwrap_or(1);
     let limit = query.pagination.limit.unwrap_or(50);
-    
+
     // Mock implementation - replace with actual asset manager calls
-    let assets = vec![
-        json!({
-            "id": Uuid::new_v4(),
-            "name": "Sample Texture",
-            "asset_type": "texture",
-            "size": 1024000,
-            "created": chrono::Utc::now()
-        })
-    ];
-    
+    let assets = vec![json!({
+        "id": Uuid::new_v4(),
+        "name": "Sample Texture",
+        "asset_type": "texture",
+        "size": 1024000,
+        "created": chrono::Utc::now()
+    })];
+
     Ok(json!({
         "assets": assets,
         "pagination": {
@@ -507,7 +573,7 @@ async fn upload_asset_impl(state: &ApiState, request: AssetUploadRequest) -> Res
     // Implementation would create asset via asset manager
     let asset_id = Uuid::new_v4();
     let now = chrono::Utc::now();
-    
+
     // Mock implementation - replace with actual asset manager calls
     Ok(AssetInfo {
         id: asset_id,
@@ -525,10 +591,7 @@ async fn upload_asset_impl(state: &ApiState, request: AssetUploadRequest) -> Res
 }
 
 /// GET /v1/assets/:id - Get asset info
-async fn get_asset(
-    State(state): State<ApiState>,
-    Path(id): Path<Uuid>,
-) -> impl IntoResponse {
+async fn get_asset(State(state): State<ApiState>, Path(id): Path<Uuid>) -> impl IntoResponse {
     match get_asset_impl(&state, id).await {
         Ok(asset) => {
             let response = ApiResponse::success(asset, state.config.api_version);
@@ -554,17 +617,16 @@ async fn update_asset(
     Json(request): Json<AssetUploadRequest>,
 ) -> impl IntoResponse {
     // Implementation similar to upload_asset but updates existing
-    let response = ApiResponse::<Value>::error("Not implemented".to_string(), state.config.api_version);
+    let response =
+        ApiResponse::<Value>::error("Not implemented".to_string(), state.config.api_version);
     (StatusCode::NOT_IMPLEMENTED, Json(response)).into_response()
 }
 
 /// DELETE /v1/assets/:id - Delete asset
-async fn delete_asset(
-    State(state): State<ApiState>,
-    Path(id): Path<Uuid>,
-) -> impl IntoResponse {
+async fn delete_asset(State(state): State<ApiState>, Path(id): Path<Uuid>) -> impl IntoResponse {
     // Implementation would delete asset via asset manager
-    let response = ApiResponse::<Value>::error("Not implemented".to_string(), state.config.api_version);
+    let response =
+        ApiResponse::<Value>::error("Not implemented".to_string(), state.config.api_version);
     (StatusCode::NOT_IMPLEMENTED, Json(response)).into_response()
 }
 
@@ -574,7 +636,8 @@ async fn download_asset_data(
     Path(id): Path<Uuid>,
 ) -> impl IntoResponse {
     // Implementation would return asset binary data
-    let response = ApiResponse::<Value>::error("Not implemented".to_string(), state.config.api_version);
+    let response =
+        ApiResponse::<Value>::error("Not implemented".to_string(), state.config.api_version);
     (StatusCode::NOT_IMPLEMENTED, Json(response)).into_response()
 }
 
@@ -585,7 +648,8 @@ async fn upload_asset_data(
     // body: Bytes, // Would handle binary data
 ) -> impl IntoResponse {
     // Implementation would store asset binary data
-    let response = ApiResponse::<Value>::error("Not implemented".to_string(), state.config.api_version);
+    let response =
+        ApiResponse::<Value>::error("Not implemented".to_string(), state.config.api_version);
     (StatusCode::NOT_IMPLEMENTED, Json(response)).into_response()
 }
 
@@ -600,180 +664,259 @@ async fn search_assets(
 
 // Inventory endpoints (stubs - similar pattern to assets)
 
-async fn list_inventory_items(State(state): State<ApiState>, Path(user_id): Path<Uuid>) -> impl IntoResponse {
-    let response = ApiResponse::<Value>::error("Not implemented".to_string(), state.config.api_version);
+async fn list_inventory_items(
+    State(state): State<ApiState>,
+    Path(user_id): Path<Uuid>,
+) -> impl IntoResponse {
+    let response =
+        ApiResponse::<Value>::error("Not implemented".to_string(), state.config.api_version);
     (StatusCode::NOT_IMPLEMENTED, Json(response)).into_response()
 }
 
-async fn create_inventory_item(State(state): State<ApiState>, Path(user_id): Path<Uuid>) -> impl IntoResponse {
-    let response = ApiResponse::<Value>::error("Not implemented".to_string(), state.config.api_version);
+async fn create_inventory_item(
+    State(state): State<ApiState>,
+    Path(user_id): Path<Uuid>,
+) -> impl IntoResponse {
+    let response =
+        ApiResponse::<Value>::error("Not implemented".to_string(), state.config.api_version);
     (StatusCode::NOT_IMPLEMENTED, Json(response)).into_response()
 }
 
-async fn get_inventory_item(State(state): State<ApiState>, Path(id): Path<Uuid>) -> impl IntoResponse {
-    let response = ApiResponse::<Value>::error("Not implemented".to_string(), state.config.api_version);
+async fn get_inventory_item(
+    State(state): State<ApiState>,
+    Path(id): Path<Uuid>,
+) -> impl IntoResponse {
+    let response =
+        ApiResponse::<Value>::error("Not implemented".to_string(), state.config.api_version);
     (StatusCode::NOT_IMPLEMENTED, Json(response)).into_response()
 }
 
-async fn update_inventory_item(State(state): State<ApiState>, Path(id): Path<Uuid>) -> impl IntoResponse {
-    let response = ApiResponse::<Value>::error("Not implemented".to_string(), state.config.api_version);
+async fn update_inventory_item(
+    State(state): State<ApiState>,
+    Path(id): Path<Uuid>,
+) -> impl IntoResponse {
+    let response =
+        ApiResponse::<Value>::error("Not implemented".to_string(), state.config.api_version);
     (StatusCode::NOT_IMPLEMENTED, Json(response)).into_response()
 }
 
-async fn delete_inventory_item(State(state): State<ApiState>, Path(id): Path<Uuid>) -> impl IntoResponse {
-    let response = ApiResponse::<Value>::error("Not implemented".to_string(), state.config.api_version);
+async fn delete_inventory_item(
+    State(state): State<ApiState>,
+    Path(id): Path<Uuid>,
+) -> impl IntoResponse {
+    let response =
+        ApiResponse::<Value>::error("Not implemented".to_string(), state.config.api_version);
     (StatusCode::NOT_IMPLEMENTED, Json(response)).into_response()
 }
 
-async fn list_inventory_folders(State(state): State<ApiState>, Path(user_id): Path<Uuid>) -> impl IntoResponse {
-    let response = ApiResponse::<Value>::error("Not implemented".to_string(), state.config.api_version);
+async fn list_inventory_folders(
+    State(state): State<ApiState>,
+    Path(user_id): Path<Uuid>,
+) -> impl IntoResponse {
+    let response =
+        ApiResponse::<Value>::error("Not implemented".to_string(), state.config.api_version);
     (StatusCode::NOT_IMPLEMENTED, Json(response)).into_response()
 }
 
-async fn create_inventory_folder(State(state): State<ApiState>, Path(user_id): Path<Uuid>) -> impl IntoResponse {
-    let response = ApiResponse::<Value>::error("Not implemented".to_string(), state.config.api_version);
+async fn create_inventory_folder(
+    State(state): State<ApiState>,
+    Path(user_id): Path<Uuid>,
+) -> impl IntoResponse {
+    let response =
+        ApiResponse::<Value>::error("Not implemented".to_string(), state.config.api_version);
     (StatusCode::NOT_IMPLEMENTED, Json(response)).into_response()
 }
 
-async fn get_inventory_folder(State(state): State<ApiState>, Path(id): Path<Uuid>) -> impl IntoResponse {
-    let response = ApiResponse::<Value>::error("Not implemented".to_string(), state.config.api_version);
+async fn get_inventory_folder(
+    State(state): State<ApiState>,
+    Path(id): Path<Uuid>,
+) -> impl IntoResponse {
+    let response =
+        ApiResponse::<Value>::error("Not implemented".to_string(), state.config.api_version);
     (StatusCode::NOT_IMPLEMENTED, Json(response)).into_response()
 }
 
-async fn update_inventory_folder(State(state): State<ApiState>, Path(id): Path<Uuid>) -> impl IntoResponse {
-    let response = ApiResponse::<Value>::error("Not implemented".to_string(), state.config.api_version);
+async fn update_inventory_folder(
+    State(state): State<ApiState>,
+    Path(id): Path<Uuid>,
+) -> impl IntoResponse {
+    let response =
+        ApiResponse::<Value>::error("Not implemented".to_string(), state.config.api_version);
     (StatusCode::NOT_IMPLEMENTED, Json(response)).into_response()
 }
 
-async fn delete_inventory_folder(State(state): State<ApiState>, Path(id): Path<Uuid>) -> impl IntoResponse {
-    let response = ApiResponse::<Value>::error("Not implemented".to_string(), state.config.api_version);
+async fn delete_inventory_folder(
+    State(state): State<ApiState>,
+    Path(id): Path<Uuid>,
+) -> impl IntoResponse {
+    let response =
+        ApiResponse::<Value>::error("Not implemented".to_string(), state.config.api_version);
     (StatusCode::NOT_IMPLEMENTED, Json(response)).into_response()
 }
 
 // User endpoints (stubs)
 
 async fn list_users(State(state): State<ApiState>) -> impl IntoResponse {
-    let response = ApiResponse::<Value>::error("Not implemented".to_string(), state.config.api_version);
+    let response =
+        ApiResponse::<Value>::error("Not implemented".to_string(), state.config.api_version);
     (StatusCode::NOT_IMPLEMENTED, Json(response)).into_response()
 }
 
 async fn create_user(State(state): State<ApiState>) -> impl IntoResponse {
-    let response = ApiResponse::<Value>::error("Not implemented".to_string(), state.config.api_version);
+    let response =
+        ApiResponse::<Value>::error("Not implemented".to_string(), state.config.api_version);
     (StatusCode::NOT_IMPLEMENTED, Json(response)).into_response()
 }
 
 async fn get_user(State(state): State<ApiState>, Path(id): Path<Uuid>) -> impl IntoResponse {
-    let response = ApiResponse::<Value>::error("Not implemented".to_string(), state.config.api_version);
+    let response =
+        ApiResponse::<Value>::error("Not implemented".to_string(), state.config.api_version);
     (StatusCode::NOT_IMPLEMENTED, Json(response)).into_response()
 }
 
 async fn update_user(State(state): State<ApiState>, Path(id): Path<Uuid>) -> impl IntoResponse {
-    let response = ApiResponse::<Value>::error("Not implemented".to_string(), state.config.api_version);
+    let response =
+        ApiResponse::<Value>::error("Not implemented".to_string(), state.config.api_version);
     (StatusCode::NOT_IMPLEMENTED, Json(response)).into_response()
 }
 
 async fn delete_user(State(state): State<ApiState>, Path(id): Path<Uuid>) -> impl IntoResponse {
-    let response = ApiResponse::<Value>::error("Not implemented".to_string(), state.config.api_version);
+    let response =
+        ApiResponse::<Value>::error("Not implemented".to_string(), state.config.api_version);
     (StatusCode::NOT_IMPLEMENTED, Json(response)).into_response()
 }
 
-async fn get_user_profile(State(state): State<ApiState>, Path(id): Path<Uuid>) -> impl IntoResponse {
-    let response = ApiResponse::<Value>::error("Not implemented".to_string(), state.config.api_version);
+async fn get_user_profile(
+    State(state): State<ApiState>,
+    Path(id): Path<Uuid>,
+) -> impl IntoResponse {
+    let response =
+        ApiResponse::<Value>::error("Not implemented".to_string(), state.config.api_version);
     (StatusCode::NOT_IMPLEMENTED, Json(response)).into_response()
 }
 
-async fn update_user_profile(State(state): State<ApiState>, Path(id): Path<Uuid>) -> impl IntoResponse {
-    let response = ApiResponse::<Value>::error("Not implemented".to_string(), state.config.api_version);
+async fn update_user_profile(
+    State(state): State<ApiState>,
+    Path(id): Path<Uuid>,
+) -> impl IntoResponse {
+    let response =
+        ApiResponse::<Value>::error("Not implemented".to_string(), state.config.api_version);
     (StatusCode::NOT_IMPLEMENTED, Json(response)).into_response()
 }
 
-async fn get_user_inventory_summary(State(state): State<ApiState>, Path(id): Path<Uuid>) -> impl IntoResponse {
-    let response = ApiResponse::<Value>::error("Not implemented".to_string(), state.config.api_version);
+async fn get_user_inventory_summary(
+    State(state): State<ApiState>,
+    Path(id): Path<Uuid>,
+) -> impl IntoResponse {
+    let response =
+        ApiResponse::<Value>::error("Not implemented".to_string(), state.config.api_version);
     (StatusCode::NOT_IMPLEMENTED, Json(response)).into_response()
 }
 
 // Region endpoints (stubs)
 
 async fn list_regions(State(state): State<ApiState>) -> impl IntoResponse {
-    let response = ApiResponse::<Value>::error("Not implemented".to_string(), state.config.api_version);
+    let response =
+        ApiResponse::<Value>::error("Not implemented".to_string(), state.config.api_version);
     (StatusCode::NOT_IMPLEMENTED, Json(response)).into_response()
 }
 
 async fn create_region(State(state): State<ApiState>) -> impl IntoResponse {
-    let response = ApiResponse::<Value>::error("Not implemented".to_string(), state.config.api_version);
+    let response =
+        ApiResponse::<Value>::error("Not implemented".to_string(), state.config.api_version);
     (StatusCode::NOT_IMPLEMENTED, Json(response)).into_response()
 }
 
 async fn get_region(State(state): State<ApiState>, Path(id): Path<Uuid>) -> impl IntoResponse {
-    let response = ApiResponse::<Value>::error("Not implemented".to_string(), state.config.api_version);
+    let response =
+        ApiResponse::<Value>::error("Not implemented".to_string(), state.config.api_version);
     (StatusCode::NOT_IMPLEMENTED, Json(response)).into_response()
 }
 
 async fn update_region(State(state): State<ApiState>, Path(id): Path<Uuid>) -> impl IntoResponse {
-    let response = ApiResponse::<Value>::error("Not implemented".to_string(), state.config.api_version);
+    let response =
+        ApiResponse::<Value>::error("Not implemented".to_string(), state.config.api_version);
     (StatusCode::NOT_IMPLEMENTED, Json(response)).into_response()
 }
 
 async fn delete_region(State(state): State<ApiState>, Path(id): Path<Uuid>) -> impl IntoResponse {
-    let response = ApiResponse::<Value>::error("Not implemented".to_string(), state.config.api_version);
+    let response =
+        ApiResponse::<Value>::error("Not implemented".to_string(), state.config.api_version);
     (StatusCode::NOT_IMPLEMENTED, Json(response)).into_response()
 }
 
 async fn restart_region(State(state): State<ApiState>, Path(id): Path<Uuid>) -> impl IntoResponse {
-    let response = ApiResponse::<Value>::error("Not implemented".to_string(), state.config.api_version);
+    let response =
+        ApiResponse::<Value>::error("Not implemented".to_string(), state.config.api_version);
     (StatusCode::NOT_IMPLEMENTED, Json(response)).into_response()
 }
 
-async fn list_region_agents(State(state): State<ApiState>, Path(id): Path<Uuid>) -> impl IntoResponse {
-    let response = ApiResponse::<Value>::error("Not implemented".to_string(), state.config.api_version);
+async fn list_region_agents(
+    State(state): State<ApiState>,
+    Path(id): Path<Uuid>,
+) -> impl IntoResponse {
+    let response =
+        ApiResponse::<Value>::error("Not implemented".to_string(), state.config.api_version);
     (StatusCode::NOT_IMPLEMENTED, Json(response)).into_response()
 }
 
-async fn list_region_objects(State(state): State<ApiState>, Path(id): Path<Uuid>) -> impl IntoResponse {
-    let response = ApiResponse::<Value>::error("Not implemented".to_string(), state.config.api_version);
+async fn list_region_objects(
+    State(state): State<ApiState>,
+    Path(id): Path<Uuid>,
+) -> impl IntoResponse {
+    let response =
+        ApiResponse::<Value>::error("Not implemented".to_string(), state.config.api_version);
     (StatusCode::NOT_IMPLEMENTED, Json(response)).into_response()
 }
 
 // Auth endpoints (stubs)
 
 async fn login(State(state): State<ApiState>) -> impl IntoResponse {
-    let response = ApiResponse::<Value>::error("Not implemented".to_string(), state.config.api_version);
+    let response =
+        ApiResponse::<Value>::error("Not implemented".to_string(), state.config.api_version);
     (StatusCode::NOT_IMPLEMENTED, Json(response)).into_response()
 }
 
 async fn logout(State(state): State<ApiState>) -> impl IntoResponse {
-    let response = ApiResponse::<Value>::error("Not implemented".to_string(), state.config.api_version);
+    let response =
+        ApiResponse::<Value>::error("Not implemented".to_string(), state.config.api_version);
     (StatusCode::NOT_IMPLEMENTED, Json(response)).into_response()
 }
 
 async fn refresh_token(State(state): State<ApiState>) -> impl IntoResponse {
-    let response = ApiResponse::<Value>::error("Not implemented".to_string(), state.config.api_version);
+    let response =
+        ApiResponse::<Value>::error("Not implemented".to_string(), state.config.api_version);
     (StatusCode::NOT_IMPLEMENTED, Json(response)).into_response()
 }
 
 async fn validate_token(State(state): State<ApiState>) -> impl IntoResponse {
-    let response = ApiResponse::<Value>::error("Not implemented".to_string(), state.config.api_version);
+    let response =
+        ApiResponse::<Value>::error("Not implemented".to_string(), state.config.api_version);
     (StatusCode::NOT_IMPLEMENTED, Json(response)).into_response()
 }
 
 // Stats endpoints (stubs)
 
 async fn get_stats_overview(State(state): State<ApiState>) -> impl IntoResponse {
-    let response = ApiResponse::<Value>::error("Not implemented".to_string(), state.config.api_version);
+    let response =
+        ApiResponse::<Value>::error("Not implemented".to_string(), state.config.api_version);
     (StatusCode::NOT_IMPLEMENTED, Json(response)).into_response()
 }
 
 async fn get_asset_stats(State(state): State<ApiState>) -> impl IntoResponse {
-    let response = ApiResponse::<Value>::error("Not implemented".to_string(), state.config.api_version);
+    let response =
+        ApiResponse::<Value>::error("Not implemented".to_string(), state.config.api_version);
     (StatusCode::NOT_IMPLEMENTED, Json(response)).into_response()
 }
 
 async fn get_user_stats(State(state): State<ApiState>) -> impl IntoResponse {
-    let response = ApiResponse::<Value>::error("Not implemented".to_string(), state.config.api_version);
+    let response =
+        ApiResponse::<Value>::error("Not implemented".to_string(), state.config.api_version);
     (StatusCode::NOT_IMPLEMENTED, Json(response)).into_response()
 }
 
 async fn get_region_stats(State(state): State<ApiState>) -> impl IntoResponse {
-    let response = ApiResponse::<Value>::error("Not implemented".to_string(), state.config.api_version);
+    let response =
+        ApiResponse::<Value>::error("Not implemented".to_string(), state.config.api_version);
     (StatusCode::NOT_IMPLEMENTED, Json(response)).into_response()
 }

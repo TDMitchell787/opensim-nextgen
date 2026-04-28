@@ -10,20 +10,23 @@
 //! - Health: Monitors instance health and connectivity
 //! - WebSocketHandler: Routes WebSocket messages for instance control
 
-pub mod config_loader;
-pub mod registry;
-pub mod controller;
-pub mod health;
-pub mod types;
-pub mod process_manager;
-pub mod announcement;
 pub mod access_control;
+pub mod announcement;
+pub mod config_loader;
+pub mod controller;
 pub mod discovery;
+pub mod health;
+pub mod process_manager;
+pub mod registry;
+pub mod types;
 
-pub use config_loader::{InstanceConfig, InstancesConfig, load_instances_config};
-pub use registry::InstanceRegistry;
+pub use config_loader::{load_instances_config, InstanceConfig, InstancesConfig};
 pub use controller::InstanceController;
+pub use discovery::{
+    find_available_controller_port, remove_discovery_file, scan_all_running_instances,
+    write_discovery_file, RunningInstanceInfo,
+};
 pub use health::HealthChecker;
 pub use process_manager::ProcessManager;
+pub use registry::InstanceRegistry;
 pub use types::*;
-pub use discovery::{RunningInstanceInfo, write_discovery_file, remove_discovery_file, scan_all_running_instances, find_available_controller_port};

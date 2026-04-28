@@ -1,8 +1,8 @@
 use std::collections::VecDeque;
 use uuid::Uuid;
 
-use super::LSLValue;
 use super::executor::{ExecutionResult, ScriptExecutor, ScriptInstance};
+use super::LSLValue;
 
 const MAX_EVENT_QUEUE_SIZE: usize = 50;
 
@@ -53,7 +53,9 @@ impl ScriptEventType {
             ScriptEventType::Control => 3,
             ScriptEventType::Listen => 4,
             ScriptEventType::Touch | ScriptEventType::TouchStart | ScriptEventType::TouchEnd => 5,
-            ScriptEventType::Collision | ScriptEventType::CollisionStart | ScriptEventType::CollisionEnd => 6,
+            ScriptEventType::Collision
+            | ScriptEventType::CollisionStart
+            | ScriptEventType::CollisionEnd => 6,
             ScriptEventType::Sensor => 7,
             ScriptEventType::AtTarget | ScriptEventType::NotAtTarget => 8,
             ScriptEventType::AtRotTarget | ScriptEventType::NotAtRotTarget => 8,
@@ -151,9 +153,11 @@ impl ScriptStateMachine {
             self.timer_queued = true;
         }
 
-        let insert_pos = self.event_queue.iter().position(|e| {
-            event.event_type.priority() < e.event_type.priority()
-        }).unwrap_or(self.event_queue.len());
+        let insert_pos = self
+            .event_queue
+            .iter()
+            .position(|e| event.event_type.priority() < e.event_type.priority())
+            .unwrap_or(self.event_queue.len());
 
         self.event_queue.insert(insert_pos, event);
     }
@@ -179,23 +183,50 @@ impl ScriptStateMachine {
         self.last_event_time = std::time::Instant::now();
 
         let event_name = event.event_type.event_name();
-        tracing::debug!("[SCRIPT] Executing '{}' on {} (running={}, queue_left={})", event_name, self.script_id, self.instance.running, self.event_queue.len());
+        tracing::debug!(
+            "[SCRIPT] Executing '{}' on {} (running={}, queue_left={})",
+            event_name,
+            self.script_id,
+            self.instance.running,
+            self.event_queue.len()
+        );
         match executor.execute_event(&mut self.instance, event_name, &event.args) {
             Ok(ExecutionResult::StateChange(new_state)) => {
-                tracing::info!("[SCRIPT] Event '{}' on {} triggered state change to '{}'", event_name, self.script_id, new_state);
+                tracing::info!(
+                    "[SCRIPT] Event '{}' on {} triggered state change to '{}'",
+                    event_name,
+                    self.script_id,
+                    new_state
+                );
                 self.change_state(&new_state, executor);
                 Some(ExecutionResult::StateChange(new_state))
             }
             Ok(ExecutionResult::Error(ref msg)) => {
-                tracing::warn!("[SCRIPT] Event '{}' on {} execution error: {}", event_name, self.script_id, msg);
+                tracing::warn!(
+                    "[SCRIPT] Event '{}' on {} execution error: {}",
+                    event_name,
+                    self.script_id,
+                    msg
+                );
                 Some(ExecutionResult::Error(msg.clone()))
             }
             Ok(result) => {
-                tracing::debug!("[SCRIPT] Event '{}' on {} completed: actions={}, running={}", event_name, self.script_id, self.instance.pending_actions.len(), self.instance.running);
+                tracing::debug!(
+                    "[SCRIPT] Event '{}' on {} completed: actions={}, running={}",
+                    event_name,
+                    self.script_id,
+                    self.instance.pending_actions.len(),
+                    self.instance.running
+                );
                 Some(result)
             }
             Err(e) => {
-                tracing::warn!("[SCRIPT] Event '{}' CRASHED script {}: {}", event_name, self.script_id, e);
+                tracing::warn!(
+                    "[SCRIPT] Event '{}' CRASHED script {}: {}",
+                    event_name,
+                    self.script_id,
+                    e
+                );
                 self.instance.running = false;
                 Some(ExecutionResult::Error(e.to_string()))
             }
@@ -228,13 +259,19 @@ impl ScriptStateMachine {
         self.instance.heap_used = 0;
 
         for (name, type_name, _) in &self.instance.compiled.globals.clone() {
-            self.instance.global_vars.insert(name.clone(), LSLValue::type_default(type_name));
+            self.instance
+                .global_vars
+                .insert(name.clone(), LSLValue::type_default(type_name));
         }
 
         self.instance.running = true;
         match executor.execute_event(&mut self.instance, "state_entry", &[]) {
             Ok(result) => {
-                tracing::info!("[SCRIPT RESET] state_entry executed OK: {:?}, pending_actions={}", result, self.instance.pending_actions.len());
+                tracing::info!(
+                    "[SCRIPT RESET] state_entry executed OK: {:?}, pending_actions={}",
+                    result,
+                    self.instance.pending_actions.len()
+                );
             }
             Err(e) => {
                 tracing::warn!("[SCRIPT RESET] state_entry FAILED: {}", e);
@@ -358,6 +395,9 @@ default
 
         let result = sm.process_next_event(&executor);
         assert!(result.is_some());
-        assert_eq!(sm.instance.global_vars.get("count"), Some(&LSLValue::Integer(1)));
+        assert_eq!(
+            sm.instance.global_vars.get("count"),
+            Some(&LSLValue::Integer(1))
+        );
     }
 }

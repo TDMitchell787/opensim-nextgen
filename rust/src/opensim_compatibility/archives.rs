@@ -3,17 +3,17 @@
 //! Provides compatibility with OpenSimulator's OAR (OpenSim Archive) and
 //! IAR (Inventory Archive) file formats for backup and restoration.
 
-use std::path::{Path, PathBuf};
-use std::fs;
-use std::io::{Read, Write, Cursor};
-use std::collections::HashMap;
-use zip::{ZipArchive, ZipWriter, write::FileOptions};
 use anyhow::Result;
+use std::collections::HashMap;
+use std::fs;
+use std::io::{Cursor, Read, Write};
+use std::path::{Path, PathBuf};
+use zip::{write::FileOptions, ZipArchive, ZipWriter};
 
 /// Archive format types
 #[derive(Debug, Clone, PartialEq)]
 pub enum ArchiveFormat {
-    OAR, // OpenSim Archive (Region)  
+    OAR, // OpenSim Archive (Region)
     IAR, // Inventory Archive
 }
 
@@ -151,7 +151,7 @@ impl ArchiveManager {
     /// Create a new archive manager
     pub fn new(bin_directory: PathBuf) -> Result<Self> {
         let temp_directory = bin_directory.join("temp");
-        
+
         Ok(Self {
             bin_directory,
             temp_directory,
@@ -159,7 +159,9 @@ impl ArchiveManager {
     }
 
     /// Extract all needed data from archive in a single pass to avoid borrow conflicts
-    fn extract_archive_data(archive: &mut ZipArchive<std::fs::File>) -> Result<ExtractedArchiveData> {
+    fn extract_archive_data(
+        archive: &mut ZipArchive<std::fs::File>,
+    ) -> Result<ExtractedArchiveData> {
         let mut manifest_content = String::new();
         let mut region_content = String::new();
         let mut terrain_data = None;
@@ -168,7 +170,7 @@ impl ArchiveManager {
         let mut metadata_map = HashMap::new();
 
         let archive_len = archive.len();
-        
+
         // First pass: collect all data including metadata files
         for i in 0..archive_len {
             let mut file = archive.by_index(i)?;
@@ -220,7 +222,7 @@ impl ArchiveManager {
                 name if name.starts_with("assets/") && !name.ends_with("_metadata.xml") => {
                     let mut data = Vec::new();
                     file.read_to_end(&mut data)?;
-                    
+
                     // Get metadata from the map if available
                     let metadata = metadata_map.get(name).cloned();
                     asset_data.push((name.to_string(), data, metadata));
@@ -241,11 +243,7 @@ impl ArchiveManager {
     }
 
     /// Create an OAR archive from region data
-    pub async fn create_oar_archive(
-        &self,
-        region_uuid: &str,
-        output_path: &Path,
-    ) -> Result<()> {
+    pub async fn create_oar_archive(&self, region_uuid: &str, output_path: &Path) -> Result<()> {
         // Ensure temp directory exists
         fs::create_dir_all(&self.temp_directory)?;
 
@@ -283,7 +281,7 @@ impl ArchiveManager {
             let filename = format!("assets/{}", asset.uuid);
             zip.start_file(&filename, options)?;
             zip.write_all(&asset.data)?;
-            
+
             // Add asset metadata
             let metadata_filename = format!("assets/{}_metadata.xml", asset.uuid);
             let metadata_xml = self.create_asset_metadata_xml(&asset)?;
@@ -301,7 +299,7 @@ impl ArchiveManager {
         }
 
         zip.finish()?;
-        
+
         tracing::info!("Created OAR archive: {}", output_path.display());
         Ok(())
     }
@@ -313,7 +311,7 @@ impl ArchiveManager {
 
         // Extract all data in a single pass to avoid borrow conflicts
         let extracted_data = Self::extract_archive_data(&mut archive)?;
-        
+
         let format_version = self.parse_oar_version(&extracted_data.manifest_content)?;
         let region_info = self.parse_region_info(&extracted_data.region_content)?;
 
@@ -365,11 +363,7 @@ impl ArchiveManager {
     }
 
     /// Create an IAR archive from user inventory
-    pub async fn create_iar_archive(
-        &self,
-        user_uuid: &str,
-        output_path: &Path,
-    ) -> Result<()> {
+    pub async fn create_iar_archive(&self, user_uuid: &str, output_path: &Path) -> Result<()> {
         let file = fs::File::create(output_path)?;
         let mut zip = ZipWriter::new(file);
         let options = FileOptions::default().compression_method(zip::CompressionMethod::Deflated);
@@ -408,7 +402,7 @@ impl ArchiveManager {
             let filename = format!("assets/{}", asset.uuid);
             zip.start_file(&filename, options)?;
             zip.write_all(&asset.data)?;
-            
+
             // Add asset metadata
             let metadata_filename = format!("assets/{}_metadata.xml", asset.uuid);
             let metadata_xml = self.create_asset_metadata_xml(&asset)?;
@@ -417,7 +411,7 @@ impl ArchiveManager {
         }
 
         zip.finish()?;
-        
+
         tracing::info!("Created IAR archive: {}", output_path.display());
         Ok(())
     }
@@ -429,7 +423,7 @@ impl ArchiveManager {
 
         // Extract all data in a single pass to avoid borrow conflicts
         let extracted_data = Self::extract_archive_data(&mut archive)?;
-        
+
         let format_version = self.parse_iar_version(&extracted_data.manifest_content)?;
 
         // For IAR archives, the region_content field actually contains user profile data
@@ -438,7 +432,7 @@ impl ArchiveManager {
         // Parse inventory items and folders from extracted content
         let mut inventory_items = Vec::new();
         let mut inventory_folders = Vec::new();
-        
+
         for content in &extracted_data.object_contents {
             // Try parsing as inventory item first
             if let Ok(item) = self.parse_inventory_item(content) {
@@ -478,7 +472,7 @@ impl ArchiveManager {
     }
 
     // Placeholder methods for data loading (would integrate with actual database/storage)
-    
+
     async fn load_region_objects(&self, _region_uuid: &str) -> Result<Vec<SceneObject>> {
         // Placeholder - would load from database
         Ok(Vec::new())
@@ -525,7 +519,7 @@ impl ArchiveManager {
     }
 
     // Placeholder parsing methods (would implement proper XML parsing)
-    
+
     fn parse_oar_version(&self, _content: &str) -> Result<String> {
         Ok("1.0".to_string())
     }
@@ -627,7 +621,7 @@ impl ArchiveManager {
     }
 
     // Placeholder XML generation methods
-    
+
     fn create_oar_manifest(&self, _region_uuid: &str) -> Result<String> {
         Ok(r#"<?xml version="1.0" encoding="utf-8"?>
 <archive major_version="1" minor_version="0">
@@ -635,7 +629,8 @@ impl ArchiveManager {
     <datetime>2024-01-01T00:00:00Z</datetime>
     <id>OpenSim Next</id>
   </creation_info>
-</archive>"#.to_string())
+</archive>"#
+            .to_string())
     }
 
     fn create_iar_manifest(&self, _user_uuid: &str) -> Result<String> {
@@ -645,11 +640,13 @@ impl ArchiveManager {
     <datetime>2024-01-01T00:00:00Z</datetime>
     <id>OpenSim Next</id>
   </creation_info>
-</archive>"#.to_string())
+</archive>"#
+            .to_string())
     }
 
     fn create_asset_metadata_xml(&self, asset: &AssetData) -> Result<String> {
-        Ok(format!(r#"<?xml version="1.0" encoding="utf-8"?>
+        Ok(format!(
+            r#"<?xml version="1.0" encoding="utf-8"?>
 <AssetMetadata>
   <ID>{}</ID>
   <Name>{}</Name>
@@ -657,13 +654,19 @@ impl ArchiveManager {
   <Type>{}</Type>
   <Temporary>{}</Temporary>
   <Local>{}</Local>
-</AssetMetadata>"#, 
-            asset.uuid, asset.name, asset.description, 
-            asset.asset_type, asset.temporary, asset.local))
+</AssetMetadata>"#,
+            asset.uuid,
+            asset.name,
+            asset.description,
+            asset.asset_type,
+            asset.temporary,
+            asset.local
+        ))
     }
 
     fn create_parcel_xml(&self, parcel: &ParcelData) -> Result<String> {
-        Ok(format!(r#"<?xml version="1.0" encoding="utf-8"?>
+        Ok(format!(
+            r#"<?xml version="1.0" encoding="utf-8"?>
 <LandData>
   <GlobalID>{}</GlobalID>
   <Name>{}</Name>
@@ -671,13 +674,19 @@ impl ArchiveManager {
   <OwnerID>{}</OwnerID>
   <Area>{}</Area>
   <Flags>{}</Flags>
-</LandData>"#, 
-            parcel.uuid, parcel.name, parcel.description,
-            parcel.owner_id, parcel.area, parcel.flags))
+</LandData>"#,
+            parcel.uuid,
+            parcel.name,
+            parcel.description,
+            parcel.owner_id,
+            parcel.area,
+            parcel.flags
+        ))
     }
 
     fn create_inventory_item_xml(&self, item: &InventoryItem) -> Result<String> {
-        Ok(format!(r#"<?xml version="1.0" encoding="utf-8"?>
+        Ok(format!(
+            r#"<?xml version="1.0" encoding="utf-8"?>
 <InventoryItem>
   <ID>{}</ID>
   <InvType>{}</InvType>
@@ -694,16 +703,28 @@ impl ArchiveManager {
   <CreatorID>{}</CreatorID>
   <FolderID>{}</FolderID>
 </InventoryItem>"#,
-            item.uuid, item.inventory_type, item.asset_type, item.asset_id,
-            item.name, item.description, item.next_permissions, item.current_permissions,
-            item.base_permissions, item.everyone_permissions, item.group_permissions,
-            item.owner_id, item.creator_id, item.folder_id))
+            item.uuid,
+            item.inventory_type,
+            item.asset_type,
+            item.asset_id,
+            item.name,
+            item.description,
+            item.next_permissions,
+            item.current_permissions,
+            item.base_permissions,
+            item.everyone_permissions,
+            item.group_permissions,
+            item.owner_id,
+            item.creator_id,
+            item.folder_id
+        ))
     }
 
     fn create_inventory_folder_xml(&self, folder: &InventoryFolder) -> Result<String> {
         let default_uuid = "00000000-0000-0000-0000-000000000000".to_string();
         let parent_id = folder.parent_id.as_ref().unwrap_or(&default_uuid);
-        Ok(format!(r#"<?xml version="1.0" encoding="utf-8"?>
+        Ok(format!(
+            r#"<?xml version="1.0" encoding="utf-8"?>
 <InventoryFolder>
   <ID>{}</ID>
   <Name>{}</Name>
@@ -712,7 +733,12 @@ impl ArchiveManager {
   <Type>{}</Type>
   <Version>{}</Version>
 </InventoryFolder>"#,
-            folder.uuid, folder.name, folder.owner_id,
-            parent_id, folder.folder_type, folder.version))
+            folder.uuid,
+            folder.name,
+            folder.owner_id,
+            parent_id,
+            folder.folder_type,
+            folder.version
+        ))
     }
 }

@@ -45,15 +45,18 @@ impl ListenManager {
         let handle = self.next_handle;
         self.next_handle += 1;
 
-        self.listeners.insert(handle, ListenEntry {
+        self.listeners.insert(
             handle,
-            script_id,
-            channel,
-            name_filter: name_filter.to_string(),
-            key_filter,
-            msg_filter: msg_filter.to_string(),
-            active: true,
-        });
+            ListenEntry {
+                handle,
+                script_id,
+                channel,
+                name_filter: name_filter.to_string(),
+                key_filter,
+                msg_filter: msg_filter.to_string(),
+                active: true,
+            },
+        );
 
         *count += 1;
         handle
@@ -74,7 +77,8 @@ impl ListenManager {
     }
 
     pub fn remove_all_for_script(&mut self, script_id: Uuid) {
-        self.listeners.retain(|_, entry| entry.script_id != script_id);
+        self.listeners
+            .retain(|_, entry| entry.script_id != script_id);
         self.script_listener_count.remove(&script_id);
     }
 
@@ -85,24 +89,27 @@ impl ListenManager {
         sender_id: Uuid,
         message: &str,
     ) -> Vec<&ListenEntry> {
-        self.listeners.values().filter(|entry| {
-            if !entry.active {
-                return false;
-            }
-            if entry.channel != channel {
-                return false;
-            }
-            if !entry.name_filter.is_empty() && entry.name_filter != sender_name {
-                return false;
-            }
-            if !entry.key_filter.is_nil() && entry.key_filter != sender_id {
-                return false;
-            }
-            if !entry.msg_filter.is_empty() && entry.msg_filter != message {
-                return false;
-            }
-            true
-        }).collect()
+        self.listeners
+            .values()
+            .filter(|entry| {
+                if !entry.active {
+                    return false;
+                }
+                if entry.channel != channel {
+                    return false;
+                }
+                if !entry.name_filter.is_empty() && entry.name_filter != sender_name {
+                    return false;
+                }
+                if !entry.key_filter.is_nil() && entry.key_filter != sender_id {
+                    return false;
+                }
+                if !entry.msg_filter.is_empty() && entry.msg_filter != message {
+                    return false;
+                }
+                true
+            })
+            .collect()
     }
 
     pub fn listener_count_for_script(&self, script_id: Uuid) -> usize {

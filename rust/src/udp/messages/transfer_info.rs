@@ -138,11 +138,7 @@ mod tests {
     #[test]
     fn test_error_transfer_info() {
         let transfer_id = Uuid::parse_str("12345678-1234-1234-1234-123456789abc").unwrap();
-        let info = TransferInfo::new_error(
-            transfer_id,
-            2,
-            TransferStatus::UnknownSource,
-        );
+        let info = TransferInfo::new_error(transfer_id, 2, TransferStatus::UnknownSource);
 
         assert_eq!(info.status, TransferStatus::UnknownSource);
         assert_eq!(info.size, 0);

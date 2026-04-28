@@ -1,3 +1,4 @@
+use crate::region::RegionId;
 use std::{
     collections::HashMap,
     net::SocketAddr,
@@ -5,9 +6,8 @@ use std::{
     time::{Duration, Instant},
 };
 use tokio::sync::RwLock;
+use tracing::{debug, info};
 use uuid::Uuid;
-use crate::region::RegionId;
-use tracing::{info, debug};
 
 /// Session permissions and access levels
 #[derive(Debug, Clone)]
@@ -24,11 +24,11 @@ pub struct SessionPermissions {
 /// Access level for session
 #[derive(Debug, Clone, PartialEq)]
 pub enum AccessLevel {
-    Guest,      // No building/scripting rights
-    Resident,   // Normal user rights
-    Estate,     // Estate manager rights
-    Grid,       // Grid manager rights
-    God,        // Administrator rights
+    Guest,    // No building/scripting rights
+    Resident, // Normal user rights
+    Estate,   // Estate manager rights
+    Grid,     // Grid manager rights
+    God,      // Administrator rights
 }
 
 impl Default for SessionPermissions {
@@ -92,7 +92,7 @@ impl Session {
             permissions: SessionPermissions::default(),
         }
     }
-    
+
     /// Create a session for a successful login
     pub fn new_authenticated(
         user_id: String,
@@ -162,27 +162,34 @@ impl SessionManager {
     pub async fn create_session(&self, session: Session) -> Result<String, String> {
         let session_id = session.session_id.clone();
         let agent_id = session.agent_id;
-        
+
         // Check if agent already has an active session
         if self.has_active_session(&agent_id.to_string()).await {
             return Err("Agent already has an active session".to_string());
         }
-        
+
         // Store session
         {
             let mut sessions = self.sessions.write().await;
             let mut agent_map = self.sessions_by_agent.write().await;
-            
+
             sessions.insert(session_id.clone(), session);
             agent_map.insert(agent_id, session_id.clone());
         }
-        
-        info!("Created new session: {} for agent: {}", session_id, agent_id);
+
+        info!(
+            "Created new session: {} for agent: {}",
+            session_id, agent_id
+        );
         Ok(session_id)
     }
 
     /// Creates a new session with agent ID and adds it to the manager
-    pub fn create_session_with_agent(&self, agent_id: Uuid, addr: SocketAddr) -> Arc<RwLock<Session>> {
+    pub fn create_session_with_agent(
+        &self,
+        agent_id: Uuid,
+        addr: SocketAddr,
+    ) -> Arc<RwLock<Session>> {
         let mut session = Session::new("unknown".to_string(), addr);
         session.agent_id = agent_id;
         Arc::new(RwLock::new(session))
@@ -191,14 +198,16 @@ impl SessionManager {
     /// Check if user/agent has an active session
     pub async fn has_active_session(&self, user_id: &str) -> bool {
         let sessions = self.sessions.read().await;
-        sessions.values().any(|s| s.user_id == user_id || s.agent_id.to_string() == user_id)
+        sessions
+            .values()
+            .any(|s| s.user_id == user_id || s.agent_id.to_string() == user_id)
     }
-    
+
     /// Retrieves a session by its ID
     pub async fn get_session(&self, session_id: &str) -> Option<Session> {
         self.sessions.read().await.get(session_id).cloned()
     }
-    
+
     /// Retrieves a session by agent ID
     pub async fn get_session_by_agent(&self, agent_id: &Uuid) -> Option<Session> {
         let agent_map = self.sessions_by_agent.read().await;
@@ -222,10 +231,13 @@ impl SessionManager {
     pub async fn remove_session(&self, session_id: &str) {
         let mut sessions = self.sessions.write().await;
         let mut agent_map = self.sessions_by_agent.write().await;
-        
+
         if let Some(session) = sessions.remove(session_id) {
             agent_map.remove(&session.agent_id);
-            info!("Removed session: {} for agent: {}", session_id, session.agent_id);
+            info!(
+                "Removed session: {} for agent: {}",
+                session_id, session.agent_id
+            );
         }
     }
 
@@ -234,9 +246,9 @@ impl SessionManager {
         let mut sessions = self.sessions.write().await;
         let mut agent_map = self.sessions_by_agent.write().await;
         let timeout = self.timeout;
-        
+
         let mut expired_sessions = Vec::new();
-        
+
         // Find expired sessions first
         for (session_id, session) in sessions.iter() {
             if session.is_expired(timeout) {
@@ -244,7 +256,7 @@ impl SessionManager {
                 expired_sessions.push((session_id.clone(), session.agent_id));
             }
         }
-        
+
         // Remove expired sessions and their agent mappings
         for (session_id, agent_id) in expired_sessions {
             sessions.remove(&session_id);
@@ -262,7 +274,9 @@ impl SessionManager {
         let sessions = self.sessions.read().await;
         let region_sessions: Vec<Session> = sessions
             .values()
-            .filter(|session| session.region_id == Some(crate::region::RegionId(region_id.as_u128() as u64)))
+            .filter(|session| {
+                session.region_id == Some(crate::region::RegionId(region_id.as_u128() as u64))
+            })
             .cloned()
             .collect();
         Ok(region_sessions)
@@ -274,38 +288,56 @@ impl SessionManager {
     }
 
     /// Teleport an agent to a new region and position
-    pub async fn teleport_agent(&self, agent_id: Uuid, region_id: Uuid, position: (f32, f32, f32)) -> Result<(), String> {
+    pub async fn teleport_agent(
+        &self,
+        agent_id: Uuid,
+        region_id: Uuid,
+        position: (f32, f32, f32),
+    ) -> Result<(), String> {
         let mut sessions = self.sessions.write().await;
         let mut session_by_agent = self.sessions_by_agent.write().await;
-        
+
         if let Some(session_id) = session_by_agent.get(&agent_id) {
             if let Some(session) = sessions.get_mut(session_id) {
                 session.region_id = Some(crate::region::RegionId(region_id.as_u128() as u64));
                 session.current_region = Some(crate::region::RegionId(region_id.as_u128() as u64));
                 // Update position would require additional fields in Session struct
-                debug!("Teleported agent {} to region {} at position {:?}", agent_id, region_id, position);
+                debug!(
+                    "Teleported agent {} to region {} at position {:?}",
+                    agent_id, region_id, position
+                );
                 return Ok(());
             }
         }
-        
+
         Err(format!("Agent {} not found", agent_id))
     }
 
     /// Broadcast a message to all agents in a specific region
-    pub async fn broadcast_to_region(&self, region_id: Uuid, message: &str) -> Result<usize, String> {
+    pub async fn broadcast_to_region(
+        &self,
+        region_id: Uuid,
+        message: &str,
+    ) -> Result<usize, String> {
         let sessions = self.sessions.read().await;
         let mut message_count = 0;
-        
+
         for session in sessions.values() {
             if session.region_id == Some(crate::region::RegionId(region_id.as_u128() as u64)) {
                 // In production, this would send the message to the client
                 // For now, just log it
-                debug!("Broadcasting to agent {} in region {}: {}", session.agent_id, region_id, message);
+                debug!(
+                    "Broadcasting to agent {} in region {}: {}",
+                    session.agent_id, region_id, message
+                );
                 message_count += 1;
             }
         }
-        
-        info!("Broadcasted message to {} agents in region {}", message_count, region_id);
+
+        info!(
+            "Broadcasted message to {} agents in region {}",
+            message_count, region_id
+        );
         Ok(message_count)
     }
 
@@ -313,25 +345,28 @@ impl SessionManager {
     pub async fn broadcast_to_all(&self, message: &str) -> Result<usize, String> {
         let sessions = self.sessions.read().await;
         let message_count = sessions.len();
-        
+
         for session in sessions.values() {
             // In production, this would send the message to the client
             // For now, just log it
             debug!("Broadcasting to agent {}: {}", session.agent_id, message);
         }
-        
-        info!("Broadcasted message to {} agents across all regions", message_count);
+
+        info!(
+            "Broadcasted message to {} agents across all regions",
+            message_count
+        );
         Ok(message_count)
     }
 
     /// Validate a session token
     pub async fn validate_token(&self, token: &str) -> Result<bool, String> {
         let sessions = self.sessions.read().await;
-        
+
         // In production, this would validate the token properly
         // For now, check if any session has this token as session_id
         let is_valid = sessions.contains_key(token);
-        
+
         debug!("Token validation for {}: {}", token, is_valid);
         Ok(is_valid)
     }
@@ -372,4 +407,4 @@ mod tests {
         let retrieved = manager.get_session(&session_id).await;
         assert!(retrieved.is_none());
     }
-} 
+}

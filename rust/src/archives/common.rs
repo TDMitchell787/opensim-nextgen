@@ -1,9 +1,9 @@
 //! Common types and utilities shared between IAR and OAR handling
 
-use serde::{Deserialize, Serialize};
-use uuid::Uuid;
 use chrono::{DateTime, Utc};
+use serde::{Deserialize, Serialize};
 use std::path::PathBuf;
+use uuid::Uuid;
 
 /// Archive format version information
 #[derive(Debug, Clone, Serialize, Deserialize)]
@@ -206,7 +206,11 @@ pub fn parse_uuid(s: &str) -> Option<Uuid> {
     if s.len() == 32 {
         let with_dashes = format!(
             "{}-{}-{}-{}-{}",
-            &s[0..8], &s[8..12], &s[12..16], &s[16..20], &s[20..32]
+            &s[0..8],
+            &s[8..12],
+            &s[12..16],
+            &s[16..20],
+            &s[20..32]
         );
         if let Ok(uuid) = Uuid::parse_str(&with_dashes) {
             return Some(uuid);
@@ -217,9 +221,7 @@ pub fn parse_uuid(s: &str) -> Option<Uuid> {
 
 /// Extract UUID from asset filename (format: {uuid}_{type}.ext)
 pub fn extract_asset_uuid_from_path(path: &str) -> Option<Uuid> {
-    let filename = std::path::Path::new(path)
-        .file_name()?
-        .to_str()?;
+    let filename = std::path::Path::new(path).file_name()?.to_str()?;
 
     // Find the first underscore which separates UUID from type
     let uuid_part = filename.split('_').next()?;
@@ -249,7 +251,9 @@ mod tests {
 
     #[test]
     fn test_extract_asset_uuid() {
-        let uuid = extract_asset_uuid_from_path("assets/12345678-1234-5678-9abc-123456789abc_texture.jp2").unwrap();
+        let uuid =
+            extract_asset_uuid_from_path("assets/12345678-1234-5678-9abc-123456789abc_texture.jp2")
+                .unwrap();
         assert_eq!(uuid.to_string(), "12345678-1234-5678-9abc-123456789abc");
     }
 }

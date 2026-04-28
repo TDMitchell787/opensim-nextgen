@@ -1,15 +1,13 @@
 //! Script execution engine for LSL scripts
 
-use std::{collections::HashMap, sync::Arc};
 use anyhow::{anyhow, Result};
-use tracing::{info, warn, error, debug};
+use std::{collections::HashMap, sync::Arc};
+use tracing::{debug, error, info, warn};
 use uuid::Uuid;
 
-use super::{LSLValue, LSLEvent, ScriptContext, lsl_functions::LSLFunctions};
+use super::{lsl_functions::LSLFunctions, LSLEvent, LSLValue, ScriptContext};
 use crate::{
-    region::RegionManager,
-    asset::AssetManager,
-    network::grid_events::GridEventManager,
+    asset::AssetManager, network::grid_events::GridEventManager, region::RegionManager,
     scripting::executor::ScriptAction,
 };
 
@@ -55,9 +53,12 @@ impl ScriptEngine {
         let cache_config = crate::asset::cache::CacheConfig::default();
         let cache = Arc::new(crate::asset::cache::AssetCache::new(cache_config).await?);
         let cdn = Arc::new(crate::asset::cdn::CdnManager::new(Default::default()).await?);
-        let storage: Arc<dyn crate::asset::storage::StorageBackend> = Arc::new(crate::asset::storage::FileSystemStorage::new("./assets".into())?);
+        let storage: Arc<dyn crate::asset::storage::StorageBackend> = Arc::new(
+            crate::asset::storage::FileSystemStorage::new("./assets".into())?,
+        );
         let config = crate::asset::AssetManagerConfig::default();
-        let asset_manager = Arc::new(crate::asset::AssetManager::new(database, cache, cdn, storage, config).await?);
+        let asset_manager =
+            Arc::new(crate::asset::AssetManager::new(database, cache, cdn, storage, config).await?);
 
         let action_queue: Arc<parking_lot::Mutex<Vec<(Uuid, ScriptAction)>>> =
             Arc::new(parking_lot::Mutex::new(Vec::new()));
@@ -105,7 +106,10 @@ impl ScriptEngine {
         let compiled = self.compile_lsl_source(script_id, source_code).await?;
 
         // Store compiled script
-        self.compiled_scripts.write().await.insert(script_id, compiled);
+        self.compiled_scripts
+            .write()
+            .await
+            .insert(script_id, compiled);
 
         // Update statistics
         {
@@ -128,17 +132,22 @@ impl ScriptEngine {
 
         let compiled_script = {
             let scripts = self.compiled_scripts.read().await;
-            scripts.get(&script_id).cloned()
+            scripts
+                .get(&script_id)
+                .cloned()
                 .ok_or_else(|| anyhow!("Script {} not found or not compiled", script_id))?
         };
 
         let start_time = std::time::Instant::now();
 
         // Execute the event
-        match self.execute_event_internal(&compiled_script, event, context).await {
+        match self
+            .execute_event_internal(&compiled_script, event, context)
+            .await
+        {
             Ok(_) => {
                 let execution_time = start_time.elapsed().as_millis() as f64;
-                
+
                 // Update statistics
                 {
                     let mut stats = self.execution_stats.write().await;
@@ -152,7 +161,7 @@ impl ScriptEngine {
             Err(e) => {
                 let mut stats = self.execution_stats.write().await;
                 stats.execution_errors += 1;
-                
+
                 error!("Event execution failed: {}", e);
                 Err(e)
             }
@@ -165,12 +174,16 @@ impl ScriptEngine {
     }
 
     /// Compile LSL source code to bytecode
-    async fn compile_lsl_source(&self, script_id: Uuid, source_code: &str) -> Result<CompiledScript> {
+    async fn compile_lsl_source(
+        &self,
+        script_id: Uuid,
+        source_code: &str,
+    ) -> Result<CompiledScript> {
         debug!("Compiling LSL source for script {}", script_id);
 
         // This is a simplified compilation process
         // A real LSL compiler would parse the syntax tree and generate bytecode
-        
+
         let mut functions = HashMap::new();
         let mut states = HashMap::new();
         let mut events = HashMap::new();
@@ -183,20 +196,19 @@ impl ScriptEngine {
 
         for (line_num, line) in lines.iter().enumerate() {
             let trimmed = line.trim();
-            
+
             // Detect state declarations
             if trimmed.starts_with("state ") {
                 if !current_events.is_empty() {
                     events.insert(current_state.clone(), current_events.clone());
                     current_events.clear();
                 }
-                
+
                 let state_name = trimmed[6..].trim_end_matches(" {").trim();
                 current_state = state_name.to_string();
                 states.insert(current_state.clone(), line_num);
                 debug!("Found state: {}", current_state);
             }
-            
             // Detect event handlers
             else if trimmed.contains("()") && trimmed.contains("{") {
                 let event_name = trimmed.split("(").next().unwrap().trim();
@@ -205,7 +217,6 @@ impl ScriptEngine {
                     debug!("Found event: {} in state {}", event_name, current_state);
                 }
             }
-            
             // Detect function declarations
             else if is_function_declaration(trimmed) {
                 let func_name = extract_function_name(trimmed);
@@ -214,7 +225,6 @@ impl ScriptEngine {
                     functions.insert(name, line_num);
                 }
             }
-            
             // Detect global variable declarations
             else if is_global_variable(trimmed) {
                 if let Some((var_name, var_value)) = extract_global_variable(trimmed) {
@@ -257,16 +267,23 @@ impl ScriptEngine {
         debug!("Executing event: {}", event_name);
 
         // Check if the current state has this event handler
-        let current_state = context.variables.get("$state")
+        let current_state = context
+            .variables
+            .get("$state")
             .map(|v| v.to_string())
             .unwrap_or_else(|| "default".to_string());
 
         let empty_events = Vec::new();
-        let state_events = compiled_script.events.get(&current_state)
+        let state_events = compiled_script
+            .events
+            .get(&current_state)
             .unwrap_or(&empty_events);
 
         if !state_events.contains(&event_name) {
-            debug!("Event {} not handled in state {}", event_name, current_state);
+            debug!(
+                "Event {} not handled in state {}",
+                event_name, current_state
+            );
             return Ok(());
         }
 
@@ -279,16 +296,20 @@ impl ScriptEngine {
                 self.execute_state_exit(compiled_script, context).await?;
             }
             LSLEvent::Touch(touch_data) => {
-                self.execute_touch_event(compiled_script, context, touch_data).await?;
+                self.execute_touch_event(compiled_script, context, touch_data)
+                    .await?;
             }
             LSLEvent::Timer(timer_name) => {
-                self.execute_timer_event(compiled_script, context, timer_name).await?;
+                self.execute_timer_event(compiled_script, context, timer_name)
+                    .await?;
             }
             LSLEvent::Listen(listen_data) => {
-                self.execute_listen_event(compiled_script, context, listen_data).await?;
+                self.execute_listen_event(compiled_script, context, listen_data)
+                    .await?;
             }
             LSLEvent::Collision(collision_data) => {
-                self.execute_collision_event(compiled_script, context, collision_data).await?;
+                self.execute_collision_event(compiled_script, context, collision_data)
+                    .await?;
             }
             _ => {
                 debug!("Event type {:?} not yet implemented", event);
@@ -304,20 +325,26 @@ impl ScriptEngine {
         compiled_script: &CompiledScript,
         context: &ScriptContext,
     ) -> Result<()> {
-        debug!("Executing state_entry for script {}", compiled_script.script_id);
-        
+        debug!(
+            "Executing state_entry for script {}",
+            compiled_script.script_id
+        );
+
         // In a real implementation, this would execute the actual bytecode
         // For now, we'll simulate execution by calling some LSL functions
-        
+
         // Example: execute llSay(0, "Script started!");
         let mut mutable_context = context.clone();
         let args = vec![
             LSLValue::Integer(0),
             LSLValue::String("Script started!".to_string()),
         ];
-        
-        let _ = self.lsl_functions.execute_function("llSay", &args, &mut mutable_context).await;
-        
+
+        let _ = self
+            .lsl_functions
+            .execute_function("llSay", &args, &mut mutable_context)
+            .await;
+
         Ok(())
     }
 
@@ -327,17 +354,23 @@ impl ScriptEngine {
         compiled_script: &CompiledScript,
         context: &ScriptContext,
     ) -> Result<()> {
-        debug!("Executing state_exit for script {}", compiled_script.script_id);
-        
+        debug!(
+            "Executing state_exit for script {}",
+            compiled_script.script_id
+        );
+
         // Example: execute llSay(0, "Script stopping!");
         let mut mutable_context = context.clone();
         let args = vec![
             LSLValue::Integer(0),
             LSLValue::String("Script stopping!".to_string()),
         ];
-        
-        let _ = self.lsl_functions.execute_function("llSay", &args, &mut mutable_context).await;
-        
+
+        let _ = self
+            .lsl_functions
+            .execute_function("llSay", &args, &mut mutable_context)
+            .await;
+
         Ok(())
     }
 
@@ -348,17 +381,23 @@ impl ScriptEngine {
         context: &ScriptContext,
         touch_data: &super::TouchEventData,
     ) -> Result<()> {
-        debug!("Executing touch event for script {}", compiled_script.script_id);
-        
+        debug!(
+            "Executing touch event for script {}",
+            compiled_script.script_id
+        );
+
         // Example: execute llSay(0, "Touched by " + toucher_name);
         let mut mutable_context = context.clone();
         let args = vec![
             LSLValue::Integer(0),
             LSLValue::String(format!("Touched by {}", touch_data.toucher_name)),
         ];
-        
-        let _ = self.lsl_functions.execute_function("llSay", &args, &mut mutable_context).await;
-        
+
+        let _ = self
+            .lsl_functions
+            .execute_function("llSay", &args, &mut mutable_context)
+            .await;
+
         Ok(())
     }
 
@@ -369,17 +408,23 @@ impl ScriptEngine {
         context: &ScriptContext,
         timer_name: &str,
     ) -> Result<()> {
-        debug!("Executing timer event {} for script {}", timer_name, compiled_script.script_id);
-        
+        debug!(
+            "Executing timer event {} for script {}",
+            timer_name, compiled_script.script_id
+        );
+
         // Example: execute llSay(0, "Timer fired!");
         let mut mutable_context = context.clone();
         let args = vec![
             LSLValue::Integer(0),
             LSLValue::String("Timer fired!".to_string()),
         ];
-        
-        let _ = self.lsl_functions.execute_function("llSay", &args, &mut mutable_context).await;
-        
+
+        let _ = self
+            .lsl_functions
+            .execute_function("llSay", &args, &mut mutable_context)
+            .await;
+
         Ok(())
     }
 
@@ -390,17 +435,23 @@ impl ScriptEngine {
         context: &ScriptContext,
         listen_data: &super::ListenEventData,
     ) -> Result<()> {
-        debug!("Executing listen event for script {}", compiled_script.script_id);
-        
+        debug!(
+            "Executing listen event for script {}",
+            compiled_script.script_id
+        );
+
         // Example: execute llSay(0, "Heard: " + message);
         let mut mutable_context = context.clone();
         let args = vec![
             LSLValue::Integer(0),
             LSLValue::String(format!("Heard: {}", listen_data.message)),
         ];
-        
-        let _ = self.lsl_functions.execute_function("llSay", &args, &mut mutable_context).await;
-        
+
+        let _ = self
+            .lsl_functions
+            .execute_function("llSay", &args, &mut mutable_context)
+            .await;
+
         Ok(())
     }
 
@@ -411,41 +462,78 @@ impl ScriptEngine {
         context: &ScriptContext,
         collision_data: &super::CollisionEventData,
     ) -> Result<()> {
-        debug!("Executing collision event for script {}", compiled_script.script_id);
-        
+        debug!(
+            "Executing collision event for script {}",
+            compiled_script.script_id
+        );
+
         // Example: execute llSay(0, "Collision detected!");
         let mut mutable_context = context.clone();
         let args = vec![
             LSLValue::Integer(0),
-            LSLValue::String(format!("Collision with {} objects!", collision_data.detected_objects.len())),
+            LSLValue::String(format!(
+                "Collision with {} objects!",
+                collision_data.detected_objects.len()
+            )),
         ];
-        
-        let _ = self.lsl_functions.execute_function("llSay", &args, &mut mutable_context).await;
-        
+
+        let _ = self
+            .lsl_functions
+            .execute_function("llSay", &args, &mut mutable_context)
+            .await;
+
         Ok(())
     }
 }
 
 /// Check if a string is an LSL event name
 fn is_lsl_event(name: &str) -> bool {
-    matches!(name, 
-        "state_entry" | "state_exit" | "touch" | "touch_start" | "touch_end" |
-        "timer" | "listen" | "collision" | "collision_start" | "collision_end" |
-        "land_collision" | "land_collision_start" | "land_collision_end" |
-        "at_target" | "not_at_target" | "at_rot_target" | "not_at_rot_target" |
-        "money" | "email" | "http_request" | "http_response" | "run_time_permissions" |
-        "changed" | "attach" | "dataserver" | "moving_start" | "moving_end" |
-        "object_rez" | "remote_data" | "control" | "sensor" | "no_sensor" |
-        "link_message"
+    matches!(
+        name,
+        "state_entry"
+            | "state_exit"
+            | "touch"
+            | "touch_start"
+            | "touch_end"
+            | "timer"
+            | "listen"
+            | "collision"
+            | "collision_start"
+            | "collision_end"
+            | "land_collision"
+            | "land_collision_start"
+            | "land_collision_end"
+            | "at_target"
+            | "not_at_target"
+            | "at_rot_target"
+            | "not_at_rot_target"
+            | "money"
+            | "email"
+            | "http_request"
+            | "http_response"
+            | "run_time_permissions"
+            | "changed"
+            | "attach"
+            | "dataserver"
+            | "moving_start"
+            | "moving_end"
+            | "object_rez"
+            | "remote_data"
+            | "control"
+            | "sensor"
+            | "no_sensor"
+            | "link_message"
     )
 }
 
 /// Check if a line is a function declaration
 fn is_function_declaration(line: &str) -> bool {
     // Simple check for function patterns
-    line.contains("(") && line.contains(")") && line.contains("{") && 
-    !line.trim_start().starts_with("//") &&
-    !is_lsl_event(line.split("(").next().unwrap_or("").trim())
+    line.contains("(")
+        && line.contains(")")
+        && line.contains("{")
+        && !line.trim_start().starts_with("//")
+        && !is_lsl_event(line.split("(").next().unwrap_or("").trim())
 }
 
 /// Extract function name from declaration
@@ -463,27 +551,27 @@ fn extract_function_name(line: &str) -> Option<String> {
 /// Check if a line is a global variable declaration
 fn is_global_variable(line: &str) -> bool {
     let trimmed = line.trim();
-    !trimmed.starts_with("//") && 
-    !trimmed.contains("(") &&
-    !trimmed.contains("{") &&
-    (trimmed.starts_with("integer ") || 
-     trimmed.starts_with("float ") ||
-     trimmed.starts_with("string ") ||
-     trimmed.starts_with("key ") ||
-     trimmed.starts_with("vector ") ||
-     trimmed.starts_with("rotation ") ||
-     trimmed.starts_with("list "))
+    !trimmed.starts_with("//")
+        && !trimmed.contains("(")
+        && !trimmed.contains("{")
+        && (trimmed.starts_with("integer ")
+            || trimmed.starts_with("float ")
+            || trimmed.starts_with("string ")
+            || trimmed.starts_with("key ")
+            || trimmed.starts_with("vector ")
+            || trimmed.starts_with("rotation ")
+            || trimmed.starts_with("list "))
 }
 
 /// Extract global variable name and value
 fn extract_global_variable(line: &str) -> Option<(String, LSLValue)> {
     let trimmed = line.trim().trim_end_matches(";");
     let parts: Vec<&str> = trimmed.split_whitespace().collect();
-    
+
     if parts.len() >= 2 {
         let var_type = parts[0];
         let var_name = parts[1];
-        
+
         // Extract initial value if present
         let value = if parts.len() >= 4 && parts[2] == "=" {
             let val_str = parts[3..].join(" ");
@@ -491,7 +579,9 @@ fn extract_global_variable(line: &str) -> Option<(String, LSLValue)> {
                 "integer" => LSLValue::Integer(val_str.parse().unwrap_or(0)),
                 "float" => LSLValue::Float(val_str.parse().unwrap_or(0.0)),
                 "string" => LSLValue::String(val_str.trim_matches('"').to_string()),
-                "key" => LSLValue::Key(uuid::Uuid::parse_str(&val_str).unwrap_or(uuid::Uuid::nil())),
+                "key" => {
+                    LSLValue::Key(uuid::Uuid::parse_str(&val_str).unwrap_or(uuid::Uuid::nil()))
+                }
                 _ => LSLValue::String(val_str),
             }
         } else {
@@ -507,7 +597,7 @@ fn extract_global_variable(line: &str) -> Option<(String, LSLValue)> {
                 _ => LSLValue::String(String::new()),
             }
         };
-        
+
         Some((var_name.to_string(), value))
     } else {
         None
@@ -555,17 +645,17 @@ mod tests {
     async fn test_script_engine_creation() -> Result<()> {
         let engine = ScriptEngine::new().await?;
         let stats = engine.get_stats().await;
-        
+
         assert_eq!(stats.scripts_compiled, 0);
         assert_eq!(stats.events_executed, 0);
-        
+
         Ok(())
     }
 
     #[tokio::test]
     async fn test_script_compilation() -> Result<()> {
         let engine = ScriptEngine::new().await?;
-        
+
         let script_source = r#"
             default {
                 state_entry() {
@@ -577,13 +667,13 @@ mod tests {
                 }
             }
         "#;
-        
+
         let script_id = engine.compile_script(script_source).await?;
         assert_ne!(script_id, Uuid::nil());
-        
+
         let stats = engine.get_stats().await;
         assert_eq!(stats.scripts_compiled, 1);
-        
+
         Ok(())
     }
 
@@ -599,7 +689,9 @@ mod tests {
     #[test]
     fn test_function_declaration_detection() {
         assert!(is_function_declaration("my_function() {"));
-        assert!(is_function_declaration("integer calculate(float x, float y) {"));
+        assert!(is_function_declaration(
+            "integer calculate(float x, float y) {"
+        ));
         assert!(!is_function_declaration("state_entry() {"));
         assert!(!is_function_declaration("// this is a comment"));
     }

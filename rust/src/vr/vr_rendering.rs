@@ -2,13 +2,13 @@
 // High-performance VR rendering with 90+ FPS stereo rendering, foveated rendering, and advanced shaders
 // Supporting multiple graphics APIs and cutting-edge VR optimization techniques
 
-use crate::vr::{VRError, VRFrameData, RenderedFrame, FoveatedRegion, VRPerformanceMetrics};
 use crate::monitoring::metrics::MetricsCollector;
+use crate::vr::{FoveatedRegion, RenderedFrame, VRError, VRFrameData, VRPerformanceMetrics};
+use serde::{Deserialize, Serialize};
+use std::collections::HashMap;
 use std::sync::Arc;
 use tokio::sync::RwLock;
-use serde::{Deserialize, Serialize};
 use uuid::Uuid;
-use std::collections::HashMap;
 
 #[derive(Debug)]
 pub struct VRRenderingPipeline {
@@ -67,19 +67,19 @@ pub enum TextureQuality {
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub enum ShadowQuality {
     Disabled,
-    Low,     // 512x512 shadow maps
-    Medium,  // 1024x1024 shadow maps
-    High,    // 2048x2048 shadow maps
-    Ultra,   // 4096x4096 shadow maps with soft shadows
+    Low,    // 512x512 shadow maps
+    Medium, // 1024x1024 shadow maps
+    High,   // 2048x2048 shadow maps
+    Ultra,  // 4096x4096 shadow maps with soft shadows
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub enum LightingQuality {
-    Forward,          // Forward rendering
-    Deferred,         // Deferred rendering
-    ForwardPlus,      // Forward+ rendering
+    Forward,           // Forward rendering
+    Deferred,          // Deferred rendering
+    ForwardPlus,       // Forward+ rendering
     DeferredClustered, // Clustered deferred
-    RayTraced,        // Ray-traced global illumination
+    RayTraced,         // Ray-traced global illumination
 }
 
 #[derive(Debug)]
@@ -150,15 +150,43 @@ pub enum CommandListState {
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub enum RenderCommand {
     SetRenderTarget(String),
-    ClearRenderTarget { color: [f32; 4] },
-    SetViewport { x: u32, y: u32, width: u32, height: u32 },
-    SetScissorRect { x: u32, y: u32, width: u32, height: u32 },
+    ClearRenderTarget {
+        color: [f32; 4],
+    },
+    SetViewport {
+        x: u32,
+        y: u32,
+        width: u32,
+        height: u32,
+    },
+    SetScissorRect {
+        x: u32,
+        y: u32,
+        width: u32,
+        height: u32,
+    },
     BindShader(String),
-    BindTexture { slot: u32, texture_id: String },
-    BindConstantBuffer { slot: u32, buffer_id: String },
-    DrawIndexed { index_count: u32, start_index: u32 },
-    DrawInstanced { vertex_count: u32, instance_count: u32 },
-    Dispatch { thread_group_x: u32, thread_group_y: u32, thread_group_z: u32 },
+    BindTexture {
+        slot: u32,
+        texture_id: String,
+    },
+    BindConstantBuffer {
+        slot: u32,
+        buffer_id: String,
+    },
+    DrawIndexed {
+        index_count: u32,
+        start_index: u32,
+    },
+    DrawInstanced {
+        vertex_count: u32,
+        instance_count: u32,
+    },
+    Dispatch {
+        thread_group_x: u32,
+        thread_group_y: u32,
+        thread_group_z: u32,
+    },
     BeginRenderPass(String),
     EndRenderPass,
     SetPipelineState(String),
@@ -196,7 +224,7 @@ pub enum TextureFormat {
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub enum PresentMode {
-    Immediate,    // No VSync
+    Immediate,   // No VSync
     Fifo,        // VSync enabled
     FifoRelaxed, // Adaptive VSync
     Mailbox,     // Triple buffering
@@ -237,10 +265,10 @@ pub struct MemoryPool {
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub enum MemoryPoolType {
-    Default,     // GPU-only memory
-    Upload,      // CPU to GPU
-    Readback,    // GPU to CPU
-    Custom,      // Application-defined
+    Default,  // GPU-only memory
+    Upload,   // CPU to GPU
+    Readback, // GPU to CPU
+    Custom,   // Application-defined
 }
 
 #[derive(Debug)]
@@ -283,7 +311,7 @@ pub struct StereoRenderer {
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct StereoConfig {
-    pub ipd: f32, // Interpupillary distance in meters
+    pub ipd: f32,        // Interpupillary distance in meters
     pub eye_relief: f32, // Distance from eye to lens in meters
     pub fov_left: FieldOfView,
     pub fov_right: FieldOfView,
@@ -310,11 +338,11 @@ pub enum ProjectionMethod {
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub enum StereoRenderingMethod {
-    Sequential,      // Render left then right
-    Instanced,       // Single draw call for both eyes
-    SinglePass,      // Hardware single-pass stereo
-    Multiview,       // Vulkan multiview extension
-    VariableRate,    // Variable rate shading per eye
+    Sequential,   // Render left then right
+    Instanced,    // Single draw call for both eyes
+    SinglePass,   // Hardware single-pass stereo
+    Multiview,    // Vulkan multiview extension
+    VariableRate, // Variable rate shading per eye
 }
 
 #[derive(Debug)]
@@ -517,11 +545,11 @@ pub enum InputClassification {
 #[derive(Debug)]
 pub struct LensDistortionCorrection {
     pub enabled: bool,
-    pub k1: f32, // Radial distortion coefficient 1
-    pub k2: f32, // Radial distortion coefficient 2
-    pub k3: f32, // Radial distortion coefficient 3
-    pub p1: f32, // Tangential distortion coefficient 1
-    pub p2: f32, // Tangential distortion coefficient 2
+    pub k1: f32,       // Radial distortion coefficient 1
+    pub k2: f32,       // Radial distortion coefficient 2
+    pub k3: f32,       // Radial distortion coefficient 3
+    pub p1: f32,       // Tangential distortion coefficient 1
+    pub p2: f32,       // Tangential distortion coefficient 2
     pub center_x: f32, // Optical center X
     pub center_y: f32, // Optical center Y
     pub chromatic_aberration: ChromaticAberration,
@@ -607,13 +635,13 @@ pub enum RegionType {
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub enum ShadingRate {
-    Rate1x1,  // 1 pixel per sample
-    Rate1x2,  // 1 sample per 2 pixels horizontally
-    Rate2x1,  // 1 sample per 2 pixels vertically
-    Rate2x2,  // 1 sample per 4 pixels
-    Rate2x4,  // 1 sample per 8 pixels
-    Rate4x2,  // 1 sample per 8 pixels
-    Rate4x4,  // 1 sample per 16 pixels
+    Rate1x1, // 1 pixel per sample
+    Rate1x2, // 1 sample per 2 pixels horizontally
+    Rate2x1, // 1 sample per 2 pixels vertically
+    Rate2x2, // 1 sample per 4 pixels
+    Rate2x4, // 1 sample per 8 pixels
+    Rate4x2, // 1 sample per 8 pixels
+    Rate4x4, // 1 sample per 16 pixels
 }
 
 #[derive(Debug)]
@@ -1066,9 +1094,9 @@ pub enum VertexSemantic {
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub enum BufferUsage {
-    Static,   // Data never changes
-    Dynamic,  // Data changes frequently
-    Stream,   // Data changes every frame
+    Static,  // Data never changes
+    Dynamic, // Data changes frequently
+    Stream,  // Data changes every frame
 }
 
 #[derive(Debug)]
@@ -1400,11 +1428,13 @@ impl VRRenderingPipeline {
             variable_rate_shading_enabled: true,
         };
 
-        let graphics_context = Arc::new(RwLock::new(Self::create_graphics_context(&rendering_config).await?));
+        let graphics_context = Arc::new(RwLock::new(
+            Self::create_graphics_context(&rendering_config).await?,
+        ));
 
         let stereo_renderer = Arc::new(StereoRenderer {
             config: StereoConfig {
-                ipd: 0.064, // Average interpupillary distance in meters
+                ipd: 0.064,        // Average interpupillary distance in meters
                 eye_relief: 0.015, // 15mm eye relief
                 fov_left: FieldOfView {
                     left_degrees: 50.0,
@@ -1504,7 +1534,7 @@ impl VRRenderingPipeline {
                 loading_thread_count: 4,
             },
             compression_formats: vec![
-                CompressionFormat::BC7, // High quality
+                CompressionFormat::BC7,  // High quality
                 CompressionFormat::DXT1, // Lower quality fallback
             ],
         });
@@ -1522,7 +1552,10 @@ impl VRRenderingPipeline {
             culling_system: CullingSystem {
                 frustum_culling: FrustumCulling {
                     enabled: true,
-                    frustum_planes: [FrustumPlane { normal: [0.0, 0.0, 1.0], distance: 0.0 }; 6],
+                    frustum_planes: [FrustumPlane {
+                        normal: [0.0, 0.0, 1.0],
+                        distance: 0.0,
+                    }; 6],
                     culled_objects: Vec::new(),
                 },
                 occlusion_culling: OcclusionCulling {
@@ -1645,7 +1678,11 @@ impl VRRenderingPipeline {
         Ok(Arc::new(pipeline))
     }
 
-    pub async fn render_stereo_frame(&self, session_id: Uuid, frame_data: &VRFrameData) -> Result<RenderedFrame, VRError> {
+    pub async fn render_stereo_frame(
+        &self,
+        session_id: Uuid,
+        frame_data: &VRFrameData,
+    ) -> Result<RenderedFrame, VRError> {
         let start_time = std::time::Instant::now();
 
         // Update dynamic resolution based on performance
@@ -1659,18 +1696,18 @@ impl VRRenderingPipeline {
         };
 
         // Render left eye
-        let left_eye_texture = self.render_eye_view(
-            &frame_data.left_eye_pose,
-            EyeType::Left,
-            &foveated_regions
-        ).await?;
+        let left_eye_texture = self
+            .render_eye_view(&frame_data.left_eye_pose, EyeType::Left, &foveated_regions)
+            .await?;
 
         // Render right eye
-        let right_eye_texture = self.render_eye_view(
-            &frame_data.right_eye_pose,
-            EyeType::Right,
-            &foveated_regions
-        ).await?;
+        let right_eye_texture = self
+            .render_eye_view(
+                &frame_data.right_eye_pose,
+                EyeType::Right,
+                &foveated_regions,
+            )
+            .await?;
 
         // Generate depth buffer (optional)
         let depth_buffer = if self.config.post_processing_enabled {
@@ -1682,7 +1719,9 @@ impl VRRenderingPipeline {
         let frame_time = start_time.elapsed().as_millis() as f32;
 
         // Record metrics
-        self.metrics.record_vr_frame_rendered(session_id, frame_time).await;
+        self.metrics
+            .record_vr_frame_rendered(session_id, frame_time)
+            .await;
 
         Ok(RenderedFrame {
             left_eye_texture,
@@ -1698,7 +1737,10 @@ impl VRRenderingPipeline {
         Ok(())
     }
 
-    async fn update_foveated_regions(&self, frame_data: &VRFrameData) -> Result<Vec<FoveatedRegion>, VRError> {
+    async fn update_foveated_regions(
+        &self,
+        frame_data: &VRFrameData,
+    ) -> Result<Vec<FoveatedRegion>, VRError> {
         let mut regions = Vec::new();
 
         // Use eye tracking data if available
@@ -1741,7 +1783,12 @@ impl VRRenderingPipeline {
         Ok(regions)
     }
 
-    async fn render_eye_view(&self, eye_pose: &crate::vr::Pose3D, eye_type: EyeType, _foveated_regions: &[FoveatedRegion]) -> Result<Vec<u8>, VRError> {
+    async fn render_eye_view(
+        &self,
+        eye_pose: &crate::vr::Pose3D,
+        eye_type: EyeType,
+        _foveated_regions: &[FoveatedRegion],
+    ) -> Result<Vec<u8>, VRError> {
         // Simplified eye rendering - in real implementation, this would:
         // 1. Set up view and projection matrices
         // 2. Perform frustum culling
@@ -1754,16 +1801,19 @@ impl VRRenderingPipeline {
         let width = self.config.render_resolution.0;
         let height = self.config.render_resolution.1;
         let pixel_count = (width * height * 4) as usize; // RGBA
-        
+
         Ok(vec![0; pixel_count]) // Black texture
     }
 
-    async fn generate_depth_buffer(&self, _head_pose: &crate::vr::Pose3D) -> Result<Vec<f32>, VRError> {
+    async fn generate_depth_buffer(
+        &self,
+        _head_pose: &crate::vr::Pose3D,
+    ) -> Result<Vec<f32>, VRError> {
         // Generate depth buffer for post-processing effects
         let width = self.config.render_resolution.0;
         let height = self.config.render_resolution.1;
         let pixel_count = (width * height) as usize;
-        
+
         Ok(vec![1.0; pixel_count]) // Max depth
     }
 
@@ -1776,13 +1826,13 @@ impl VRRenderingPipeline {
     fn detect_best_graphics_api() -> GraphicsAPI {
         #[cfg(target_os = "windows")]
         return GraphicsAPI::DirectX12;
-        
+
         #[cfg(target_os = "macos")]
         return GraphicsAPI::Metal;
-        
+
         #[cfg(target_os = "linux")]
         return GraphicsAPI::Vulkan;
-        
+
         #[cfg(not(any(target_os = "windows", target_os = "macos", target_os = "linux")))]
         return GraphicsAPI::OpenGL;
     }
@@ -1805,13 +1855,11 @@ impl VRRenderingPipeline {
                 supports_ray_tracing: false,
                 supports_variable_rate_shading: true,
             },
-            command_queues: vec![
-                CommandQueue {
-                    queue_type: CommandQueueType::Graphics,
-                    priority: QueuePriority::Realtime,
-                    command_lists: Vec::new(),
-                },
-            ],
+            command_queues: vec![CommandQueue {
+                queue_type: CommandQueueType::Graphics,
+                priority: QueuePriority::Realtime,
+                command_lists: Vec::new(),
+            }],
             swap_chains: HashMap::new(),
             descriptor_heaps: Vec::new(),
             memory_manager: MemoryManager {
@@ -1867,18 +1915,16 @@ impl VRRenderingPipeline {
                 blend_state: BlendState {
                     alpha_to_coverage_enable: false,
                     independent_blend_enable: false,
-                    render_target_blend_desc: vec![
-                        RenderTargetBlendDesc {
-                            blend_enable: false,
-                            src_blend: BlendFactor::One,
-                            dest_blend: BlendFactor::Zero,
-                            blend_op: BlendOperation::Add,
-                            src_blend_alpha: BlendFactor::One,
-                            dest_blend_alpha: BlendFactor::Zero,
-                            blend_op_alpha: BlendOperation::Add,
-                            render_target_write_mask: 0xF,
-                        }
-                    ],
+                    render_target_blend_desc: vec![RenderTargetBlendDesc {
+                        blend_enable: false,
+                        src_blend: BlendFactor::One,
+                        dest_blend: BlendFactor::Zero,
+                        blend_op: BlendOperation::Add,
+                        src_blend_alpha: BlendFactor::One,
+                        dest_blend_alpha: BlendFactor::Zero,
+                        blend_op_alpha: BlendOperation::Add,
+                        render_target_write_mask: 0xF,
+                    }],
                 },
                 primitive_topology: PrimitiveTopology::TriangleList,
             },
@@ -1948,27 +1994,33 @@ impl VRRenderingPipeline {
     fn create_default_shaders() -> HashMap<String, Shader> {
         let mut shaders = HashMap::new();
 
-        shaders.insert("vr_vertex_shader".to_string(), Shader {
-            shader_id: "vr_vertex_shader".to_string(),
-            shader_type: ShaderType::Vertex,
-            source_code: include_str!("../../shaders/vr_vertex.hlsl").to_string(),
-            entry_point: "main".to_string(),
-            target_profile: "vs_5_0".to_string(),
-            compile_flags: vec![CompileFlag::OptimizationLevel3],
-            includes: Vec::new(),
-            defines: HashMap::new(),
-        });
+        shaders.insert(
+            "vr_vertex_shader".to_string(),
+            Shader {
+                shader_id: "vr_vertex_shader".to_string(),
+                shader_type: ShaderType::Vertex,
+                source_code: include_str!("../../shaders/vr_vertex.hlsl").to_string(),
+                entry_point: "main".to_string(),
+                target_profile: "vs_5_0".to_string(),
+                compile_flags: vec![CompileFlag::OptimizationLevel3],
+                includes: Vec::new(),
+                defines: HashMap::new(),
+            },
+        );
 
-        shaders.insert("vr_pixel_shader".to_string(), Shader {
-            shader_id: "vr_pixel_shader".to_string(),
-            shader_type: ShaderType::Pixel,
-            source_code: include_str!("../../shaders/vr_pixel.hlsl").to_string(),
-            entry_point: "main".to_string(),
-            target_profile: "ps_5_0".to_string(),
-            compile_flags: vec![CompileFlag::OptimizationLevel3],
-            includes: Vec::new(),
-            defines: HashMap::new(),
-        });
+        shaders.insert(
+            "vr_pixel_shader".to_string(),
+            Shader {
+                shader_id: "vr_pixel_shader".to_string(),
+                shader_type: ShaderType::Pixel,
+                source_code: include_str!("../../shaders/vr_pixel.hlsl").to_string(),
+                entry_point: "main".to_string(),
+                target_profile: "ps_5_0".to_string(),
+                compile_flags: vec![CompileFlag::OptimizationLevel3],
+                includes: Vec::new(),
+                defines: HashMap::new(),
+            },
+        );
 
         shaders
     }
@@ -1989,7 +2041,10 @@ impl VRRenderingPipeline {
                 effect_id: "taa".to_string(),
                 effect_type: EffectType::TAA,
                 enabled: true,
-                parameters: [("blend_factor".to_string(), 0.1)].iter().cloned().collect(),
+                parameters: [("blend_factor".to_string(), 0.1)]
+                    .iter()
+                    .cloned()
+                    .collect(),
                 shader_id: "taa_shader".to_string(),
             },
             PostProcessingEffect {

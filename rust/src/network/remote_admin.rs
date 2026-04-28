@@ -3,13 +3,7 @@
 //! This module provides OpenSim-compatible RemoteAdmin functionality,
 //! allowing external tools and scripts to manage the server remotely.
 
-use std::collections::HashMap;
-use std::sync::Arc;
 use anyhow::{anyhow, Result};
-use serde::{Deserialize, Serialize};
-use tokio::sync::RwLock;
-use tracing::{info, warn, error, debug};
-use uuid::Uuid;
 use axum::{
     extract::{Query, State},
     http::StatusCode,
@@ -17,13 +11,19 @@ use axum::{
     routing::{get, post},
     Json, Router,
 };
+use serde::{Deserialize, Serialize};
+use std::collections::HashMap;
+use std::sync::Arc;
+use tokio::sync::RwLock;
+use tracing::{debug, error, info, warn};
+use uuid::Uuid;
 
 use crate::{
-    region::{RegionManager, RegionId},
-    network::session::SessionManager,
-    database::user_accounts::UserAccountDatabase,
     asset::AssetManager,
+    database::user_accounts::UserAccountDatabase,
+    network::session::SessionManager,
     performance::admin_dashboard::AdminDashboard,
+    region::{RegionId, RegionManager},
     scripting::ScriptingManager,
 };
 
@@ -128,24 +128,33 @@ impl RemoteAdminService {
         scripting_manager: Arc<ScriptingManager>,
     ) -> Self {
         let mut enabled_commands = HashMap::new();
-        
+
         // Enable safe commands by default
         let safe_commands = [
-            "admin_exists_user", "admin_get_agents", "admin_region_query",
-            "admin_broadcast", "admin_load_oar", "admin_save_oar",
+            "admin_exists_user",
+            "admin_get_agents",
+            "admin_region_query",
+            "admin_broadcast",
+            "admin_load_oar",
+            "admin_save_oar",
         ];
-        
+
         for command in &safe_commands {
             enabled_commands.insert(command.to_string(), true);
         }
-        
+
         // Disable potentially dangerous commands by default
         let dangerous_commands = [
-            "admin_create_user", "admin_teleport_agent", "admin_restart",
-            "admin_load_heightmap", "admin_save_heightmap", "admin_load_xml",
-            "admin_save_xml", "admin_console_command",
+            "admin_create_user",
+            "admin_teleport_agent",
+            "admin_restart",
+            "admin_load_heightmap",
+            "admin_save_heightmap",
+            "admin_load_xml",
+            "admin_save_xml",
+            "admin_console_command",
         ];
-        
+
         for command in &dangerous_commands {
             enabled_commands.insert(command.to_string(), false);
         }
@@ -181,7 +190,7 @@ impl RemoteAdminService {
             warn!("RemoteAdmin: No admin password set - denying access");
             return false;
         }
-        
+
         password == self.admin_password
     }
 
@@ -202,7 +211,10 @@ impl RemoteAdminService {
         {
             let mut stats = self.command_stats.write().await;
             stats.total_commands += 1;
-            *stats.commands_by_type.entry(method.to_string()).or_insert(0) += 1;
+            *stats
+                .commands_by_type
+                .entry(method.to_string())
+                .or_insert(0) += 1;
             stats.last_command_time = Some(chrono::Utc::now().timestamp() as u64);
         }
 
@@ -237,14 +249,21 @@ impl RemoteAdminService {
     }
 
     /// Create user account
-    async fn admin_create_user(&self, params: &HashMap<String, String>) -> Result<RemoteAdminResponse> {
-        let user_firstname = params.get("user_firstname")
+    async fn admin_create_user(
+        &self,
+        params: &HashMap<String, String>,
+    ) -> Result<RemoteAdminResponse> {
+        let user_firstname = params
+            .get("user_firstname")
             .ok_or_else(|| anyhow!("Missing user_firstname parameter"))?;
-        let user_lastname = params.get("user_lastname")
+        let user_lastname = params
+            .get("user_lastname")
             .ok_or_else(|| anyhow!("Missing user_lastname parameter"))?;
-        let user_password = params.get("user_password")
+        let user_password = params
+            .get("user_password")
             .ok_or_else(|| anyhow!("Missing user_password parameter"))?;
-        let user_email = params.get("user_email")
+        let user_email = params
+            .get("user_email")
             .ok_or_else(|| anyhow!("Missing user_email parameter"))?;
 
         info!("Creating user: {} {}", user_firstname, user_lastname);
@@ -258,46 +277,71 @@ impl RemoteAdminService {
             last_name: user_lastname.clone(),
             home_region_id: None,
         };
-        
+
         let user_account = self.user_manager.create_user(create_request).await?;
 
         let mut data = HashMap::new();
-        data.insert("avatar_uuid".to_string(), serde_json::Value::String(user_account.id.to_string()));
+        data.insert(
+            "avatar_uuid".to_string(),
+            serde_json::Value::String(user_account.id.to_string()),
+        );
 
         Ok(RemoteAdminResponse {
             success: true,
-            message: format!("User {} {} created successfully", user_firstname, user_lastname),
+            message: format!(
+                "User {} {} created successfully",
+                user_firstname, user_lastname
+            ),
             data,
         })
     }
 
     /// Check if user exists
-    async fn admin_exists_user(&self, params: &HashMap<String, String>) -> Result<RemoteAdminResponse> {
-        let user_firstname = params.get("user_firstname")
+    async fn admin_exists_user(
+        &self,
+        params: &HashMap<String, String>,
+    ) -> Result<RemoteAdminResponse> {
+        let user_firstname = params
+            .get("user_firstname")
             .ok_or_else(|| anyhow!("Missing user_firstname parameter"))?;
-        let user_lastname = params.get("user_lastname")
+        let user_lastname = params
+            .get("user_lastname")
             .ok_or_else(|| anyhow!("Missing user_lastname parameter"))?;
 
-        let exists = self.user_manager.user_exists(user_firstname, user_lastname).await?;
+        let exists = self
+            .user_manager
+            .user_exists(user_firstname, user_lastname)
+            .await?;
 
         let mut data = HashMap::new();
         data.insert("user_exists".to_string(), serde_json::Value::Bool(exists));
 
         Ok(RemoteAdminResponse {
             success: true,
-            message: if exists { "User exists" } else { "User does not exist" }.to_string(),
+            message: if exists {
+                "User exists"
+            } else {
+                "User does not exist"
+            }
+            .to_string(),
             data,
         })
     }
 
     /// Get logged in agents
-    async fn admin_get_agents(&self, params: &HashMap<String, String>) -> Result<RemoteAdminResponse> {
-        let region_uuid = params.get("region_uuid")
+    async fn admin_get_agents(
+        &self,
+        params: &HashMap<String, String>,
+    ) -> Result<RemoteAdminResponse> {
+        let region_uuid = params
+            .get("region_uuid")
             .and_then(|s| Uuid::parse_str(s).ok())
             .map(|uuid| RegionId(uuid.as_u128() as u64));
 
         let agents = if let Some(region_id) = region_uuid {
-            self.session_manager.get_region_agents(Uuid::from_u128(region_id.0 as u128)).await
+            self.session_manager
+                .get_region_agents(Uuid::from_u128(region_id.0 as u128))
+                .await
                 .map_err(|e| anyhow::anyhow!("Failed to get region agents: {}", e))?
         } else {
             self.session_manager.get_all_agents().await
@@ -317,55 +361,84 @@ impl RemoteAdminService {
 
         Ok(RemoteAdminResponse {
             success: true,
-            message: format!("Found {} agents", data.get("agents").unwrap().as_array().unwrap().len()),
+            message: format!(
+                "Found {} agents",
+                data.get("agents").unwrap().as_array().unwrap().len()
+            ),
             data,
         })
     }
 
     /// Teleport agent
-    async fn admin_teleport_agent(&self, params: &HashMap<String, String>) -> Result<RemoteAdminResponse> {
-        let agent_id = params.get("agent_id")
+    async fn admin_teleport_agent(
+        &self,
+        params: &HashMap<String, String>,
+    ) -> Result<RemoteAdminResponse> {
+        let agent_id = params
+            .get("agent_id")
             .and_then(|s| Uuid::parse_str(s).ok())
             .ok_or_else(|| anyhow!("Missing or invalid agent_id parameter"))?;
-        
-        let region_name = params.get("region_name")
+
+        let region_name = params
+            .get("region_name")
             .ok_or_else(|| anyhow!("Missing region_name parameter"))?;
 
         // Parse position parameters
-        let x: f32 = params.get("pos_x").and_then(|s| s.parse().ok()).unwrap_or(128.0);
-        let y: f32 = params.get("pos_y").and_then(|s| s.parse().ok()).unwrap_or(128.0);
-        let z: f32 = params.get("pos_z").and_then(|s| s.parse().ok()).unwrap_or(25.0);
+        let x: f32 = params
+            .get("pos_x")
+            .and_then(|s| s.parse().ok())
+            .unwrap_or(128.0);
+        let y: f32 = params
+            .get("pos_y")
+            .and_then(|s| s.parse().ok())
+            .unwrap_or(128.0);
+        let z: f32 = params
+            .get("pos_z")
+            .and_then(|s| s.parse().ok())
+            .unwrap_or(25.0);
 
-        info!("Teleporting agent {} to {} at ({}, {}, {})", agent_id, region_name, x, y, z);
+        info!(
+            "Teleporting agent {} to {} at ({}, {}, {})",
+            agent_id, region_name, x, y, z
+        );
 
         // Find region by name
-        let region_info = self.region_manager.find_region_by_name(region_name).await
+        let region_info = self
+            .region_manager
+            .find_region_by_name(region_name)
+            .await
             .map_err(|_| anyhow!("Region '{}' not found", region_name))?;
-        
+
         // For now, use a placeholder region ID - in production, get from region_info
         let region_id = uuid::Uuid::new_v4();
 
         // Teleport agent
-        self.session_manager.teleport_agent(agent_id, region_id, (x, y, z)).await
+        self.session_manager
+            .teleport_agent(agent_id, region_id, (x, y, z))
+            .await
             .map_err(|e| anyhow::anyhow!("Failed to teleport agent: {}", e))?;
 
         Ok(RemoteAdminResponse {
             success: true,
-            message: format!("Agent {} teleported to {} at ({}, {}, {})", agent_id, region_name, x, y, z),
+            message: format!(
+                "Agent {} teleported to {} at ({}, {}, {})",
+                agent_id, region_name, x, y, z
+            ),
             data: HashMap::new(),
         })
     }
 
     /// Restart region
     async fn admin_restart(&self, params: &HashMap<String, String>) -> Result<RemoteAdminResponse> {
-        let region_uuid = params.get("region_uuid")
+        let region_uuid = params
+            .get("region_uuid")
             .and_then(|s| Uuid::parse_str(s).ok())
             .map(|uuid| RegionId(uuid.as_u128() as u64));
 
         if let Some(region_id) = region_uuid {
             info!("Restarting region: {}", region_id.0);
             self.region_manager.restart_region(region_id).await?;
-            
+
             Ok(RemoteAdminResponse {
                 success: true,
                 message: format!("Region {} restarted successfully", region_id.0),
@@ -374,7 +447,7 @@ impl RemoteAdminService {
         } else {
             info!("Restarting all regions");
             self.region_manager.restart_all_regions().await?;
-            
+
             Ok(RemoteAdminResponse {
                 success: true,
                 message: "All regions restarted successfully".to_string(),
@@ -384,18 +457,28 @@ impl RemoteAdminService {
     }
 
     /// Load heightmap
-    async fn admin_load_heightmap(&self, params: &HashMap<String, String>) -> Result<RemoteAdminResponse> {
-        let region_uuid = params.get("region_uuid")
+    async fn admin_load_heightmap(
+        &self,
+        params: &HashMap<String, String>,
+    ) -> Result<RemoteAdminResponse> {
+        let region_uuid = params
+            .get("region_uuid")
             .and_then(|s| Uuid::parse_str(s).ok())
             .map(|uuid| RegionId(uuid.as_u128() as u64))
             .ok_or_else(|| anyhow!("Missing or invalid region_uuid parameter"))?;
-        
-        let filename = params.get("filename")
+
+        let filename = params
+            .get("filename")
             .ok_or_else(|| anyhow!("Missing filename parameter"))?;
 
-        info!("Loading heightmap {} for region {}", filename, region_uuid.0);
+        info!(
+            "Loading heightmap {} for region {}",
+            filename, region_uuid.0
+        );
 
-        self.region_manager.load_heightmap(region_uuid, filename).await?;
+        self.region_manager
+            .load_heightmap(region_uuid, filename)
+            .await?;
 
         Ok(RemoteAdminResponse {
             success: true,
@@ -405,34 +488,49 @@ impl RemoteAdminService {
     }
 
     /// Save heightmap
-    async fn admin_save_heightmap(&self, params: &HashMap<String, String>) -> Result<RemoteAdminResponse> {
-        let region_uuid = params.get("region_uuid")
+    async fn admin_save_heightmap(
+        &self,
+        params: &HashMap<String, String>,
+    ) -> Result<RemoteAdminResponse> {
+        let region_uuid = params
+            .get("region_uuid")
             .and_then(|s| Uuid::parse_str(s).ok())
             .map(|uuid| RegionId(uuid.as_u128() as u64))
             .ok_or_else(|| anyhow!("Missing or invalid region_uuid parameter"))?;
-        
-        let filename = params.get("filename")
+
+        let filename = params
+            .get("filename")
             .ok_or_else(|| anyhow!("Missing filename parameter"))?;
 
         info!("Saving heightmap {} for region {}", filename, region_uuid.0);
 
-        self.region_manager.save_heightmap(region_uuid, filename).await?;
+        self.region_manager
+            .save_heightmap(region_uuid, filename)
+            .await?;
 
         Ok(RemoteAdminResponse {
             success: true,
-            message: format!("Heightmap saved to {} for region {}", filename, region_uuid.0),
+            message: format!(
+                "Heightmap saved to {} for region {}",
+                filename, region_uuid.0
+            ),
             data: HashMap::new(),
         })
     }
 
     /// Load XML
-    async fn admin_load_xml(&self, params: &HashMap<String, String>) -> Result<RemoteAdminResponse> {
-        let region_uuid = params.get("region_uuid")
+    async fn admin_load_xml(
+        &self,
+        params: &HashMap<String, String>,
+    ) -> Result<RemoteAdminResponse> {
+        let region_uuid = params
+            .get("region_uuid")
             .and_then(|s| Uuid::parse_str(s).ok())
             .map(|uuid| RegionId(uuid.as_u128() as u64))
             .ok_or_else(|| anyhow!("Missing or invalid region_uuid parameter"))?;
-        
-        let filename = params.get("filename")
+
+        let filename = params
+            .get("filename")
             .ok_or_else(|| anyhow!("Missing filename parameter"))?;
 
         info!("Loading XML {} for region {}", filename, region_uuid.0);
@@ -447,13 +545,18 @@ impl RemoteAdminService {
     }
 
     /// Save XML
-    async fn admin_save_xml(&self, params: &HashMap<String, String>) -> Result<RemoteAdminResponse> {
-        let region_uuid = params.get("region_uuid")
+    async fn admin_save_xml(
+        &self,
+        params: &HashMap<String, String>,
+    ) -> Result<RemoteAdminResponse> {
+        let region_uuid = params
+            .get("region_uuid")
             .and_then(|s| Uuid::parse_str(s).ok())
             .map(|uuid| RegionId(uuid.as_u128() as u64))
             .ok_or_else(|| anyhow!("Missing or invalid region_uuid parameter"))?;
-        
-        let filename = params.get("filename")
+
+        let filename = params
+            .get("filename")
             .ok_or_else(|| anyhow!("Missing filename parameter"))?;
 
         info!("Saving XML {} for region {}", filename, region_uuid.0);
@@ -468,13 +571,18 @@ impl RemoteAdminService {
     }
 
     /// Load OAR
-    async fn admin_load_oar(&self, params: &HashMap<String, String>) -> Result<RemoteAdminResponse> {
-        let region_uuid = params.get("region_uuid")
+    async fn admin_load_oar(
+        &self,
+        params: &HashMap<String, String>,
+    ) -> Result<RemoteAdminResponse> {
+        let region_uuid = params
+            .get("region_uuid")
             .and_then(|s| Uuid::parse_str(s).ok())
             .map(|uuid| RegionId(uuid.as_u128() as u64))
             .ok_or_else(|| anyhow!("Missing or invalid region_uuid parameter"))?;
-        
-        let filename = params.get("filename")
+
+        let filename = params
+            .get("filename")
             .ok_or_else(|| anyhow!("Missing filename parameter"))?;
 
         info!("Loading OAR {} for region {}", filename, region_uuid.0);
@@ -489,13 +597,18 @@ impl RemoteAdminService {
     }
 
     /// Save OAR
-    async fn admin_save_oar(&self, params: &HashMap<String, String>) -> Result<RemoteAdminResponse> {
-        let region_uuid = params.get("region_uuid")
+    async fn admin_save_oar(
+        &self,
+        params: &HashMap<String, String>,
+    ) -> Result<RemoteAdminResponse> {
+        let region_uuid = params
+            .get("region_uuid")
             .and_then(|s| Uuid::parse_str(s).ok())
             .map(|uuid| RegionId(uuid.as_u128() as u64))
             .ok_or_else(|| anyhow!("Missing or invalid region_uuid parameter"))?;
-        
-        let filename = params.get("filename")
+
+        let filename = params
+            .get("filename")
             .ok_or_else(|| anyhow!("Missing filename parameter"))?;
 
         info!("Saving OAR {} for region {}", filename, region_uuid.0);
@@ -510,21 +623,30 @@ impl RemoteAdminService {
     }
 
     /// Broadcast message
-    async fn admin_broadcast(&self, params: &HashMap<String, String>) -> Result<RemoteAdminResponse> {
-        let message = params.get("message")
+    async fn admin_broadcast(
+        &self,
+        params: &HashMap<String, String>,
+    ) -> Result<RemoteAdminResponse> {
+        let message = params
+            .get("message")
             .ok_or_else(|| anyhow!("Missing message parameter"))?;
 
-        let region_uuid = params.get("region_uuid")
+        let region_uuid = params
+            .get("region_uuid")
             .and_then(|s| Uuid::parse_str(s).ok())
             .map(|uuid| RegionId(uuid.as_u128() as u64));
 
         info!("Broadcasting message: {}", message);
 
         if let Some(region_id) = region_uuid {
-            self.session_manager.broadcast_to_region(Uuid::from_u128(region_id.0 as u128), message).await
+            self.session_manager
+                .broadcast_to_region(Uuid::from_u128(region_id.0 as u128), message)
+                .await
                 .map_err(|e| anyhow::anyhow!("Failed to broadcast to region: {}", e))?;
         } else {
-            self.session_manager.broadcast_to_all(message).await
+            self.session_manager
+                .broadcast_to_all(message)
+                .await
                 .map_err(|e| anyhow::anyhow!("Failed to broadcast to all: {}", e))?;
         }
 
@@ -536,21 +658,43 @@ impl RemoteAdminService {
     }
 
     /// Query region information
-    async fn admin_region_query(&self, params: &HashMap<String, String>) -> Result<RemoteAdminResponse> {
-        let region_uuid = params.get("region_uuid")
+    async fn admin_region_query(
+        &self,
+        params: &HashMap<String, String>,
+    ) -> Result<RemoteAdminResponse> {
+        let region_uuid = params
+            .get("region_uuid")
             .and_then(|s| Uuid::parse_str(s).ok())
             .map(|uuid| RegionId(uuid.as_u128() as u64));
 
         if let Some(region_id) = region_uuid {
             let region_info = self.region_manager.get_region_info(region_id).await?;
-            
+
             let mut data = HashMap::new();
-            data.insert("region_name".to_string(), serde_json::Value::String(region_info.name));
-            data.insert("region_x".to_string(), serde_json::Value::Number(region_info.x.into()));
-            data.insert("region_y".to_string(), serde_json::Value::Number(region_info.y.into()));
-            data.insert("region_size_x".to_string(), serde_json::Value::Number(region_info.size_x.into()));
-            data.insert("region_size_y".to_string(), serde_json::Value::Number(region_info.size_y.into()));
-            data.insert("avatar_count".to_string(), serde_json::Value::Number(region_info.avatar_count.into()));
+            data.insert(
+                "region_name".to_string(),
+                serde_json::Value::String(region_info.name),
+            );
+            data.insert(
+                "region_x".to_string(),
+                serde_json::Value::Number(region_info.x.into()),
+            );
+            data.insert(
+                "region_y".to_string(),
+                serde_json::Value::Number(region_info.y.into()),
+            );
+            data.insert(
+                "region_size_x".to_string(),
+                serde_json::Value::Number(region_info.size_x.into()),
+            );
+            data.insert(
+                "region_size_y".to_string(),
+                serde_json::Value::Number(region_info.size_y.into()),
+            );
+            data.insert(
+                "avatar_count".to_string(),
+                serde_json::Value::Number(region_info.avatar_count.into()),
+            );
 
             Ok(RemoteAdminResponse {
                 success: true,
@@ -559,7 +703,7 @@ impl RemoteAdminService {
             })
         } else {
             let regions = self.region_manager.get_all_regions().await;
-            
+
             let mut data = HashMap::new();
             // Convert RegionIds to region information
             let mut region_infos = Vec::new();
@@ -576,31 +720,52 @@ impl RemoteAdminService {
                     }));
                 }
             }
-            data.insert("regions".to_string(), serde_json::Value::Array(region_infos));
+            data.insert(
+                "regions".to_string(),
+                serde_json::Value::Array(region_infos),
+            );
 
             Ok(RemoteAdminResponse {
                 success: true,
-                message: format!("Retrieved {} regions", data.get("regions").unwrap().as_array().unwrap().len()),
+                message: format!(
+                    "Retrieved {} regions",
+                    data.get("regions").unwrap().as_array().unwrap().len()
+                ),
                 data,
             })
         }
     }
 
     /// Execute console command
-    async fn admin_console_command(&self, params: &HashMap<String, String>) -> Result<RemoteAdminResponse> {
-        let command = params.get("command")
+    async fn admin_console_command(
+        &self,
+        params: &HashMap<String, String>,
+    ) -> Result<RemoteAdminResponse> {
+        let command = params
+            .get("command")
             .ok_or_else(|| anyhow!("Missing command parameter"))?;
 
         warn!("Console command execution: {}", command);
 
         // For security, only allow specific safe commands
         let safe_commands = [
-            "show users", "show regions", "show stats", "show version",
-            "show uptime", "show memory", "show threads",
+            "show users",
+            "show regions",
+            "show stats",
+            "show version",
+            "show uptime",
+            "show memory",
+            "show threads",
         ];
 
-        if !safe_commands.iter().any(|&safe_cmd| command.starts_with(safe_cmd)) {
-            return Err(anyhow!("Command '{}' not allowed for security reasons", command));
+        if !safe_commands
+            .iter()
+            .any(|&safe_cmd| command.starts_with(safe_cmd))
+        {
+            return Err(anyhow!(
+                "Command '{}' not allowed for security reasons",
+                command
+            ));
         }
 
         // Execute safe command and return result
@@ -621,39 +786,49 @@ impl RemoteAdminService {
         match command {
             "show users" => {
                 let agents = self.session_manager.get_all_agents().await;
-                Ok(format!("Active users: {}\n{}", agents.len(), 
-                    agents.iter().map(|a| format!("{} {} ({})", a.first_name, a.last_name, a.user_id))
-                        .collect::<Vec<_>>().join("\n")))
-            },
+                Ok(format!(
+                    "Active users: {}\n{}",
+                    agents.len(),
+                    agents
+                        .iter()
+                        .map(|a| format!("{} {} ({})", a.first_name, a.last_name, a.user_id))
+                        .collect::<Vec<_>>()
+                        .join("\n")
+                ))
+            }
             "show regions" => {
                 let region_ids = self.region_manager.get_all_regions().await;
                 let mut regions_info = Vec::new();
                 for region_id in region_ids {
                     if let Ok(region_info) = self.region_manager.get_region_info(region_id).await {
-                        regions_info.push(format!("{} at {},{}", 
-                            region_info.name, region_info.x, region_info.y));
+                        regions_info.push(format!(
+                            "{} at {},{}",
+                            region_info.name, region_info.x, region_info.y
+                        ));
                     }
                 }
-                Ok(format!("Active regions: {}\n{}", regions_info.len(), regions_info.join("\n")))
-            },
+                Ok(format!(
+                    "Active regions: {}\n{}",
+                    regions_info.len(),
+                    regions_info.join("\n")
+                ))
+            }
             "show stats" => {
                 let stats = self.command_stats.read().await;
-                Ok(format!("RemoteAdmin Statistics:\nTotal commands: {}\nSuccessful: {}\nFailed: {}", 
-                    stats.total_commands, stats.successful_commands, stats.failed_commands))
-            },
-            "show version" => {
-                Ok("OpenSim Next v1.0.0 - Rust/Zig High Performance Virtual World Server".to_string())
-            },
+                Ok(format!(
+                    "RemoteAdmin Statistics:\nTotal commands: {}\nSuccessful: {}\nFailed: {}",
+                    stats.total_commands, stats.successful_commands, stats.failed_commands
+                ))
+            }
+            "show version" => Ok(
+                "OpenSim Next v1.0.0 - Rust/Zig High Performance Virtual World Server".to_string(),
+            ),
             "show uptime" => {
                 // This would need to be tracked from server start time
                 Ok("Uptime information not available".to_string())
-            },
-            "show memory" => {
-                Ok("Memory usage information not available".to_string())
-            },
-            "show threads" => {
-                Ok("Thread information not available".to_string())
-            },
+            }
+            "show memory" => Ok("Memory usage information not available".to_string()),
+            "show threads" => Ok("Thread information not available".to_string()),
             _ => Err(anyhow!("Unknown safe command: {}", command)),
         }
     }
@@ -666,12 +841,17 @@ impl RemoteAdminService {
     /// Enable or disable a command
     pub fn set_command_enabled(&mut self, command: &str, enabled: bool) {
         self.enabled_commands.insert(command.to_string(), enabled);
-        info!("RemoteAdmin command '{}' {}", command, if enabled { "enabled" } else { "disabled" });
+        info!(
+            "RemoteAdmin command '{}' {}",
+            command,
+            if enabled { "enabled" } else { "disabled" }
+        );
     }
 
     /// Get enabled commands
     pub fn get_enabled_commands(&self) -> Vec<String> {
-        self.enabled_commands.iter()
+        self.enabled_commands
+            .iter()
             .filter(|(_, &enabled)| enabled)
             .map(|(cmd, _)| cmd.clone())
             .collect()
@@ -688,7 +868,7 @@ async fn handle_admin_request_get(
     let mut parameters = params.clone();
     parameters.remove("method");
     parameters.remove("password");
-    
+
     handle_admin_request_internal(service, method, password, parameters).await
 }
 
@@ -697,7 +877,13 @@ async fn handle_admin_request_post(
     State(service): State<Arc<RemoteAdminService>>,
     Json(request): Json<RemoteAdminRequest>,
 ) -> impl IntoResponse {
-    handle_admin_request_internal(service, request.method, request.password, request.parameters).await
+    handle_admin_request_internal(
+        service,
+        request.method,
+        request.password,
+        request.parameters,
+    )
+    .await
 }
 
 /// Internal admin request handler
@@ -712,21 +898,29 @@ async fn handle_admin_request_internal(
     // Authenticate
     if !service.authenticate(&password) {
         warn!("RemoteAdmin: Authentication failed for method {}", method);
-        return (StatusCode::UNAUTHORIZED, Json(RemoteAdminResponse {
-            success: false,
-            message: "Authentication failed".to_string(),
-            data: HashMap::new(),
-        })).into_response();
+        return (
+            StatusCode::UNAUTHORIZED,
+            Json(RemoteAdminResponse {
+                success: false,
+                message: "Authentication failed".to_string(),
+                data: HashMap::new(),
+            }),
+        )
+            .into_response();
     }
 
     // Check if command is enabled
     if !service.is_command_enabled(&method) {
         warn!("RemoteAdmin: Command {} is disabled", method);
-        return (StatusCode::FORBIDDEN, Json(RemoteAdminResponse {
-            success: false,
-            message: format!("Command '{}' is disabled", method),
-            data: HashMap::new(),
-        })).into_response();
+        return (
+            StatusCode::FORBIDDEN,
+            Json(RemoteAdminResponse {
+                success: false,
+                message: format!("Command '{}' is disabled", method),
+                data: HashMap::new(),
+            }),
+        )
+            .into_response();
     }
 
     // Execute command
@@ -734,43 +928,51 @@ async fn handle_admin_request_internal(
         Ok(response) => (StatusCode::OK, Json(response)).into_response(),
         Err(e) => {
             error!("RemoteAdmin command '{}' failed: {}", method, e);
-            (StatusCode::INTERNAL_SERVER_ERROR, Json(RemoteAdminResponse {
-                success: false,
-                message: e.to_string(),
-                data: HashMap::new(),
-            })).into_response()
+            (
+                StatusCode::INTERNAL_SERVER_ERROR,
+                Json(RemoteAdminResponse {
+                    success: false,
+                    message: e.to_string(),
+                    data: HashMap::new(),
+                }),
+            )
+                .into_response()
         }
     }
 }
 
 /// Handle admin status request
-async fn handle_admin_status(
-    State(service): State<Arc<RemoteAdminService>>,
-) -> impl IntoResponse {
+async fn handle_admin_status(State(service): State<Arc<RemoteAdminService>>) -> impl IntoResponse {
     let stats = service.get_statistics().await;
-    
-    (StatusCode::OK, Json(serde_json::json!({
-        "status": "running",
-        "enabled_commands": service.get_enabled_commands(),
-        "statistics": stats,
-        "access_restrictions": service.access_restrictions,
-    }))).into_response()
+
+    (
+        StatusCode::OK,
+        Json(serde_json::json!({
+            "status": "running",
+            "enabled_commands": service.get_enabled_commands(),
+            "statistics": stats,
+            "access_restrictions": service.access_restrictions,
+        })),
+    )
+        .into_response()
 }
 
 /// Handle admin commands list
 async fn handle_admin_commands(
     State(service): State<Arc<RemoteAdminService>>,
 ) -> impl IntoResponse {
-    (StatusCode::OK, Json(serde_json::json!({
-        "available_commands": service.access_restrictions.allowed_methods,
-        "enabled_commands": service.get_enabled_commands(),
-    }))).into_response()
+    (
+        StatusCode::OK,
+        Json(serde_json::json!({
+            "available_commands": service.access_restrictions.allowed_methods,
+            "enabled_commands": service.get_enabled_commands(),
+        })),
+    )
+        .into_response()
 }
 
 /// Handle admin statistics
-async fn handle_admin_stats(
-    State(service): State<Arc<RemoteAdminService>>,
-) -> impl IntoResponse {
+async fn handle_admin_stats(State(service): State<Arc<RemoteAdminService>>) -> impl IntoResponse {
     let stats = service.get_statistics().await;
     (StatusCode::OK, Json(stats)).into_response()
 }
@@ -778,27 +980,27 @@ async fn handle_admin_stats(
 #[cfg(test)]
 mod tests {
     use super::*;
-    
+
     #[tokio::test]
     async fn test_authentication() {
         let service = create_test_service().await;
-        
+
         assert!(service.authenticate("test_password"));
         assert!(!service.authenticate("wrong_password"));
         assert!(!service.authenticate(""));
     }
-    
+
     #[tokio::test]
     async fn test_command_enabling() {
         let mut service = create_test_service().await;
-        
+
         assert!(service.is_command_enabled("admin_exists_user"));
         assert!(!service.is_command_enabled("admin_create_user"));
-        
+
         service.set_command_enabled("admin_create_user", true);
         assert!(service.is_command_enabled("admin_create_user"));
     }
-    
+
     async fn create_test_service() -> RemoteAdminService {
         // This would create mock services for testing
         // Implementation would depend on your test setup

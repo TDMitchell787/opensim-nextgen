@@ -1,11 +1,11 @@
 //! Input validation and sanity checking
-//! 
+//!
 //! Validates configuration settings and provides helpful error messages
 //! for common configuration issues.
 
+use anyhow::{anyhow, Result};
 use std::net::{IpAddr, ToSocketAddrs};
 use std::path::Path;
-use anyhow::{Result, anyhow};
 use tracing::{info, warn};
 
 use crate::setup::questions::SetupConfig;
@@ -18,16 +18,12 @@ pub struct Validator {
 impl Validator {
     /// Create a new validator
     pub fn new() -> Self {
-        Self {
-            strict_mode: false,
-        }
+        Self { strict_mode: false }
     }
 
     /// Create validator in strict mode (more rigorous validation)
     pub fn strict() -> Self {
-        Self {
-            strict_mode: true,
-        }
+        Self { strict_mode: true }
     }
 
     /// Validate complete setup configuration
@@ -36,21 +32,21 @@ impl Validator {
 
         // Validate basic settings
         self.validate_basic_settings(config)?;
-        
+
         // Validate region configuration
         self.validate_region_config(config)?;
-        
+
         // Validate network configuration
         self.validate_network_config(config)?;
-        
+
         // Validate database configuration
         self.validate_database_config(config)?;
-        
+
         // Validate grid configuration (if applicable)
         if config.grid_mode {
             self.validate_grid_config(config)?;
         }
-        
+
         // Validate performance settings
         self.validate_performance_config(config)?;
 
@@ -63,29 +59,41 @@ impl Validator {
         // Validate setup mode
         let valid_modes = ["standalone", "grid-region", "grid-robust"];
         if !valid_modes.contains(&config.setup_mode.as_str()) {
-            return Err(anyhow!("Invalid setup mode: {}. Must be one of: {}", 
-                config.setup_mode, valid_modes.join(", ")));
+            return Err(anyhow!(
+                "Invalid setup mode: {}. Must be one of: {}",
+                config.setup_mode,
+                valid_modes.join(", ")
+            ));
         }
 
         // Validate physics engine
         let valid_physics = ["ubODE", "Bullet", "basicphysics"];
         if !valid_physics.contains(&config.physics_engine.as_str()) {
-            return Err(anyhow!("Invalid physics engine: {}. Must be one of: {}", 
-                config.physics_engine, valid_physics.join(", ")));
+            return Err(anyhow!(
+                "Invalid physics engine: {}. Must be one of: {}",
+                config.physics_engine,
+                valid_physics.join(", ")
+            ));
         }
 
         // Validate script engine
         let valid_scripts = ["XEngine", "YEngine"];
         if !valid_scripts.contains(&config.script_engine.as_str()) {
-            return Err(anyhow!("Invalid script engine: {}. Must be one of: {}", 
-                config.script_engine, valid_scripts.join(", ")));
+            return Err(anyhow!(
+                "Invalid script engine: {}. Must be one of: {}",
+                config.script_engine,
+                valid_scripts.join(", ")
+            ));
         }
 
         // Validate log level
         let valid_levels = ["ERROR", "WARN", "INFO", "DEBUG"];
         if !valid_levels.contains(&config.log_level.as_str()) {
-            return Err(anyhow!("Invalid log level: {}. Must be one of: {}", 
-                config.log_level, valid_levels.join(", ")));
+            return Err(anyhow!(
+                "Invalid log level: {}. Must be one of: {}",
+                config.log_level,
+                valid_levels.join(", ")
+            ));
         }
 
         Ok(())
@@ -103,7 +111,10 @@ impl Validator {
         }
 
         // Check for invalid characters in region name
-        if config.region_name.contains(['|', ',', ';', ':', '"', '\'', '\\', '/', '<', '>']) {
+        if config
+            .region_name
+            .contains(['|', ',', ';', ':', '"', '\'', '\\', '/', '<', '>'])
+        {
             return Err(anyhow!("Region name contains invalid characters"));
         }
 
@@ -117,20 +128,31 @@ impl Validator {
 
         // Validate region size
         if config.region_size_x < 32 || config.region_size_x > 8192 {
-            return Err(anyhow!("Invalid region size X: {}. Must be between 32 and 8192", config.region_size_x));
+            return Err(anyhow!(
+                "Invalid region size X: {}. Must be between 32 and 8192",
+                config.region_size_x
+            ));
         }
 
         if config.region_size_y < 32 || config.region_size_y > 8192 {
-            return Err(anyhow!("Invalid region size Y: {}. Must be between 32 and 8192", config.region_size_y));
+            return Err(anyhow!(
+                "Invalid region size Y: {}. Must be between 32 and 8192",
+                config.region_size_y
+            ));
         }
 
         if config.region_size_z < 256 || config.region_size_z > 8192 {
-            return Err(anyhow!("Invalid region size Z: {}. Must be between 256 and 8192", config.region_size_z));
+            return Err(anyhow!(
+                "Invalid region size Z: {}. Must be between 256 and 8192",
+                config.region_size_z
+            ));
         }
 
         // Check if region size is power of 2 (recommended)
         if self.strict_mode {
-            if !self.is_power_of_two(config.region_size_x) || !self.is_power_of_two(config.region_size_y) {
+            if !self.is_power_of_two(config.region_size_x)
+                || !self.is_power_of_two(config.region_size_y)
+            {
                 warn!("Region size should be power of 2 for optimal performance");
             }
         }
@@ -143,17 +165,26 @@ impl Validator {
         // Validate internal IP address
         if config.internal_address != "0.0.0.0" && config.internal_address != "SYSTEMIP" {
             if config.internal_address.parse::<IpAddr>().is_err() {
-                return Err(anyhow!("Invalid internal IP address: {}", config.internal_address));
+                return Err(anyhow!(
+                    "Invalid internal IP address: {}",
+                    config.internal_address
+                ));
             }
         }
 
         // Validate ports
         if config.internal_port == 0 || config.internal_port > 65535 {
-            return Err(anyhow!("Invalid internal port: {}. Must be between 1 and 65535", config.internal_port));
+            return Err(anyhow!(
+                "Invalid internal port: {}. Must be between 1 and 65535",
+                config.internal_port
+            ));
         }
 
         if config.http_port == 0 || config.http_port > 65535 {
-            return Err(anyhow!("Invalid HTTP port: {}. Must be between 1 and 65535", config.http_port));
+            return Err(anyhow!(
+                "Invalid HTTP port: {}. Must be between 1 and 65535",
+                config.http_port
+            ));
         }
 
         // Check for port conflicts
@@ -165,7 +196,10 @@ impl Validator {
         if config.https_enabled {
             if let Some(https_port) = config.https_port {
                 if https_port == 0 || https_port > 65535 {
-                    return Err(anyhow!("Invalid HTTPS port: {}. Must be between 1 and 65535", https_port));
+                    return Err(anyhow!(
+                        "Invalid HTTPS port: {}. Must be between 1 and 65535",
+                        https_port
+                    ));
                 }
                 if https_port == config.http_port || https_port == config.internal_port {
                     return Err(anyhow!("HTTPS port conflicts with other ports"));
@@ -193,8 +227,11 @@ impl Validator {
         // Validate database type
         let valid_types = ["sqlite", "postgresql", "mysql", "mariadb"];
         if !valid_types.contains(&config.database_type.as_str()) {
-            return Err(anyhow!("Invalid database type: {}. Must be one of: {}", 
-                config.database_type, valid_types.join(", ")));
+            return Err(anyhow!(
+                "Invalid database type: {}. Must be one of: {}",
+                config.database_type,
+                valid_types.join(", ")
+            ));
         }
 
         // Validate database URL/connection string
@@ -206,13 +243,13 @@ impl Validator {
         match config.database_type.as_str() {
             "sqlite" => {
                 self.validate_sqlite_path(&config.database_url)?;
-            },
+            }
             "postgresql" => {
                 self.validate_postgres_url(&config.database_url)?;
-            },
+            }
             "mysql" | "mariadb" => {
                 self.validate_mysql_url(&config.database_url)?;
-            },
+            }
             _ => {} // Already validated above
         }
 
@@ -223,7 +260,9 @@ impl Validator {
     fn validate_grid_config(&self, config: &SetupConfig) -> Result<()> {
         if config.setup_mode == "grid-region" {
             // Grid URI is required for grid regions
-            let grid_uri = config.grid_uri.as_ref()
+            let grid_uri = config
+                .grid_uri
+                .as_ref()
                 .ok_or_else(|| anyhow!("Grid URI is required for grid-region mode"))?;
 
             if grid_uri.trim().is_empty() {
@@ -252,7 +291,10 @@ impl Validator {
                 return Err(anyhow!("Max threads cannot be zero"));
             }
             if max_threads > 1000 {
-                warn!("Very high thread count ({}) may impact performance", max_threads);
+                warn!(
+                    "Very high thread count ({}) may impact performance",
+                    max_threads
+                );
             }
         }
 
@@ -268,9 +310,11 @@ impl Validator {
         }
 
         for part in parts {
-            let coord: u32 = part.trim().parse()
+            let coord: u32 = part
+                .trim()
+                .parse()
                 .map_err(|_| anyhow!("Region coordinates must be positive integers"))?;
-            
+
             // Check coordinate bounds (OpenSim limit)
             if coord > 1000000 {
                 return Err(anyhow!("Region coordinate too large (max 1,000,000)"));
@@ -296,11 +340,11 @@ impl Validator {
             if label.is_empty() || label.len() > 63 {
                 return Err(anyhow!("Invalid hostname format"));
             }
-            
+
             if !label.chars().all(|c| c.is_alphanumeric() || c == '-') {
                 return Err(anyhow!("Hostname contains invalid characters"));
             }
-            
+
             if label.starts_with('-') || label.ends_with('-') {
                 return Err(anyhow!("Hostname labels cannot start or end with hyphen"));
             }
@@ -318,7 +362,10 @@ impl Validator {
         // Check if directory exists (if path contains directory)
         if let Some(parent) = Path::new(path).parent() {
             if !parent.as_os_str().is_empty() && !parent.exists() {
-                return Err(anyhow!("SQLite database directory does not exist: {}", parent.display()));
+                return Err(anyhow!(
+                    "SQLite database directory does not exist: {}",
+                    parent.display()
+                ));
             }
         }
 
@@ -328,7 +375,9 @@ impl Validator {
     fn validate_postgres_url(&self, url: &str) -> Result<()> {
         // Basic PostgreSQL URL validation
         if !url.starts_with("postgresql://") && !url.starts_with("postgres://") {
-            return Err(anyhow!("PostgreSQL URL must start with postgresql:// or postgres://"));
+            return Err(anyhow!(
+                "PostgreSQL URL must start with postgresql:// or postgres://"
+            ));
         }
 
         // Try to parse as URL
@@ -352,7 +401,9 @@ impl Validator {
                 return Err(anyhow!("MySQL connection string must specify database"));
             }
         } else {
-            return Err(anyhow!("MySQL URL must be either mysql:// format or connection string"));
+            return Err(anyhow!(
+                "MySQL URL must be either mysql:// format or connection string"
+            ));
         }
 
         Ok(())
@@ -442,7 +493,7 @@ mod tests {
     #[test]
     fn test_region_location_validation() {
         let validator = Validator::new();
-        
+
         assert!(validator.validate_region_location("1000,1000").is_ok());
         assert!(validator.validate_region_location("0,0").is_ok());
         assert!(validator.validate_region_location("invalid").is_err());
@@ -453,7 +504,7 @@ mod tests {
     #[test]
     fn test_hostname_validation() {
         let validator = Validator::new();
-        
+
         assert!(validator.validate_hostname("example.com").is_ok());
         assert!(validator.validate_hostname("192.168.1.1").is_ok());
         assert!(validator.validate_hostname("sub.example.com").is_ok());
@@ -464,17 +515,23 @@ mod tests {
     #[test]
     fn test_postgres_url_validation() {
         let validator = Validator::new();
-        
-        assert!(validator.validate_postgres_url("postgresql://user:pass@localhost/db").is_ok());
-        assert!(validator.validate_postgres_url("postgres://user:pass@localhost/db").is_ok());
-        assert!(validator.validate_postgres_url("mysql://user:pass@localhost/db").is_err());
+
+        assert!(validator
+            .validate_postgres_url("postgresql://user:pass@localhost/db")
+            .is_ok());
+        assert!(validator
+            .validate_postgres_url("postgres://user:pass@localhost/db")
+            .is_ok());
+        assert!(validator
+            .validate_postgres_url("mysql://user:pass@localhost/db")
+            .is_err());
         assert!(validator.validate_postgres_url("invalid-url").is_err());
     }
 
     #[test]
     fn test_is_power_of_two() {
         let validator = Validator::new();
-        
+
         assert!(validator.is_power_of_two(256));
         assert!(validator.is_power_of_two(512));
         assert!(!validator.is_power_of_two(300));

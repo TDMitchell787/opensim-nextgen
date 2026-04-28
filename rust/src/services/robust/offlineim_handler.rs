@@ -1,11 +1,11 @@
 use axum::extract::State;
+use axum::http::{header, StatusCode};
 use axum::response::IntoResponse;
-use axum::http::{StatusCode, header};
-use tracing::{info, warn, debug};
 use std::collections::HashMap;
+use tracing::{debug, info, warn};
 
-use super::RobustState;
 use super::xml_response::*;
+use super::RobustState;
 use crate::services::traits::OfflineIM;
 
 pub async fn handle_offlineim(
@@ -13,7 +13,11 @@ pub async fn handle_offlineim(
     body: String,
 ) -> axum::response::Response {
     let params = parse_form_body(&body);
-    let method = params.get("METHOD").or_else(|| params.get("method")).cloned().unwrap_or_default();
+    let method = params
+        .get("METHOD")
+        .or_else(|| params.get("method"))
+        .cloned()
+        .unwrap_or_default();
 
     debug!("[OFFLINEIM] Request: METHOD={}", method);
 
@@ -27,7 +31,11 @@ pub async fn handle_offlineim(
 
     match method.to_uppercase().as_str() {
         "GET" => {
-            let principal_id = params.get("PrincipalID").or_else(|| params.get("PRINCIPALID")).cloned().unwrap_or_default();
+            let principal_id = params
+                .get("PrincipalID")
+                .or_else(|| params.get("PRINCIPALID"))
+                .cloned()
+                .unwrap_or_default();
             debug!("[OFFLINEIM] GET: {}", principal_id);
 
             match svc.get_messages(&principal_id).await {
@@ -35,14 +43,17 @@ pub async fn handle_offlineim(
                     if messages.is_empty() {
                         return null_result_response();
                     }
-                    let items: Vec<HashMap<String, String>> = messages.iter().map(|im| {
-                        let mut m = HashMap::new();
-                        m.insert("PrincipalID".to_string(), im.principal_id.clone());
-                        m.insert("FromID".to_string(), im.from_id.clone());
-                        m.insert("Message".to_string(), im.message.clone());
-                        m.insert("TMStamp".to_string(), im.timestamp.to_string());
-                        m
-                    }).collect();
+                    let items: Vec<HashMap<String, String>> = messages
+                        .iter()
+                        .map(|im| {
+                            let mut m = HashMap::new();
+                            m.insert("PrincipalID".to_string(), im.principal_id.clone());
+                            m.insert("FromID".to_string(), im.from_id.clone());
+                            m.insert("Message".to_string(), im.message.clone());
+                            m.insert("TMStamp".to_string(), im.timestamp.to_string());
+                            m
+                        })
+                        .collect();
                     let xml = list_result("im", items);
                     (StatusCode::OK, [(header::CONTENT_TYPE, "text/xml")], xml).into_response()
                 }
@@ -53,11 +64,23 @@ pub async fn handle_offlineim(
             }
         }
         "STORE" => {
-            let principal_id = params.get("PrincipalID").or_else(|| params.get("PRINCIPALID"))
-                .or_else(|| params.get("ToAgentID")).cloned().unwrap_or_default();
-            let from_id = params.get("FromID").or_else(|| params.get("FROMID"))
-                .or_else(|| params.get("FromAgentID")).cloned().unwrap_or_default();
-            let message = params.get("Message").or_else(|| params.get("MESSAGE")).cloned().unwrap_or_default();
+            let principal_id = params
+                .get("PrincipalID")
+                .or_else(|| params.get("PRINCIPALID"))
+                .or_else(|| params.get("ToAgentID"))
+                .cloned()
+                .unwrap_or_default();
+            let from_id = params
+                .get("FromID")
+                .or_else(|| params.get("FROMID"))
+                .or_else(|| params.get("FromAgentID"))
+                .cloned()
+                .unwrap_or_default();
+            let message = params
+                .get("Message")
+                .or_else(|| params.get("MESSAGE"))
+                .cloned()
+                .unwrap_or_default();
 
             info!("[OFFLINEIM] STORE: from={} to={}", from_id, principal_id);
 
@@ -79,8 +102,12 @@ pub async fn handle_offlineim(
             }
         }
         "DELETE" => {
-            let user_id = params.get("UserID").or_else(|| params.get("USERID"))
-                .or_else(|| params.get("PrincipalID")).cloned().unwrap_or_default();
+            let user_id = params
+                .get("UserID")
+                .or_else(|| params.get("USERID"))
+                .or_else(|| params.get("PrincipalID"))
+                .cloned()
+                .unwrap_or_default();
             info!("[OFFLINEIM] DELETE: {}", user_id);
 
             match svc.delete_messages(&user_id).await {

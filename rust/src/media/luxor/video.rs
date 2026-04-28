@@ -1,5 +1,5 @@
-use serde::{Serialize, Deserialize};
 use super::camera::CameraRig;
+use serde::{Deserialize, Serialize};
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct CameraKeyframe {
@@ -29,7 +29,9 @@ impl PathType {
     pub fn from_name(name: &str) -> Option<Self> {
         match name.to_lowercase().as_str() {
             "linear" | "straight" => Some(PathType::Linear),
-            "catmullrom" | "catmull-rom" | "catmull_rom" | "smooth" | "spline" => Some(PathType::CatmullRom),
+            "catmullrom" | "catmull-rom" | "catmull_rom" | "smooth" | "spline" => {
+                Some(PathType::CatmullRom)
+            }
             "orbit" | "circle" | "rotate" => Some(PathType::Orbit),
             _ => None,
         }
@@ -68,7 +70,13 @@ impl VideoJob {
         }
     }
 
-    pub fn dolly(start: [f32; 3], end: [f32; 3], look_at: [f32; 3], duration_secs: f32, fps: u32) -> Self {
+    pub fn dolly(
+        start: [f32; 3],
+        end: [f32; 3],
+        look_at: [f32; 3],
+        duration_secs: f32,
+        fps: u32,
+    ) -> Self {
         let keyframes = vec![
             CameraKeyframe {
                 position: start,
@@ -137,9 +145,7 @@ impl VideoJob {
         };
 
         match self.path_type {
-            PathType::Linear => {
-                interpolate_linear(kf1, kf2, segment_t)
-            }
+            PathType::Linear => interpolate_linear(kf1, kf2, segment_t),
             PathType::CatmullRom | PathType::Orbit => {
                 let i0 = if i1 > 0 { i1 - 1 } else { i1 };
                 let i3 = (i2 + 1).min(self.keyframes.len() - 1);
@@ -185,7 +191,13 @@ fn interpolate_catmull_rom(
     CameraRig {
         position: catmull_rom_3(kf0.position, kf1.position, kf2.position, kf3.position, t),
         look_at: catmull_rom_3(kf0.look_at, kf1.look_at, kf2.look_at, kf3.look_at, t),
-        focal_length_mm: catmull_rom_1(kf0.focal_length_mm, kf1.focal_length_mm, kf2.focal_length_mm, kf3.focal_length_mm, t),
+        focal_length_mm: catmull_rom_1(
+            kf0.focal_length_mm,
+            kf1.focal_length_mm,
+            kf2.focal_length_mm,
+            kf3.focal_length_mm,
+            t,
+        ),
         f_stop: catmull_rom_1(kf0.f_stop, kf1.f_stop, kf2.f_stop, kf3.f_stop, t),
         ..CameraRig::default()
     }
@@ -194,10 +206,10 @@ fn interpolate_catmull_rom(
 fn catmull_rom_1(p0: f32, p1: f32, p2: f32, p3: f32, t: f32) -> f32 {
     let t2 = t * t;
     let t3 = t2 * t;
-    0.5 * ((2.0 * p1) +
-        (-p0 + p2) * t +
-        (2.0 * p0 - 5.0 * p1 + 4.0 * p2 - p3) * t2 +
-        (-p0 + 3.0 * p1 - 3.0 * p2 + p3) * t3)
+    0.5 * ((2.0 * p1)
+        + (-p0 + p2) * t
+        + (2.0 * p0 - 5.0 * p1 + 4.0 * p2 - p3) * t2
+        + (-p0 + 3.0 * p1 - 3.0 * p2 + p3) * t3)
 }
 
 fn catmull_rom_3(p0: [f32; 3], p1: [f32; 3], p2: [f32; 3], p3: [f32; 3], t: f32) -> [f32; 3] {
@@ -234,7 +246,8 @@ mod tests {
             [118.0, 128.0, 27.0],
             [138.0, 128.0, 27.0],
             [128.0, 128.0, 25.0],
-            5.0, 24,
+            5.0,
+            24,
         );
         assert_eq!(job.keyframes.len(), 2);
         assert_eq!(job.total_frames(), 120);
@@ -246,7 +259,8 @@ mod tests {
             [0.0, 0.0, 10.0],
             [20.0, 0.0, 10.0],
             [10.0, 10.0, 0.0],
-            2.0, 30,
+            2.0,
+            30,
         );
 
         let cameras = job.interpolate_cameras();
@@ -262,7 +276,11 @@ mod tests {
         assert!((val - 1.0).abs() < 0.01, "t=0 should give p1, got {}", val);
 
         let val2 = catmull_rom_1(0.0, 1.0, 2.0, 3.0, 1.0);
-        assert!((val2 - 2.0).abs() < 0.01, "t=1 should give p2, got {}", val2);
+        assert!(
+            (val2 - 2.0).abs() < 0.01,
+            "t=1 should give p2, got {}",
+            val2
+        );
     }
 
     #[test]
@@ -283,7 +301,10 @@ mod tests {
     fn test_path_type_from_name() {
         assert_eq!(PathType::from_name("orbit"), Some(PathType::Orbit));
         assert_eq!(PathType::from_name("linear"), Some(PathType::Linear));
-        assert_eq!(PathType::from_name("catmull-rom"), Some(PathType::CatmullRom));
+        assert_eq!(
+            PathType::from_name("catmull-rom"),
+            Some(PathType::CatmullRom)
+        );
         assert_eq!(PathType::from_name("invalid"), None);
     }
 

@@ -1,10 +1,10 @@
-use std::collections::HashMap;
 use anyhow::Result;
+use std::collections::HashMap;
 use tracing::info;
 use uuid::Uuid;
 
-use super::vehicle_scripts::VehicleScriptLibrary;
 use super::vehicle_recipes::{self, VehicleRecipe};
+use super::vehicle_scripts::VehicleScriptLibrary;
 use crate::udp::action_bridge::ActionBridge;
 
 pub struct VehicleBuilder<'a> {
@@ -38,8 +38,13 @@ impl<'a> VehicleBuilder<'a> {
         tuning: &HashMap<String, f32>,
         requester_id: Uuid,
     ) -> Result<BuildResult> {
-        let recipe = vehicle_recipes::get_recipe(recipe_name)
-            .ok_or_else(|| anyhow::anyhow!("Unknown vehicle recipe: '{}'. Available: {:?}", recipe_name, vehicle_recipes::list_recipe_names()))?;
+        let recipe = vehicle_recipes::get_recipe(recipe_name).ok_or_else(|| {
+            anyhow::anyhow!(
+                "Unknown vehicle recipe: '{}'. Available: {:?}",
+                recipe_name,
+                vehicle_recipes::list_recipe_names()
+            )
+        })?;
 
         let scale_factor = tuning.get("SCALE").copied().unwrap_or(1.0);
         let use_scale = (scale_factor - 1.0).abs() > 0.01;
@@ -58,14 +63,30 @@ impl<'a> VehicleBuilder<'a> {
         let mut narration = Vec::new();
         let msg = format!("Building a {}...", recipe.description);
         narration.push(msg.clone());
-        let _ = self.bridge.say(npc_id, &self.speaker_name, &msg, position).await;
+        let _ = self
+            .bridge
+            .say(npc_id, &self.speaker_name, &msg, position)
+            .await;
 
-        info!("[VEHICLE_BUILDER] Building '{}' at [{:.1}, {:.1}, {:.1}] for {}",
-            recipe_name, position[0], position[1], position[2], requester_id);
+        info!(
+            "[VEHICLE_BUILDER] Building '{}' at [{:.1}, {:.1}, {:.1}] for {}",
+            recipe_name, position[0], position[1], position[2], requester_id
+        );
 
         narration.push(format!("Rezzing the {}...", root_spec.name));
-        let root_id = self.rez_prim(npc_id, root_spec.shape, position, root_spec.size, root_spec.name).await?;
-        info!("[VEHICLE_BUILDER] Root prim '{}' → local_id {}", root_spec.name, root_id);
+        let root_id = self
+            .rez_prim(
+                npc_id,
+                root_spec.shape,
+                position,
+                root_spec.size,
+                root_spec.name,
+            )
+            .await?;
+        info!(
+            "[VEHICLE_BUILDER] Root prim '{}' → local_id {}",
+            root_spec.name, root_id
+        );
 
         let mut child_ids: Vec<(String, u32, Option<&str>)> = Vec::new();
         for child in child_slice {
@@ -75,39 +96,76 @@ impl<'a> VehicleBuilder<'a> {
                 position[2] + child.offset[2],
             ];
             narration.push(format!("Adding {}...", child.name));
-            let child_id = self.rez_prim(npc_id, child.shape, child_pos, child.size, child.name).await?;
-            info!("[VEHICLE_BUILDER] Child '{}' → local_id {}", child.name, child_id);
+            let child_id = self
+                .rez_prim(npc_id, child.shape, child_pos, child.size, child.name)
+                .await?;
+            info!(
+                "[VEHICLE_BUILDER] Child '{}' → local_id {}",
+                child.name, child_id
+            );
             child_ids.push((child.name.to_string(), child_id, child.script_name));
         }
 
         let msg = format!("Linking {} components...", child_ids.len() + 1);
         narration.push(msg.clone());
-        let _ = self.bridge.say(npc_id, &self.speaker_name, &msg, position).await;
+        let _ = self
+            .bridge
+            .say(npc_id, &self.speaker_name, &msg, position)
+            .await;
         let mut link_ids: Vec<u32> = child_ids.iter().map(|(_, id, _)| *id).collect();
         link_ids.push(root_id);
-        info!("[VEHICLE_BUILDER] LinkObjects: children {:?}, root {} (root becomes link 1)",
-            &link_ids[..link_ids.len()-1], root_id);
-        self.bridge.link_objects(root_id, &link_ids[..link_ids.len()-1]).await?;
+        info!(
+            "[VEHICLE_BUILDER] LinkObjects: children {:?}, root {} (root becomes link 1)",
+            &link_ids[..link_ids.len() - 1],
+            root_id
+        );
+        self.bridge
+            .link_objects(root_id, &link_ids[..link_ids.len() - 1])
+            .await?;
 
         let msg = "Installing drive controller...".to_string();
         narration.push(msg.clone());
-        let _ = self.bridge.say(npc_id, &self.speaker_name, &msg, position).await;
+        let _ = self
+            .bridge
+            .say(npc_id, &self.speaker_name, &msg, position)
+            .await;
         let merged_tuning = self.merge_tuning(recipe, tuning);
-        if let Some(root_source) = self.scripts.get_script_with_tuning(recipe.root_script, &merged_tuning) {
-            self.bridge.insert_script(npc_id, root_id, recipe.root_script, &root_source).await?;
-            info!("[VEHICLE_BUILDER] Root script '{}' installed", recipe.root_script);
+        if let Some(root_source) = self
+            .scripts
+            .get_script_with_tuning(recipe.root_script, &merged_tuning)
+        {
+            self.bridge
+                .insert_script(npc_id, root_id, recipe.root_script, &root_source)
+                .await?;
+            info!(
+                "[VEHICLE_BUILDER] Root script '{}' installed",
+                recipe.root_script
+            );
         } else {
             info!("[VEHICLE_BUILDER] WARNING: Root script '{}' not found in library, using template fallback", recipe.root_script);
             let template_name = recipe.root_script.trim_end_matches(".lsl");
-            if let Some(source) = crate::ai::script_templates::apply_template(template_name, &self.tuning_to_string_map(&merged_tuning)) {
-                self.bridge.insert_script(npc_id, root_id, recipe.root_script, &source).await?;
-                info!("[VEHICLE_BUILDER] Root script from template '{}' installed", template_name);
+            if let Some(source) = crate::ai::script_templates::apply_template(
+                template_name,
+                &self.tuning_to_string_map(&merged_tuning),
+            ) {
+                self.bridge
+                    .insert_script(npc_id, root_id, recipe.root_script, &source)
+                    .await?;
+                info!(
+                    "[VEHICLE_BUILDER] Root script from template '{}' installed",
+                    template_name
+                );
             } else {
-                return Err(anyhow::anyhow!("Neither vehicle script '{}' nor template '{}' found", recipe.root_script, template_name));
+                return Err(anyhow::anyhow!(
+                    "Neither vehicle script '{}' nor template '{}' found",
+                    recipe.root_script,
+                    template_name
+                ));
             }
         }
 
-        let scripted_children: Vec<_> = child_ids.iter()
+        let scripted_children: Vec<_> = child_ids
+            .iter()
             .filter(|(_, _, script)| script.is_some())
             .collect();
         if !scripted_children.is_empty() {
@@ -115,10 +173,18 @@ impl<'a> VehicleBuilder<'a> {
             for (name, id, script_name) in &scripted_children {
                 let script = script_name.unwrap();
                 if let Some(source) = self.scripts.get_script(script) {
-                    self.bridge.insert_script(npc_id, *id, script, source).await?;
-                    info!("[VEHICLE_BUILDER] Child script '{}' → '{}' (local_id {})", script, name, id);
+                    self.bridge
+                        .insert_script(npc_id, *id, script, source)
+                        .await?;
+                    info!(
+                        "[VEHICLE_BUILDER] Child script '{}' → '{}' (local_id {})",
+                        script, name, id
+                    );
                 } else {
-                    info!("[VEHICLE_BUILDER] WARNING: Child script '{}' not found for '{}'", script, name);
+                    info!(
+                        "[VEHICLE_BUILDER] WARNING: Child script '{}' not found for '{}'",
+                        script, name
+                    );
                 }
             }
         }
@@ -128,25 +194,41 @@ impl<'a> VehicleBuilder<'a> {
             if let Some(hud_source) = self.scripts.get_script(hud_script) {
                 let hud_pos = [position[0] + 2.0, position[1] + 2.0, position[2] + 1.0];
                 narration.push("Building HUD...".to_string());
-                let hid = self.bridge.rez_box(npc_id, hud_pos, [0.1, 0.3, 0.05], "Vehicle HUD").await?;
-                self.bridge.insert_script(npc_id, hid, hud_script, hud_source).await?;
+                let hid = self
+                    .bridge
+                    .rez_box(npc_id, hud_pos, [0.1, 0.3, 0.05], "Vehicle HUD")
+                    .await?;
+                self.bridge
+                    .insert_script(npc_id, hid, hud_script, hud_source)
+                    .await?;
                 self.bridge.give_object(hid, requester_id).await?;
                 hud_id = Some(hid);
-                info!("[VEHICLE_BUILDER] HUD '{}' given to {}", hud_script, requester_id);
+                info!(
+                    "[VEHICLE_BUILDER] HUD '{}' given to {}",
+                    hud_script, requester_id
+                );
             }
         }
 
         let usage = self.usage_instructions(recipe_name);
         let msg = format!("Your {} is ready! {}", recipe_name, usage);
         narration.push(msg.clone());
-        let _ = self.bridge.say(npc_id, &self.speaker_name, &msg, position).await;
+        let _ = self
+            .bridge
+            .say(npc_id, &self.speaker_name, &msg, position)
+            .await;
 
-        let result_child_ids: Vec<(String, u32)> = child_ids.into_iter()
+        let result_child_ids: Vec<(String, u32)> = child_ids
+            .into_iter()
             .map(|(name, id, _)| (name, id))
             .collect();
 
-        info!("[VEHICLE_BUILDER] Build complete: root={}, children={}, hud={}",
-            root_id, result_child_ids.len(), hud_id.is_some());
+        info!(
+            "[VEHICLE_BUILDER] Build complete: root={}, children={}, hud={}",
+            root_id,
+            result_child_ids.len(),
+            hud_id.is_some()
+        );
 
         Ok(BuildResult {
             root_id,
@@ -157,7 +239,14 @@ impl<'a> VehicleBuilder<'a> {
         })
     }
 
-    async fn rez_prim(&self, npc_id: Uuid, shape: &str, position: [f32; 3], size: [f32; 3], name: &str) -> Result<u32> {
+    async fn rez_prim(
+        &self,
+        npc_id: Uuid,
+        shape: &str,
+        position: [f32; 3],
+        size: [f32; 3],
+        name: &str,
+    ) -> Result<u32> {
         match shape {
             "box" => self.bridge.rez_box(npc_id, position, size, name).await,
             "cylinder" => self.bridge.rez_cylinder(npc_id, position, size, name).await,
@@ -166,7 +255,11 @@ impl<'a> VehicleBuilder<'a> {
         }
     }
 
-    fn merge_tuning(&self, recipe: &VehicleRecipe, overrides: &HashMap<String, f32>) -> HashMap<String, f32> {
+    fn merge_tuning(
+        &self,
+        recipe: &VehicleRecipe,
+        overrides: &HashMap<String, f32>,
+    ) -> HashMap<String, f32> {
         let mut merged = HashMap::new();
         for &(name, default) in recipe.tuning_defaults {
             merged.insert(name.to_string(), *overrides.get(name).unwrap_or(&default));
@@ -180,13 +273,16 @@ impl<'a> VehicleBuilder<'a> {
     }
 
     fn tuning_to_string_map(&self, tuning: &HashMap<String, f32>) -> HashMap<String, String> {
-        tuning.iter().map(|(k, v)| {
-            if v.fract() == 0.0 && *v >= i32::MIN as f32 && *v <= i32::MAX as f32 {
-                (k.clone(), format!("{}", *v as i32))
-            } else {
-                (k.clone(), format!("{:.1}", v))
-            }
-        }).collect()
+        tuning
+            .iter()
+            .map(|(k, v)| {
+                if v.fract() == 0.0 && *v >= i32::MIN as f32 && *v <= i32::MAX as f32 {
+                    (k.clone(), format!("{}", *v as i32))
+                } else {
+                    (k.clone(), format!("{:.1}", v))
+                }
+            })
+            .collect()
     }
 
     fn usage_instructions(&self, recipe_name: &str) -> &'static str {
@@ -207,7 +303,10 @@ impl<'a> VehicleBuilder<'a> {
 mod tests {
     use super::*;
 
-    fn merge_tuning_standalone(recipe: &VehicleRecipe, overrides: &HashMap<String, f32>) -> HashMap<String, f32> {
+    fn merge_tuning_standalone(
+        recipe: &VehicleRecipe,
+        overrides: &HashMap<String, f32>,
+    ) -> HashMap<String, f32> {
         let mut merged = HashMap::new();
         for &(name, default) in recipe.tuning_defaults {
             merged.insert(name.to_string(), *overrides.get(name).unwrap_or(&default));
@@ -241,8 +340,12 @@ mod tests {
     #[test]
     fn test_usage_instructions_coverage() {
         let instructions = [
-            ("car", "W/S"), ("bike", "W/S"), ("plane", "throttle"),
-            ("vtol", "hover"), ("vessel", "sails"), ("starship", "impulse"),
+            ("car", "W/S"),
+            ("bike", "W/S"),
+            ("plane", "throttle"),
+            ("vtol", "hover"),
+            ("vessel", "sails"),
+            ("starship", "impulse"),
         ];
         for (name, keyword) in &instructions {
             let recipe = vehicle_recipes::get_recipe(name).unwrap();
@@ -256,7 +359,12 @@ mod tests {
                 "starship" => "Sit to board. Say 'impulse' or 'warp N' for propulsion. Say 'red alert' for combat.",
                 _ => "Sit on it to operate.",
             };
-            assert!(usage.contains(keyword), "Recipe '{}' should contain '{}'", name, keyword);
+            assert!(
+                usage.contains(keyword),
+                "Recipe '{}' should contain '{}'",
+                name,
+                keyword
+            );
         }
     }
 }

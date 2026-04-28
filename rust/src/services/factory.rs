@@ -13,20 +13,18 @@ use std::sync::Arc;
 use tracing::info;
 
 use crate::database::multi_backend::DatabaseConnection;
-use crate::services::traits::{
-    ServiceMode, ServiceConfig,
-    GridServiceTrait, UserAccountServiceTrait, AssetServiceTrait,
-    AuthenticationServiceTrait, InventoryServiceTrait, PresenceServiceTrait,
-    AvatarServiceTrait,
-};
 use crate::services::local::{
-    LocalGridService, LocalUserAccountService, LocalAssetService,
-    LocalAuthenticationService, LocalInventoryService, LocalPresenceService,
+    LocalAssetService, LocalAuthenticationService, LocalGridService, LocalInventoryService,
+    LocalPresenceService, LocalUserAccountService,
 };
 use crate::services::remote::{
-    RemoteGridService, RemoteUserAccountService, RemoteAssetService,
-    RemoteAuthenticationService, RemoteInventoryService, RemotePresenceService,
-    RemoteAvatarService,
+    RemoteAssetService, RemoteAuthenticationService, RemoteAvatarService, RemoteGridService,
+    RemoteInventoryService, RemotePresenceService, RemoteUserAccountService,
+};
+use crate::services::traits::{
+    AssetServiceTrait, AuthenticationServiceTrait, AvatarServiceTrait, GridServiceTrait,
+    InventoryServiceTrait, PresenceServiceTrait, ServiceConfig, ServiceMode,
+    UserAccountServiceTrait,
 };
 
 pub struct ServiceFactory;
@@ -44,7 +42,9 @@ impl ServiceFactory {
                 Ok(Arc::new(LocalGridService::new(conn)))
             }
             ServiceMode::Grid => {
-                let uri = config.grid_server_uri.as_ref()
+                let uri = config
+                    .grid_server_uri
+                    .as_ref()
                     .ok_or_else(|| anyhow!("Grid server URI required for grid mode"))?;
                 info!("Creating remote grid service (grid mode): {}", uri);
                 Ok(Arc::new(RemoteGridService::new(uri)))
@@ -57,7 +57,9 @@ impl ServiceFactory {
                     info!("Creating local grid service (hybrid mode - fallback to local)");
                     Ok(Arc::new(LocalGridService::new(conn)))
                 } else {
-                    Err(anyhow!("Either grid server URI or database connection required"))
+                    Err(anyhow!(
+                        "Either grid server URI or database connection required"
+                    ))
                 }
             }
         }
@@ -75,7 +77,9 @@ impl ServiceFactory {
                 Ok(Arc::new(LocalUserAccountService::new(conn)))
             }
             ServiceMode::Grid => {
-                let uri = config.user_account_server_uri.as_ref()
+                let uri = config
+                    .user_account_server_uri
+                    .as_ref()
                     .or(config.grid_server_uri.as_ref())
                     .ok_or_else(|| anyhow!("User account server URI required for grid mode"))?;
                 info!("Creating remote user account service (grid mode): {}", uri);
@@ -83,13 +87,18 @@ impl ServiceFactory {
             }
             ServiceMode::Hybrid => {
                 if let Some(uri) = &config.user_account_server_uri {
-                    info!("Creating remote user account service (hybrid mode): {}", uri);
+                    info!(
+                        "Creating remote user account service (hybrid mode): {}",
+                        uri
+                    );
                     Ok(Arc::new(RemoteUserAccountService::new(uri)))
                 } else if let Some(conn) = db_connection {
                     info!("Creating local user account service (hybrid mode - fallback to local)");
                     Ok(Arc::new(LocalUserAccountService::new(conn)))
                 } else {
-                    Err(anyhow!("Either user account server URI or database connection required"))
+                    Err(anyhow!(
+                        "Either user account server URI or database connection required"
+                    ))
                 }
             }
         }
@@ -107,7 +116,9 @@ impl ServiceFactory {
                 Ok(Arc::new(LocalAssetService::new(conn)))
             }
             ServiceMode::Grid => {
-                let uri = config.asset_server_uri.as_ref()
+                let uri = config
+                    .asset_server_uri
+                    .as_ref()
                     .or(config.grid_server_uri.as_ref())
                     .ok_or_else(|| anyhow!("Asset server URI required for grid mode"))?;
                 info!("Creating remote asset service (grid mode): {}", uri);
@@ -121,7 +132,9 @@ impl ServiceFactory {
                     info!("Creating local asset service (hybrid mode - fallback to local)");
                     Ok(Arc::new(LocalAssetService::new(conn)))
                 } else {
-                    Err(anyhow!("Either asset server URI or database connection required"))
+                    Err(anyhow!(
+                        "Either asset server URI or database connection required"
+                    ))
                 }
             }
         }
@@ -139,21 +152,33 @@ impl ServiceFactory {
                 Ok(Arc::new(LocalAuthenticationService::new(conn)))
             }
             ServiceMode::Grid => {
-                let uri = config.authentication_server_uri.as_ref()
+                let uri = config
+                    .authentication_server_uri
+                    .as_ref()
                     .or(config.grid_server_uri.as_ref())
                     .ok_or_else(|| anyhow!("Authentication server URI required for grid mode"))?;
-                info!("Creating remote authentication service (grid mode): {}", uri);
+                info!(
+                    "Creating remote authentication service (grid mode): {}",
+                    uri
+                );
                 Ok(Arc::new(RemoteAuthenticationService::new(uri)))
             }
             ServiceMode::Hybrid => {
                 if let Some(uri) = &config.authentication_server_uri {
-                    info!("Creating remote authentication service (hybrid mode): {}", uri);
+                    info!(
+                        "Creating remote authentication service (hybrid mode): {}",
+                        uri
+                    );
                     Ok(Arc::new(RemoteAuthenticationService::new(uri)))
                 } else if let Some(conn) = db_connection {
-                    info!("Creating local authentication service (hybrid mode - fallback to local)");
+                    info!(
+                        "Creating local authentication service (hybrid mode - fallback to local)"
+                    );
                     Ok(Arc::new(LocalAuthenticationService::new(conn)))
                 } else {
-                    Err(anyhow!("Either authentication server URI or database connection required"))
+                    Err(anyhow!(
+                        "Either authentication server URI or database connection required"
+                    ))
                 }
             }
         }
@@ -171,7 +196,9 @@ impl ServiceFactory {
                 Ok(Arc::new(LocalInventoryService::new(conn)))
             }
             ServiceMode::Grid => {
-                let uri = config.inventory_server_uri.as_ref()
+                let uri = config
+                    .inventory_server_uri
+                    .as_ref()
                     .or(config.grid_server_uri.as_ref())
                     .ok_or_else(|| anyhow!("Inventory server URI required for grid mode"))?;
                 info!("Creating remote inventory service (grid mode): {}", uri);
@@ -185,7 +212,9 @@ impl ServiceFactory {
                     info!("Creating local inventory service (hybrid mode - fallback to local)");
                     Ok(Arc::new(LocalInventoryService::new(conn)))
                 } else {
-                    Err(anyhow!("Either inventory server URI or database connection required"))
+                    Err(anyhow!(
+                        "Either inventory server URI or database connection required"
+                    ))
                 }
             }
         }
@@ -203,7 +232,9 @@ impl ServiceFactory {
                 Ok(Arc::new(LocalPresenceService::new(conn)))
             }
             ServiceMode::Grid => {
-                let uri = config.presence_server_uri.as_ref()
+                let uri = config
+                    .presence_server_uri
+                    .as_ref()
                     .or(config.grid_server_uri.as_ref())
                     .ok_or_else(|| anyhow!("Presence server URI required for grid mode"))?;
                 info!("Creating remote presence service (grid mode): {}", uri);
@@ -217,7 +248,9 @@ impl ServiceFactory {
                     info!("Creating local presence service (hybrid mode - fallback to local)");
                     Ok(Arc::new(LocalPresenceService::new(conn)))
                 } else {
-                    Err(anyhow!("Either presence server URI or database connection required"))
+                    Err(anyhow!(
+                        "Either presence server URI or database connection required"
+                    ))
                 }
             }
         }
@@ -228,12 +261,12 @@ impl ServiceFactory {
         local_avatar_service: Option<Arc<dyn AvatarServiceTrait>>,
     ) -> Result<Arc<dyn AvatarServiceTrait>> {
         match config.mode {
-            ServiceMode::Standalone => {
-                local_avatar_service
-                    .ok_or_else(|| anyhow!("Local avatar service required for standalone mode"))
-            }
+            ServiceMode::Standalone => local_avatar_service
+                .ok_or_else(|| anyhow!("Local avatar service required for standalone mode")),
             ServiceMode::Grid => {
-                let uri = config.avatar_server_uri.as_ref()
+                let uri = config
+                    .avatar_server_uri
+                    .as_ref()
                     .or(config.grid_server_uri.as_ref())
                     .ok_or_else(|| anyhow!("Avatar server URI required for grid mode"))?;
                 info!("Creating remote avatar service (grid mode): {}", uri);
@@ -244,8 +277,9 @@ impl ServiceFactory {
                     info!("Creating remote avatar service (hybrid mode): {}", uri);
                     Ok(Arc::new(RemoteAvatarService::new(uri)))
                 } else {
-                    local_avatar_service
-                        .ok_or_else(|| anyhow!("Either avatar server URI or local avatar service required"))
+                    local_avatar_service.ok_or_else(|| {
+                        anyhow!("Either avatar server URI or local avatar service required")
+                    })
                 }
             }
         }
@@ -268,13 +302,19 @@ impl ServiceContainer {
         config: ServiceConfig,
         db_connection: Option<Arc<DatabaseConnection>>,
     ) -> Result<Self> {
-        info!("Initializing service container with mode: {:?}", config.mode);
+        info!(
+            "Initializing service container with mode: {:?}",
+            config.mode
+        );
 
         let grid_service = ServiceFactory::create_grid_service(&config, db_connection.clone())?;
-        let user_account_service = ServiceFactory::create_user_account_service(&config, db_connection.clone())?;
+        let user_account_service =
+            ServiceFactory::create_user_account_service(&config, db_connection.clone())?;
         let asset_service = ServiceFactory::create_asset_service(&config, db_connection.clone())?;
-        let authentication_service = ServiceFactory::create_authentication_service(&config, db_connection.clone())?;
-        let inventory_service = ServiceFactory::create_inventory_service(&config, db_connection.clone())?;
+        let authentication_service =
+            ServiceFactory::create_authentication_service(&config, db_connection.clone())?;
+        let inventory_service =
+            ServiceFactory::create_inventory_service(&config, db_connection.clone())?;
         let presence_service = ServiceFactory::create_presence_service(&config, db_connection)?;
         let avatar_service = ServiceFactory::create_avatar_service(&config, None).ok();
 
@@ -359,7 +399,10 @@ mod tests {
         };
 
         assert_eq!(config.mode, ServiceMode::Grid);
-        assert_eq!(config.grid_server_uri, Some("http://localhost:8003".to_string()));
+        assert_eq!(
+            config.grid_server_uri,
+            Some("http://localhost:8003".to_string())
+        );
     }
 
     #[test]

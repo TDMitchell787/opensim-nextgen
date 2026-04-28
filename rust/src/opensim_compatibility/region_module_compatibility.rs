@@ -3,11 +3,11 @@
 //! Provides a compatibility layer for existing OpenSimulator region modules
 //! allowing them to work with OpenSim Next's architecture.
 
+use anyhow::{anyhow, Result};
 use std::collections::HashMap;
-use std::sync::Arc;
 use std::path::PathBuf;
+use std::sync::Arc;
 use tokio::sync::RwLock;
-use anyhow::{Result, anyhow};
 
 /// Region module compatibility manager
 pub struct RegionModuleCompatibility {
@@ -196,16 +196,17 @@ impl RegionModuleCompatibility {
 
         for line in config_data.lines() {
             let line = line.trim();
-            
+
             if line.starts_with('[') && line.ends_with(']') {
                 // Save previous config
                 if !current_section.is_empty() {
                     current_config.config_section = current_section.clone();
-                    self.module_configs.insert(current_section.clone(), current_config.clone());
+                    self.module_configs
+                        .insert(current_section.clone(), current_config.clone());
                 }
-                
+
                 // Start new section
-                current_section = line[1..line.len()-1].to_string();
+                current_section = line[1..line.len() - 1].to_string();
                 current_config = ModuleConfiguration {
                     enabled: true,
                     priority: 0,
@@ -217,27 +218,27 @@ impl RegionModuleCompatibility {
             } else if let Some(eq_pos) = line.find('=') {
                 let key = line[..eq_pos].trim();
                 let value = line[eq_pos + 1..].trim().trim_matches('"');
-                
+
                 match key {
                     "Enabled" => current_config.enabled = value.to_lowercase() == "true",
                     "Priority" => current_config.priority = value.parse().unwrap_or(0),
                     "ServiceInterfaces" => {
-                        current_config.service_interfaces = value.split(',')
-                            .map(|s| s.trim().to_string())
-                            .collect();
+                        current_config.service_interfaces =
+                            value.split(',').map(|s| s.trim().to_string()).collect();
                     }
                     "EventSubscriptions" => {
-                        current_config.event_subscriptions = value.split(',')
-                            .map(|s| s.trim().to_string())
-                            .collect();
+                        current_config.event_subscriptions =
+                            value.split(',').map(|s| s.trim().to_string()).collect();
                     }
                     _ => {
-                        current_config.initialization_params.insert(key.to_string(), value.to_string());
+                        current_config
+                            .initialization_params
+                            .insert(key.to_string(), value.to_string());
                     }
                 }
             }
         }
-        
+
         // Save final config
         if !current_section.is_empty() {
             current_config.config_section = current_section.clone();
@@ -251,8 +252,11 @@ impl RegionModuleCompatibility {
     /// Register a compatibility module
     pub async fn register_module(&self, module: CompatibilityModule) -> Result<()> {
         let module_name = module.name.clone();
-        self.loaded_modules.write().await.insert(module_name.clone(), module);
-        
+        self.loaded_modules
+            .write()
+            .await
+            .insert(module_name.clone(), module);
+
         tracing::info!("Registered compatibility module: {}", module_name);
         Ok(())
     }
@@ -260,14 +264,14 @@ impl RegionModuleCompatibility {
     /// Initialize a module with OpenSim Next compatibility
     pub async fn initialize_module(&self, module_name: &str, scene_id: &str) -> Result<()> {
         let mut modules = self.loaded_modules.write().await;
-        
+
         if let Some(module) = modules.get_mut(module_name) {
             if module.initialization_state != InitializationState::NotInitialized {
                 return Ok(()); // Already initialized
             }
-            
+
             module.initialization_state = InitializationState::Initializing;
-            
+
             // Simulate module initialization process
             match module.module_type {
                 RegionModuleType::NonSharedRegionModule => {
@@ -277,21 +281,24 @@ impl RegionModuleCompatibility {
                     self.initialize_shared_module(module, scene_id).await?;
                 }
                 RegionModuleType::EntityTransferModule => {
-                    self.initialize_entity_transfer_module(module, scene_id).await?;
+                    self.initialize_entity_transfer_module(module, scene_id)
+                        .await?;
                 }
                 _ => {
                     self.initialize_generic_module(module, scene_id).await?;
                 }
             }
-            
+
             module.initialization_state = InitializationState::Initialized;
-            tracing::info!("Initialized module: {} for scene: {}", module_name, scene_id);
+            tracing::info!(
+                "Initialized module: {} for scene: {}",
+                module_name,
+                scene_id
+            );
         } else {
-            return Err(anyhow!(
-                format!("Module not found: {}", module_name)
-            ));
+            return Err(anyhow!(format!("Module not found: {}", module_name)));
         }
-        
+
         Ok(())
     }
 
@@ -302,8 +309,12 @@ impl RegionModuleCompatibility {
         scene_id: &str,
     ) -> Result<()> {
         // Non-shared modules are instantiated per region
-        tracing::debug!("Initializing non-shared module: {} for scene: {}", module.name, scene_id);
-        
+        tracing::debug!(
+            "Initializing non-shared module: {} for scene: {}",
+            module.name,
+            scene_id
+        );
+
         // Create scene interface for this module
         let scene_interface = SceneInterface {
             scene_id: scene_id.to_string(),
@@ -317,10 +328,10 @@ impl RegionModuleCompatibility {
                 registered_commands: HashMap::new(),
             },
         };
-        
+
         // Register standard OpenSim services this module might need
         self.register_standard_services(&scene_interface).await?;
-        
+
         Ok(())
     }
 
@@ -332,10 +343,10 @@ impl RegionModuleCompatibility {
     ) -> Result<()> {
         // Shared modules are instantiated once and shared across regions
         tracing::debug!("Initializing shared module: {}", module.name);
-        
+
         // Shared modules typically provide grid-wide services
         self.register_shared_services(module).await?;
-        
+
         Ok(())
     }
 
@@ -345,12 +356,18 @@ impl RegionModuleCompatibility {
         module: &mut CompatibilityModule,
         scene_id: &str,
     ) -> Result<()> {
-        tracing::debug!("Initializing entity transfer module: {} for scene: {}", module.name, scene_id);
-        
+        tracing::debug!(
+            "Initializing entity transfer module: {} for scene: {}",
+            module.name,
+            scene_id
+        );
+
         // Entity transfer modules handle avatar/object movement between regions
-        module.capabilities.push(ModuleCapability::HandleRegionEvents);
+        module
+            .capabilities
+            .push(ModuleCapability::HandleRegionEvents);
         module.capabilities.push(ModuleCapability::ManageUsers);
-        
+
         Ok(())
     }
 
@@ -360,11 +377,17 @@ impl RegionModuleCompatibility {
         module: &mut CompatibilityModule,
         scene_id: &str,
     ) -> Result<()> {
-        tracing::debug!("Initializing generic module: {} for scene: {}", module.name, scene_id);
-        
+        tracing::debug!(
+            "Initializing generic module: {} for scene: {}",
+            module.name,
+            scene_id
+        );
+
         // Generic initialization for unknown module types
-        module.capabilities.push(ModuleCapability::HandleClientEvents);
-        
+        module
+            .capabilities
+            .push(ModuleCapability::HandleClientEvents);
+
         Ok(())
     }
 
@@ -380,7 +403,7 @@ impl RegionModuleCompatibility {
             ("IGridService", "0.8"),
             ("IFriendsService", "0.8"),
         ];
-        
+
         for (service_name, version) in standard_services {
             let service = ServiceInterface {
                 name: service_name.to_string(),
@@ -388,32 +411,40 @@ impl RegionModuleCompatibility {
                 version: version.to_string(),
                 methods: self.get_standard_service_methods(service_name),
             };
-            
-            tracing::debug!("Registered service: {} for scene: {}", service_name, scene_interface.scene_id);
+
+            tracing::debug!(
+                "Registered service: {} for scene: {}",
+                service_name,
+                scene_interface.scene_id
+            );
         }
-        
+
         Ok(())
     }
 
     /// Register shared services
     async fn register_shared_services(&self, module: &CompatibilityModule) -> Result<()> {
         tracing::debug!("Registering shared services for module: {}", module.name);
-        
+
         // Shared services are typically grid-wide
         let shared_services = vec![
             "IGridService",
-            "IUserAccountService", 
+            "IUserAccountService",
             "IAuthenticationService",
             "IPresenceService",
             "IFriendsService",
             "IInventoryService",
             "IAssetService",
         ];
-        
+
         for service_name in shared_services {
-            tracing::debug!("Registered shared service: {} from module: {}", service_name, module.name);
+            tracing::debug!(
+                "Registered shared service: {} from module: {}",
+                service_name,
+                module.name
+            );
         }
-        
+
         Ok(())
     }
 
@@ -423,46 +454,38 @@ impl RegionModuleCompatibility {
             "IAssetService" => vec![
                 ServiceMethod {
                     name: "Get".to_string(),
-                    parameters: vec![
-                        MethodParameter {
-                            name: "id".to_string(),
-                            param_type: "string".to_string(),
-                            is_optional: false,
-                            default_value: None,
-                        }
-                    ],
+                    parameters: vec![MethodParameter {
+                        name: "id".to_string(),
+                        param_type: "string".to_string(),
+                        is_optional: false,
+                        default_value: None,
+                    }],
                     return_type: "AssetBase".to_string(),
                     is_async: true,
                 },
                 ServiceMethod {
                     name: "Store".to_string(),
-                    parameters: vec![
-                        MethodParameter {
-                            name: "asset".to_string(),
-                            param_type: "AssetBase".to_string(),
-                            is_optional: false,
-                            default_value: None,
-                        }
-                    ],
+                    parameters: vec![MethodParameter {
+                        name: "asset".to_string(),
+                        param_type: "AssetBase".to_string(),
+                        is_optional: false,
+                        default_value: None,
+                    }],
                     return_type: "string".to_string(),
                     is_async: true,
                 },
             ],
-            "IInventoryService" => vec![
-                ServiceMethod {
-                    name: "GetRootFolder".to_string(),
-                    parameters: vec![
-                        MethodParameter {
-                            name: "userID".to_string(),
-                            param_type: "UUID".to_string(),
-                            is_optional: false,
-                            default_value: None,
-                        }
-                    ],
-                    return_type: "InventoryFolderBase".to_string(),
-                    is_async: true,
-                },
-            ],
+            "IInventoryService" => vec![ServiceMethod {
+                name: "GetRootFolder".to_string(),
+                parameters: vec![MethodParameter {
+                    name: "userID".to_string(),
+                    param_type: "UUID".to_string(),
+                    is_optional: false,
+                    default_value: None,
+                }],
+                return_type: "InventoryFolderBase".to_string(),
+                is_async: true,
+            }],
             _ => Vec::new(),
         }
     }
@@ -470,16 +493,21 @@ impl RegionModuleCompatibility {
     /// Send event to modules
     pub async fn send_event(&self, event: ModuleEvent) -> Result<()> {
         let modules = self.loaded_modules.read().await;
-        
+
         for target_module in &event.target_modules {
             if let Some(module) = modules.get(target_module) {
-                if module.enabled && module.initialization_state == InitializationState::Initialized {
-                    tracing::debug!("Sending event {} to module: {}", event.event_type, target_module);
+                if module.enabled && module.initialization_state == InitializationState::Initialized
+                {
+                    tracing::debug!(
+                        "Sending event {} to module: {}",
+                        event.event_type,
+                        target_module
+                    );
                     // In a real implementation, this would invoke the module's event handler
                 }
             }
         }
-        
+
         Ok(())
     }
 
@@ -491,27 +519,37 @@ impl RegionModuleCompatibility {
         permission_level: PermissionLevel,
     ) -> Result<String> {
         for scene_interface in self.scene_interfaces.values() {
-            if let Some(cmd) = scene_interface.console_manager.registered_commands.get(command) {
+            if let Some(cmd) = scene_interface
+                .console_manager
+                .registered_commands
+                .get(command)
+            {
                 if Self::check_permission(&cmd.permission_level, &permission_level) {
-                    tracing::info!("Executing console command: {} from module: {}", command, cmd.module_name);
-                    return Ok(format!("Executed command '{}' with args: {:?}", command, args));
-                } else {
-                    return Err(anyhow!(
-                        format!("Insufficient permissions for command: {}", command)
+                    tracing::info!(
+                        "Executing console command: {} from module: {}",
+                        command,
+                        cmd.module_name
+                    );
+                    return Ok(format!(
+                        "Executed command '{}' with args: {:?}",
+                        command, args
                     ));
+                } else {
+                    return Err(anyhow!(format!(
+                        "Insufficient permissions for command: {}",
+                        command
+                    )));
                 }
             }
         }
-        
-        Err(anyhow!(
-            format!("Command not found: {}", command)
-        ))
+
+        Err(anyhow!(format!("Command not found: {}", command)))
     }
 
     /// Check permission level
     fn check_permission(required: &PermissionLevel, provided: &PermissionLevel) -> bool {
         use PermissionLevel::*;
-        
+
         match (required, provided) {
             (Public, _) => true,
             (Moderator, Moderator | Administrator | Developer | System) => true,
@@ -535,22 +573,24 @@ impl RegionModuleCompatibility {
     /// Enable/disable module
     pub async fn set_module_enabled(&self, module_name: &str, enabled: bool) -> Result<()> {
         let mut modules = self.loaded_modules.write().await;
-        
+
         if let Some(module) = modules.get_mut(module_name) {
             module.enabled = enabled;
-            tracing::info!("Module {} {}", module_name, if enabled { "enabled" } else { "disabled" });
+            tracing::info!(
+                "Module {} {}",
+                module_name,
+                if enabled { "enabled" } else { "disabled" }
+            );
             Ok(())
         } else {
-            Err(anyhow!(
-                format!("Module not found: {}", module_name)
-            ))
+            Err(anyhow!(format!("Module not found: {}", module_name)))
         }
     }
 
     /// Shutdown module compatibility system
     pub async fn shutdown(&self) -> Result<()> {
         let mut modules = self.loaded_modules.write().await;
-        
+
         for (name, module) in modules.iter_mut() {
             if module.enabled {
                 tracing::info!("Shutting down module: {}", name);
@@ -558,7 +598,7 @@ impl RegionModuleCompatibility {
                 module.initialization_state = InitializationState::NotInitialized;
             }
         }
-        
+
         modules.clear();
         tracing::info!("Region module compatibility system shutdown complete");
         Ok(())

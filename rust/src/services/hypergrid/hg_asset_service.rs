@@ -1,7 +1,7 @@
+use crate::services::traits::{AssetBase, AssetServiceTrait};
 use anyhow::Result;
+use tracing::{debug, info, warn};
 use uuid::Uuid;
-use tracing::{info, warn, debug};
-use crate::services::traits::{AssetServiceTrait, AssetBase};
 
 pub fn is_foreign_asset(asset_id: &str) -> bool {
     asset_id.contains('|') && (asset_id.starts_with("http://") || asset_id.starts_with("https://"))
@@ -34,7 +34,12 @@ pub async fn fetch_foreign_asset(grid_uri: &str, asset_id: Uuid) -> Result<Asset
 
     let data = response.bytes().await?.to_vec();
 
-    info!("Fetched foreign asset {} ({} bytes) from {}", asset_id, data.len(), grid_uri);
+    info!(
+        "Fetched foreign asset {} ({} bytes) from {}",
+        asset_id,
+        data.len(),
+        grid_uri
+    );
 
     Ok(AssetBase {
         id: asset_id.to_string(),
@@ -68,7 +73,10 @@ pub async fn get_asset_with_foreign_fallback(
                     return Ok(Some(asset));
                 }
                 Err(e) => {
-                    warn!("Failed to fetch foreign asset {} from {}: {}", local_id, grid_uri, e);
+                    warn!(
+                        "Failed to fetch foreign asset {} from {}: {}",
+                        local_id, grid_uri, e
+                    );
                     return Ok(None);
                 }
             }
@@ -85,15 +93,22 @@ mod tests {
 
     #[test]
     fn test_is_foreign_asset() {
-        assert!(is_foreign_asset("http://grid.example.com:8002|00000000-0000-0000-0000-000000000001"));
-        assert!(is_foreign_asset("https://secure.grid.com|abcdef01-2345-6789-abcd-ef0123456789"));
+        assert!(is_foreign_asset(
+            "http://grid.example.com:8002|00000000-0000-0000-0000-000000000001"
+        ));
+        assert!(is_foreign_asset(
+            "https://secure.grid.com|abcdef01-2345-6789-abcd-ef0123456789"
+        ));
         assert!(!is_foreign_asset("00000000-0000-0000-0000-000000000001"));
         assert!(!is_foreign_asset("not-a-foreign-asset"));
     }
 
     #[test]
     fn test_parse_foreign_asset() {
-        let (uri, id) = parse_foreign_asset("http://grid.example.com:8002|00000000-0000-0000-0000-000000000001").unwrap();
+        let (uri, id) = parse_foreign_asset(
+            "http://grid.example.com:8002|00000000-0000-0000-0000-000000000001",
+        )
+        .unwrap();
         assert_eq!(uri, "http://grid.example.com:8002");
         assert_eq!(id.to_string(), "00000000-0000-0000-0000-000000000001");
 

@@ -1,30 +1,30 @@
 //! Business Intelligence Engine
-//! 
+//!
 //! Advanced business intelligence, KPI tracking, and AI-powered
 //! insights for enterprise virtual world operations.
 
 use super::*;
-use tokio::sync::RwLock;
-use tracing::{info, warn, error, debug};
-use std::collections::{HashMap, BTreeMap};
+use std::collections::{BTreeMap, HashMap};
 use std::time::Duration;
+use tokio::sync::RwLock;
+use tracing::{debug, error, info, warn};
 
 /// Business Intelligence Engine
 pub struct BusinessIntelligenceEngine {
     database: Arc<DatabaseManager>,
     config: AnalyticsConfig,
-    
+
     // KPI Management
     kpi_registry: Arc<RwLock<HashMap<Uuid, BusinessKPI>>>,
     kpi_definitions: Arc<RwLock<Vec<KPIDefinition>>>,
-    
+
     // Insight Generation
     insight_engine: InsightEngine,
     ai_analytics: AIAnalyticsEngine,
-    
+
     // Dashboard Management
     dashboard_registry: Arc<RwLock<HashMap<Uuid, BusinessDashboard>>>,
-    
+
     // Real-time monitoring
     real_time_metrics: Arc<RwLock<RealTimeMetrics>>,
 }
@@ -395,10 +395,7 @@ pub trait InsightGenerator: Send + Sync {
 
 impl BusinessIntelligenceEngine {
     /// Create new business intelligence engine
-    pub fn new(
-        database: Arc<DatabaseManager>,
-        config: AnalyticsConfig,
-    ) -> AnalyticsResult<Self> {
+    pub fn new(database: Arc<DatabaseManager>, config: AnalyticsConfig) -> AnalyticsResult<Self> {
         Ok(Self {
             database,
             config,
@@ -410,24 +407,24 @@ impl BusinessIntelligenceEngine {
             real_time_metrics: Arc::new(RwLock::new(RealTimeMetrics::default())),
         })
     }
-    
+
     /// Initialize business intelligence engine
     pub async fn initialize(&self) -> AnalyticsResult<()> {
         info!("Initializing business intelligence engine");
-        
+
         // Load KPI definitions
         self.load_kpi_definitions().await?;
-        
+
         // Initialize default dashboards
         self.create_default_dashboards().await?;
-        
+
         // Start real-time monitoring
         self.start_real_time_monitoring().await?;
-        
+
         info!("Business intelligence engine initialized");
         Ok(())
     }
-    
+
     /// Create or update KPI
     pub async fn create_kpi(&self, definition: KPIDefinition) -> AnalyticsResult<BusinessKPI> {
         let kpi = BusinessKPI {
@@ -443,86 +440,99 @@ impl BusinessIntelligenceEngine {
             last_updated: Utc::now(),
             historical_values: Vec::new(),
         };
-        
+
         // Store in registry
         let mut registry = self.kpi_registry.write().await;
         registry.insert(kpi.kpi_id, kpi.clone());
-        
+
         Ok(kpi)
     }
-    
+
     /// Generate insights for time period
-    pub async fn generate_insights(&self, time_period: TimePeriod) -> AnalyticsResult<Vec<AnalyticsInsight>> {
+    pub async fn generate_insights(
+        &self,
+        time_period: TimePeriod,
+    ) -> AnalyticsResult<Vec<AnalyticsInsight>> {
         let mut insights = Vec::new();
-        
+
         // Generate AI-powered insights
         if self.config.ai_insights_enabled {
             insights.extend(self.ai_analytics.generate_insights(&time_period).await?);
         }
-        
+
         // Generate business insights
         insights.extend(self.generate_business_insights(&time_period).await?);
-        
+
         // Generate performance insights
         insights.extend(self.generate_performance_insights(&time_period).await?);
-        
+
         // Generate security insights
         if self.config.security_analytics_enabled {
             insights.extend(self.generate_security_insights(&time_period).await?);
         }
-        
+
         // Sort by impact score
-        insights.sort_by(|a, b| b.impact_score.partial_cmp(&a.impact_score).unwrap_or(std::cmp::Ordering::Equal));
-        
+        insights.sort_by(|a, b| {
+            b.impact_score
+                .partial_cmp(&a.impact_score)
+                .unwrap_or(std::cmp::Ordering::Equal)
+        });
+
         Ok(insights)
     }
-    
+
     /// Get business KPIs
-    pub async fn get_business_kpis(&self, category: Option<KPICategory>) -> AnalyticsResult<Vec<BusinessKPI>> {
+    pub async fn get_business_kpis(
+        &self,
+        category: Option<KPICategory>,
+    ) -> AnalyticsResult<Vec<BusinessKPI>> {
         let registry = self.kpi_registry.read().await;
         let mut kpis: Vec<BusinessKPI> = registry.values().cloned().collect();
-        
+
         if let Some(filter_category) = category {
-            kpis.retain(|kpi| std::mem::discriminant(&kpi.category) == std::mem::discriminant(&filter_category));
+            kpis.retain(|kpi| {
+                std::mem::discriminant(&kpi.category) == std::mem::discriminant(&filter_category)
+            });
         }
-        
+
         Ok(kpis)
     }
-    
+
     /// Create dashboard
     pub async fn create_dashboard(&self, dashboard: BusinessDashboard) -> AnalyticsResult<Uuid> {
         let dashboard_id = dashboard.dashboard_id;
-        
+
         let mut registry = self.dashboard_registry.write().await;
         registry.insert(dashboard_id, dashboard);
-        
+
         Ok(dashboard_id)
     }
-    
+
     /// Get dashboard
     pub async fn get_dashboard(&self, dashboard_id: Uuid) -> AnalyticsResult<BusinessDashboard> {
         let registry = self.dashboard_registry.read().await;
-        registry.get(&dashboard_id)
+        registry
+            .get(&dashboard_id)
             .cloned()
             .ok_or_else(|| AnalyticsError::ProcessingFailed {
-                reason: format!("Dashboard {} not found", dashboard_id)
+                reason: format!("Dashboard {} not found", dashboard_id),
             })
     }
-    
+
     /// Update real-time metrics
     pub async fn update_real_time_metrics(&self, metrics: RealTimeMetrics) -> AnalyticsResult<()> {
         let mut current_metrics = self.real_time_metrics.write().await;
         *current_metrics = metrics;
         Ok(())
     }
-    
+
     /// Get real-time metrics
     pub async fn get_real_time_metrics(&self) -> RealTimeMetrics {
         self.real_time_metrics.read().await.clone()
     }
-    
+
     // Private helper methods
-    
+
     async fn load_kpi_definitions(&self) -> AnalyticsResult<()> {
         // Load from database or create defaults
         let default_kpis = self.create_default_kpi_definitions();
@@ -530,7 +540,7 @@ impl BusinessIntelligenceEngine {
         definitions.extend(default_kpis);
         Ok(())
     }
-    
+
     fn create_default_kpi_definitions(&self) -> Vec<KPIDefinition> {
         vec![
             KPIDefinition {
@@ -538,7 +548,9 @@ impl BusinessIntelligenceEngine {
                 name: "Daily Active Users".to_string(),
                 description: "Number of unique users active within 24 hours".to_string(),
                 category: KPICategory::UserEngagement,
-                calculation_formula: "COUNT(DISTINCT user_id) WHERE last_activity > NOW() - INTERVAL 24 HOUR".to_string(),
+                calculation_formula:
+                    "COUNT(DISTINCT user_id) WHERE last_activity > NOW() - INTERVAL 24 HOUR"
+                        .to_string(),
                 data_sources: vec![DataSource::UserTracking],
                 update_frequency: UpdateFrequency::Hourly,
                 target_thresholds: KPIThresholds {
@@ -601,7 +613,7 @@ impl BusinessIntelligenceEngine {
             },
         ]
     }
-    
+
     async fn create_default_dashboards(&self) -> AnalyticsResult<()> {
         // Create executive dashboard
         let executive_dashboard = BusinessDashboard {
@@ -638,12 +650,12 @@ impl BusinessIntelligenceEngine {
             last_modified: Utc::now(),
             is_public: false,
         };
-        
+
         self.create_dashboard(executive_dashboard).await?;
-        
+
         Ok(())
     }
-    
+
     fn create_executive_widgets(&self) -> Vec<DashboardWidget> {
         vec![
             DashboardWidget {
@@ -663,7 +675,11 @@ impl BusinessIntelligenceEngine {
                     interactive: true,
                     export_enabled: true,
                 },
-                position: WidgetPosition { row: 0, column: 0, z_index: None },
+                position: WidgetPosition {
+                    row: 0,
+                    column: 0,
+                    z_index: None,
+                },
                 size: WidgetSize {
                     width: 1,
                     height: 1,
@@ -692,14 +708,25 @@ impl BusinessIntelligenceEngine {
                     interactive: true,
                     export_enabled: true,
                 },
-                position: WidgetPosition { row: 0, column: 1, z_index: None },
-                size: WidgetSize { width: 2, height: 1, min_width: None, min_height: None, max_width: None, max_height: None },
+                position: WidgetPosition {
+                    row: 0,
+                    column: 1,
+                    z_index: None,
+                },
+                size: WidgetSize {
+                    width: 2,
+                    height: 1,
+                    min_width: None,
+                    min_height: None,
+                    max_width: None,
+                    max_height: None,
+                },
                 refresh_interval_seconds: Some(1800),
                 drill_down_enabled: true,
             },
         ]
     }
-    
+
     async fn start_real_time_monitoring(&self) -> AnalyticsResult<()> {
         // Start background task for real-time metric updates
         tokio::spawn(async move {
@@ -709,77 +736,93 @@ impl BusinessIntelligenceEngine {
                 debug!("Updating real-time business intelligence metrics");
             }
         });
-        
+
         Ok(())
     }
-    
-    async fn generate_business_insights(&self, _time_period: &TimePeriod) -> AnalyticsResult<Vec<AnalyticsInsight>> {
+
+    async fn generate_business_insights(
+        &self,
+        _time_period: &TimePeriod,
+    ) -> AnalyticsResult<Vec<AnalyticsInsight>> {
         // Generate business-focused insights
-        Ok(vec![
-            AnalyticsInsight {
-                insight_id: Uuid::new_v4(),
-                title: "Revenue Growth Opportunity".to_string(),
-                description: "VR users generate 3x more revenue than traditional users".to_string(),
-                insight_type: InsightType::BusinessOpportunity,
-                confidence_score: 0.85,
-                impact_score: 0.92,
-                recommended_actions: vec![
-                    "Invest in VR marketing campaigns".to_string(),
-                    "Develop VR-exclusive premium features".to_string(),
-                    "Partner with VR hardware manufacturers".to_string(),
-                ],
-                supporting_data: Vec::new(),
-                created_at: Utc::now(),
-                expires_at: Some(Utc::now() + chrono::Duration::days(30)),
-                tags: vec!["revenue".to_string(), "vr".to_string(), "growth".to_string()],
-            }
-        ])
+        Ok(vec![AnalyticsInsight {
+            insight_id: Uuid::new_v4(),
+            title: "Revenue Growth Opportunity".to_string(),
+            description: "VR users generate 3x more revenue than traditional users".to_string(),
+            insight_type: InsightType::BusinessOpportunity,
+            confidence_score: 0.85,
+            impact_score: 0.92,
+            recommended_actions: vec![
+                "Invest in VR marketing campaigns".to_string(),
+                "Develop VR-exclusive premium features".to_string(),
+                "Partner with VR hardware manufacturers".to_string(),
+            ],
+            supporting_data: Vec::new(),
+            created_at: Utc::now(),
+            expires_at: Some(Utc::now() + chrono::Duration::days(30)),
+            tags: vec![
+                "revenue".to_string(),
+                "vr".to_string(),
+                "growth".to_string(),
+            ],
+        }])
     }
-    
-    async fn generate_performance_insights(&self, _time_period: &TimePeriod) -> AnalyticsResult<Vec<AnalyticsInsight>> {
+
+    async fn generate_performance_insights(
+        &self,
+        _time_period: &TimePeriod,
+    ) -> AnalyticsResult<Vec<AnalyticsInsight>> {
         // Generate performance-focused insights
-        Ok(vec![
-            AnalyticsInsight {
-                insight_id: Uuid::new_v4(),
-                title: "Server Performance Optimization".to_string(),
-                description: "CPU usage spikes detected during peak hours (2-4 PM)".to_string(),
-                insight_type: InsightType::PerformanceOptimization,
-                confidence_score: 0.78,
-                impact_score: 0.65,
-                recommended_actions: vec![
-                    "Enable auto-scaling for afternoon traffic".to_string(),
-                    "Optimize database queries during peak times".to_string(),
-                    "Consider load balancing improvements".to_string(),
-                ],
-                supporting_data: Vec::new(),
-                created_at: Utc::now(),
-                expires_at: Some(Utc::now() + chrono::Duration::days(7)),
-                tags: vec!["performance".to_string(), "cpu".to_string(), "scaling".to_string()],
-            }
-        ])
+        Ok(vec![AnalyticsInsight {
+            insight_id: Uuid::new_v4(),
+            title: "Server Performance Optimization".to_string(),
+            description: "CPU usage spikes detected during peak hours (2-4 PM)".to_string(),
+            insight_type: InsightType::PerformanceOptimization,
+            confidence_score: 0.78,
+            impact_score: 0.65,
+            recommended_actions: vec![
+                "Enable auto-scaling for afternoon traffic".to_string(),
+                "Optimize database queries during peak times".to_string(),
+                "Consider load balancing improvements".to_string(),
+            ],
+            supporting_data: Vec::new(),
+            created_at: Utc::now(),
+            expires_at: Some(Utc::now() + chrono::Duration::days(7)),
+            tags: vec![
+                "performance".to_string(),
+                "cpu".to_string(),
+                "scaling".to_string(),
+            ],
+        }])
     }
-    
-    async fn generate_security_insights(&self, _time_period: &TimePeriod) -> AnalyticsResult<Vec<AnalyticsInsight>> {
+
+    async fn generate_security_insights(
+        &self,
+        _time_period: &TimePeriod,
+    ) -> AnalyticsResult<Vec<AnalyticsInsight>> {
         // Generate security-focused insights
-        Ok(vec![
-            AnalyticsInsight {
-                insight_id: Uuid::new_v4(),
-                title: "Security Alert Pattern".to_string(),
-                description: "Unusual login patterns detected from specific geographic regions".to_string(),
-                insight_type: InsightType::SecurityRisk,
-                confidence_score: 0.72,
-                impact_score: 0.55,
-                recommended_actions: vec![
-                    "Review geographic access policies".to_string(),
-                    "Enable additional authentication for affected regions".to_string(),
-                    "Monitor for credential stuffing attacks".to_string(),
-                ],
-                supporting_data: Vec::new(),
-                created_at: Utc::now(),
-                expires_at: Some(Utc::now() + chrono::Duration::days(3)),
-                tags: vec!["security".to_string(), "authentication".to_string(), "geographic".to_string()],
-            }
-        ])
+        Ok(vec![AnalyticsInsight {
+            insight_id: Uuid::new_v4(),
+            title: "Security Alert Pattern".to_string(),
+            description: "Unusual login patterns detected from specific geographic regions"
+                .to_string(),
+            insight_type: InsightType::SecurityRisk,
+            confidence_score: 0.72,
+            impact_score: 0.55,
+            recommended_actions: vec![
+                "Review geographic access policies".to_string(),
+                "Enable additional authentication for affected regions".to_string(),
+                "Monitor for credential stuffing attacks".to_string(),
+            ],
+            supporting_data: Vec::new(),
+            created_at: Utc::now(),
+            expires_at: Some(Utc::now() + chrono::Duration::days(3)),
+            tags: vec![
+                "security".to_string(),
+                "authentication".to_string(),
+                "geographic".to_string(),
+            ],
+        }])
     }
 }
 
@@ -791,8 +834,11 @@ impl AIAnalyticsEngine {
             pattern_analyzers: HashMap::new(),
         }
     }
-    
-    async fn generate_insights(&self, _time_period: &TimePeriod) -> AnalyticsResult<Vec<AnalyticsInsight>> {
+
+    async fn generate_insights(
+        &self,
+        _time_period: &TimePeriod,
+    ) -> AnalyticsResult<Vec<AnalyticsInsight>> {
         // AI-generated insights (placeholder)
         Ok(Vec::new())
     }
