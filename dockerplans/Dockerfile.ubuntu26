@@ -142,7 +142,7 @@ RUN chmod -R o-rwx /opt/opensim-next /var/lib/opensim-next /var/log/opensim-next
 
 # Health check
 HEALTHCHECK --interval=30s --timeout=10s --start-period=60s --retries=3 \
-    CMD curl -f http://localhost:9100/health || exit 1
+    CMD curl -f http://localhost:8080/health || exit 1
 
 # Ports: 9000-9003 (4 LLUDP regions), 8080 (web), 9200 (admin), 9100 (metrics)
 EXPOSE 9000/tcp 9000/udp 9001/udp 9002/udp 9003/udp 8080 9200 9100

@@ -3351,21 +3351,27 @@ async fn start_server() -> Result<()> {
             )
         }
 
-        let app = Router::new()
+        // Auth applies only to routes registered on `protected`; merging keeps
+        // /ping outside the middleware so unauthenticated probes (Docker
+        // healthchecks, load balancers) can hit it.
+        let protected = Router::new()
             .route("/metrics", get(metrics_handler).options(cors_handler))
             .route("/health", get(health_handler).options(cors_handler))
             .route("/info", get(instance_info_handler).options(cors_handler))
-            .route("/ping", get(simple_health)) // No auth required
             .layer(middleware::from_fn_with_state(
                 app_state.clone(),
                 auth_middleware,
-            ))
+            ));
+        let app = Router::new()
+            .route("/ping", get(simple_health))
+            .merge(protected)
             .with_state(app_state.clone())
             // Add fallback route without auth for OPTIONS
             .fallback(cors_handler);
         let addr = SocketAddr::from(([0, 0, 0, 0], metrics_port));
         info!("Starting monitoring HTTP server on {}", addr);
         info!("Available endpoints:");
+        info!("  GET /ping    - Liveness probe (no auth)");
         info!("  GET /metrics - Prometheus metrics (requires API key)");
         info!("  GET /health  - Health status (requires API key)");
         info!("  GET /info    - Instance information (requires API key)");
