@@ -1,0 +1,16 @@
+{
+  "db_name": "PostgreSQL",
+  "query": "\n                INSERT INTO avatars (principalid, name, value)\n                VALUES ($1, $2, $3)\n                ON CONFLICT (principalid, name)\n                DO UPDATE SET value = EXCLUDED.value\n                ",
+  "describe": {
+    "columns": [],
+    "parameters": {
+      "Left": [
+        "Uuid",
+        "Varchar",
+        "Text"
+      ]
+    },
+    "nullable": []
+  },
+  "hash": "4f6d5f0f5744d2cbcba7df62dcd0b8f3f4b87854207ee24c420f46aaec96fd3f"
+}
